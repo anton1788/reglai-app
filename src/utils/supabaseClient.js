@@ -2,8 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 // ✅ Используем те же значения, что и в App.jsx
-const SUPABASE_URL = 'https://fnrzwatvrqldwdikdnew.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZucnp3YXR2cnFsZHdkaWtkbmV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MjIwMTcsImV4cCI6MjA5MTM5ODAxN30.PelullmWY45XuqHgyiFb2tAGPZe8faKI0yZrZoy5sX4';
+const SUPABASE_URL = 'https://lcfooydickfghjlqpivw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjZm9veWRpY2tmZ2hqbHFwaXZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNjIwMjcsImV4cCI6MjA5MTkzODAyN30.f6TqW2G_nbUeD_wmUc0wJLRiSIw9m95Iwv-BR-FbSb4';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
