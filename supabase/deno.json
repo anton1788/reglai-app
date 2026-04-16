@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "std/": "https://deno.land/std@0.168.0/",
+    "@upstash/ratelimit": "https://esm.sh/@upstash/ratelimit@1.0.1",
+    "@upstash/redis": "https://esm.sh/@upstash/redis@1.25.1"
+  },
+  "compilerOptions": {
+    "lib": ["deno.ns", "deno.window"],
+    "types": ["deno.ns"]
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "name": "Реглай Снабжение",
+  "short_name": "Реглай",
+  "description": "Профессиональная система управления заявками на материалы для вентиляции и кондиционирования. Контроль поставок, аналитика расходов, работа офлайн и онлайн.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#F5F7FA",
+  "theme_color": "#4A6572",
+  "theme_color_dark": "#0f172a",
+  "categories": ["business", "productivity", "utilities", "construction"],
+  "lang": "ru",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "iarc_rating_id": "none",
+  
+  "features": [
+    "Cross-Platform",
+    "Camera",
+    "Geolocation",
+    "Offline Support",
+    "Push Notifications"
+  ],
+
+  "icons": [
+    { "src": "/icon-48.png", "sizes": "48x48", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-72.png", "sizes": "72x72", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-96.png", "sizes": "96x96", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-152.png", "sizes": "152x152", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-256.png", "sizes": "256x256", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+
+  "screenshots": [
+    { "src": "/screenshots/screenshot-1-v3.25.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide", "label": "Главная панель: список заявок на материалы ВиК" },
+    { "src": "/screenshots/screenshot-2-v3.25.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide", "label": "Создание заявки: выбор материалов и поставщиков" },
+    { "src": "/screenshots/screenshot-3-v3.25.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide", "label": "Аналитика: отчёты по расходам и поставкам" },
+    { "src": "/screenshots/screenshot-mobile-1-v3.25.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow", "label": "Мобильная версия: навигация по заявкам" },
+    { "src": "/screenshots/screenshot-mobile-2-v3.25.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow", "label": "Мобильная версия: быстрое создание заявки" }
+  ],
+
+  "shortcuts": [
+    { "name": "Новая заявка", "short_name": "Заявка", "description": "Создать новую заявку на материалы ВиК", "url": "/requests/new?source=pwa-shortcut", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" }] },
+    { "name": "Аналитика", "short_name": "Аналитика", "description": "Просмотреть аналитику по заявкам и расходам", "url": "/analytics?source=pwa-shortcut", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" }] },
+    { "name": "История", "short_name": "История", "description": "Посмотреть историю и архив заявок", "url": "/requests/history?source=pwa-shortcut", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" }] },
+    { "name": "Черновики", "short_name": "Черновики", "description": "Управление сохранёнными черновиками заявок", "url": "/drafts?source=pwa-shortcut", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" }] }
+  ],
+
+  "protocol_handlers": [
+    { "protocol": "web+reglai", "url": "/action=%s" }
+  ],
+
+  "file_handlers": [
+    {
+      "action": "/import",
+      "accept": {
+        "application/json": [".reglai", ".json"],
+        "text/csv": [".csv"],
+        "application/vnd.ms-excel": [".xls"],
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"]
+      },
+      "launch_type": "single-client",
+      "name": "Импорт данных в Реглай"
+    }
+  ],
+
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [{ "name": "attachments", "accept": ["image/*", "application/pdf", ".csv", ".xlsx"] }]
+    }
+  },
+
+  "related_applications": [],
+  "edge_side_panel": { "preferred_width": 400 },
+  "handle_links": "preferred",
+  "launch_handler": { "client_mode": ["navigate-existing", "auto"] },
+
+  "id": "reglai-vik-v0.0.6",
+
+  "serviceworker": {
+    "src": "/sw.js?v=0.0.6",
+    "scope": "/",
+    "update_via_cache": "none",
+    "type": "module"
+  }
+}
