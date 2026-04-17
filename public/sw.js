@@ -1,8 +1,8 @@
 // public/sw.js
 // ✅ Service Worker для PWA приложения Reglai
-// Версия: 0.0.2
+// Версия: 0.0.3
 
-const APP_VERSION = '0.0.2'; // ✅ Синхронизировано с index.html и manifest.json
+const APP_VERSION = '0.0.3'; // ✅ Синхронизировано с index.html и manifest.json
 const CACHE_NAME = `reglai-system-v${APP_VERSION}`;
 const DATA_CACHE_NAME = `reglai-data-v${APP_VERSION}`;
 const OFFLINE_CACHE_NAME = `reglai-offline-v${APP_VERSION}`;

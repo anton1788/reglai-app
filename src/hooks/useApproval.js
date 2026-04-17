@@ -67,7 +67,7 @@ export const useApproval = (companyId, userId, userRole) => {
         .select(`
           *,
           applications:application_id (id, object_name, foreman_name),
-          approver:user_id (email, full_name)
+          approver:approver_id (email, full_name)
         `)
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
