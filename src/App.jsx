@@ -336,6 +336,7 @@ const [npsResponses, setNpsResponses] = useState([]);
 const [showChurnModal, setShowChurnModal] = useState(false);
 const [churnSubmitting, setChurnSubmitting] = useState(false);
 const [churnReasons, setChurnReasons] = useState([]);
+const [initialViewSet, setInitialViewSet] = useState(false); 
 
 // 🧪 A/B Testing State
 const [abTestVariants, setABTestVariants] = useState({
@@ -3260,10 +3261,7 @@ useEffect(() => {
   loadAuditLogs();
 }, [userCompanyId, supabase]);
 
-  // ─────────────────────────────────────────────────────────
-  // 🧭 VIEW ROUTING
-  // ─────────────────────────────────────────────────────────
- // ✅ НОВАЯ ВЕРСИЯ (с защитой для супер-админа)
+  // 🧭 VIEW ROUTING (ИСПРАВЛЕННЫЙ)
 useEffect(() => {
   if (!user) return;
   
@@ -3273,16 +3271,20 @@ useEffect(() => {
       console.log('[SuperAdmin] Перенаправление на superAdmin панель');
       setCurrentView('superAdmin');
     }
-    return; // ⚠️ ВАЖНО: выходим, чтобы обычная логика не сработала
+    return;
   }
   
-  // 👨‍💼 ОБЫЧНЫЕ ПОЛЬЗОВАТЕЛИ: обычная логика
-  if (currentUserPermissions.canCreate) {
-    setCurrentView('create');
-  } else if (currentUserPermissions.canViewAnalytics) {
-    setCurrentView('analytics');
-  } else {
-    setCurrentView('pending');
+  // 👨‍💼 ОБЫЧНЫЕ ПОЛЬЗОВАТЕЛИ: устанавливаем начальный вид ТОЛЬКО при загрузке
+  // ⚠️ ВАЖНО: Добавляем флаг, чтобы не сбрасывать при каждом клике
+  if (!initialViewSet) {
+    if (currentUserPermissions.canCreate) {
+      setCurrentView('create');
+    } else if (currentUserPermissions.canViewAnalytics) {
+      setCurrentView('analytics');
+    } else {
+      setCurrentView('pending');
+    }
+    setInitialViewSet(true);
   }
 }, [user, userRole, currentUserPermissions.canCreate, currentUserPermissions.canViewAnalytics, currentView]);
 
