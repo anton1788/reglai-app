@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from '
 // === ТАРИФЫ И КВОТЫ ===
 import TariffSelector from './components/TariffSelector';
 import QuotaUsage from './components/QuotaUsage';
-import { activatePromoPlan } from './utils/promoManager';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
