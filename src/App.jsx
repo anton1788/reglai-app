@@ -3756,38 +3756,30 @@ useEffect(() => {
 
   const renderNavigation = () => {
   let navItems;
-  const isRealSuperAdmin = isSuperAdmin(userRole, user?.user_metadata);
   
-  // 🔒 СУПЕР-АДМИН: ТОЛЬКО админские пункты
-  if (isRealSuperAdmin) {
-    navItems = [
-      { id: 'superAdmin', label: t('superAdminPanelTitle'), icon: Shield, condition: true },
-      { id: 'tariffs', label: t('tariffs') || 'Тарифы', icon: DollarSign, condition: true }
-    ];
-    // ⚠️ ВАЖНО: Никаких 'create', 'warehouse', 'chat' и т.д.!
-  } 
-  // 👨‍💼 ОБЫЧНЫЕ ПОЛЬЗОВАТЕЛИ: все остальные пункты
-  else {
-    navItems = [
-      { id: 'tasks', label: language === 'ru' ? 'Задачи' : 'Tasks', icon: CheckCircle, condition: currentUserPermissions.canCreate || userRole === 'manager' || userRole === 'supply_admin' },
-      { id: 'approvals', label: `Согласование (${pendingApprovals.length})`, icon: CheckCircle, condition: userRole === 'manager' || userRole === 'director' },
-      { id: 'create', label: t('createApplication'), icon: Plus, condition: currentUserPermissions.canCreate },
-      { id: 'chat', label: t('chat') || 'Чат', icon: MessageCircle, condition: true },
-      { id: 'audit', label: t('audit'), icon: History, condition: currentUserPermissions.canViewAudit },
-      { id: 'calendar', label: t('calendar') || 'Календарь', icon: Calendar, condition: currentUserPermissions.canViewAnalytics },
-      { id: 'inwork', label: language === 'ru' ? 'В работе' : 'In Work', icon: Briefcase, condition: userRole === 'foreman' || userRole === 'supply_admin' || userRole === 'manager' },
-      { id: 'confirmation', label: language === 'ru' ? 'Подтверждение' : 'Confirmation', icon: CheckCircle, condition: userRole === 'foreman' },
-      { id: 'warehouse', label: language === 'ru' ? 'Склад' : 'Warehouse', icon: Package, condition: userRole === 'manager' || userRole === 'supply_admin' || isAdminMode },
-      { id: 'received', label: t('receivedTab'), icon: Package, condition: true },
-      { id: 'history', label: t('history'), icon: Archive, condition: true },
-      { id: 'analytics', label: t('analytics'), icon: BarChart3, condition: currentUserPermissions.canViewAnalytics },
-      { id: 'employees', label: t('employees'), icon: Users, condition: userRole === 'manager' },
-      { id: 'api', label: 'API', icon: Code, condition: userRole === 'manager' || isCompanyOwner },
-      { id: 'invite', label: t('inviteUser'), icon: User, condition: userRole === 'manager' || userRole === 'supply_admin' || isCompanyOwner },
-      { id: 'cart', label: t('cart'), icon: ShoppingCart, condition: formData.cart.length > 0 },
-      { id: 'tariffs', label: t('tariffs') || 'Тарифы', icon: Sparkles, condition: isCompanyOwner || userRole === 'manager' }
-    ].filter(item => item.condition);
-  }
+  // 🔥 ВРЕМЕННО ОТКЛЮЧАЕМ ПРОВЕРКУ СУПЕР-АДМИНА
+  // const isRealSuperAdmin = false; // закомментируйте или удалите эту строку
+  
+  // 👨‍💼 ВСЕГДА ПОКАЗЫВАЕМ ВСЕ ВКЛАДКИ (для теста)
+  navItems = [
+    { id: 'tasks', label: language === 'ru' ? 'Задачи' : 'Tasks', icon: CheckCircle, condition: true },
+    { id: 'approvals', label: `Согласование (${pendingApprovals.length})`, icon: CheckCircle, condition: true },
+    { id: 'create', label: t('createApplication'), icon: Plus, condition: true },
+    { id: 'chat', label: t('chat') || 'Чат', icon: MessageCircle, condition: true },
+    { id: 'audit', label: t('audit'), icon: History, condition: true },
+    { id: 'calendar', label: t('calendar') || 'Календарь', icon: Calendar, condition: true },
+    { id: 'inwork', label: language === 'ru' ? 'В работе' : 'In Work', icon: Briefcase, condition: true },
+    { id: 'confirmation', label: language === 'ru' ? 'Подтверждение' : 'Confirmation', icon: CheckCircle, condition: true },
+    { id: 'warehouse', label: language === 'ru' ? 'Склад' : 'Warehouse', icon: Package, condition: true },
+    { id: 'received', label: t('receivedTab'), icon: Package, condition: true },
+    { id: 'history', label: t('history'), icon: Archive, condition: true },
+    { id: 'analytics', label: t('analytics'), icon: BarChart3, condition: true },
+    { id: 'employees', label: t('employees'), icon: Users, condition: true },
+    { id: 'api', label: 'API', icon: Code, condition: true },
+    { id: 'invite', label: t('inviteUser'), icon: User, condition: true },
+    { id: 'cart', label: t('cart'), icon: ShoppingCart, condition: formData.cart.length > 0 },
+    { id: 'tariffs', label: t('tariffs') || 'Тарифы', icon: Sparkles, condition: true }
+  ].filter(item => item.condition);
 
   return (
     <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-40 page-enter">
