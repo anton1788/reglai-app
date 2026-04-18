@@ -6,7 +6,8 @@ export const ROLE_OPTIONS = [
   { value: 'supply_admin', label: 'Администратор снабжения' },
   { value: 'manager', label: 'Руководитель' },
   { value: 'accountant', label: 'Бухгалтер' },
-  { value: 'super_admin', label: 'Супер-администратор' }, // ← ДОБАВИТЬ
+  { value: 'super_admin', label: 'Супер-администратор' },
+  { value: 'client', label: 'Заказчик' },  // ← НОВАЯ РОЛЬ
 ];
 
 // === Права доступа для каждой роли ===
@@ -58,6 +59,20 @@ export const ROLE_PERMISSIONS = {
     canViewAll: false,             // Не видит все заявки своей компании
     canViewOnlyCompleted: false,   // Не видит только завершённые
     canViewAudit: false,           // Аудит — в админке отдельно
+  },
+  // 🆕 НОВАЯ РОЛЬ: ЗАКАЗЧИК
+  client: {
+    canViewOwnObjects: true,        // Только свои объекты
+    canViewApplications: true,      // Просмотр заявок
+    canConfirmWork: true,           // Подтверждение работ
+    canViewActs: true,              // Просмотр актов
+    canChat: true,                  // Чат с прорабом/менеджером
+    canViewPhotos: true,            // Просмотр фото
+    canCreate: false,               // Не создаёт заявки
+    canEditStatus: false,           // Не меняет статусы
+    canViewAnalytics: false,        // Не видит аналитику компании
+    canViewAll: false,              // Только свои объекты
+    canViewAudit: false,            // Не видит аудит
   }
 };
 
@@ -93,12 +108,21 @@ export const isSuperAdmin = (userRole, userMetadata) => {
   return userRole === 'super_admin' || userMetadata?.role === 'super_admin';
 };
 
+// === Проверка, является ли пользователь заказчиком ===
+export const isClient = (userRole) => userRole === 'client';
+
 // === Проверка, может ли пользователь приглашать другие роли ===
 export const canInviteRole = (userRole, targetRole, isCompanyOwner) => {
   // Супер-админ не приглашает через обычный интерфейс
   if (isSuperAdmin(userRole, { role: userRole })) {
     return false;
   }
+  
+  // Менеджер может приглашать заказчиков
+  if (userRole === 'manager' && targetRole === 'client') {
+    return true;
+  }
+  
   if (!['manager', 'supply_admin'].includes(userRole)) {
     return false;
   }
@@ -137,6 +161,7 @@ export default {
   hasAnyPermission,
   getRolePermissions,
   isSuperAdmin,
+  isClient,                    // ← ЭКСПОРТ НОВОЙ ФУНКЦИИ
   canInviteRole,
   getAvailableRolesForInvite,
   isSuperAdminStrict

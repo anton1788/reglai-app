@@ -1,12 +1,12 @@
 {
-  "currentVersion": "0.0.4",
+  "currentVersion": "0.0.5",
   "releaseDate": "2026-03-27",
   "forceUpdate": false,
   "versions": [
     {
-      "version": "0.0.4",
+      "version": "0.0.5",
       "date": "2026-04-02",
-      "title": "Переход на новую БД",
+      "title": "Создан раздел заказчика",
       "changes": [
         "✅ Исправлен расчёт Activation Rate",
         "📊 Улучшена точность трекинга первых заявок",

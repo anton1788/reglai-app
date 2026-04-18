@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from '
 // === ТАРИФЫ И КВОТЫ ===
 import TariffSelector from './components/TariffSelector';
 import QuotaUsage from './components/QuotaUsage';
+import ClientDashboard from './components/ClientPortal/ClientDashboard';
+import ClientInviteModal from './components/Manager/ClientInviteModal';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -132,7 +134,7 @@ import {
   Copy, CheckCircleIcon, Globe, Mail, Users, TrendingUp,
   Moon, Sun, CheckCircle, Briefcase, Home, Clock, Archive, MessageCircle, Ban, Menu,
   HelpCircle, ArrowRight, Info, Loader2, WifiOff, Wifi, Trash2, ShoppingCart,
-  Undo2, Sparkles, RefreshCw,Code,DollarSign
+  Undo2, Sparkles, RefreshCw,Code,DollarSign,UserPlus
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -207,6 +209,17 @@ const getDaysSince = (dateString) => {
   const created = new Date(dateString);
   const diffTime = Math.abs(now - created);
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+const getClientId = async (userId, companyId) => {
+  const { data } = await supabase
+    .from('company_users')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('company_id', companyId)
+    .eq('role', 'client')
+    .single();
+  return data?.id || null;
 };
 
 const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num || 0);
@@ -334,6 +347,8 @@ const [npsResponses, setNpsResponses] = useState([]);
 
 // 📉 Churn Reasons State
 const [showChurnModal, setShowChurnModal] = useState(false);
+const [showClientInviteModal, setShowClientInviteModal] = useState(false);
+const [clientId, setClientId] = useState(null);
 const [churnSubmitting, setChurnSubmitting] = useState(false);
 const [churnReasons, setChurnReasons] = useState([]);
 const [initialViewSet, setInitialViewSet] = useState(false); 
@@ -394,6 +409,17 @@ useEffect(() => {
   };
   loadAuditLogs();
 }, [userCompanyId, supabase]);
+
+// Загрузка clientId для роли client
+useEffect(() => {
+  const loadClientId = async () => {
+    if (user && userCompanyId && userRole === 'client') {
+      const id = await getClientId(user.id, userCompanyId);
+      setClientId(id);
+    }
+  };
+  loadClientId();
+}, [user, userCompanyId, userRole]);
 
 // 📊 Load NPS Responses
 useEffect(() => {
@@ -3759,6 +3785,43 @@ useEffect(() => {
   const renderNavigation = () => {
   let navItems;
   const isRealSuperAdmin = isSuperAdmin(userRole, user?.user_metadata);
+
+    // 🆕 Маршрутизация для заказчика
+  if (userRole === 'client') {
+    navItems = [
+      { id: 'clientDashboard', label: 'Мой объект', icon: Home, condition: true },
+      { id: 'clientChat', label: 'Чат с прорабом', icon: MessageCircle, condition: true },
+      { id: 'clientDocuments', label: 'Документы', icon: FileText, condition: true }
+    ];
+    
+    return (
+      <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-40 page-enter">
+        <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-6">
+          <div className="flex overflow-x-auto no-scrollbar gap-1 h-14">
+            <div className="hidden lg:flex items-center space-x-1 overflow-x-auto no-scrollbar snap-x snap-mandatory">
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setCurrentView(item.id)}
+                  data-nav={item.id}
+                  className={`group relative flex items-center justify-center px-3 py-2 rounded-lg transition-all duration-200 flex-shrink-0 snap-center ${
+                    currentView === item.id
+                      ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33] border border-[#4A6572]/20 dark:border-[#F9AA33]/20'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 hover:text-[#4A6572] dark:hover:text-[#F9AA33]'
+                  }`}
+                >
+                  <item.icon className="w-5 h-5 transition-transform duration-200" />
+                  <span className="hidden 2xl:inline ml-2 whitespace-nowrap text-sm font-medium">
+                    {item.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
   
   // 🔒 СУПЕР-АДМИН: ТОЛЬКО админские пункты
   if (isRealSuperAdmin) {
@@ -3774,6 +3837,7 @@ useEffect(() => {
       { id: 'tasks', label: language === 'ru' ? 'Задачи' : 'Tasks', icon: CheckCircle, condition: currentUserPermissions.canCreate || userRole === 'manager' || userRole === 'supply_admin' },
       { id: 'approvals', label: `Согласование (${pendingApprovals.length})`, icon: CheckCircle, condition: userRole === 'manager' || userRole === 'director' },
       { id: 'create', label: t('createApplication'), icon: Plus, condition: currentUserPermissions.canCreate },
+      { id: 'inviteClient', label: 'Пригласить заказчика', icon: UserPlus, condition: userRole === 'manager' || userRole === 'director' },
       { id: 'chat', label: t('chat') || 'Чат', icon: MessageCircle, condition: true },
       { id: 'audit', label: t('audit'), icon: History, condition: currentUserPermissions.canViewAudit },
       { id: 'calendar', label: t('calendar') || 'Календарь', icon: Calendar, condition: currentUserPermissions.canViewAnalytics },
@@ -5585,6 +5649,15 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 )}
   </div>
 )}
+
+            {currentView === 'clientDashboard' && userRole === 'client' && (
+        <ClientDashboard 
+          user={user}
+          clientId={clientId}
+          companyId={userCompanyId}
+          t={t}
+        />
+      )}
 </main>
       <ReceiveModal
   isOpen={showReceiveModal}
@@ -5862,6 +5935,42 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     t={t}
   />
 )}
+
+
+      {/* Модалка приглашения заказчика */}
+      {showClientInviteModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">Пригласить заказчика</h3>
+              <button onClick={() => setShowClientInviteModal(false)} className="p-2">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <input
+                type="email"
+                placeholder="Email заказчика"
+                className="w-full px-4 py-2 border rounded-lg"
+                id="clientInviteEmail"
+              />
+              <button
+                onClick={() => {
+                  const email = document.getElementById('clientInviteEmail').value;
+                  if (email) {
+                    // Здесь логика приглашения
+                    console.log('Пригласить:', email);
+                    setShowClientInviteModal(false);
+                  }
+                }}
+                className="w-full py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg"
+              >
+                Отправить приглашение
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
