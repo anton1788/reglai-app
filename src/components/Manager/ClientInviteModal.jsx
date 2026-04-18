@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { X, UserPlus, Mail, Phone, Building } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 
-const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess, t }) => {
+const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess }) => {
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
@@ -11,43 +11,64 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess, t }) => {
     objectName: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.fullName || !formData.phone) {
-      alert(t('fillRequiredFields') || 'Заполните ФИО и телефон');
+    setError(null);
+    
+    // Валидация
+    if (!formData.fullName.trim()) {
+      setError('Введите ФИО заказчика');
+      return;
+    }
+    if (!formData.phone.trim()) {
+      setError('Введите телефон заказчика');
       return;
     }
 
     setIsLoading(true);
     try {
+      // Получаем текущего пользователя
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // 1. Создаём приглашение в таблице invitations
       const { data: invitation, error: inviteError } = await supabase
         .from('invitations')
         .insert([{
           email: formData.email || null,
           role: 'client',
           company_id: companyId,
-          invited_by: (await supabase.auth.getUser()).data.user?.id,
+          invited_by: user?.id,
           metadata: {
             full_name: formData.fullName,
             phone: formData.phone,
             object_name: formData.objectName
           },
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          created_at: new Date().toISOString(),
+          accepted: false
         }])
         .select()
         .single();
 
       if (inviteError) throw inviteError;
 
-      const inviteLink = `${window.location.origin}/auth/register?invite=${invitation.id}`;
-      console.log('Ссылка для регистрации:', inviteLink);
-
+      // 2. Формируем ссылку для регистрации
+      const inviteLink = `${window.location.origin}/?invite=${invitation.id}`;
+      
+      // 3. Копируем ссылку в буфер
+      await navigator.clipboard.writeText(inviteLink);
+      
       onSuccess?.();
       onClose();
+      
+      // Показываем уведомление
+      alert(`✅ Приглашение создано!\n\nСсылка для регистрации скопирована в буфер обмена:\n${inviteLink}\n\nОтправьте её заказчику.`);
+      
     } catch (err) {
       console.error('Ошибка приглашения:', err);
-      alert(t('inviteFailed') || 'Ошибка: ' + err.message);
+      setError(err.message || 'Ошибка при создании приглашения');
     } finally {
       setIsLoading(false);
     }
@@ -61,7 +82,7 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess, t }) => {
         <div className="flex justify-between items-center p-4 border-b">
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-green-600" />
-            <h3 className="text-lg font-bold">{t('inviteClient') || 'Пригласить заказчика'}</h3>
+            <h3 className="text-lg font-bold">Пригласить заказчика</h3>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
             <X className="w-5 h-5" />
@@ -69,8 +90,14 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess, t }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+          
           <div>
-            <label className="block text-sm font-medium mb-1">{t('fullName') || 'ФИО заказчика'} *</label>
+            <label className="block text-sm font-medium mb-1">ФИО заказчика *</label>
             <input
               type="text"
               value={formData.fullName}
@@ -82,7 +109,7 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess, t }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">{t('phoneNumber') || 'Телефон'} *</label>
+            <label className="block text-sm font-medium mb-1">Телефон *</label>
             <input
               type="tel"
               value={formData.phone}
@@ -94,7 +121,7 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess, t }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">{t('email') || 'Email'} ({t('optional') || 'необязательно'})</label>
+            <label className="block text-sm font-medium mb-1">Email (необязательно)</label>
             <input
               type="email"
               value={formData.email}
@@ -105,13 +132,13 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess, t }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">{t('objectName') || 'Объект'}</label>
+            <label className="block text-sm font-medium mb-1">Объект</label>
             <input
               type="text"
               value={formData.objectName}
               onChange={(e) => setFormData({ ...formData, objectName: e.target.value })}
               className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-              placeholder={t('objectPlaceholder') || 'Квартира 45, ЖК Солнечный'}
+              placeholder="Квартира 45, ЖК Солнечный"
             />
           </div>
 
@@ -121,14 +148,14 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess, t }) => {
               onClick={onClose}
               className="flex-1 px-4 py-2 border rounded-lg dark:border-gray-600"
             >
-              {t('cancel') || 'Отмена'}
+              Отмена
             </button>
             <button
               type="submit"
               disabled={isLoading}
               className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg disabled:opacity-50"
             >
-              {isLoading ? (t('sending') || 'Отправка...') : (t('sendInvite') || 'Отправить приглашение')}
+              {isLoading ? 'Отправка...' : 'Отправить приглашение'}
             </button>
           </div>
         </form>
