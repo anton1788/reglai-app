@@ -3865,13 +3865,15 @@ useEffect(() => {
               <button
                 key={item.id}
                 onClick={() => {
-                  if (item.id === 'invite') {
-                    setShowInviteModal(true);
-                  } else {
-                    setCurrentView(item.id);
-                  }
-                  setMobileMenuOpen(false);
-                }}
+  if (item.id === 'invite') {
+    setShowInviteModal(true);
+  } else if (item.id === 'inviteClient') {
+    setShowClientInviteModal(true);
+  } else {
+    setCurrentView(item.id);
+  }
+  setMobileMenuOpen(false);
+}}
                 data-nav={item.id}
                 title={item.label} // Нативная подсказка
                 className={`
@@ -3920,13 +3922,15 @@ useEffect(() => {
               <button
                 key={item.id}
                 onClick={() => {
-                  if (item.id === 'invite') {
-                    setShowInviteModal(true);
-                  } else {
-                    setCurrentView(item.id);
-                  }
-                  setMobileMenuOpen(false);
-                }}
+  if (item.id === 'invite') {
+    setShowInviteModal(true);
+  } else if (item.id === 'inviteClient') {
+    setShowClientInviteModal(true);
+  } else {
+    setCurrentView(item.id);
+  }
+  setMobileMenuOpen(false);
+}}
                 data-nav={item.id}
                 className={`w-full text-left px-4 py-3 rounded-lg text-base font-medium flex items-center space-x-3 transition-colors ${
                   currentView === item.id
@@ -5947,39 +5951,18 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 )}
 
 
+      {/* ✅ ОСТАВИТЬ ТОЛЬКО ЭТОТ БЛОК - с компонентом ClientInviteModal */}
       {/* Модалка приглашения заказчика */}
       {showClientInviteModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">Пригласить заказчика</h3>
-              <button onClick={() => setShowClientInviteModal(false)} className="p-2">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <input
-                type="email"
-                placeholder="Email заказчика"
-                className="w-full px-4 py-2 border rounded-lg"
-                id="clientInviteEmail"
-              />
-              <button
-                onClick={() => {
-                  const email = document.getElementById('clientInviteEmail').value;
-                  if (email) {
-                    // Здесь логика приглашения
-                    console.log('Пригласить:', email);
-                    setShowClientInviteModal(false);
-                  }
-                }}
-                className="w-full py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg"
-              >
-                Отправить приглашение
-              </button>
-            </div>
-          </div>
-        </div>
+        <ClientInviteModal
+          isOpen={showClientInviteModal}
+          onClose={() => setShowClientInviteModal(false)}
+          companyId={userCompanyId}
+          onSuccess={() => {
+            showNotification('Приглашение отправлено!', 'success');
+          }}
+          t={t}
+        />
       )}
     </div>
   );
