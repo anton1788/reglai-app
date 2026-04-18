@@ -1,6 +1,6 @@
 // src/components/Manager/ClientInviteModal.jsx
 import React, { useState } from 'react';
-import { X, UserPlus, Mail, Phone, Building } from 'lucide-react';
+import { X, UserPlus } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 
 const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess }) => {
@@ -32,7 +32,7 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess }) => {
       // Получаем текущего пользователя
       const { data: { user } } = await supabase.auth.getUser();
       
-      // 1. Создаём приглашение в таблице invitations
+      // 1. Создаём приглашение в таблице invitations (БЕЗ expires_at)
       const { data: invitation, error: inviteError } = await supabase
         .from('invitations')
         .insert([{
@@ -45,7 +45,6 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess }) => {
             phone: formData.phone,
             object_name: formData.objectName
           },
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
           created_at: new Date().toISOString(),
           accepted: false
         }])
