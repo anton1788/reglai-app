@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { UserPlus, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { supabase } from '../utils/supabaseClient';
+import { supabase } from '../../utils/supabaseClient';
 
 const ClientRegister = () => {
   const [searchParams] = useSearchParams();
