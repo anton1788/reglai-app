@@ -5,6 +5,7 @@ import TariffSelector from './components/TariffSelector';
 import QuotaUsage from './components/QuotaUsage';
 import ClientDashboard from './components/ClientPortal/ClientDashboard';
 import ClientInviteModal from './components/Manager/ClientInviteModal';
+import ClientRegister from './pages/ClientRegister';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -5190,6 +5191,15 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   );
 };
 
+// ─────────────────────────────────────────────────────────
+  // 📝 РЕГИСТРАЦИЯ ЗАКАЗЧИКА ПО ПРИГЛАШЕНИЮ
+  // ─────────────────────────────────────────────────────────
+  const urlParams = new URLSearchParams(window.location.search);
+  const inviteParam = urlParams.get('invite');
+
+  if (inviteParam && !user) {
+    return <ClientRegister />;
+  }
 
   // ─────────────────────────────────────────────────────────
   // 📋 MAIN RENDER

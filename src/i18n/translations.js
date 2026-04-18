@@ -259,6 +259,47 @@ reactionAdded: 'Реакция добавлена',
 mentionNotification: 'Вас упомянули в чате'
 },
 
+clientCalendar: {
+  title: 'Календарь работ',
+  statusPending: 'В обработке',
+  statusAdminProcessing: 'Приёмка материалов',
+  statusPartial: 'Частично выполнено',
+  statusPendingConfirm: 'Ожидает подтверждения',
+  statusCompleted: 'Выполнено',
+  statusCanceled: 'Отменено',
+  foreman: 'Прораб',
+  phone: 'Телефон',
+  materials: 'Материалы'
+},
+
+clientChat: {
+  title: 'Чат с прорабом',
+  subtitle: 'Сотрудники компании ответят вам в ближайшее время',
+  noMessages: 'Нет сообщений',
+  startChat: 'Напишите свой вопрос',
+  messagePlaceholder: 'Введите сообщение...',
+  sendError: 'Не удалось отправить сообщение',
+  manager: 'Руководитель',
+  supplyAdmin: 'Администратор',
+  foreman: 'Прораб',
+  emergencyContact: '📞 При срочных вопросах звоните'
+},
+
+clientDocuments: {
+  title: 'Документы',
+  subtitle: 'Акты выполненных работ и счета',
+  noDocuments: 'Документов пока нет',
+  actNumber: 'Акт',
+  foreman: 'Прораб',
+  downloadPDF: 'Скачать PDF',
+  downloadStarted: 'Скачивание начато...',
+  downloadError: 'Ошибка скачивания',
+  statusDraft: 'Черновик',
+  statusSent: 'Отправлен',
+  statusSigned: 'Подписан',
+  statusPaid: 'Оплачен'
+},
+
 clientDashboard: {
   title: 'Личный кабинет заказчика',
   subtitle: 'Отслеживайте ход работ по вашему объекту',
@@ -1044,6 +1085,47 @@ messageInput: 'Type a message',
 send: 'Send',
 reactionAdded: 'Reaction added',
 mentionNotification: 'You were mentioned in chat'
+},
+
+clientDocuments: {
+  title: 'Documents',
+  subtitle: 'Work completion certificates and invoices',
+  noDocuments: 'No documents yet',
+  actNumber: 'Certificate',
+  foreman: 'Foreman',
+  downloadPDF: 'Download PDF',
+  downloadStarted: 'Download started...',
+  downloadError: 'Download error',
+  statusDraft: 'Draft',
+  statusSent: 'Sent',
+  statusSigned: 'Signed',
+  statusPaid: 'Paid'
+},
+
+clientCalendar: {
+  title: 'Work Calendar',
+  statusPending: 'Processing',
+  statusAdminProcessing: 'Material Receiving',
+  statusPartial: 'Partially Completed',
+  statusPendingConfirm: 'Awaiting Confirmation',
+  statusCompleted: 'Completed',
+  statusCanceled: 'Canceled',
+  foreman: 'Foreman',
+  phone: 'Phone',
+  materials: 'Materials'
+},
+
+clientChat: {
+  title: 'Chat with Foreman',
+  subtitle: 'Company employees will respond to you shortly',
+  noMessages: 'No messages',
+  startChat: 'Write your question',
+  messagePlaceholder: 'Type a message...',
+  sendError: 'Failed to send message',
+  manager: 'Manager',
+  supplyAdmin: 'Administrator',
+  foreman: 'Foreman',
+  emergencyContact: '📞 For urgent questions call'
 },
 
 warehouse: 'On Warehouse',
