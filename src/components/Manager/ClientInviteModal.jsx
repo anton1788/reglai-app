@@ -12,6 +12,7 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess }) => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [inviteLink, setInviteLink] = useState(null); // ← ДОБАВИТЬ
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,7 +33,7 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess }) => {
       // Получаем текущего пользователя
       const { data: { user } } = await supabase.auth.getUser();
       
-      // 1. Создаём приглашение в таблице invitations (БЕЗ expires_at)
+      // 1. Создаём приглашение в таблице invitations
       const { data: invitation, error: inviteError } = await supabase
         .from('invitations')
         .insert([{
@@ -54,16 +55,19 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess }) => {
       if (inviteError) throw inviteError;
 
       // 2. Формируем ссылку для регистрации
-      const inviteLink = `${window.location.origin}/?invite=${invitation.id}`;
+      const link = `${window.location.origin}/?invite=${invitation.id}`;
+      setInviteLink(link);
       
       // 3. Копируем ссылку в буфер
-      await navigator.clipboard.writeText(inviteLink);
+      await navigator.clipboard.writeText(link);
       
       onSuccess?.();
-      onClose();
       
-      // Показываем уведомление
-      alert(`✅ Приглашение создано!\n\nСсылка для регистрации скопирована в буфер обмена:\n${inviteLink}\n\nОтправьте её заказчику.`);
+      // Показываем alert с ссылкой (чтобы точно увидеть)
+      alert(`✅ Приглашение создано!\n\nСсылка для регистрации скопирована в буфер обмена:\n${link}\n\nОтправьте её заказчику.`);
+      
+      // Не закрываем модалку сразу, показываем ссылку
+      // onClose(); // ← ЗАКОММЕНТИРОВАЛИ, чтобы показать ссылку
       
     } catch (err) {
       console.error('Ошибка приглашения:', err);
@@ -71,6 +75,12 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleClose = () => {
+    setInviteLink(null);
+    setFormData({ fullName: '', phone: '', email: '', objectName: '' });
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -83,7 +93,7 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess }) => {
             <UserPlus className="w-5 h-5 text-green-600" />
             <h3 className="text-lg font-bold">Пригласить заказчика</h3>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
+          <button onClick={handleClose} className="p-1 hover:bg-gray-100 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -92,6 +102,23 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess }) => {
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
+            </div>
+          )}
+          
+          {inviteLink && (
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-green-700 text-sm font-medium mb-2">✅ Приглашение создано!</p>
+              <p className="text-xs text-gray-600 break-all">Ссылка: {inviteLink}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(inviteLink);
+                  alert('Ссылка скопирована!');
+                }}
+                className="mt-2 text-xs bg-green-600 text-white px-2 py-1 rounded"
+              >
+                Копировать ссылку
+              </button>
             </div>
           )}
           
@@ -144,18 +171,29 @@ const ClientInviteModal = ({ isOpen, onClose, companyId, onSuccess }) => {
           <div className="flex gap-3 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex-1 px-4 py-2 border rounded-lg dark:border-gray-600"
             >
-              Отмена
+              Закрыть
             </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg disabled:opacity-50"
-            >
-              {isLoading ? 'Отправка...' : 'Отправить приглашение'}
-            </button>
+            {!inviteLink && (
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg disabled:opacity-50"
+              >
+                {isLoading ? 'Отправка...' : 'Отправить приглашение'}
+              </button>
+            )}
+            {inviteLink && (
+              <button
+                type="button"
+                onClick={handleClose}
+                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg"
+              >
+                Готово
+              </button>
+            )}
           </div>
         </form>
       </div>
