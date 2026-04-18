@@ -5,7 +5,7 @@ import TariffSelector from './components/TariffSelector';
 import QuotaUsage from './components/QuotaUsage';
 import ClientDashboard from './components/ClientPortal/ClientDashboard';
 import ClientInviteModal from './components/Manager/ClientInviteModal';
-import ClientRegister from './components/ClientPortal/ClientRegister';
+import ClientRegister from './components/pages/ClientRegister';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
