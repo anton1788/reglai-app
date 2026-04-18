@@ -3593,7 +3593,7 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   const renderHeader = () => (
     <header className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-50 page-enter">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center space-x-3">
             <div className="bg-gradient-to-br from-[#4A6572] to-[#344955] p-2.5 rounded-xl shadow-md">
@@ -3793,8 +3793,8 @@ useEffect(() => {
 
   return (
     <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-40 page-enter">
-      <div className="max-w-[1920px] mx-auto px-2 sm:px-4 lg:px-6">
-  <div className="flex justify-center h-14">  {/* ← ИСПРАВЛЕНО */}
+      <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-6">
+  <div className="flex overflow-x-auto no-scrollbar gap-1 h-14"> {/* ← ИСПРАВЛЕНО */}
     <div className="hidden lg:flex items-center space-x-1 overflow-x-auto no-scrollbar snap-x snap-mandatory">
             {navItems.map((item) => (
               <button
