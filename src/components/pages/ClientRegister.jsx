@@ -1,13 +1,11 @@
-// src/pages/ClientRegister.jsx
-import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+// src/components/pages/ClientRegister.jsx
+import React, { useState, useEffect, useCallback } from 'react';
 import { UserPlus, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 
 const ClientRegister = () => {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const inviteToken = searchParams.get('invite');
+  const urlParams = new URLSearchParams(window.location.search);
+  const inviteToken = urlParams.get('invite');
   
   const [step, setStep] = useState('loading'); // loading, form, success, error
   const [invitation, setInvitation] = useState(null);
@@ -22,17 +20,7 @@ const ClientRegister = () => {
   const [error, setError] = useState(null);
 
   // Загрузка данных приглашения
-  useEffect(() => {
-    if (!inviteToken) {
-      setStep('error');
-      setError('Ссылка-приглашение не найдена');
-      return;
-    }
-    
-    loadInvitation();
-  }, [inviteToken]);
-
-  const loadInvitation = async () => {
+  const loadInvitation = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('invitations')
@@ -46,10 +34,10 @@ const ClientRegister = () => {
         throw new Error('Приглашение не найдено или уже использовано');
       }
       
-      // Проверяем срок действия
-      if (new Date(data.expires_at) < new Date()) {
-        throw new Error('Срок действия приглашения истёк');
-      }
+      // Проверка срока действия (только если колонка существует)
+      // if (data.expires_at && new Date(data.expires_at) < new Date()) {
+      //   throw new Error('Срок действия приглашения истёк');
+      // }
       
       setInvitation(data);
       setFormData(prev => ({
@@ -65,7 +53,17 @@ const ClientRegister = () => {
       setStep('error');
       setError(err.message);
     }
-  };
+  }, [inviteToken]);
+
+  useEffect(() => {
+    if (!inviteToken) {
+      setStep('error');
+      setError('Ссылка-приглашение не найдена');
+      return;
+    }
+    
+    loadInvitation();
+  }, [inviteToken, loadInvitation]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -143,7 +141,7 @@ const ClientRegister = () => {
       
       // Автоматический вход через 2 секунды
       setTimeout(() => {
-        navigate('/client/dashboard');
+        window.location.href = '/';
       }, 3000);
       
     } catch (err) {
