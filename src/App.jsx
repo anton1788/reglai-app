@@ -194,14 +194,15 @@ const GLOBAL_STYLES = `
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
-/* 🎯 Onboarding Highlight Effect */
+/* Вставьте это внутрь строковой константы GLOBAL_STYLES, вместо старого .onboarding-highlight */
 .onboarding-highlight {
-  animation: pulse-highlight 2s ease-in-out infinite;
-  box-shadow: 0 0 0 4px rgba(74, 101, 114, 0.5);
+  position: relative !important;
+  z-index: 10000 !important; /* Выше шапки (z-50) и затемнения */
+  box-shadow: 0 0 0 4px #F9AA33, 0 0 24px rgba(249, 170, 51, 0.6) !important;
   border-radius: 8px;
-  position: relative;
-  z-index: 9999;
-  transition: box-shadow 0.3s ease;
+  background-color: var(--color-surface, #fff); /* Гарантируем видимость фона */
+  transition: all 0.3s ease;
+  animation: pulse-highlight 2s infinite;
 }
   /* ✅ ВСТАВИТЬ ВОТ СЮДА (скроллбар) */
 .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -1180,32 +1181,140 @@ useEffect(() => {
     t('tutorialStep4')
   ];
   // 🎯 Onboarding Tour Configuration
+// 🔹 КОНФИГУРАЦИЯ ОНБОРДИНГА (Замените старый onboardingHighlights)
 const ROLE_ONBOARDING_HIGHLIGHTS = useMemo(() => ({
   foreman: [
-    { selector: 'button[aria-label="Создать заявку"]', title: 'Создание заявки', description: 'Нажмите сюда, чтобы создать новую заявку на материалы', actionLabel: 'Попробуйте создать свою первую заявку!', position: { top: '60%', left: '50%' } },
-    { selector: '[data-nav="confirmation"]', title: 'Подтверждение материалов', description: 'Здесь вы подтверждаете фактическую приёмку материалов на объекте', actionLabel: 'Перейдите в раздел подтверждения', position: { top: '20%', left: '50%' } },
-    { selector: '[data-profile-menu]', title: 'Профиль', description: 'Настройте уведомления и язык интерфейса', actionLabel: 'Заполните информацию о себе', position: { top: '10%', left: '90%' } }
+    {
+      selector: '[data-nav="create"]',
+      title: 'Создание заявки',
+      description: 'Здесь вы создаете новые заявки на материалы. Нажмите на плюс, чтобы начать.',
+      actionLabel: 'Создать первую заявку',
+      position: { top: '120px', left: '50%' }
+    },
+    {
+      selector: '[data-nav="inwork"]',
+      title: 'Заявки в работе',
+      description: 'Отслеживайте статус текущих заявок: в работе, частичная доставка или готово.',
+      actionLabel: 'Перейти к заявкам',
+      position: { top: '120px', left: '30%' }
+    },
+    {
+      selector: '[data-nav="history"]',
+      title: 'История',
+      description: 'Архив всех выполненных и отмененных заявок доступен здесь.',
+      actionLabel: 'Посмотреть историю',
+      position: { top: '120px', left: '40%' }
+    },
+    {
+      selector: '[data-profile-menu]',
+      title: 'Профиль и настройки',
+      description: 'Настройте уведомления, язык и экспортируйте свои данные.',
+      actionLabel: 'Открыть профиль',
+      position: { top: '60px', left: '95%' }
+    }
   ],
   manager: [
-    { selector: '[data-nav="invite"]', title: 'Приглашение сотрудников', description: 'Добавляйте прорабов, снабженцев и бухгалтеров в систему', actionLabel: 'Пригласите первого сотрудника', position: { top: '20%', left: '70%' } },
-    { selector: '[data-nav="analytics"]', title: 'Аналитика и отчёты', description: 'Отслеживайте расходы, сроки поставок и загрузку объектов', actionLabel: 'Посмотрите статистику', position: { top: '20%', left: '70%' } },
-    { selector: '[data-nav="warehouse"]', title: 'Управление складом', description: 'Контролируйте остатки и движение материалов', actionLabel: 'Проверьте текущие остатки', position: { top: '20%', left: '50%' } }
+    {
+      selector: '[data-nav="invite"]',
+      title: 'Приглашение команды',
+      description: 'Добавляйте прорабов, снабженцев и бухгалтеров в вашу компанию.',
+      actionLabel: 'Пригласить сотрудника',
+      position: { top: '120px', left: '85%' }
+    },
+    {
+      selector: '[data-nav="analytics"]',
+      title: 'Аналитика',
+      description: 'Следите за расходами, скоростью обработки и загрузкой объектов.',
+      actionLabel: 'Открыть дашборд',
+      position: { top: '120px', left: '75%' }
+    },
+    {
+      selector: '[data-nav="employees"]',
+      title: 'Сотрудники',
+      description: 'Управляйте доступом: блокируйте уволенных или меняйте роли.',
+      actionLabel: 'Управление сотрудниками',
+      position: { top: '120px', left: '80%' }
+    },
+    {
+      selector: '[data-nav="warehouse"]',
+      title: 'Склад',
+      description: 'Контролируйте остатки материалов на складе компании.',
+      actionLabel: 'Перейти на склад',
+      position: { top: '120px', left: '60%' }
+    },
+    {
+      selector: '[data-profile-menu]',
+      title: 'Профиль',
+      description: 'Ваши личные настройки и данные.',
+      actionLabel: 'Открыть профиль',
+      position: { top: '60px', left: '95%' }
+    }
   ],
   supply_admin: [
-    { selector: '[data-nav="received"]', title: 'Приёмка заявок', description: 'Обрабатывайте входящие заявки и фиксируйте поставки', actionLabel: 'Перейдите к заявкам', position: { top: '20%', left: '60%' } },
-    { selector: '[data-nav="warehouse"]', title: 'Складские операции', description: 'Управляйте приходом и расходом материалов', actionLabel: 'Проверьте баланс склада', position: { top: '20%', left: '50%' } },
-    { selector: '[data-nav="chat"]', title: 'Чат с командой', description: 'Координируйте действия с прорабами и менеджерами', actionLabel: 'Напишите в общий чат', position: { top: '20%', left: '30%' } }
+    {
+      selector: '[data-nav="received"]',
+      title: 'Приёмка и заявки',
+      description: 'Обрабатывайте входящие заявки от прорабов и фиксируйте приход.',
+      actionLabel: 'Обработать заявки',
+      position: { top: '120px', left: '65%' }
+    },
+    {
+      selector: '[data-nav="warehouse"]',
+      title: 'Управление складом',
+      description: 'Списывайте материалы под объекты и проверяйте баланс.',
+      actionLabel: 'Открыть склад',
+      position: { top: '120px', left: '50%' }
+    },
+    {
+      selector: '[data-nav="chat"]',
+      title: 'Чат с командой',
+      description: 'Координируйте поставки и общайтесь с прорабами напрямую.',
+      actionLabel: 'Написать в чат',
+      position: { top: '120px', left: '40%' }
+    },
+    {
+      selector: '[data-profile-menu]',
+      title: 'Профиль',
+      description: 'Настройки учетной записи.',
+      actionLabel: 'Открыть профиль',
+      position: { top: '60px', left: '95%' }
+    }
   ],
   client: [
-    { selector: '[data-nav="clientDashboard"]', title: 'Личный кабинет', description: 'Следите за статусом ваших объектов и заявок', actionLabel: 'Посмотрите сводку', position: { top: '50%', left: '50%' } },
-    { selector: '[data-nav="clientChat"]', title: 'Связь с прорабом', description: 'Общайтесь с ответственным за объект напрямую', actionLabel: 'Отправьте сообщение', position: { top: '20%', left: '30%' } }
+    {
+      selector: '[data-nav="clientDashboard"]',
+      title: 'Мой объект',
+      description: 'Общая сводка по вашему строительному объекту.',
+      actionLabel: 'Посмотреть сводку',
+      position: { top: '120px', left: '20%' }
+    },
+    {
+      selector: '[data-nav="clientChat"]',
+      title: 'Чат с прорабом',
+      description: 'Общайтесь с ответственным за объект напрямую.',
+      actionLabel: 'Открыть чат',
+      position: { top: '120px', left: '40%' }
+    },
+    {
+      selector: '[data-nav="clientDocuments"]',
+      title: 'Документы',
+      description: 'Здесь хранятся акты, сметы и фотоотчеты.',
+      actionLabel: 'Перейти к документам',
+      position: { top: '120px', left: '60%' }
+    }
   ],
   default: [
-    { selector: 'button[aria-label="Создать заявку"]', title: 'Быстрый старт', description: 'Создайте первую заявку или ознакомьтесь с интерфейсом', actionLabel: 'Начать работу', position: { top: '60%', left: '50%' } }
+    {
+      selector: '[data-profile-menu]',
+      title: 'Добро пожаловать!',
+      description: 'Изучите интерфейс, используя меню навигации.',
+      actionLabel: 'Начать работу',
+      position: { top: '60px', left: '95%' }
+    }
   ]
 }), []);
 
-// Динамический выбор шагов для текущей роли
+// Динамический выбор шагов
 const currentOnboardingHighlights = useMemo(() => {
   return ROLE_ONBOARDING_HIGHLIGHTS[userRole] || ROLE_ONBOARDING_HIGHLIGHTS.default;
 }, [userRole, ROLE_ONBOARDING_HIGHLIGHTS]);
@@ -3464,13 +3573,15 @@ useEffect(() => {
   const checkOnboarding = async () => {
     if (!user || !userCompanyId) return;
     if (isSuperAdmin(userRole, user?.user_metadata)) return;
-    // Ключ теперь зависит от роли, чтобы онбординг показывался для каждой роли отдельно
+    
+    // Используем ключ с ролью
     const key = `onboarding_${userCompanyId}_${userRole}`;
     const completed = localStorage.getItem(key);
+    
     if (!completed) {
       setTimeout(() => {
         setShowOnboarding(true);
-      }, 2000);
+      }, 1500);
     }
   };
   checkOnboarding();
@@ -3479,6 +3590,7 @@ useEffect(() => {
 const handleOnboardingComplete = async () => {
   setShowOnboarding(false);
   if (userCompanyId && userRole) {
+    // Ключ зависит от роли!
     localStorage.setItem(`onboarding_${userCompanyId}_${userRole}`, 'true');
   }
   showNotification('🎉 Onboarding завершён! Теперь вы готовы к работе', 'success');
