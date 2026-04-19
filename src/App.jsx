@@ -3292,6 +3292,15 @@ useEffect(() => {
 useEffect(() => {
   if (!user) return;
   
+  // 🆕 ДОБАВИТЬ: Если пользователь - заказчик, показываем clientDashboard
+  if (userRole === 'client') {
+    if (currentView !== 'clientDashboard') {
+      console.log('[Client] Перенаправление на clientDashboard');
+      setCurrentView('clientDashboard');
+    }
+    return;
+  }
+  
   // 🔒 СУПЕР-АДМИН: Всегда на superAdmin вьюхе
   if (isSuperAdmin(userRole, user?.user_metadata)) {
     if (currentView !== 'superAdmin' && currentView !== 'tariffs') {
