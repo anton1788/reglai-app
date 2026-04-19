@@ -13,7 +13,6 @@ const ClientCalendar = ({ clientId, t }) => {
     if (!clientId) return;
     setLoading(true);
     try {
-      // Загружаем заявки заказчика как события
       const { data: applications, error } = await supabase
         .from('applications')
         .select('*')
@@ -21,7 +20,6 @@ const ClientCalendar = ({ clientId, t }) => {
       
       if (error) throw error;
       
-      // Преобразуем заявки в события календаря
       const calendarEvents = applications.map(app => ({
         id: app.id,
         title: app.object_name,
@@ -111,7 +109,6 @@ const ClientCalendar = ({ clientId, t }) => {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4">
-      {/* Заголовок */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold flex items-center gap-2">
           <Calendar className="w-5 h-5" />
@@ -136,7 +133,6 @@ const ClientCalendar = ({ clientId, t }) => {
         </div>
       </div>
 
-      {/* Дни недели */}
       <div className="grid grid-cols-7 gap-1 mb-2">
         {weekDays.map((day, idx) => (
           <div key={idx} className="text-center text-sm font-medium text-gray-500 py-2">
@@ -145,14 +141,11 @@ const ClientCalendar = ({ clientId, t }) => {
         ))}
       </div>
 
-      {/* Календарная сетка */}
       <div className="grid grid-cols-7 gap-1">
-        {/* Пустые ячейки до первого дня месяца */}
         {Array.from({ length: firstDay }).map((_, idx) => (
           <div key={`empty-${idx}`} className="min-h-[100px] bg-gray-50 dark:bg-gray-700/30 rounded-lg p-1" />
         ))}
         
-        {/* Дни месяца */}
         {Array.from({ length: daysInMonth }).map((_, idx) => {
           const day = idx + 1;
           const dayEvents = getEventsForDay(day);
@@ -191,7 +184,6 @@ const ClientCalendar = ({ clientId, t }) => {
         })}
       </div>
 
-      {/* Модалка деталей события */}
       {selectedEvent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setSelectedEvent(null)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
