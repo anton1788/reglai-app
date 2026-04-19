@@ -8,17 +8,36 @@ const ClientCalendar = ({ clientId, t }) => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [error, setError] = useState(null);
 
   const loadEvents = useCallback(async () => {
-    if (!clientId) return;
+    if (!clientId) {
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
+    setError(null);
+    
     try {
-      const { data: applications, error } = await supabase
+      const { data: applications, error: queryError } = await supabase
         .from('applications')
         .select('*')
         .eq('client_id', clientId);
       
-      if (error) throw error;
+      if (queryError) {
+        console.error('❌ Ошибка загрузки событий:', queryError);
+        setError(queryError.message);
+        setEvents([]);
+        return;
+      }
+
+      // 🔥 ВАЖНО: проверяем, что data — это массив
+      if (!Array.isArray(applications)) {
+        console.warn('⚠️ Ожидался массив заявок, получено:', applications);
+        setEvents([]);
+        return;
+      }
       
       const calendarEvents = applications.map(app => ({
         id: app.id,
@@ -28,12 +47,14 @@ const ClientCalendar = ({ clientId, t }) => {
         type: 'application',
         foreman: app.foreman_name,
         phone: app.foreman_phone,
-        materials: app.materials
+        materials: Array.isArray(app.materials) ? app.materials : []
       }));
       
       setEvents(calendarEvents);
     } catch (err) {
-      console.error('Ошибка загрузки событий:', err);
+      console.error('❌ Критическая ошибка загрузки календаря:', err);
+      setError(err.message);
+      setEvents([]);
     } finally {
       setLoading(false);
     }
@@ -53,7 +74,10 @@ const ClientCalendar = ({ clientId, t }) => {
 
   const getEventsForDay = (day) => {
     const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return events.filter(event => event.date?.startsWith(dateStr));
+    // 🔥 Безопасная фильтрация
+    return Array.isArray(events) 
+      ? events.filter(event => event?.date?.startsWith(dateStr))
+      : [];
   };
 
   const getStatusColor = (status) => {
@@ -107,6 +131,20 @@ const ClientCalendar = ({ clientId, t }) => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="text-center py-8 text-red-600 dark:text-red-400">
+        <p>❌ {t('clientCalendar.loadError') || 'Ошибка загрузки'}: {error}</p>
+        <button 
+          onClick={loadEvents}
+          className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+        >
+          {t('retry') || 'Повторить'}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4">
       <div className="flex items-center justify-between mb-6">
@@ -118,6 +156,7 @@ const ClientCalendar = ({ clientId, t }) => {
           <button
             onClick={() => changeMonth(-1)}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            aria-label={t('previousMonth') || 'Предыдущий месяц'}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -127,6 +166,7 @@ const ClientCalendar = ({ clientId, t }) => {
           <button
             onClick={() => changeMonth(1)}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            aria-label={t('nextMonth') || 'Следующий месяц'}
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -166,18 +206,24 @@ const ClientCalendar = ({ clientId, t }) => {
                 {day}
               </div>
               <div className="space-y-1">
-                {dayEvents.map((event) => (
-                  <button
-                    key={event.id}
-                    onClick={() => setSelectedEvent(event)}
-                    className={`w-full text-left text-xs p-1 rounded ${getStatusColor(event.status)} transition-colors hover:opacity-80`}
-                  >
-                    <div className="flex items-center gap-1">
-                      {getStatusIcon(event.status)}
-                      <span className="truncate">{event.title}</span>
-                    </div>
-                  </button>
-                ))}
+                {/* 🔥 Безопасный рендеринг событий */}
+                {Array.isArray(dayEvents) && dayEvents.length > 0 ? (
+                  dayEvents.map((event) => (
+                    <button
+                      key={event?.id || `${day}-${idx}`}
+                      onClick={() => event?.id && setSelectedEvent(event)}
+                      className={`w-full text-left text-xs p-1 rounded ${getStatusColor(event?.status)} transition-colors hover:opacity-80`}
+                      disabled={!event?.id}
+                    >
+                      <div className="flex items-center gap-1">
+                        {getStatusIcon(event?.status)}
+                        <span className="truncate">{event?.title || t('clientCalendar.untitled') || 'Без названия'}</span>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-xs text-gray-400 px-1">—</span>
+                )}
               </div>
             </div>
           );
@@ -188,8 +234,8 @@ const ClientCalendar = ({ clientId, t }) => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setSelectedEvent(null)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-4">
-              <h3 className="text-xl font-bold">{selectedEvent.title}</h3>
-              <button onClick={() => setSelectedEvent(null)} className="p-1 hover:bg-gray-100 rounded-lg">
+              <h3 className="text-xl font-bold">{selectedEvent.title || t('clientCalendar.untitled')}</h3>
+              <button onClick={() => setSelectedEvent(null)} className="p-1 hover:bg-gray-100 rounded-lg" aria-label={t('close') || 'Закрыть'}>
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
@@ -197,7 +243,7 @@ const ClientCalendar = ({ clientId, t }) => {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="w-4 h-4 text-gray-400" />
-                <span>{new Date(selectedEvent.date).toLocaleDateString()}</span>
+                <span>{selectedEvent.date ? new Date(selectedEvent.date).toLocaleDateString() : '—'}</span>
               </div>
               
               <div className="flex items-center gap-2 text-sm">
@@ -214,14 +260,14 @@ const ClientCalendar = ({ clientId, t }) => {
                 </div>
               )}
               
-              {selectedEvent.materials && selectedEvent.materials.length > 0 && (
+              {selectedEvent.materials && Array.isArray(selectedEvent.materials) && selectedEvent.materials.length > 0 && (
                 <div className="mt-3">
                   <h4 className="font-medium mb-2">{t('clientCalendar.materials') || 'Материалы'}:</h4>
                   <div className="space-y-1 max-h-48 overflow-y-auto">
                     {selectedEvent.materials.map((m, idx) => (
                       <div key={idx} className="text-sm flex justify-between border-b pb-1">
-                        <span>{m.description}</span>
-                        <span>{m.received || 0}/{m.quantity} {m.unit}</span>
+                        <span>{m.description || '—'}</span>
+                        <span>{m.received || 0}/{m.quantity || 0} {m.unit || 'шт'}</span>
                       </div>
                     ))}
                   </div>

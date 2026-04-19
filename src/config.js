@@ -1,5 +1,5 @@
 // ✅ Единая точка управления версией приложения
-export const APP_VERSION = '6.9.9';
+export const APP_VERSION = '7.9.9';
 
 export const APP_CONFIG = {
   version: APP_VERSION,
