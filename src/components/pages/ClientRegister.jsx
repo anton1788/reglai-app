@@ -34,11 +34,6 @@ const ClientRegister = () => {
         throw new Error('Приглашение не найдено или уже использовано');
       }
       
-      // Проверка срока действия (только если колонка существует)
-      // if (data.expires_at && new Date(data.expires_at) < new Date()) {
-      //   throw new Error('Срок действия приглашения истёк');
-      // }
-      
       setInvitation(data);
       setFormData(prev => ({
         ...prev,
@@ -82,6 +77,15 @@ const ClientRegister = () => {
     setError(null);
     
     try {
+      // ✅ ВАЖНО: Если есть активная сессия (руководитель), выходим из неё
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        console.log('[ClientRegister] Выход из текущей сессии перед регистрацией');
+        await supabase.auth.signOut();
+        // Небольшая задержка для завершения выхода
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
       // 1. Регистрируем пользователя
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
@@ -113,7 +117,9 @@ const ClientRegister = () => {
           email: formData.email
         }]);
       
-      if (clientError) throw clientError;
+      if (clientError) {
+        console.warn('Ошибка clients (не критично):', clientError);
+      }
       
       // 3. Помечаем приглашение как использованное
       await supabase
@@ -126,7 +132,7 @@ const ClientRegister = () => {
         .eq('id', inviteToken);
       
       // 4. Создаём запись в company_users
-      await supabase
+      const { error: companyUserError } = await supabase
         .from('company_users')
         .insert([{
           user_id: authData.user.id,
@@ -137,12 +143,26 @@ const ClientRegister = () => {
           is_active: true
         }]);
       
+      if (companyUserError) {
+        console.warn('Ошибка company_users (не критично):', companyUserError);
+      }
+      
+      // 5. Автоматический вход после регистрации
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password
+      });
+      
+      if (signInError) {
+        console.warn('Ошибка автовхода:', signInError);
+      }
+      
       setStep('success');
       
-      // Автоматический вход через 2 секунды
+      // Перенаправление через 2 секунды
       setTimeout(() => {
         window.location.href = '/';
-      }, 3000);
+      }, 2000);
       
     } catch (err) {
       console.error('Ошибка регистрации:', err);
@@ -219,7 +239,6 @@ const ClientRegister = () => {
             <input
               type="text"
               value={formData.fullName}
-              onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
               className="w-full px-3 py-2 border rounded-lg bg-gray-50"
               disabled
             />

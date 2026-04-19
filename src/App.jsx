@@ -5210,7 +5210,9 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   const urlParams = new URLSearchParams(window.location.search);
   const inviteParam = urlParams.get('invite');
 
-  if (inviteParam && !user) {
+  // ✅ Если есть параметр invite - ВСЕГДА показываем регистрацию
+  // Это позволяет заказчику перейти по ссылке даже если руководитель уже залогинен
+  if (inviteParam) {
     return <ClientRegister />;
   }
 
