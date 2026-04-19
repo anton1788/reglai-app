@@ -6,6 +6,8 @@ import QuotaUsage from './components/QuotaUsage';
 import ClientDashboard from './components/ClientPortal/ClientDashboard';
 import ClientInviteModal from './components/Manager/ClientInviteModal';
 import ClientRegister from './components/pages/ClientRegister';
+import ClientChat from './components/ClientPortal/ClientChat';
+import ClientDocuments from './components/ClientPortal/ClientDocuments';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -353,6 +355,7 @@ const [clientId, setClientId] = useState(null);
 const [churnSubmitting, setChurnSubmitting] = useState(false);
 const [churnReasons, setChurnReasons] = useState([]);
 const [initialViewSet, setInitialViewSet] = useState(false); 
+const [selectedClientId, setSelectedClientId] = useState(null);
 
 // 🧪 A/B Testing State
 const [abTestVariants, setABTestVariants] = useState({
@@ -1808,6 +1811,7 @@ const handleSubmit = async (e) => {
     status: initialStatus,
     user_id: sessionUser.id,
     company_id: safeCompanyId,
+    client_id: selectedClientId || null,
     created_at: new Date().toISOString(),
     total_amount: totalAmount,
     status_history: [{
@@ -5245,6 +5249,9 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       setShowTemplateModal={setShowTemplateModal}
       templateName={templateName}
       setTemplateName={setTemplateName}
+      selectedClientId={selectedClientId}
+    onClientSelect={setSelectedClientId}
+    companyId={userCompanyId}
       t={t}
       language={language}
       showNotification={showNotification}
@@ -5675,14 +5682,29 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   </div>
 )}
 
+                      {/* Вкладки для заказчика */}
             {currentView === 'clientDashboard' && userRole === 'client' && (
-        <ClientDashboard 
-          user={user}
-          clientId={clientId}
-          companyId={userCompanyId}
-          t={t}
-        />
-      )}
+              <ClientDashboard 
+                clientId={clientId}
+                t={t}
+              />
+            )}
+
+            {currentView === 'clientChat' && userRole === 'client' && (
+              <ClientChat 
+                clientId={clientId}
+                companyId={userCompanyId}
+                user={user}
+                t={t}
+              />
+            )}
+
+            {currentView === 'clientDocuments' && userRole === 'client' && (
+              <ClientDocuments 
+                clientId={clientId}
+                t={t}
+              />
+            )}
 </main>
       <ReceiveModal
   isOpen={showReceiveModal}

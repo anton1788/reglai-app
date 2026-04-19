@@ -6,6 +6,7 @@ import {
   ChevronDown, RotateCcw, Undo2, Info, Minus, Camera
 } from 'lucide-react';
 import MaterialCart from './MaterialCart';
+import ClientSelector from './ClientSelector'; // Добавлен импорт ClientSelector
 
 // ─────────────────────────────────────────────────────────────
 // 📦 КОНСТАНТЫ
@@ -747,7 +748,11 @@ const CreateApplicationForm = memo(({
   fileInputRef,
   capturedPhotos,
   selectedApplication,
-  onAddPhoto
+  onAddPhoto,
+  // Добавленные пропсы
+  selectedClientId,
+  onClientSelect,
+  companyId
 }) => {
   // ─────────────────────────────────────────────────────────
   // 📊 STATE & REFS
@@ -920,6 +925,16 @@ const CreateApplicationForm = memo(({
             inputRef={objectInputRef}
             listRef={objectListRef}
           />
+
+          {/* Выбор заказчика */}
+          {companyId && onClientSelect && (
+            <ClientSelector
+              companyId={companyId}
+              selectedClientId={selectedClientId}
+              onSelect={onClientSelect}
+              t={t}
+            />
+          )}
 
           {/* Foreman Name */}
           <ForemanField
