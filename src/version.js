@@ -1,4 +1,4 @@
 // src/version.js — ⚠️ НЕ МЕНЯТЬ ВРУЧНЮЮ, только через скрипт
-export const VERSION = '4.9.9';
+export const VERSION = '5.9.9';
 export const ASSET_SUFFIX = `v${VERSION}`;
 export const CACHE_NAME = `reglai-system-${VERSION}`;

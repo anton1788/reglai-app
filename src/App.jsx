@@ -3825,23 +3825,26 @@ useEffect(() => {
             <div className="hidden lg:flex items-center space-x-1 overflow-x-auto no-scrollbar snap-x snap-mandatory">
               {navItems.map((item) => (
                 <button
-          key={item.id}
-          onClick={() => {
-            console.log('🔵 КЛИК ПО:', item.id, 'Текущий currentView:', currentView);  // ← ДОБАВИТЬ ЭТУ СТРОКУ
-            setCurrentView(item.id);
-          }}
-          data-nav={item.id}
-                  className={`group relative flex items-center justify-center px-3 py-2 rounded-lg transition-all duration-200 flex-shrink-0 snap-center ${
-                    currentView === item.id
-                      ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33] border border-[#4A6572]/20 dark:border-[#F9AA33]/20'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 hover:text-[#4A6572] dark:hover:text-[#F9AA33]'
-                  }`}
-                >
-                  <item.icon className="w-5 h-5 transition-transform duration-200" />
-                  <span className="hidden 2xl:inline ml-2 whitespace-nowrap text-sm font-medium">
-                    {item.label}
-                  </span>
-                </button>
+  key={item.id}
+  type="button"
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('🔵 КЛИК ПО:', item.id, 'Текущий currentView:', currentView);
+    setCurrentView(item.id);
+  }}
+  data-nav={item.id}
+  className={`group relative flex items-center justify-center px-3 py-2 rounded-lg transition-all duration-200 flex-shrink-0 snap-center ${
+    currentView === item.id
+      ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33] border border-[#4A6572]/20 dark:border-[#F9AA33]/20'
+      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 hover:text-[#4A6572] dark:hover:text-[#F9AA33]'
+  }`}
+>
+  <item.icon className="w-5 h-5 transition-transform duration-200 ${currentView === item.id ? 'scale-110' : 'group-hover:scale-110'}" />
+  <span className="hidden 2xl:inline ml-2 whitespace-nowrap text-sm font-medium">
+    {item.label}
+  </span>
+</button>
               ))}
             </div>
           </div>
