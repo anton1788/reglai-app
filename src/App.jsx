@@ -3299,16 +3299,28 @@ useEffect(() => {
 
   // 🧭 VIEW ROUTING (ИСПРАВЛЕННЫЙ)
 useEffect(() => {
-  if (!user) return;
-  
-  // 🆕 ДОБАВИТЬ: Если пользователь - заказчик, показываем clientDashboard
-  if (userRole === 'client') {
-    if (currentView !== 'clientDashboard') {
-      console.log('[Client] Перенаправление на clientDashboard');
-      setCurrentView('clientDashboard');
+    if (!user) return;
+    // 🆕 ДОБАВИТЬ: Если пользователь - заказчик, показываем clientDashboard
+    if (userRole === 'client') {
+        // Список разрешенных views для клиента
+        const allowedClientViews = [
+            'clientDashboard', 
+            'clientApplications', 
+            'clientCalendar', 
+            'clientChat', 
+            'clientDocuments', 
+            'clientPhotos', 
+            'clientConfirmation', 
+            'clientWorkAct'
+        ];
+
+        // Если текущий вид НЕ входит в список разрешенных, переключаем на дашборд
+        if (!allowedClientViews.includes(currentView)) {
+            console.log('[Client] Перенаправление на clientDashboard, так как текущий вид:', currentView);
+            setCurrentView('clientDashboard');
+        }
+        return;
     }
-    return;
-  }
   
   // 🔒 СУПЕР-АДМИН: Всегда на superAdmin вьюхе
   if (isSuperAdmin(userRole, user?.user_metadata)) {
