@@ -8,6 +8,11 @@ import ClientInviteModal from './components/Manager/ClientInviteModal';
 import ClientRegister from './components/pages/ClientRegister';
 import ClientChat from './components/ClientPortal/ClientChat';
 import ClientDocuments from './components/ClientPortal/ClientDocuments';
+import ClientApplications from './components/ClientPortal/ClientApplications';
+import ClientCalendar from './components/ClientPortal/ClientCalendar';
+import ClientConfirmation from './components/ClientPortal/ClientConfirmation';
+import ClientPhotos from './components/ClientPortal/ClientPhotos';
+import ClientWorkAct from './components/ClientPortal/ClientWorkAct';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -3804,8 +3809,13 @@ useEffect(() => {
   if (userRole === 'client') {
     navItems = [
       { id: 'clientDashboard', label: 'Мой объект', icon: Home, condition: true },
-      { id: 'clientChat', label: 'Чат с прорабом', icon: MessageCircle, condition: true },
-      { id: 'clientDocuments', label: 'Документы', icon: FileText, condition: true }
+    { id: 'clientApplications', label: 'Заявки', icon: FileText, condition: true },
+    { id: 'clientCalendar', label: 'Календарь', icon: Calendar, condition: true },
+    { id: 'clientChat', label: 'Чат с прорабом', icon: MessageCircle, condition: true },
+    { id: 'clientDocuments', label: 'Документы', icon: FileText, condition: true },
+    { id: 'clientPhotos', label: 'Фотоотчёт', icon: Image, condition: true },
+    { id: 'clientConfirmation', label: 'Подтверждение', icon: CheckCircle, condition: true },
+    { id: 'clientWorkAct', label: 'Акты', icon: FileText, condition: true }
     ];
     
     return (
@@ -5705,6 +5715,26 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
                 t={t}
               />
             )}
+
+            {currentView === 'clientApplications' && userRole === 'client' && (
+  <ClientApplications clientId={clientId} t={t} />
+)}
+
+{currentView === 'clientCalendar' && userRole === 'client' && (
+  <ClientCalendar clientId={clientId} t={t} />
+)}
+
+{currentView === 'clientConfirmation' && userRole === 'client' && (
+  <ClientConfirmation clientId={clientId} t={t} />
+)}
+
+{currentView === 'clientPhotos' && userRole === 'client' && (
+  <ClientPhotos clientId={clientId} t={t} />
+)}
+
+{currentView === 'clientWorkAct' && userRole === 'client' && (
+  <ClientWorkAct clientId={clientId} t={t} />
+)}
 </main>
       <ReceiveModal
   isOpen={showReceiveModal}
