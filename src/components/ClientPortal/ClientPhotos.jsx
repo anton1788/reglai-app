@@ -1,6 +1,6 @@
 // src/components/ClientPortal/ClientPhotos.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { Image, Camera, Download, X, Eye } from 'lucide-react';
+import { Camera, X, Eye } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 
 const ClientPhotos = ({ clientId }) => {

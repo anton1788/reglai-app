@@ -1,6 +1,6 @@
 // src/components/ClientPortal/ClientConfirmation.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 
 const ClientConfirmation = ({ clientId }) => {

@@ -1,6 +1,6 @@
 // src/components/ClientPortal/ClientWorkAct.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileText, Download, Eye, Calendar, DollarSign } from 'lucide-react';
+import { FileText, Download, Calendar, DollarSign } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 
 const ClientWorkAct = ({ clientId }) => {
