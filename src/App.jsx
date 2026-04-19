@@ -142,7 +142,7 @@ import {
   Copy, CheckCircleIcon, Globe, Mail, Users, TrendingUp,
   Moon, Sun, CheckCircle, Briefcase, Home, Clock, Archive, MessageCircle, Ban, Menu,
   HelpCircle, ArrowRight, Info, Loader2, WifiOff, Wifi, Trash2, ShoppingCart,
-  Undo2, Sparkles, RefreshCw,Code,DollarSign,UserPlus
+  Undo2, Sparkles, RefreshCw,Code,DollarSign,UserPlus,Image 
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import * as XLSX from 'xlsx';
