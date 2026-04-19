@@ -1180,43 +1180,35 @@ useEffect(() => {
     t('tutorialStep4')
   ];
   // 🎯 Onboarding Tour Configuration
-const onboardingHighlights = useMemo(() => [
-  {
-    selector: 'button[aria-label="Создать заявку"]',
-    title: 'Создание заявки',
-    description: 'Нажмите сюда, чтобы создать новую заявку на материалы',
-    actionLabel: 'Попробуйте создать свою первую заявку!',
-    position: { top: '60%', left: '50%' }
-  },
-  {
-    selector: '[data-nav="analytics"]',
-    title: 'Аналитика',
-    description: 'Здесь вы можете отслеживать все показатели по объектам',
-    actionLabel: 'Проверьте статистику по вашим заявкам',
-    position: { top: '20%', left: '70%' }
-  },
-  {
-    selector: '[data-nav="warehouse"]',
-    title: 'Склад',
-    description: 'Управляйте остатками материалов на складе',
-    actionLabel: 'Проверьте текущие остатки',
-    position: { top: '20%', left: '50%' }
-  },
-  {
-    selector: '[data-nav="chat"]',
-    title: 'Чат команды',
-    description: 'Общайтесь с коллегами прямо в приложении',
-    actionLabel: 'Отправьте первое сообщение',
-    position: { top: '20%', left: '30%' }
-  },
-  {
-    selector: '[data-profile-menu]',
-    title: 'Профиль',
-    description: 'Настройте уведомления и экспорт данных',
-    actionLabel: 'Заполните информацию о себе',
-    position: { top: '10%', left: '90%' }
-  }
-], []);
+const ROLE_ONBOARDING_HIGHLIGHTS = useMemo(() => ({
+  foreman: [
+    { selector: 'button[aria-label="Создать заявку"]', title: 'Создание заявки', description: 'Нажмите сюда, чтобы создать новую заявку на материалы', actionLabel: 'Попробуйте создать свою первую заявку!', position: { top: '60%', left: '50%' } },
+    { selector: '[data-nav="confirmation"]', title: 'Подтверждение материалов', description: 'Здесь вы подтверждаете фактическую приёмку материалов на объекте', actionLabel: 'Перейдите в раздел подтверждения', position: { top: '20%', left: '50%' } },
+    { selector: '[data-profile-menu]', title: 'Профиль', description: 'Настройте уведомления и язык интерфейса', actionLabel: 'Заполните информацию о себе', position: { top: '10%', left: '90%' } }
+  ],
+  manager: [
+    { selector: '[data-nav="invite"]', title: 'Приглашение сотрудников', description: 'Добавляйте прорабов, снабженцев и бухгалтеров в систему', actionLabel: 'Пригласите первого сотрудника', position: { top: '20%', left: '70%' } },
+    { selector: '[data-nav="analytics"]', title: 'Аналитика и отчёты', description: 'Отслеживайте расходы, сроки поставок и загрузку объектов', actionLabel: 'Посмотрите статистику', position: { top: '20%', left: '70%' } },
+    { selector: '[data-nav="warehouse"]', title: 'Управление складом', description: 'Контролируйте остатки и движение материалов', actionLabel: 'Проверьте текущие остатки', position: { top: '20%', left: '50%' } }
+  ],
+  supply_admin: [
+    { selector: '[data-nav="received"]', title: 'Приёмка заявок', description: 'Обрабатывайте входящие заявки и фиксируйте поставки', actionLabel: 'Перейдите к заявкам', position: { top: '20%', left: '60%' } },
+    { selector: '[data-nav="warehouse"]', title: 'Складские операции', description: 'Управляйте приходом и расходом материалов', actionLabel: 'Проверьте баланс склада', position: { top: '20%', left: '50%' } },
+    { selector: '[data-nav="chat"]', title: 'Чат с командой', description: 'Координируйте действия с прорабами и менеджерами', actionLabel: 'Напишите в общий чат', position: { top: '20%', left: '30%' } }
+  ],
+  client: [
+    { selector: '[data-nav="clientDashboard"]', title: 'Личный кабинет', description: 'Следите за статусом ваших объектов и заявок', actionLabel: 'Посмотрите сводку', position: { top: '50%', left: '50%' } },
+    { selector: '[data-nav="clientChat"]', title: 'Связь с прорабом', description: 'Общайтесь с ответственным за объект напрямую', actionLabel: 'Отправьте сообщение', position: { top: '20%', left: '30%' } }
+  ],
+  default: [
+    { selector: 'button[aria-label="Создать заявку"]', title: 'Быстрый старт', description: 'Создайте первую заявку или ознакомьтесь с интерфейсом', actionLabel: 'Начать работу', position: { top: '60%', left: '50%' } }
+  ]
+}), []);
+
+// Динамический выбор шагов для текущей роли
+const currentOnboardingHighlights = useMemo(() => {
+  return ROLE_ONBOARDING_HIGHLIGHTS[userRole] || ROLE_ONBOARDING_HIGHLIGHTS.default;
+}, [userRole, ROLE_ONBOARDING_HIGHLIGHTS]);
 
   const handleTutorialNext = () => {
     if (tutorialStep < tutorialSteps.length - 1) {
@@ -3471,13 +3463,10 @@ useEffect(() => {
 useEffect(() => {
   const checkOnboarding = async () => {
     if (!user || !userCompanyId) return;
-    
-    // 🔒 Супер-админу не показываем onboarding
-    if (isSuperAdmin(userRole, user?.user_metadata)) {
-      return;
-    }
-    
-    const completed = localStorage.getItem(`onboarding_${userCompanyId}`);
+    if (isSuperAdmin(userRole, user?.user_metadata)) return;
+    // Ключ теперь зависит от роли, чтобы онбординг показывался для каждой роли отдельно
+    const key = `onboarding_${userCompanyId}_${userRole}`;
+    const completed = localStorage.getItem(key);
     if (!completed) {
       setTimeout(() => {
         setShowOnboarding(true);
@@ -3489,15 +3478,15 @@ useEffect(() => {
 
 const handleOnboardingComplete = async () => {
   setShowOnboarding(false);
-  if (userCompanyId) {
-    localStorage.setItem(`onboarding_${userCompanyId}`, 'true');
+  if (userCompanyId && userRole) {
+    localStorage.setItem(`onboarding_${userCompanyId}_${userRole}`, 'true');
   }
   showNotification('🎉 Onboarding завершён! Теперь вы готовы к работе', 'success');
 };
 
 const resetOnboarding = () => {
-  if (userCompanyId) {
-    localStorage.removeItem(`onboarding_${userCompanyId}`);
+  if (userCompanyId && userRole) {
+    localStorage.removeItem(`onboarding_${userCompanyId}_${userRole}`);
   }
   setOnboardingStep(0);
   setShowOnboarding(true);
@@ -5909,11 +5898,11 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     isOpen={showOnboarding}
     onClose={() => setShowOnboarding(false)}
     currentStep={onboardingStep}
-    totalSteps={onboardingHighlights.length}
-    onNext={() => setOnboardingStep(prev => Math.min(prev + 1, onboardingHighlights.length - 1))}
+    totalSteps={currentOnboardingHighlights.length}
+    onNext={() => setOnboardingStep(prev => Math.min(prev + 1, currentOnboardingHighlights.length - 1))}
     onPrev={() => setOnboardingStep(prev => Math.max(prev - 1, 0))}
     onComplete={handleOnboardingComplete}
-    highlights={onboardingHighlights}
+    highlights={currentOnboardingHighlights}
   />
 )}
 {/* 🆕 Модалка согласования */}
