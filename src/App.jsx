@@ -3825,9 +3825,12 @@ useEffect(() => {
             <div className="hidden lg:flex items-center space-x-1 overflow-x-auto no-scrollbar snap-x snap-mandatory">
               {navItems.map((item) => (
                 <button
-                  key={item.id}
-                  onClick={() => setCurrentView(item.id)}
-                  data-nav={item.id}
+          key={item.id}
+          onClick={() => {
+            console.log('🔵 КЛИК ПО:', item.id, 'Текущий currentView:', currentView);  // ← ДОБАВИТЬ ЭТУ СТРОКУ
+            setCurrentView(item.id);
+          }}
+          data-nav={item.id}
                   className={`group relative flex items-center justify-center px-3 py-2 rounded-lg transition-all duration-200 flex-shrink-0 snap-center ${
                     currentView === item.id
                       ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33] border border-[#4A6572]/20 dark:border-[#F9AA33]/20'
