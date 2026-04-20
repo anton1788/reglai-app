@@ -3938,49 +3938,50 @@ useEffect(() => {
     </header>
   );
 
-  // ─────────────────────────────────────────────────────────
-// 🎨 RENDER NAVIGATION — РЕФАКТОРИНГ ПО РОЛЯМ
-// ─────────────────────────────────────────────────────────
-const renderNavigation = () => {
+  const renderNavigation = () => {
   let navItems;
   const isRealSuperAdmin = isSuperAdmin(userRole, user?.user_metadata);
 
-  // 🆕 1. МАРШРУТИЗАЦИЯ ДЛЯ ЗАКАЗЧИКА
+    // 🆕 Маршрутизация для заказчика
   if (userRole === 'client') {
     navItems = [
       { id: 'clientDashboard', label: 'Мой объект', icon: Home, condition: true },
-      { id: 'clientApplications', label: 'Заявки', icon: FileText, condition: true },
-      { id: 'clientCalendar', label: 'Календарь', icon: Calendar, condition: true },
-      { id: 'clientChat', label: 'Чат с прорабом', icon: MessageCircle, condition: true },
-      { id: 'clientDocuments', label: 'Документы', icon: FileText, condition: true },
-      { id: 'clientPhotos', label: 'Фотоотчёт', icon: Image, condition: true },
-      { id: 'clientConfirmation', label: 'Подтверждение', icon: CheckCircle, condition: true },
-      { id: 'clientWorkAct', label: 'Акты', icon: FileText, condition: true }
+    { id: 'clientApplications', label: 'Заявки', icon: FileText, condition: true },
+    { id: 'clientCalendar', label: 'Календарь', icon: Calendar, condition: true },
+    { id: 'clientChat', label: 'Чат с прорабом', icon: MessageCircle, condition: true },
+    { id: 'clientDocuments', label: 'Документы', icon: FileText, condition: true },
+    { id: 'clientPhotos', label: 'Фотоотчёт', icon: Image, condition: true },
+    { id: 'clientConfirmation', label: 'Подтверждение', icon: CheckCircle, condition: true },
+    { id: 'clientWorkAct', label: 'Акты', icon: FileText, condition: true }
     ];
+    
     return (
-      <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-[60] page-enter">
+      <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-[10000] page-enter">
         <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-6">
           <div className="flex overflow-x-auto no-scrollbar gap-1 h-14">
             <div className="hidden lg:flex items-center space-x-1 overflow-x-auto no-scrollbar snap-x snap-mandatory">
               {navItems.map((item) => (
                 <button
-                  key={item.id}
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setCurrentView(item.id);
-                  }}
-                  data-nav={item.id}
-                  className={`group relative flex items-center justify-center px-3 py-2 rounded-lg transition-all duration-200 flex-shrink-0 snap-center ${
-                    currentView === item.id
-                      ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33] border border-[#4A6572]/20 dark:border-[#F9AA33]/20'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 hover:text-[#4A6572] dark:hover:text-[#F9AA33]'
-                  }`}
-                >
-                  <item.icon className="w-5 h-5 transition-transform duration-200" />
-                  <span className="hidden 2xl:inline ml-2 whitespace-nowrap text-sm font-medium">{item.label}</span>
-                </button>
+  key={item.id}
+  type="button"
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('🔵 КЛИК ПО:', item.id, 'Текущий currentView:', currentView);
+    setCurrentView(item.id);
+  }}
+  data-nav={item.id}
+  className={`group relative flex items-center justify-center px-3 py-2 rounded-lg transition-all duration-200 flex-shrink-0 snap-center ${
+    currentView === item.id
+      ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33] border border-[#4A6572]/20 dark:border-[#F9AA33]/20'
+      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 hover:text-[#4A6572] dark:hover:text-[#F9AA33]'
+  }`}
+>
+  <item.icon className="w-5 h-5 transition-transform duration-200 ${currentView === item.id ? 'scale-110' : 'group-hover:scale-110'}" />
+  <span className="hidden 2xl:inline ml-2 whitespace-nowrap text-sm font-medium">
+    {item.label}
+  </span>
+</button>
               ))}
             </div>
           </div>
@@ -3988,93 +3989,82 @@ const renderNavigation = () => {
       </nav>
     );
   }
-
-  // 🔒 2. СУПЕР-АДМИН
+  
+  // 🔒 СУПЕР-АДМИН: ТОЛЬКО админские пункты
   if (isRealSuperAdmin) {
     navItems = [
       { id: 'superAdmin', label: t('superAdminPanelTitle'), icon: Shield, condition: true },
       { id: 'tariffs', label: t('tariffs') || 'Тарифы', icon: DollarSign, condition: true }
     ];
-  }
-
-  // 👨‍💼 3. МЕНЕДЖЕР / ВЛАДЕЛЕЦ (Полный доступ)
-  else if (userRole === 'manager' || isCompanyOwner) {
-    navItems = [
-      { id: 'create', label: t('createApplication'), icon: Plus, condition: true },
-      { id: 'approvals', label: `Согласование (${pendingApprovals.length})`, icon: CheckCircle, condition: pendingApprovals.length > 0 },
-      { id: 'inwork', label: language === 'ru' ? 'В работе' : 'In Work', icon: Briefcase, condition: true },
-      { id: 'received', label: t('receivedTab'), icon: Package, condition: true },
-      { id: 'warehouse', label: language === 'ru' ? 'Склад' : 'Warehouse', icon: Package, condition: true },
-      { id: 'chat', label: t('chat') || 'Чат', icon: MessageCircle, condition: true },
-      { id: 'history', label: t('history'), icon: Archive, condition: true },
-      { id: 'analytics', label: t('analytics'), icon: BarChart3, condition: true },
-      { id: 'employees', label: t('employees'), icon: Users, condition: true },
-      { id: 'invite', label: t('inviteUser'), icon: User, condition: true },
-      { id: 'api', label: 'API', icon: Code, condition: true },
-      { id: 'tariffs', label: t('tariffs') || 'Тарифы', icon: Sparkles, condition: isCompanyOwner },
-      { id: 'photo', label: 'Фотофиксация', icon: Camera, condition: true },
-      { id: 'scanner', label: 'QR Сканер', icon: ScanLine, condition: true }
-    ];
-  }
-
-  // 🏗 4. СНАБЖЕНЕЦ (Акцент на логистику)
-  else if (userRole === 'supply_admin') {
-    navItems = [
-      { id: 'inwork', label: language === 'ru' ? 'В работе' : 'In Work', icon: Briefcase, condition: true },
-      { id: 'received', label: t('receivedTab'), icon: Package, condition: true },
-      { id: 'warehouse', label: language === 'ru' ? 'Склад' : 'Warehouse', icon: Package, condition: true },
-      { id: 'scanner', label: 'QR Сканер', icon: ScanLine, condition: true },
-      { id: 'chat', label: t('chat') || 'Чат', icon: MessageCircle, condition: true },
-      { id: 'history', label: t('history'), icon: Archive, condition: true },
-      { id: 'photo', label: 'Фотофиксация', icon: Camera, condition: true }
-    ];
-  }
-
-  // 👷 5. ПРОРАБ / МАСТЕР (Полевые работы)
+    // ⚠️ ВАЖНО: Никаких 'create', 'warehouse', 'chat' и т.д.!
+  } 
+  // 👨‍💼 ОБЫЧНЫЕ ПОЛЬЗОВАТЕЛИ: все остальные пункты
   else {
     navItems = [
-      { id: 'create', label: t('createApplication'), icon: Plus, condition: true },
-      { id: 'inwork', label: language === 'ru' ? 'В работе' : 'In Work', icon: Briefcase, condition: true },
-      { id: 'confirmation', label: language === 'ru' ? 'Подтверждение' : 'Confirmation', icon: CheckCircle, condition: true },
+      { id: 'tasks', label: language === 'ru' ? 'Задачи' : 'Tasks', icon: CheckCircle, condition: currentUserPermissions.canCreate || userRole === 'manager' || userRole === 'supply_admin' },
+      { id: 'approvals', label: `Согласование (${pendingApprovals.length})`, icon: CheckCircle, condition: userRole === 'manager' || userRole === 'director' },
+      { id: 'create', label: t('createApplication'), icon: Plus, condition: currentUserPermissions.canCreate },
+      { id: 'inviteClient', label: 'Пригласить заказчика', icon: UserPlus, condition: userRole === 'manager' || userRole === 'director' },
+      { id: 'chat', label: t('chat') || 'Чат', icon: MessageCircle, condition: true },
+      { id: 'audit', label: t('audit'), icon: History, condition: currentUserPermissions.canViewAudit },
+      { id: 'calendar', label: t('calendar') || 'Календарь', icon: Calendar, condition: currentUserPermissions.canViewAnalytics },
+      { id: 'inwork', label: language === 'ru' ? 'В работе' : 'In Work', icon: Briefcase, condition: userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin' || userRole === 'manager' },
+      { id: 'confirmation', label: language === 'ru' ? 'Подтверждение' : 'Confirmation', icon: CheckCircle, condition: userRole === 'master' || userRole === 'foreman' },
+      { id: 'warehouse', label: language === 'ru' ? 'Склад' : 'Warehouse', icon: Package, condition: userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || isAdminMode },
+{ 
+  id: 'photo', 
+  label: 'Фотофиксация', 
+  icon: Camera, 
+  condition: userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin' 
+},
+{ 
+  id: 'scanner', 
+  label: 'QR Сканер', 
+  icon: ScanLine, 
+  condition: userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin' || userRole === 'manager' 
+},
+      { id: 'received', label: t('receivedTab'), icon: Package, condition: true },
       { id: 'history', label: t('history'), icon: Archive, condition: true },
-      { id: 'photo', label: 'Фотофиксация', icon: Camera, condition: true },
-      { id: 'chat', label: t('chat') || 'Чат', icon: MessageCircle, condition: true }
-    ];
+      { id: 'analytics', label: t('analytics'), icon: BarChart3, condition: currentUserPermissions.canViewAnalytics },
+      { id: 'employees', label: t('employees'), icon: Users, condition: userRole === 'manager' },
+      { id: 'api', label: 'API', icon: Code, condition: userRole === 'manager' || isCompanyOwner },
+      { id: 'invite', label: t('inviteUser'), icon: User, condition: userRole === 'manager' || userRole === 'supply_admin' || isCompanyOwner },
+      { id: 'cart', label: t('cart'), icon: ShoppingCart, condition: formData.cart.length > 0 },
+      { id: 'tariffs', label: t('tariffs') || 'Тарифы', icon: Sparkles, condition: isCompanyOwner || userRole === 'manager' }
+    ].filter(item => item.condition);
   }
 
-  // 🎨 Рендер навигации для всех ролей (кроме client)
   return (
-    <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-[60] page-enter">
+    <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-[10000] page-enter">
       <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-6">
-        <div className="flex overflow-x-auto no-scrollbar gap-1 h-14">
-          <div className="hidden lg:flex items-center space-x-1 overflow-x-auto no-scrollbar snap-x snap-mandatory">
-            {navItems.filter(item => item.condition).map((item) => (
+  <div className="flex overflow-x-auto no-scrollbar gap-1 h-14"> {/* ← ИСПРАВЛЕНО */}
+    <div className="hidden lg:flex items-center space-x-1 overflow-x-auto no-scrollbar snap-x snap-mandatory">
+            {navItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => {
-                  // 🔹 Обработка специальных действий
-                  if (item.id === 'invite') {
-                    setShowInviteModal(true);
-                  } else if (item.id === 'inviteClient') {
-                    setShowClientInviteModal(true);
-                  } else if (item.id === 'photo') {
-                    // 📸 Открытие камеры
-                    setActiveMaterialIndex(null);
-                    setShowPhotoCapture(true);
-                    setMobileMenuOpen(false);
-                  } else if (item.id === 'scanner') {
-                    // 📷 Открытие сканера
-                    setShowQRScanner(true);
-                    setMobileMenuOpen(false);
-                  } else {
-                    // 🔄 Стандартный переход
-                    setCurrentView(item.id);
-                  }
-                  // Закрываем мобильное меню
-                  setMobileMenuOpen(false);
-                }}
+    if (item.id === 'invite') {
+        setShowInviteModal(true);
+    } else if (item.id === 'inviteClient') {
+        setShowClientInviteModal(true);
+    } else if (item.id === 'photo') {
+        // Открываем модалку фото
+        setShowPhotoCapture(true); 
+        setMobileMenuOpen(false);
+    } else if (item.id === 'scanner') {
+        // Открываем модалку сканера
+        setShowQRScanner(true); 
+        setMobileMenuOpen(false);
+    } else {
+        setCurrentView(item.id);
+    }
+    // Если это не фото/сканер, закрываем мобильное меню
+    if (item.id !== 'photo' && item.id !== 'scanner') {
+        setMobileMenuOpen(false);
+    }
+}}
                 data-nav={item.id}
-                title={item.label}
+                title={item.label} // Нативная подсказка
                 className={`
                   group relative flex items-center justify-center px-3 py-2 rounded-lg transition-all duration-200 flex-shrink-0 snap-center
                   ${currentView === item.id
@@ -4082,17 +4072,25 @@ const renderNavigation = () => {
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 hover:text-[#4A6572] dark:hover:text-[#F9AA33]'}
                 `}
               >
+                {/* ИКОНКА: Видна всегда (на lg и выше) */}
                 <item.icon className={`w-5 h-5 transition-transform duration-200 ${currentView === item.id ? 'scale-110' : 'group-hover:scale-110'}`} aria-hidden="true" />
-                <span className="hidden 2xl:inline ml-2 whitespace-nowrap text-sm font-medium">{item.label}</span>
-                {/* Тултип для lg экранов */}
+                
+                {/* ТЕКСТ: Скрыт на lg, появляется на 2xl (широкие мониторы) */}
+                <span className="hidden 2xl:inline ml-2 whitespace-nowrap text-sm font-medium">
+                  {item.label}
+                </span>
+
+                {/* КАСТОМНЫЙ ТУЛТИП: Появляется на lg при наведении, скрыт на 2xl */}
                 <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap 2xl:hidden z-50">
                   {item.label}
+                  {/* Стрелочка тултипа */}
                   <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></span>
                 </span>
               </button>
             ))}
           </div>
-          {/* Бургер для мобильных */}
+
+          {/* ✅ БУРГЕР МЕНЮ (появляется только на экранах < lg) */}
           <div className="lg:hidden flex items-center">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -4104,40 +4102,76 @@ const renderNavigation = () => {
           </div>
         </div>
       </div>
-      {/* Мобильное меню */}
+
+      {/* Мобильное меню (для экранов < lg) */}
       {mobileMenuOpen && (
         <div className="lg:hidden bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border-t border-gray-200/50 dark:border-gray-700/50 fade-enter max-h-[80vh] overflow-y-auto">
-          <div className="px-3 pt-2 pb-3 space-y-1">
-            {navItems.filter(item => item.condition).map((item) => (
-              <button
+          <div className="px-3 pt-2 pb-3 space-y-4">
+    {/* Группа 1: Основные */}
+    <div className="space-y-1">
+        <h3 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Разделы</h3>
+        {navItems.filter(item => ['create', 'inwork', 'received', 'history', 'chat', 'analytics'].includes(item.id) && item.condition).map((item) => (
+            <button
                 key={item.id}
                 onClick={() => {
-                  if (item.id === 'invite') {
-                    setShowInviteModal(true);
-                  } else if (item.id === 'inviteClient') {
-                    setShowClientInviteModal(true);
-                  } else if (item.id === 'photo') {
-                    setActiveMaterialIndex(null);
-                    setShowPhotoCapture(true);
-                  } else if (item.id === 'scanner') {
-                    setShowQRScanner(true);
-                  } else {
                     setCurrentView(item.id);
-                  }
-                  setMobileMenuOpen(false);
+                    setMobileMenuOpen(false);
                 }}
-                data-nav={item.id}
                 className={`w-full text-left px-4 py-3 rounded-lg text-base font-medium flex items-center space-x-3 transition-colors ${
-                  currentView === item.id
+                    currentView === item.id
                     ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-700/50'
                 }`}
-              >
-                <item.icon className="w-5 h-5" aria-hidden="true" />
+            >
+                <item.icon className="w-5 h-5" />
                 <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
+            </button>
+        ))}
+    </div>
+
+    {/* Группа 2: Инструменты (Фото, Сканер и т.д.) */}
+    <div className="space-y-1 border-t border-gray-200/50 dark:border-gray-700/50 pt-2">
+        <h3 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Инструменты</h3>
+        {navItems.filter(item => ['photo', 'scanner', 'warehouse', 'api'].includes(item.id) && item.condition).map((item) => (
+            <button
+                key={item.id}
+                onClick={() => {
+                    if (item.id === 'photo') {
+                        setShowPhotoCapture(true);
+                    } else if (item.id === 'scanner') {
+                        setShowQRScanner(true);
+                    } else {
+                        setCurrentView(item.id);
+                    }
+                    setMobileMenuOpen(false);
+                }}
+                className={`w-full text-left px-4 py-3 rounded-lg text-base font-medium flex items-center space-x-3 transition-colors ${
+                    currentView === item.id
+                    ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-700/50'
+                }`}
+            >
+                <item.icon className="w-5 h-5" />
+                <span>{item.label}</span>
+            </button>
+        ))}
+    </div>
+    
+    {/* Остальные пункты (Профиль, Выход и т.д. - если есть в navItems, но не попали в фильтр) */}
+    {navItems.filter(item => !['create', 'inwork', 'received', 'history', 'chat', 'analytics', 'photo', 'scanner', 'warehouse', 'api'].includes(item.id) && item.condition).map((item) => (
+         <button
+            key={item.id}
+            onClick={() => {
+                setCurrentView(item.id);
+                setMobileMenuOpen(false);
+            }}
+            className="w-full text-left px-4 py-3 rounded-lg text-base font-medium flex items-center space-x-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-700/50"
+         >
+             <item.icon className="w-5 h-5" />
+             <span>{item.label}</span>
+         </button>
+    ))}
+</div>
         </div>
       )}
     </nav>
