@@ -37,7 +37,13 @@ const OnboardingTour = ({
   return (
     <div className="fixed inset-0 z-[10000] pointer-events-none">
       {/* Затемнение фона */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto" />
+      <div 
+  className="absolute inset-0 pointer-events-auto"
+  style={{ 
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backdropFilter: 'none'
+  }}
+/>
       
       {/* Подсветка элемента */}
       {step?.selector && (
