@@ -197,12 +197,13 @@ const GLOBAL_STYLES = `
 /* Вставьте это внутрь строковой константы GLOBAL_STYLES, вместо старого .onboarding-highlight */
 .onboarding-highlight {
   position: relative !important;
-  z-index: 10000 !important; /* Выше шапки (z-50) и затемнения */
+  z-index: 100000 !important; /* Выше шапки (10000) и размытия */
   box-shadow: 0 0 0 4px #F9AA33, 0 0 24px rgba(249, 170, 51, 0.6) !important;
   border-radius: 8px;
-  background-color: var(--color-surface, #fff); /* Гарантируем видимость фона */
+  background-color: var(--color-surface, #fff);
   transition: all 0.3s ease;
   animation: pulse-highlight 2s infinite;
+  transform: translateZ(0); /* Форсируем отрисовку на переднем плане */
 }
   /* ✅ ВСТАВИТЬ ВОТ СЮДА (скроллбар) */
 .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -3773,7 +3774,7 @@ useEffect(() => {
   // 🎨 RENDER FUNCTIONS
   // ─────────────────────────────────────────────────────────
   const renderHeader = () => (
-    <header className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-[60] page-enter">
+    <header className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-[10000] page-enter">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center space-x-3">
@@ -3955,7 +3956,7 @@ useEffect(() => {
     ];
     
     return (
-      <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-[60] page-enter">
+      <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-[10000] page-enter">
         <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-6">
           <div className="flex overflow-x-auto no-scrollbar gap-1 h-14">
             <div className="hidden lg:flex items-center space-x-1 overflow-x-auto no-scrollbar snap-x snap-mandatory">
@@ -4022,7 +4023,7 @@ useEffect(() => {
   }
 
   return (
-    <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-[60] page-enter">
+    <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-[10000] page-enter">
       <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-6">
   <div className="flex overflow-x-auto no-scrollbar gap-1 h-14"> {/* ← ИСПРАВЛЕНО */}
     <div className="hidden lg:flex items-center space-x-1 overflow-x-auto no-scrollbar snap-x snap-mandatory">
