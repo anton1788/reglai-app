@@ -142,7 +142,7 @@ import {
   Copy, CheckCircleIcon, Globe, Mail, Users, TrendingUp,
   Moon, Sun, CheckCircle, Briefcase, Home, Clock, Archive, MessageCircle, Ban, Menu,
   HelpCircle, ArrowRight, Info, Loader2, WifiOff, Wifi, Trash2, ShoppingCart,
-  Undo2, Sparkles, RefreshCw,Code,DollarSign,UserPlus,Image 
+  Undo2, Sparkles, RefreshCw,Code,DollarSign,UserPlus,Image,Camera, ScanLine 
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -4011,6 +4011,18 @@ useEffect(() => {
       { id: 'inwork', label: language === 'ru' ? 'В работе' : 'In Work', icon: Briefcase, condition: userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin' || userRole === 'manager' },
       { id: 'confirmation', label: language === 'ru' ? 'Подтверждение' : 'Confirmation', icon: CheckCircle, condition: userRole === 'master' || userRole === 'foreman' },
       { id: 'warehouse', label: language === 'ru' ? 'Склад' : 'Warehouse', icon: Package, condition: userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || isAdminMode },
+{ 
+  id: 'photo', 
+  label: 'Фотофиксация', 
+  icon: Camera, 
+  condition: userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin' 
+},
+{ 
+  id: 'scanner', 
+  label: 'QR Сканер', 
+  icon: ScanLine, 
+  condition: userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin' || userRole === 'manager' 
+},
       { id: 'received', label: t('receivedTab'), icon: Package, condition: true },
       { id: 'history', label: t('history'), icon: Archive, condition: true },
       { id: 'analytics', label: t('analytics'), icon: BarChart3, condition: currentUserPermissions.canViewAnalytics },
@@ -4031,14 +4043,25 @@ useEffect(() => {
               <button
                 key={item.id}
                 onClick={() => {
-  if (item.id === 'invite') {
-    setShowInviteModal(true);
-  } else if (item.id === 'inviteClient') {
-    setShowClientInviteModal(true);
-  } else {
-    setCurrentView(item.id);
-  }
-  setMobileMenuOpen(false);
+    if (item.id === 'invite') {
+        setShowInviteModal(true);
+    } else if (item.id === 'inviteClient') {
+        setShowClientInviteModal(true);
+    } else if (item.id === 'photo') {
+        // Открываем модалку фото
+        setShowPhotoCapture(true); 
+        setMobileMenuOpen(false);
+    } else if (item.id === 'scanner') {
+        // Открываем модалку сканера
+        setShowQRScanner(true); 
+        setMobileMenuOpen(false);
+    } else {
+        setCurrentView(item.id);
+    }
+    // Если это не фото/сканер, закрываем мобильное меню
+    if (item.id !== 'photo' && item.id !== 'scanner') {
+        setMobileMenuOpen(false);
+    }
 }}
                 data-nav={item.id}
                 title={item.label} // Нативная подсказка
@@ -4083,32 +4106,72 @@ useEffect(() => {
       {/* Мобильное меню (для экранов < lg) */}
       {mobileMenuOpen && (
         <div className="lg:hidden bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border-t border-gray-200/50 dark:border-gray-700/50 fade-enter max-h-[80vh] overflow-y-auto">
-          <div className="px-3 pt-2 pb-3 space-y-1">
-            {navItems.map((item) => (
-              <button
+          <div className="px-3 pt-2 pb-3 space-y-4">
+    {/* Группа 1: Основные */}
+    <div className="space-y-1">
+        <h3 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Разделы</h3>
+        {navItems.filter(item => ['create', 'inwork', 'received', 'history', 'chat', 'analytics'].includes(item.id) && item.condition).map((item) => (
+            <button
                 key={item.id}
                 onClick={() => {
-  if (item.id === 'invite') {
-    setShowInviteModal(true);
-  } else if (item.id === 'inviteClient') {
-    setShowClientInviteModal(true);
-  } else {
-    setCurrentView(item.id);
-  }
-  setMobileMenuOpen(false);
-}}
-                data-nav={item.id}
+                    setCurrentView(item.id);
+                    setMobileMenuOpen(false);
+                }}
                 className={`w-full text-left px-4 py-3 rounded-lg text-base font-medium flex items-center space-x-3 transition-colors ${
-                  currentView === item.id
+                    currentView === item.id
                     ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-700/50'
                 }`}
-              >
-                <item.icon className="w-5 h-5" aria-hidden="true" />
+            >
+                <item.icon className="w-5 h-5" />
                 <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
+            </button>
+        ))}
+    </div>
+
+    {/* Группа 2: Инструменты (Фото, Сканер и т.д.) */}
+    <div className="space-y-1 border-t border-gray-200/50 dark:border-gray-700/50 pt-2">
+        <h3 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Инструменты</h3>
+        {navItems.filter(item => ['photo', 'scanner', 'warehouse', 'api'].includes(item.id) && item.condition).map((item) => (
+            <button
+                key={item.id}
+                onClick={() => {
+                    if (item.id === 'photo') {
+                        setShowPhotoCapture(true);
+                    } else if (item.id === 'scanner') {
+                        setShowQRScanner(true);
+                    } else {
+                        setCurrentView(item.id);
+                    }
+                    setMobileMenuOpen(false);
+                }}
+                className={`w-full text-left px-4 py-3 rounded-lg text-base font-medium flex items-center space-x-3 transition-colors ${
+                    currentView === item.id
+                    ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-700/50'
+                }`}
+            >
+                <item.icon className="w-5 h-5" />
+                <span>{item.label}</span>
+            </button>
+        ))}
+    </div>
+    
+    {/* Остальные пункты (Профиль, Выход и т.д. - если есть в navItems, но не попали в фильтр) */}
+    {navItems.filter(item => !['create', 'inwork', 'received', 'history', 'chat', 'analytics', 'photo', 'scanner', 'warehouse', 'api'].includes(item.id) && item.condition).map((item) => (
+         <button
+            key={item.id}
+            onClick={() => {
+                setCurrentView(item.id);
+                setMobileMenuOpen(false);
+            }}
+            className="w-full text-left px-4 py-3 rounded-lg text-base font-medium flex items-center space-x-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-700/50"
+         >
+             <item.icon className="w-5 h-5" />
+             <span>{item.label}</span>
+         </button>
+    ))}
+</div>
         </div>
       )}
     </nav>
