@@ -2,49 +2,58 @@
 
 // === Конфигурация ролей ===
 export const ROLE_OPTIONS = [
-  { value: 'foreman', label: 'Сотрудник' },
-  { value: 'supply_admin', label: 'Администратор снабжения' },
-  { value: 'manager', label: 'Руководитель' },
+  { value: 'master', label: 'Мастер (Исполнитель)' }, // ← Старый foreman переименован для чистоты
+  { value: 'foreman', label: 'Прораб' },              // ← НОВАЯ ОТДЕЛЬНАЯ РОЛЬ
+  { value: 'supply_admin', label: 'Снабженец' },
+  { value: 'manager', label: 'Менеджер/Администратор' },
   { value: 'accountant', label: 'Бухгалтер' },
-  { value: 'super_admin', label: 'Супер-администратор' },
-  { value: 'client', label: 'Заказчик' },  // ← НОВАЯ РОЛЬ
+  { value: 'client', label: 'Заказчик' },
+  { value: 'super_admin', label: 'Супер-администратор' }
 ];
 
 // === Права доступа для каждой роли ===
 export const ROLE_PERMISSIONS = {
-  foreman: {
+  master: {
     canCreate: true,
-    canEditStatus: false,
     canViewAnalytics: false,
-    canViewAll: false,
-    canViewOnlyCompleted: false,
+    canManageUsers: false,
+    canReceiveMaterials: false,
+    canManageWarehouse: false,
+    canViewAudit: false
+  },
+  foreman: { // ← ОТДЕЛЬНЫЙ ПРОРАБ (права назначаются отдельно)
+    canCreate: true,
+    canViewAnalytics: true,
+    canManageUsers: false,
+    canReceiveMaterials: true,
+    canManageWarehouse: true,
     canViewAudit: false
   },
   supply_admin: {
     canCreate: false,
-    canEditStatus: true,
     canViewAnalytics: true,
-    canViewAll: true,
-    canViewOnlyCompleted: false,
+    canManageUsers: false,
+    canReceiveMaterials: true,
+    canManageWarehouse: true,
     canViewAudit: false
   },
   manager: {
-    canCreate: false,
-    canEditStatus: false,
+    canCreate: true,
     canViewAnalytics: true,
-    canViewAll: true,
-    canViewOnlyCompleted: false,
+    canManageUsers: true,
+    canReceiveMaterials: true,
+    canManageWarehouse: true,
     canViewAudit: true
   },
   accountant: {
     canCreate: false,
-    canEditStatus: false,
     canViewAnalytics: true,
-    canViewAll: true,
-    canViewOnlyCompleted: true,
+    canManageUsers: false,
+    canReceiveMaterials: false,
+    canManageWarehouse: false,
     canViewAudit: true
   },
-  // 🔥 ПОЛНОСТЬЮ ПЕРЕПИСАНАЯ РОЛЬ super_admin
+  // 🔥 ПОЛНОСТЬЮ ПЕРЕПИСАННАЯ РОЛЬ super_admin
   super_admin: {
     // ✅ ТОЛЬКО админские права
     canViewAllCompanies: true,    // Просмотр всех компаний
@@ -84,7 +93,8 @@ export const getRoleLabel = (role) => {
 
 // === Проверка наличия права доступа ===
 export const hasPermission = (userRole, permission) => {
-  const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.foreman;
+  // Возвращаем минимальные права для неизвестных ролей
+  const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.master;
   return permissions[permission] === true;
 };
 
@@ -100,7 +110,8 @@ export const hasAnyPermission = (userRole, permissions) => {
 
 // === Получение всех доступных прав для роли ===
 export const getRolePermissions = (userRole) => {
-  return ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.foreman;
+  // Возвращаем минимальные права для неизвестных ролей
+  return ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.master;
 };
 
 // === Проверка, является ли роль супер-админом ===
@@ -112,27 +123,35 @@ export const isSuperAdmin = (userRole, userMetadata) => {
 export const isClient = (userRole) => userRole === 'client';
 
 // === Проверка, может ли пользователь приглашать другие роли ===
-export const canInviteRole = (userRole, targetRole, isCompanyOwner) => {
+export const canInviteRole = (inviterRole, targetRole, isCompanyOwner) => {
   // Супер-админ не приглашает через обычный интерфейс
-  if (isSuperAdmin(userRole, { role: userRole })) {
-    return false;
-  }
+  if (inviterRole === 'super_admin') return false;
   
   // Менеджер может приглашать заказчиков
-  if (userRole === 'manager' && targetRole === 'client') {
+  if (inviterRole === 'manager' && targetRole === 'client') {
     return true;
   }
   
-  if (!['manager', 'supply_admin'].includes(userRole)) {
-    return false;
+  if (targetRole === 'super_admin') return false;
+  if (targetRole === 'manager' && !isCompanyOwner) return false;
+  
+  // Прораба могут приглашать менеджеры и снабженцы
+  if (targetRole === 'foreman') {
+    return inviterRole === 'manager' || inviterRole === 'supply_admin' || isCompanyOwner;
   }
-  if (targetRole === 'super_admin') {
-    return false;
+  
+  // Мастера могут приглашать менеджеры и прорабы
+  if (targetRole === 'master') {
+    return inviterRole === 'manager' || inviterRole === 'foreman' || isCompanyOwner;
   }
-  if (targetRole === 'manager' && !isCompanyOwner) {
-    return false;
+  
+  // Остальные роли
+  const allowedInviters = ['manager'];
+  if (targetRole === 'supply_admin' || targetRole === 'accountant') {
+    return allowedInviters.includes(inviterRole) || isCompanyOwner;
   }
-  return true;
+  
+  return allowedInviters.includes(inviterRole) || isCompanyOwner;
 };
 
 // === Фильтрация ролей для приглашения ===
@@ -161,7 +180,7 @@ export default {
   hasAnyPermission,
   getRolePermissions,
   isSuperAdmin,
-  isClient,                    // ← ЭКСПОРТ НОВОЙ ФУНКЦИИ
+  isClient,
   canInviteRole,
   getAvailableRolesForInvite,
   isSuperAdminStrict

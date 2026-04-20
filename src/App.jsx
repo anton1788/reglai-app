@@ -260,7 +260,7 @@ const App = () => {
     cart: []
   });
   const [user, setUser] = useState(null);
-  const [userRole, setUserRole] = useState('foreman');
+  const [userRole, setUserRole] = useState('master');
   const [userCompany, setUserCompany] = useState(null);
   const [userCompanyId, setUserCompanyId] = useState(null);
   const [authEmail, setAuthEmail] = useState('');
@@ -299,7 +299,7 @@ const [onboardingStep, setOnboardingStep] = useState(0);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('foreman');
+  const [inviteRole, setInviteRole] = useState('master');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
@@ -562,8 +562,8 @@ const {
   ), [user, profileDataForHeader, userRole, userCompanyId]);
 
   const currentUserPermissions = useMemo(() => {
-    return getRolePermissions(userRole || 'foreman');
-  }, [userRole]);
+  return getRolePermissions(userRole || 'master');
+}, [userRole]);
 
   // 🕒 Time to First Value
 const timeToFirstValue = useMemo(() => {
@@ -811,7 +811,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const metadata = session.user.user_metadata;
-        const role = metadata?.role || 'foreman';
+        const role = metadata?.role || 'master';
         const company_id = metadata?.company_id;
         const company_name = metadata?.company_name?.trim();
         if (company_id) {
@@ -876,7 +876,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
             if (error) throw error;
             if (newSession?.user) {
               const metadata = newSession.user.user_metadata;
-              const role = metadata?.role || 'foreman';
+              const role = metadata?.role || 'master';
               const company_id = metadata?.company_id;
               const company_name = metadata?.company_name?.trim();
               if (!company_id || !company_name) {
@@ -933,7 +933,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         const metadata = session.user.user_metadata;
-        const role = metadata?.role || 'foreman';
+        const role = metadata?.role || 'master';
         const company_id = metadata?.company_id;
         const company_name = metadata?.company_name?.trim();
         if (!company_id || !company_name) {
@@ -1122,7 +1122,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
                 company_id: userCompanyId,
                 full_name: data[0].foreman_name.trim(),
                 phone: data[0].foreman_phone,
-                role: 'foreman',
+                role: 'master',
                 is_active: true
               });
             if (insertErr && insertErr.code !== '23505') {
@@ -1147,7 +1147,7 @@ useEffect(() => {
   if (isSuperAdmin(userRole, user?.user_metadata)) {
     return;
   }
-  if (user && userRole === 'foreman' && currentUserPermissions.canCreate) {
+  if (user && userRole === 'master' && currentUserPermissions.canCreate) {
     setShowTutorial(true);
   }
 }, [user, userRole, currentUserPermissions.canCreate]);
@@ -1183,6 +1183,29 @@ useEffect(() => {
   // 🎯 Onboarding Tour Configuration
 // 🔹 КОНФИГУРАЦИЯ ОНБОРДИНГА (Замените старый onboardingHighlights)
 const ROLE_ONBOARDING_HIGHLIGHTS = useMemo(() => ({
+  master: [
+  {
+    selector: '[data-nav="create"]',
+    title: 'Создание заявки',
+    description: 'Здесь вы создаёте заявки на материалы для вашего объекта.',
+    actionLabel: 'Создать заявку',
+    position: { top: '120px', left: '50%' }
+  },
+  {
+    selector: '[data-nav="inwork"]',
+    title: 'Мои заявки',
+    description: 'Отслеживайте статус ваших заявок: в работе, доставлено, завершено.',
+    actionLabel: 'Перейти к заявкам',
+    position: { top: '120px', left: '30%' }
+  },
+  {
+    selector: '[data-profile-menu]',
+    title: 'Профиль',
+    description: 'Настройте уведомления и экспортируйте свои данные.',
+    actionLabel: 'Открыть профиль',
+    position: { top: '60px', left: '95%' }
+  }
+],
   foreman: [
     {
       selector: '[data-nav="create"]',
@@ -1499,7 +1522,7 @@ const checkForUpdates = useCallback(async () => {
         .replace(/^\.+|\.+$/g, '');
     };
 
-    let finalRole = 'foreman';
+    let finalRole = 'master';
     let targetCompanyId = null;
     let invitedCompanyName = null;
     let isCreatingCompany = false;
@@ -1544,7 +1567,7 @@ const checkForUpdates = useCallback(async () => {
         }
         if (existingCompany) {
           targetCompanyId = existingCompany.id;
-          finalRole = 'foreman';
+          finalRole = 'master';
         } else {
           const { data, error: insertError } = await supabase
             .from('companies')
@@ -2289,7 +2312,7 @@ if (needsApproval) {
       application_id: applicationId,
       user_id: user?.id,
       user_email: user?.email,
-      user_role: userRole || 'foreman',
+      user_role: userRole || 'master',
       user_company_id: safeCompanyId,
       content: cleanContent,
       created_at: new Date().toISOString()
@@ -2589,7 +2612,7 @@ useEffect(() => {
   // 📋 APPLICATION INTERACTION
   // ─────────────────────────────────────────────────────────
   const markAsViewed = async (applicationId) => {
-    if (userRole === 'supply_admin') {
+  if (userRole === 'supply_admin' || userRole === 'foreman') {
       const app = applications.find(a => a.id === applicationId);
       if (app && !app.viewed_by_supply_admin) {
         const { error } = await supabase
@@ -2615,14 +2638,14 @@ useEffect(() => {
   };
 
   const openReceiveModal = useCallback((application, mode = 'admin_receive') => {
-    if (mode === 'admin_receive' && userRole !== 'supply_admin' && userRole !== 'manager') {
-      showNotification('Нет прав на приёмку', 'error');
-      return;
-    }
-    if (mode === 'master_confirm' && userRole !== 'foreman') {
-      showNotification('Нет прав на подтверждение', 'error');
-      return;
-    }
+  if (mode === 'admin_receive' && userRole !== 'supply_admin' && userRole !== 'manager' && userRole !== 'foreman') {
+    showNotification('Нет прав на приёмку', 'error');
+    return;
+  }
+  if (mode === 'master_confirm' && userRole !== 'master' && userRole !== 'foreman') {
+    showNotification('Нет прав на подтверждение', 'error');
+    return;
+  }
     if (mode === 'admin_receive') {
       const hasUnreceivedMaterials = application.materials?.some(m =>
         (Number(m.supplier_received_quantity) || 0) < (Number(m.quantity) || 0)
@@ -2733,7 +2756,7 @@ useEffect(() => {
         materialsCount: cleanMaterials?.length,
         hasMaterials: cleanMaterials?.some(m => (m.supplier_received_quantity || 0) > 0)
       });
-      if (WAREHOUSE_ENABLED && (userRole === 'supply_admin' || userRole === 'manager')) {
+      if (WAREHOUSE_ENABLED && (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'foreman')) {
         for (const material of cleanMaterials) {
           const qtyReceived = Number(material.supplier_received_quantity) || 0;
           if (qtyReceived > 0) {
@@ -3250,7 +3273,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false })
       .range((pageNumber - 1) * ITEMS_PER_PAGE, pageNumber * ITEMS_PER_PAGE - 1);
-    if (userRole === 'foreman') query = query.eq('user_id', user?.id);
+    if (userRole === 'master') query = query.eq('user_id', user?.id);
     if (userRole === 'accountant') query = query.eq('status', 'received');
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
@@ -3984,9 +4007,9 @@ useEffect(() => {
       { id: 'chat', label: t('chat') || 'Чат', icon: MessageCircle, condition: true },
       { id: 'audit', label: t('audit'), icon: History, condition: currentUserPermissions.canViewAudit },
       { id: 'calendar', label: t('calendar') || 'Календарь', icon: Calendar, condition: currentUserPermissions.canViewAnalytics },
-      { id: 'inwork', label: language === 'ru' ? 'В работе' : 'In Work', icon: Briefcase, condition: userRole === 'foreman' || userRole === 'supply_admin' || userRole === 'manager' },
-      { id: 'confirmation', label: language === 'ru' ? 'Подтверждение' : 'Confirmation', icon: CheckCircle, condition: userRole === 'foreman' },
-      { id: 'warehouse', label: language === 'ru' ? 'Склад' : 'Warehouse', icon: Package, condition: userRole === 'manager' || userRole === 'supply_admin' || isAdminMode },
+      { id: 'inwork', label: language === 'ru' ? 'В работе' : 'In Work', icon: Briefcase, condition: userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin' || userRole === 'manager' },
+      { id: 'confirmation', label: language === 'ru' ? 'Подтверждение' : 'Confirmation', icon: CheckCircle, condition: userRole === 'master' || userRole === 'foreman' },
+      { id: 'warehouse', label: language === 'ru' ? 'Склад' : 'Warehouse', icon: Package, condition: userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || isAdminMode },
       { id: 'received', label: t('receivedTab'), icon: Package, condition: true },
       { id: 'history', label: t('history'), icon: Archive, condition: true },
       { id: 'analytics', label: t('analytics'), icon: BarChart3, condition: currentUserPermissions.canViewAnalytics },
@@ -5429,7 +5452,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           app.status === APPLICATION_STATUS.PARTIAL_RECEIVED ||
           app.status === APPLICATION_STATUS.CANCELED;
         return (isCompleted || hasReceivedMaterials) &&
-          (userRole !== 'foreman' || app.user_id === user?.id);
+          (userRole !== 'master' || app.user_id === user?.id);
       })}
       title={t('receivedTab')}
       emptyMessage={userRole === 'foreman' ? t('noReceived') : t('noApplications')}
@@ -5511,7 +5534,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     <ApplicationList
       applications={filteredApplications.filter(app => {
         return isApplicationActive(app.status) &&
-          (userRole !== 'foreman' || app.user_id === user?.id);
+          (userRole !== 'master' || app.user_id === user?.id);
       })}
       title={language === 'ru' ? 'В работе' : 'In Work'}
       emptyMessage={language === 'ru' ? 'Нет заявок в работе' : 'No applications in work'}
