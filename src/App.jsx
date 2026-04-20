@@ -166,47 +166,49 @@ const ITEMS_PER_PAGE = 20;
 // 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1)
 // ─────────────────────────────────────────────────────────────
 const GLOBAL_STYLES = `
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(20px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-@keyframes pulse-highlight {
-  0%, 100% { box-shadow: 0 0 0 4px rgba(74, 101, 114, 0.5); }
-  50% { box-shadow: 0 0 0 8px rgba(74, 101, 114, 0.3); }
-}
-.page-enter { animation: slideIn 200ms ease-out forwards; }
-.fade-enter { animation: fadeIn 200ms ease-out forwards; }
-.pulse { animation: pulse 2s ease-in-out infinite; }
-.shimmer {
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-}
-/* Вставьте это внутрь строковой константы GLOBAL_STYLES, вместо старого .onboarding-highlight */
-.onboarding-highlight {
-  position: relative !important;
-  z-index: 10000 !important; /* Выше шапки (z-50) и затемнения */
-  box-shadow: 0 0 0 4px #F9AA33, 0 0 24px rgba(249, 170, 51, 0.6) !important;
-  border-radius: 8px;
-  background-color: var(--color-surface, #fff); /* Гарантируем видимость фона */
-  transition: all 0.3s ease;
-  animation: pulse-highlight 2s infinite;
-}
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes pulse-highlight {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(74, 101, 114, 0.5); }
+    50% { box-shadow: 0 0 0 8px rgba(74, 101, 114, 0.3); }
+  }
+  .page-enter { animation: slideIn 200ms ease-out forwards; }
+  .fade-enter { animation: fadeIn 200ms ease-out forwards; }
+  .pulse { animation: pulse 2s ease-in-out infinite; }
+  .shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  
+  /* ✅ ИСПРАВЛЕННАЯ ПОДСВЕТКА ОНБОРДИНГА */
+  .onboarding-highlight {
+    position: relative !important; /* Обязательно для работы z-index */
+    z-index: 999999 !important;    /* Очень высокий приоритет, чтобы быть ВЫШЕ затемнения */
+    background-color: var(--color-surface, #fff) !important; /* Фон, чтобы текст не сливался */
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65) !important; /* Создает темный фон вокруг элемента */
+    border-radius: 8px !important;
+    transition: none !important;   /* Убираем мерцание при смене шагов */
+    pointer-events: auto !important; /* Элемент остается кликабельным */
+  }
+  
   /* ✅ ВСТАВИТЬ ВОТ СЮДА (скроллбар) */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 `;
 
 // ─────────────────────────────────────────────────────────────
