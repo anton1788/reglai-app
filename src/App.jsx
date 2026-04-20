@@ -831,11 +831,47 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
             console.error('Ошибка проверки блокировки компании:', err);
           }
         }
-        if (!company_id || !company_name) {
-          showNotification('Ваш аккаунт не привязан к компании. Обратитесь к администратору.', 'error');
+         // 🔒 СУПЕР-АДМИН: не требует привязки к компании
+    if (role === 'super_admin') {
+      setUser(session.user);
+      setUserRole('super_admin');
+      setUserCompany(null);
+      setUserCompanyId(null);
+      setIsCompanyOwner(false);
+      setProfileDataForHeader({
+        fullName: metadata.full_name || '',
+        phone: metadata.phone || ''
+      });
+      setLanguage(metadata.language || 'ru');
+      setTheme(metadata.theme || 'system');
+      setIsLoading(false);
+      return; // ← ВАЖНО: выходим, не проверяем компанию
+    }
+    
+    // Обычная проверка для остальных ролей
+    if (company_id) {
+      try {
+        const { data: companyData } = await supabase
+          .from('companies')
+          .select('is_blocked')
+          .eq('id', company_id)
+          .single();
+        if (companyData?.is_blocked) {
+          showNotification(t('companyBlockedAlert'), 'error');
           await supabase.auth.signOut();
+          window.location.href = '/login?blocked=1';
           return;
         }
+      } catch (err) {
+        console.error('Ошибка проверки блокировки компании:', err);
+      }
+    }
+    
+    if (!company_id || !company_name) {
+      showNotification('Ваш аккаунт не привязан к компании. Обратитесь к администратору.', 'error');
+      await supabase.auth.signOut();
+      return;
+    }
         setUser(session.user);
         setUserRole(role);
         setUserCompany(company_name);
@@ -931,16 +967,35 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
     checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        const metadata = session.user.user_metadata;
-        const role = metadata?.role || 'master';
-        const company_id = metadata?.company_id;
-        const company_name = metadata?.company_name?.trim();
-        if (!company_id || !company_name) {
-          showNotification('Ваш аккаунт не привязан к компании. Обратитесь к администратору.', 'error');
-          supabase.auth.signOut();
-          return;
-        }
+  if (session?.user) {
+    const metadata = session.user.user_metadata;
+    const role = metadata?.role || 'master';
+    
+    // 🔒 СУПЕР-АДМИН: отдельная логика
+    if (role === 'super_admin') {
+      setUser(session.user);
+      setUserRole('super_admin');
+      setUserCompany(null);
+      setUserCompanyId(null);
+      setIsCompanyOwner(false);
+      setProfileDataForHeader({
+        fullName: metadata.full_name || '',
+        phone: metadata.phone || ''
+      });
+      setLanguage(metadata.language || 'ru');
+      setTheme(metadata.theme || 'system');
+      setIsLoading(false);
+      return;
+    }
+    
+    const company_id = metadata?.company_id;
+    const company_name = metadata?.company_name?.trim();
+    
+    if (!company_id || !company_name) {
+      showNotification('Ваш аккаунт не привязан к компании. Обратитесь к администратору.', 'error');
+      supabase.auth.signOut();
+      return;
+    }
         setUser(session.user);
         setUserRole(role);
         setUserCompany(company_name);
