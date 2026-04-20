@@ -1,12 +1,12 @@
 {
-  "currentVersion": "6.0.0",
+  "currentVersion": "7.0.0",
   "releaseDate": "2026-03-27",
   "forceUpdate": false,
   "versions": [
     {
-      "version": "6.0.0",
+      "version": "7.0.0",
       "date": "2026-04-02",
-      "title": "Изменение онборда",
+      "title": " (Ловушка контекста наложения).",
       "changes": [
         "✅ Исправлен расчёт Activation Rate",
         "📊 Улучшена точность трекинга первых заявок",

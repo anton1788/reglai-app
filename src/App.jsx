@@ -166,49 +166,47 @@ const ITEMS_PER_PAGE = 20;
 // 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1)
 // ─────────────────────────────────────────────────────────────
 const GLOBAL_STYLES = `
-  @keyframes slideIn {
-    from { opacity: 0; transform: translateY(20px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-  }
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-  @keyframes pulse-highlight {
-    0%, 100% { box-shadow: 0 0 0 4px rgba(74, 101, 114, 0.5); }
-    50% { box-shadow: 0 0 0 8px rgba(74, 101, 114, 0.3); }
-  }
-  .page-enter { animation: slideIn 200ms ease-out forwards; }
-  .fade-enter { animation: fadeIn 200ms ease-out forwards; }
-  .pulse { animation: pulse 2s ease-in-out infinite; }
-  .shimmer {
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-  }
-  
-  /* ✅ ИСПРАВЛЕННАЯ ПОДСВЕТКА ОНБОРДИНГА */
-  .onboarding-highlight {
-    position: relative !important; /* Обязательно для работы z-index */
-    z-index: 999999 !important;    /* Очень высокий приоритет, чтобы быть ВЫШЕ затемнения */
-    background-color: var(--color-surface, #fff) !important; /* Фон, чтобы текст не сливался */
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65) !important; /* Создает темный фон вокруг элемента */
-    border-radius: 8px !important;
-    transition: none !important;   /* Убираем мерцание при смене шагов */
-    pointer-events: auto !important; /* Элемент остается кликабельным */
-  }
-  
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes pulse-highlight {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(74, 101, 114, 0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(74, 101, 114, 0.3); }
+}
+.page-enter { animation: slideIn 200ms ease-out forwards; }
+.fade-enter { animation: fadeIn 200ms ease-out forwards; }
+.pulse { animation: pulse 2s ease-in-out infinite; }
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+/* Вставьте это внутрь строковой константы GLOBAL_STYLES, вместо старого .onboarding-highlight */
+.onboarding-highlight {
+  position: relative !important;
+  z-index: 10000 !important; /* Выше шапки (z-50) и затемнения */
+  box-shadow: 0 0 0 4px #F9AA33, 0 0 24px rgba(249, 170, 51, 0.6) !important;
+  border-radius: 8px;
+  background-color: var(--color-surface, #fff); /* Гарантируем видимость фона */
+  transition: all 0.3s ease;
+  animation: pulse-highlight 2s infinite;
+}
   /* ✅ ВСТАВИТЬ ВОТ СЮДА (скроллбар) */
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 `;
 
 // ─────────────────────────────────────────────────────────────
@@ -3775,7 +3773,7 @@ useEffect(() => {
   // 🎨 RENDER FUNCTIONS
   // ─────────────────────────────────────────────────────────
   const renderHeader = () => (
-    <header className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-50 page-enter">
+    <header className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-[60] page-enter">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center space-x-3">
@@ -3957,7 +3955,7 @@ useEffect(() => {
     ];
     
     return (
-      <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-40 page-enter">
+      <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-[60] page-enter">
         <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-6">
           <div className="flex overflow-x-auto no-scrollbar gap-1 h-14">
             <div className="hidden lg:flex items-center space-x-1 overflow-x-auto no-scrollbar snap-x snap-mandatory">
@@ -4024,7 +4022,7 @@ useEffect(() => {
   }
 
   return (
-    <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-40 page-enter">
+    <nav className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-16 z-[60] page-enter">
       <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-6">
   <div className="flex overflow-x-auto no-scrollbar gap-1 h-14"> {/* ← ИСПРАВЛЕНО */}
     <div className="hidden lg:flex items-center space-x-1 overflow-x-auto no-scrollbar snap-x snap-mandatory">
