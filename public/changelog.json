@@ -1,12 +1,12 @@
 {
-  "currentVersion": "9.6.0",
+  "currentVersion": "9.7.0",
   "releaseDate": "2026-03-27",
   "forceUpdate": false,
   "versions": [
     {
-      "version": "9.6.0",
+      "version": "9.7.0",
       "date": "2026-04-02",
-      "title": "ДОБАВЛЕНЫ РАСШИРЕНИЯ ДЛЯ ЗАКРЫВАЮЩИХ ДОКУМЕНТОВ",
+      "title": "изменен онборд для пользователей по ролям",
       "changes": [
         "✅ Исправлен расчёт Activation Rate",
         "📊 Улучшена точность трекинга первых заявок",

@@ -1852,6 +1852,12 @@ const checkForUpdates = useCallback(async () => {
 // ─────────────────────────────────────────────────────────
 const handleSubmit = async (e) => {
   e.preventDefault();
+
+  // 🔐 Проверка роли - только прораб, снабженец могут создавать
+  if (userRole !== 'master' && userRole !== 'foreman' && userRole !== 'supply_admin') {
+    showNotification('У вашей роли нет прав на создание заявок', 'error');
+    return;
+  }
   
   // 🔐 Базовые проверки
   if (!user) {
@@ -4004,7 +4010,12 @@ useEffect(() => {
     navItems = [
       { id: 'tasks', label: language === 'ru' ? 'Задачи' : 'Tasks', icon: CheckCircle, condition: currentUserPermissions.canCreate || userRole === 'manager' || userRole === 'supply_admin' },
       { id: 'approvals', label: `Согласование (${pendingApprovals.length})`, icon: CheckCircle, condition: userRole === 'manager' || userRole === 'director' },
-      { id: 'create', label: t('createApplication'), icon: Plus, condition: currentUserPermissions.canCreate },
+      { 
+  id: 'create', 
+  label: t('createApplication'), 
+  icon: Plus, 
+  condition: userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin' 
+},
       { id: 'inviteClient', label: 'Пригласить заказчика', icon: UserPlus, condition: userRole === 'manager' || userRole === 'director' },
       { id: 'chat', label: t('chat') || 'Чат', icon: MessageCircle, condition: true },
       { id: 'audit', label: t('audit'), icon: History, condition: currentUserPermissions.canViewAudit },
@@ -4032,7 +4043,12 @@ useEffect(() => {
       { id: 'api', label: 'API', icon: Code, condition: userRole === 'manager' || isCompanyOwner },
       { id: 'invite', label: t('inviteUser'), icon: User, condition: userRole === 'manager' || userRole === 'supply_admin' || isCompanyOwner },
       { id: 'cart', label: t('cart'), icon: ShoppingCart, condition: formData.cart.length > 0 },
-      { id: 'tariffs', label: t('tariffs') || 'Тарифы', icon: Sparkles, condition: isCompanyOwner || userRole === 'manager' }
+      { 
+  id: 'tariffs', 
+  label: t('tariffs') || 'Тарифы', 
+  icon: Sparkles, 
+  condition: isCompanyOwner || userRole === 'manager' || userRole === 'director' 
+},
     ].filter(item => item.condition);
   }
 
@@ -5853,7 +5869,8 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     language={language} // ← текущий язык
   />
 )}
-{currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && (
+{currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && 
+ (isCompanyOwner || userRole === 'manager' || userRole === 'director') && (
   <div className="max-w-7xl mx-auto p-4 page-enter">
     <div className="flex items-center justify-between mb-6">
       <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
