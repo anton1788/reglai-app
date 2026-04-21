@@ -1,19 +1,20 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { FileText, Download, Printer, Calendar, Package, ClipboardList, Truck, Loader2, AlertCircle, FileCheck, Ruler, Receipt } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { 
+  FileText, Download, Printer, Calendar, Package, ClipboardList, Truck, 
+  Loader2, AlertCircle, FileCheck, Ruler, Receipt, Check, X, Upload, Paperclip
+} from 'lucide-react';
 
 const DOCS = [
-  // Первая очередь (обязательно)
   { id: 'work_act', label: 'Акт выполненных работ', icon: ClipboardList },
   { id: 'material_act', label: 'Акт приемки (М-7)', icon: Package },
   { id: 'work_log', label: 'Журнал работ', icon: Calendar },
   { id: 'invoice', label: 'Накладная', icon: Truck },
-  // Вторая очередь (желательно)
   { id: 'ks2', label: 'КС-2', icon: FileCheck },
   { id: 'ks3', label: 'КС-3', icon: Receipt },
   { id: 'hidden_works', label: 'Акт скрытых работ', icon: FileText },
   { id: 'executive_diagram', label: 'Исполнительная схема', icon: Ruler },
-  { id: 'invoice_bill', label: 'Счет', icon: Receipt },
-  { id: 'invoice_vat', label: 'Счет-фактура', icon: FileText }
+  { id: 'invoice_bill', label: 'Счёт', icon: Receipt },
+  { id: 'invoice_vat', label: 'Счёт-фактура', icon: FileText }
 ];
 
 const PRINT_STYLES = `
@@ -22,6 +23,7 @@ const PRINT_STYLES = `
   #printable-doc, #printable-doc * { visibility: visible; }
   #printable-doc { position: absolute; left: 0; top: 0; width: 100%; }
   .no-print { display: none !important; }
+  .page-break { page-break-before: always; }
 }
 `;
 
@@ -30,13 +32,44 @@ const DocumentGenerator = ({
   user,
   userRole,
   showNotification,
-  companyName
+  companyName,
+  userCompanyId,
+  supabase // ← ДОБАВИТЬ этот пропс при интеграции в App.jsx
 }) => {
   const [activeTab, setActiveTab] = useState('work_act');
   const [selectedAppId, setSelectedAppId] = useState('');
+  const [selectedAppIds, setSelectedAppIds] = useState([]); // ✅ Для пакетной печати
   const [isGenerating, setIsGenerating] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
+  const [companyDetails, setCompanyDetails] = useState(null);
+  const [loadingCompanyDetails, setLoadingCompanyDetails] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState('');
   const printRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // ✅ Загрузка реквизитов компании
+  useEffect(() => {
+    const fetchCompanyDetails = async () => {
+      if (!userCompanyId || !supabase) return;
+      setLoadingCompanyDetails(true);
+      try {
+        const { data, error } = await supabase
+          .from('company_details')
+          .select('*')
+          .eq('company_id', userCompanyId)
+          .maybeSingle();
+        if (!error && data) {
+          setCompanyDetails(data);
+        }
+      } catch (err) {
+        console.warn('Не удалось загрузить реквизиты:', err);
+      } finally {
+        setLoadingCompanyDetails(false);
+      }
+    };
+    fetchCompanyDetails();
+  }, [userCompanyId, supabase]);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -58,32 +91,79 @@ const DocumentGenerator = ({
     [applications, userRole, user?.id]
   );
 
+  const formatRub = (num) => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(num || 0);
+
+  // ✅ Загрузка файла в Supabase Storage
+  // eslint-disable-next-line no-unused-vars
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !userCompanyId || !supabase) return;
+    
+    setUploadingFile(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${userCompanyId}/diagrams/${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, file);
+      
+      if (uploadError) throw uploadError;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('documents')
+        .getPublicUrl(fileName);
+      
+      setUploadedFileUrl(publicUrl);
+      showNotification('📎 Файл загружен', 'success');
+    } catch (err) {
+      console.error('Ошибка загрузки файла:', err);
+      showNotification('❌ Ошибка загрузки файла', 'error');
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // ✅ Сохранение сгенерированного документа в БД
+  const saveGeneratedDocument = useCallback(async (docType, app, htmlContent) => {
+    if (!supabase || !userCompanyId || !user?.id) return null;
+    try {
+      const { data, error } = await supabase
+        .from('generated_documents')
+        .insert([{
+          company_id: userCompanyId,
+          application_id: app.id,
+          document_type: docType,
+          generated_by: user.id,
+          content_html: htmlContent,
+          created_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.warn('Не удалось сохранить документ:', err);
+      return null;
+    }
+  }, [supabase, userCompanyId, user?.id]);
+
   const generateTemplate = (type, app) => {
     if (!app) return '';
     const date = new Date(app.created_at).toLocaleDateString('ru-RU');
     const docNumber = app.id?.slice(0, 8).toUpperCase() || '---';
     
-    const materialsRows = app.materials.map(m => {
-      const qty = Number(m.quantity) || 0;
-      const received = Number(m.received || m.supplier_received_quantity || 0);
-      const price = Number(m.price || 1000); // Заглушка, если цены нет
-      const total = qty * price;
-      return `
-        <tr class="border-t border-gray-200 dark:border-gray-700">
-          <td class="py-2 px-3 text-sm">${m.description}</td>
-          <td class="py-2 px-3 text-sm text-center">${m.unit}</td>
-          <td class="py-2 px-3 text-sm text-center">${qty.toLocaleString('ru-RU')}</td>
-          <td class="py-2 px-3 text-sm text-center">${received.toLocaleString('ru-RU')}</td>
-          <td class="py-2 px-3 text-sm text-right">${price.toLocaleString('ru-RU')} ₽</td>
-          <td class="py-2 px-3 text-sm text-right font-medium">${total.toLocaleString('ru-RU')} ₽</td>
-        </tr>
-      `;
-    }).join('');
-
-    const totalAmount = app.materials.reduce((sum, m) => 
-      sum + (Number(m.quantity) || 0) * (Number(m.price) || 1000), 0
-    );
-
+    // ✅ Используем реальные реквизиты или заглушки
+    const cd = companyDetails || {};
+    const inn = cd.inn || '—';
+    const kpp = cd.kpp || '—';
+    const address = cd.address || '—';
+    const bank = cd.bank_name || '—';
+    const bik = cd.bik || '—';
+    const account = cd.account_number || '—';
+    
     const signatures = `
       <div class="mt-8 pt-4 border-t border-gray-300 dark:border-gray-600 flex justify-between">
         <div class="text-center w-1/2">
@@ -99,9 +179,30 @@ const DocumentGenerator = ({
       </div>
     `;
 
+    const vatSignatures = `
+      <div class="mt-8 pt-4 border-t border-gray-300 dark:border-gray-600 grid grid-cols-2 gap-8 text-sm">
+        <div>
+          <p class="font-medium mb-2">Руководитель</p>
+          <p class="border-b border-gray-400 dark:border-gray-500 pb-8">_________________</p>
+        </div>
+        <div>
+          <p class="font-medium mb-2">Главный бухгалтер</p>
+          <p class="border-b border-gray-400 dark:border-gray-500 pb-8">_________________</p>
+        </div>
+      </div>
+    `;
+
     switch (type) {
-      // === ПЕРВАЯ ОЧЕРЕДЬ (оставляем как есть) ===
-      case 'work_act':
+      case 'work_act': {
+        const materialsRows = app.materials.map(m => `
+          <tr class="border-t border-gray-200 dark:border-gray-700">
+            <td class="py-2 px-3 text-sm">${m.description}</td>
+            <td class="py-2 px-3 text-sm text-center">${m.unit}</td>
+            <td class="py-2 px-3 text-sm text-center">${Number(m.quantity).toLocaleString('ru-RU')}</td>
+            <td class="py-2 px-3 text-sm text-center">${Number(m.received || m.supplier_received_quantity || 0).toLocaleString('ru-RU')}</td>
+          </tr>
+        `).join('');
+        
         return `
           <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-4xl mx-auto">
             <h1 class="text-xl font-bold text-center mb-4">АКТ ВЫПОЛНЕННЫХ РАБОТ</h1>
@@ -124,8 +225,18 @@ const DocumentGenerator = ({
             </table>
             ${signatures}
           </div>`;
+      }
       
-      case 'material_act':
+      case 'material_act': {
+        const materialsRows = app.materials.map(m => `
+          <tr class="border-t border-gray-200 dark:border-gray-700">
+            <td class="py-2 px-3 text-sm">${m.description}</td>
+            <td class="py-2 px-3 text-sm text-center">${m.unit}</td>
+            <td class="py-2 px-3 text-sm text-center">${Number(m.quantity).toLocaleString('ru-RU')}</td>
+            <td class="py-2 px-3 text-sm text-center">${Number(m.received || m.supplier_received_quantity || 0).toLocaleString('ru-RU')}</td>
+          </tr>
+        `).join('');
+        
         return `
           <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-4xl mx-auto">
             <h1 class="text-xl font-bold text-center mb-4">АКТ ПРИЁМКИ МАТЕРИАЛОВ (Форма М-7)</h1>
@@ -151,6 +262,7 @@ const DocumentGenerator = ({
             </p>
             ${signatures}
           </div>`;
+      }
       
       case 'work_log': {
         const logEntries = app.status_history?.map(h => `
@@ -179,7 +291,16 @@ const DocumentGenerator = ({
           </div>`;
       }
       
-      case 'invoice':
+      case 'invoice': {
+        const materialsRows = app.materials.map(m => `
+          <tr class="border-t border-gray-200 dark:border-gray-700">
+            <td class="py-2 px-3 text-sm">${m.description}</td>
+            <td class="py-2 px-3 text-sm text-center">${m.unit}</td>
+            <td class="py-2 px-3 text-sm text-center">${Number(m.quantity).toLocaleString('ru-RU')}</td>
+            <td class="py-2 px-3 text-sm text-center">—</td>
+          </tr>
+        `).join('');
+        
         return `
           <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-4xl mx-auto">
             <h1 class="text-xl font-bold text-center mb-4">ТОВАРНАЯ НАКЛАДНАЯ</h1>
@@ -202,10 +323,13 @@ const DocumentGenerator = ({
             </table>
             ${signatures}
           </div>`;
+      }
 
-      // === ВТОРАЯ ОЧЕРЕДЬ (НОВОЕ) ===
-      
-      case 'ks2':
+      case 'ks2': {
+        const totalAmount = app.materials.reduce((sum, m) => 
+          sum + (Number(m.quantity) || 0) * (Number(m.price) || 1000), 0
+        );
+        
         return `
           <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-5xl mx-auto">
             <div class="text-center mb-4">
@@ -213,7 +337,7 @@ const DocumentGenerator = ({
               <h2 class="text-xl font-bold mt-1">о приемке выполненных работ (форма КС-2)</h2>
             </div>
             <div class="grid grid-cols-2 gap-2 text-xs mb-4 p-3 bg-gray-50 dark:bg-gray-700/30 rounded">
-              <p><strong>Заказчик:</strong> ${companyName || '—'}</p>
+              <p><strong>Заказчик:</strong> ${companyName || '—'}<br/>ИНН/КПП: ${inn}/${kpp}</p>
               <p><strong>Подрядчик:</strong> ${app.foreman_name}</p>
               <p><strong>Объект:</strong> ${app.object_name}</p>
               <p><strong>Дата составления:</strong> ${date}</p>
@@ -223,12 +347,12 @@ const DocumentGenerator = ({
             <table class="w-full border-collapse text-left text-sm">
               <thead>
                 <tr class="bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-300 dark:border-gray-600">
-                  <th class="py-2 px-2 font-bold text-center" rowspan="2">№</th>
-                  <th class="py-2 px-2 font-bold text-left" rowspan="2">Наименование работ</th>
-                  <th class="py-2 px-2 font-bold text-center" rowspan="2">Ед.изм.</th>
-                  <th class="py-2 px-2 font-bold text-center" colspan="2">Количество</th>
-                  <th class="py-2 px-2 font-bold text-right" rowspan="2">Цена, ₽</th>
-                  <th class="py-2 px-2 font-bold text-right" rowspan="2">Стоимость, ₽</th>
+                  <th class="py-2 px-2 font-bold text-center" rowSpan="2">№</th>
+                  <th class="py-2 px-2 font-bold text-left" rowSpan="2">Наименование работ</th>
+                  <th class="py-2 px-2 font-bold text-center" rowSpan="2">Ед.изм.</th>
+                  <th class="py-2 px-2 font-bold text-center" colSpan="2">Количество</th>
+                  <th class="py-2 px-2 font-bold text-right" rowSpan="2">Цена, ₽</th>
+                  <th class="py-2 px-2 font-bold text-right" rowSpan="2">Стоимость, ₽</th>
                 </tr>
                 <tr class="bg-gray-100 dark:bg-gray-700 border-b border-gray-300 dark:border-gray-600">
                   <th class="py-1 px-2 font-bold text-center">По проекту</th>
@@ -239,7 +363,7 @@ const DocumentGenerator = ({
                 ${app.materials.map((m, idx) => {
                   const qty = Number(m.quantity) || 0;
                   const received = Number(m.received || m.supplier_received_quantity || 0);
-                  const price = Number(m.price || 1000);
+                  const price = Number(m.price) || 1000;
                   const total = received * price;
                   return `
                     <tr class="border-b border-gray-200 dark:border-gray-700">
@@ -256,8 +380,8 @@ const DocumentGenerator = ({
               </tbody>
               <tfoot>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 font-bold">
-                  <td colspan="6" class="py-3 px-2 text-right">ИТОГО:</td>
-                  <td class="py-3 px-2 text-right">${totalAmount.toLocaleString('ru-RU')} ₽</td>
+                  <td colSpan="6" class="py-3 px-2 text-right">ИТОГО:</td>
+                  <td class="py-3 px-2 text-right">${formatRub(totalAmount)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -274,8 +398,14 @@ const DocumentGenerator = ({
               </div>
             </div>
           </div>`;
+      }
 
-      case 'ks3':
+      case 'ks3': {
+        const totalAmount = app.materials.reduce((sum, m) => 
+          sum + (Number(m.quantity) || 0) * (Number(m.price) || 1000), 0
+        );
+        const ndsAmount = Math.round(totalAmount * 20 / 120);
+        
         return `
           <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-5xl mx-auto">
             <div class="text-center mb-4">
@@ -284,17 +414,17 @@ const DocumentGenerator = ({
             </div>
             <div class="grid grid-cols-2 gap-2 text-xs mb-4 p-3 bg-gray-50 dark:bg-gray-700/30 rounded">
               <p><strong>Стройка:</strong> ${app.object_name}</p>
-              <p><strong>Заказчик:</strong> ${companyName || '—'}</p>
+              <p><strong>Заказчик:</strong> ${companyName || '—'}<br/>ИНН/КПП: ${inn}/${kpp}</p>
               <p><strong>Подрядчик:</strong> ${app.foreman_name}</p>
               <p><strong>Дата:</strong> ${date}</p>
             </div>
             <table class="w-full border-collapse text-left text-sm">
               <thead>
                 <tr class="bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-300 dark:border-gray-600">
-                  <th class="py-2 px-2 font-bold text-center" rowspan="2">№</th>
-                  <th class="py-2 px-2 font-bold text-left" rowspan="2">Наименование работ</th>
-                  <th class="py-2 px-2 font-bold text-center" rowspan="2">Ед.изм.</th>
-                  <th class="py-2 px-2 font-bold text-right" colspan="2">Стоимость, ₽</th>
+                  <th class="py-2 px-2 font-bold text-center" rowSpan="2">№</th>
+                  <th class="py-2 px-2 font-bold text-left" rowSpan="2">Наименование работ</th>
+                  <th class="py-2 px-2 font-bold text-center" rowSpan="2">Ед.изм.</th>
+                  <th class="py-2 px-2 font-bold text-right" colSpan="2">Стоимость, ₽</th>
                 </tr>
                 <tr class="bg-gray-100 dark:bg-gray-700 border-b border-gray-300 dark:border-gray-600">
                   <th class="py-1 px-2 font-bold text-right">По договору</th>
@@ -305,7 +435,7 @@ const DocumentGenerator = ({
                 ${app.materials.map((m, idx) => {
                   const qty = Number(m.quantity) || 0;
                   const received = Number(m.received || m.supplier_received_quantity || 0);
-                  const price = Number(m.price || 1000);
+                  const price = Number(m.price) || 1000;
                   const contractTotal = qty * price;
                   const actualTotal = received * price;
                   return `
@@ -321,20 +451,21 @@ const DocumentGenerator = ({
               </tbody>
               <tfoot>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 font-bold">
-                  <td colspan="3" class="py-3 px-2 text-right">ВСЕГО:</td>
-                  <td class="py-3 px-2 text-right">${totalAmount.toLocaleString('ru-RU')} ₽</td>
-                  <td class="py-3 px-2 text-right">${totalAmount.toLocaleString('ru-RU')} ₽</td>
+                  <td colSpan="3" class="py-3 px-2 text-right">ВСЕГО:</td>
+                  <td class="py-3 px-2 text-right">${formatRub(totalAmount)}</td>
+                  <td class="py-3 px-2 text-right">${formatRub(totalAmount)}</td>
                 </tr>
                 <tr class="bg-gray-100 dark:bg-gray-700 font-bold">
-                  <td colspan="3" class="py-2 px-2 text-right">В т.ч. НДС 20%:</td>
-                  <td class="py-2 px-2 text-right" colspan="2">${Math.round(totalAmount * 0.2 / 1.2).toLocaleString('ru-RU')} ₽</td>
+                  <td colSpan="3" class="py-2 px-2 text-right">В т.ч. НДС 20%:</td>
+                  <td class="py-2 px-2 text-right" colSpan="2">${formatRub(ndsAmount)}</td>
                 </tr>
               </tfoot>
             </table>
             ${signatures}
           </div>`;
+      }
 
-      case 'hidden_works':
+      case 'hidden_works': {
         return `
           <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-4xl mx-auto">
             <h1 class="text-xl font-bold text-center mb-4">АКТ<br/>на скрытые работы</h1>
@@ -376,8 +507,9 @@ const DocumentGenerator = ({
               ${signatures}
             </div>
           </div>`;
+      }
 
-      case 'executive_diagram':
+      case 'executive_diagram': {
         return `
           <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-4xl mx-auto">
             <h1 class="text-xl font-bold text-center mb-4">ИСПОЛНИТЕЛЬНАЯ СХЕМА</h1>
@@ -387,14 +519,35 @@ const DocumentGenerator = ({
               <p><strong>Прораб:</strong> ${app.foreman_name}</p>
               <p><strong>№ заявки:</strong> ${docNumber}</p>
             </div>
-            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 mb-6 text-center bg-gray-50 dark:bg-gray-700/30">
-              <p class="text-gray-500 dark:text-gray-400 mb-2">📐 Место для схемы / чертежа</p>
-              <p class="text-xs text-gray-400">Прикрепите исполнительную схему в формате PDF, DWG или изображение</p>
-              <div class="mt-4 flex justify-center gap-2">
-                <button class="px-3 py-1.5 text-xs bg-[#4A6572] text-white rounded hover:bg-[#344955]">Загрузить файл</button>
-                <button class="px-3 py-1.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500">Сделать фото</button>
+            ${uploadedFileUrl ? `
+              <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p class="font-medium flex items-center gap-2">
+                  <Paperclip class="w-4 h-4" /> Прикреплённый файл:
+                </p>
+                <a href="${uploadedFileUrl}" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline break-all">
+                  ${uploadedFileUrl.split('/').pop()}
+                </a>
               </div>
-            </div>
+            ` : `
+              <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 mb-6 text-center bg-gray-50 dark:bg-gray-700/30">
+                <p class="text-gray-500 dark:text-gray-400 mb-2">📐 Место для схемы / чертежа</p>
+                <p class="text-xs text-gray-400">Прикрепите исполнительную схему в формате PDF, DWG или изображение</p>
+                <div class="mt-4 flex justify-center gap-2 no-print">
+                  <label class="px-3 py-1.5 text-xs bg-[#4A6572] text-white rounded hover:bg-[#344955] cursor-pointer flex items-center gap-1">
+                    <Upload class="w-3 h-3" />
+                    ${uploadingFile ? 'Загрузка...' : 'Загрузить файл'}
+                    <input 
+                      type="file" 
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      accept=".pdf,.dwg,.png,.jpg,.jpeg"
+                      class="hidden"
+                    />
+                  </label>
+                  <button class="px-3 py-1.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500">Сделать фото</button>
+                </div>
+              </div>
+            `}
             <div class="mb-6">
               <p class="font-medium mb-2">Перечень выполненных работ:</p>
               <ul class="space-y-1 text-sm">
@@ -408,8 +561,29 @@ const DocumentGenerator = ({
             </div>
             ${signatures}
           </div>`;
+      }
 
-      case 'invoice_bill':
+      case 'invoice_bill': {
+        const materialsRows = app.materials.map((m, idx) => {
+          const qty = Number(m.quantity) || 0;
+          const price = Number(m.price) || 1000;
+          const total = qty * price;
+          return `
+            <tr class="border-t border-gray-200 dark:border-gray-700">
+              <td class="py-2 px-3">${idx + 1}</td>
+              <td class="py-2 px-3">${m.description}</td>
+              <td class="py-2 px-3 text-center">${m.unit}</td>
+              <td class="py-2 px-3 text-center">${qty}</td>
+              <td class="py-2 px-3 text-right">${price.toLocaleString('ru-RU')}</td>
+              <td class="py-2 px-3 text-right font-medium">${total.toLocaleString('ru-RU')}</td>
+            </tr>
+          `;
+        }).join('');
+        
+        const totalAmount = app.materials.reduce((sum, m) => 
+          sum + (Number(m.quantity) || 0) * (Number(m.price) || 1000), 0
+        );
+        
         return `
           <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-4xl mx-auto">
             <div class="flex justify-between items-start mb-6">
@@ -420,7 +594,10 @@ const DocumentGenerator = ({
               <div class="text-right text-sm">
                 <p><strong>Поставщик:</strong></p>
                 <p>${companyName || '—'}</p>
-                <p class="text-gray-500 mt-1">ИНН/КПП: — / —</p>
+                <p class="text-gray-500 mt-1">ИНН/КПП: ${inn} / ${kpp}</p>
+                <p class="text-gray-500">Адрес: ${address}</p>
+                <p class="text-gray-500">Банк: ${bank}, БИК ${bik}</p>
+                <p class="text-gray-500">Р/с: ${account}</p>
               </div>
             </div>
             <div class="mb-4 p-3 bg-gray-50 dark:bg-gray-700/30 rounded text-sm">
@@ -438,41 +615,31 @@ const DocumentGenerator = ({
                   <th class="py-2 px-3 font-medium text-right">Сумма</th>
                 </tr>
               </thead>
-              <tbody>
-                ${app.materials.map((m, idx) => {
-                  const qty = Number(m.quantity) || 0;
-                  const price = Number(m.price || 1000);
-                  const total = qty * price;
-                  return `
-                    <tr class="border-t border-gray-200 dark:border-gray-700">
-                      <td class="py-2 px-3">${idx + 1}</td>
-                      <td class="py-2 px-3">${m.description}</td>
-                      <td class="py-2 px-3 text-center">${m.unit}</td>
-                      <td class="py-2 px-3 text-center">${qty}</td>
-                      <td class="py-2 px-3 text-right">${price.toLocaleString('ru-RU')}</td>
-                      <td class="py-2 px-3 text-right font-medium">${total.toLocaleString('ru-RU')}</td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
+              <tbody>${materialsRows}</tbody>
               <tfoot>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 font-bold">
-                  <td colspan="5" class="py-3 px-3 text-right">Итого:</td>
-                  <td class="py-3 px-3 text-right">${totalAmount.toLocaleString('ru-RU')} ₽</td>
+                  <td colSpan="5" class="py-3 px-3 text-right">Итого:</td>
+                  <td class="py-3 px-3 text-right">${formatRub(totalAmount)}</td>
                 </tr>
                 <tr class="font-bold">
-                  <td colspan="5" class="py-2 px-3 text-right">Всего к оплате:</td>
-                  <td class="py-2 px-3 text-right text-lg">${totalAmount.toLocaleString('ru-RU')} ₽</td>
+                  <td colSpan="5" class="py-2 px-3 text-right">Всего к оплате:</td>
+                  <td class="py-2 px-3 text-right text-lg">${formatRub(totalAmount)}</td>
                 </tr>
               </tfoot>
             </table>
             <div class="text-sm text-gray-600 dark:text-gray-400">
               <p>Оплата в течение 3 банковских дней с момента выставления счета.</p>
-              <p class="mt-2">Реквизиты для оплаты: [указать в настройках компании]</p>
             </div>
           </div>`;
+      }
 
-      case 'invoice_vat':
+      case 'invoice_vat': {
+        const totalAmount = app.materials.reduce((sum, m) => 
+          sum + (Number(m.quantity) || 0) * (Number(m.price) || 1000), 0
+        );
+        const ndsAmount = Math.round(totalAmount * 20 / 120);
+        const withoutNds = totalAmount - ndsAmount;
+        
         return `
           <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-5xl mx-auto">
             <h1 class="text-xl font-bold text-center mb-4">СЧЕТ-ФАКТУРА № ${docNumber}</h1>
@@ -481,8 +648,10 @@ const DocumentGenerator = ({
               <div>
                 <p><strong>Продавец:</strong></p>
                 <p>${companyName || '—'}</p>
-                <p>Адрес: —</p>
-                <p>ИНН/КПП: — / —</p>
+                <p>Адрес: ${address}</p>
+                <p>ИНН/КПП: ${inn} / ${kpp}</p>
+                <p>Банк: ${bank}, БИК ${bik}</p>
+                <p>Р/с: ${account}</p>
               </div>
               <div>
                 <p><strong>Покупатель:</strong></p>
@@ -507,10 +676,10 @@ const DocumentGenerator = ({
               <tbody>
                 ${app.materials.map((m, idx) => {
                   const qty = Number(m.quantity) || 0;
-                  const price = Number(m.price || 1000);
+                  const price = Number(m.price) || 1000;
                   const total = qty * price;
-                  const nds = Math.round(total * 0.2 / 1.2);
-                  const withoutNds = total - nds;
+                  const itemNds = Math.round(total * 20 / 120);
+                  const itemWithoutNds = total - itemNds;
                   return `
                     <tr class="border-b border-gray-200 dark:border-gray-700">
                       <td class="py-2 px-2 text-center">${idx + 1}</td>
@@ -518,8 +687,8 @@ const DocumentGenerator = ({
                       <td class="py-2 px-2 text-center">${m.unit}</td>
                       <td class="py-2 px-2 text-center">${qty}</td>
                       <td class="py-2 px-2 text-right">${price.toLocaleString('ru-RU')}</td>
-                      <td class="py-2 px-2 text-right">${withoutNds.toLocaleString('ru-RU')}</td>
-                      <td class="py-2 px-2 text-right">${nds.toLocaleString('ru-RU')}</td>
+                      <td class="py-2 px-2 text-right">${itemWithoutNds.toLocaleString('ru-RU')}</td>
+                      <td class="py-2 px-2 text-right">${itemNds.toLocaleString('ru-RU')}</td>
                       <td class="py-2 px-2 text-right font-medium">${total.toLocaleString('ru-RU')}</td>
                     </tr>
                   `;
@@ -527,46 +696,105 @@ const DocumentGenerator = ({
               </tbody>
               <tfoot>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 font-bold">
-                  <td colspan="5" class="py-3 px-2 text-right">Итого:</td>
-                  <td class="py-3 px-2 text-right">${Math.round(totalAmount * 100 / 120).toLocaleString('ru-RU')}</td>
-                  <td class="py-3 px-2 text-right">${Math.round(totalAmount * 20 / 120).toLocaleString('ru-RU')}</td>
-                  <td class="py-3 px-2 text-right">${totalAmount.toLocaleString('ru-RU')} ₽</td>
+                  <td colSpan="5" class="py-3 px-2 text-right">Итого:</td>
+                  <td class="py-3 px-2 text-right">${formatRub(withoutNds)}</td>
+                  <td class="py-3 px-2 text-right">${formatRub(ndsAmount)}</td>
+                  <td class="py-3 px-2 text-right">${formatRub(totalAmount)}</td>
                 </tr>
               </tfoot>
             </table>
-            <div class="grid grid-cols-2 gap-8 text-sm mt-8">
-              <div>
-                <p class="font-medium mb-2">Руководитель:</p>
-                <p class="border-b border-gray-400 dark:border-gray-500 pb-8">_________________</p>
-              </div>
-              <div>
-                <p class="font-medium mb-2">Главный бухгалтер:</p>
-                <p class="border-b border-gray-400 dark:border-gray-500 pb-8">_________________</p>
-              </div>
-            </div>
+            ${vatSignatures}
             <p class="mt-6 text-xs text-gray-400 text-center">
-              * Документ сформирован в электронном виде. Подписан усиленной квалифицированной электронной подписью.
+              * Документ сформирован в электронном виде. Подпись не требуется.
             </p>
           </div>`;
+      }
 
       default: 
         return '';
     }
   };
 
-  const handleGenerate = () => {
+  // ✅ Пакетная генерация и печать
+  const handleBatchPrint = async () => {
+    if (selectedAppIds.length === 0) {
+      showNotification?.('Выберите хотя бы одну заявку', 'warning');
+      return;
+    }
+    
+    setIsGenerating(true);
+    showNotification?.(`Формирование ${selectedAppIds.length} документов...`, 'info');
+    
+    try {
+      for (const appId of selectedAppIds) {
+        const app = applications.find(a => a.id === appId);
+        if (!app) continue;
+        
+        const html = generateTemplate(activeTab, app);
+        if (!html) continue;
+        
+        // Сохраняем в БД
+        await saveGeneratedDocument(activeTab, app, html);
+        
+        // Печатаем
+        setPreviewHtml(html);
+        await new Promise(resolve => setTimeout(resolve, 300)); // Небольшая задержка для рендера
+        window.print();
+        
+        // Разделитель страниц для следующего документа
+        if (selectedAppIds.indexOf(appId) < selectedAppIds.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      showNotification?.('✅ Все документы сформированы и отправлены на печать', 'success');
+    } catch (err) {
+      console.error('Ошибка пакетной печати:', err);
+      showNotification?.('❌ Ошибка при пакетной печати', 'error');
+    } finally {
+      setIsGenerating(false);
+      setPreviewHtml('');
+    }
+  };
+
+  const handleGenerate = async () => {
     if (!selectedApp) {
       showNotification?.('Выберите заявку для формирования документа', 'warning');
       return;
     }
     setIsGenerating(true);
-    setPreviewHtml(generateTemplate(activeTab, selectedApp));
-    setIsGenerating(false);
+    try {
+      const html = generateTemplate(activeTab, selectedApp);
+      setPreviewHtml(html);
+      // Сохраняем в БД
+      await saveGeneratedDocument(activeTab, selectedApp, html);
+      showNotification?.('📄 Документ сформирован и сохранён', 'success');
+    } catch (err) {
+      console.error('Ошибка генерации:', err);
+      showNotification?.('❌ Ошибка формирования документа', 'error');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handlePrint = () => {
     if (!previewHtml) return;
     window.print();
+  };
+
+  const toggleAppSelection = (appId) => {
+    setSelectedAppIds(prev => 
+      prev.includes(appId) 
+        ? prev.filter(id => id !== appId)
+        : [...prev, appId]
+    );
+  };
+
+  const selectAllApps = () => {
+    if (selectedAppIds.length === eligibleApps.length) {
+      setSelectedAppIds([]);
+    } else {
+      setSelectedAppIds(eligibleApps.map(app => app.id));
+    }
   };
 
   return (
@@ -577,7 +805,11 @@ const DocumentGenerator = ({
           {DOCS.map(doc => (
             <button
               key={doc.id}
-              onClick={() => setActiveTab(doc.id)}
+              onClick={() => {
+                setActiveTab(doc.id);
+                setSelectedAppIds([]); // Сброс выбора при смене типа
+                setUploadedFileUrl('');
+              }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                 activeTab === doc.id
                   ? 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white shadow-md'
@@ -591,6 +823,43 @@ const DocumentGenerator = ({
         </div>
       </div>
 
+      {/* ✅ Пакетный выбор заявок */}
+      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-medium text-gray-700 dark:text-gray-300">Пакетная печать</h3>
+          <button 
+            onClick={selectAllApps}
+            className="text-xs text-[#4A6572] hover:underline dark:text-[#F9AA33]"
+          >
+            {selectedAppIds.length === eligibleApps.length ? 'Снять все' : 'Выбрать все'}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+          {eligibleApps.slice(0, 20).map(app => (
+            <label key={app.id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600">
+              <input
+                type="checkbox"
+                checked={selectedAppIds.includes(app.id)}
+                onChange={() => toggleAppSelection(app.id)}
+                className="rounded border-gray-300 text-[#4A6572] focus:ring-[#4A6572]"
+              />
+              <span className="truncate max-w-[200px]">{app.object_name}</span>
+            </label>
+          ))}
+        </div>
+        {selectedAppIds.length > 0 && (
+          <button
+            onClick={handleBatchPrint}
+            disabled={isGenerating}
+            className="mt-3 px-4 py-2 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white rounded-lg font-medium hover:shadow-md transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            <Printer className="w-4 h-4" />
+            Печать выбранных ({selectedAppIds.length})
+          </button>
+        )}
+      </div>
+
+      {/* ✅ Основная панель генерации */}
       <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <div className="flex-1">
@@ -608,25 +877,35 @@ const DocumentGenerator = ({
               ))}
             </select>
           </div>
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
             <button
               onClick={handleGenerate}
               disabled={!selectedAppId || isGenerating}
-              className="w-full md:w-auto px-6 py-2.5 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white rounded-lg font-medium hover:shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              className="px-6 py-2.5 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white rounded-lg font-medium hover:shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              Сформировать документ
+              Сформировать
+            </button>
+            <button
+              onClick={handlePrint}
+              disabled={!previewHtml}
+              className="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 disabled:opacity-50"
+            >
+              <Printer className="w-4 h-4" />
+              Печать
             </button>
           </div>
         </div>
 
+        {loadingCompanyDetails && (
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-sm flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Загрузка реквизитов компании...
+          </div>
+        )}
+
         {previewHtml ? (
           <div className="space-y-4">
-            <div className="flex justify-end gap-3 no-print">
-              <button onClick={handlePrint} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg flex items-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-600">
-                <Printer className="w-4 h-4" /> Печать / Экспорт в PDF
-              </button>
-            </div>
             <div ref={printRef} id="printable-doc" className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 bg-gray-50 dark:bg-gray-900/50 overflow-x-auto">
               <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
             </div>
@@ -634,7 +913,10 @@ const DocumentGenerator = ({
         ) : (
           <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>Выберите заявку и тип документа, затем нажмите «Сформировать документ»</p>
+            <p>Выберите заявку и тип документа, затем нажмите «Сформировать»</p>
+            <p className="text-xs mt-2 text-gray-400">
+              💡 Для пакетной печати используйте чекбоксы выше
+            </p>
           </div>
         )}
       </div>

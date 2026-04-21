@@ -5781,6 +5781,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     t={t}
     showNotification={showNotification}
     companyName={userCompany}
+    supabase={supabase}
   />
 )}
   
