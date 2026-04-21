@@ -13,6 +13,7 @@ import ClientCalendar from './components/ClientPortal/ClientCalendar';
 import ClientConfirmation from './components/ClientPortal/ClientConfirmation';
 import ClientPhotos from './components/ClientPortal/ClientPhotos';
 import ClientWorkAct from './components/ClientPortal/ClientWorkAct';
+import DocumentGenerator from './components/DocumentGenerator';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -4025,6 +4026,7 @@ useEffect(() => {
 },
       { id: 'received', label: t('receivedTab'), icon: Package, condition: true },
       { id: 'history', label: t('history'), icon: Archive, condition: true },
+      { id: 'documents', label: 'Документы', icon: FileText, condition: userRole !== 'super_admin' },
       { id: 'analytics', label: t('analytics'), icon: BarChart3, condition: currentUserPermissions.canViewAnalytics },
       { id: 'employees', label: t('employees'), icon: Users, condition: userRole === 'manager' },
       { id: 'api', label: 'API', icon: Code, condition: userRole === 'manager' || isCompanyOwner },
@@ -5769,6 +5771,18 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       }}
     />
   )}
+
+  {currentView === 'documents' && (
+  <DocumentGenerator
+    applications={isAdminMode ? allApplications : applications}
+    user={user}
+    userCompanyId={userCompanyId}
+    userRole={userRole}
+    t={t}
+    showNotification={showNotification}
+    companyName={userCompany}
+  />
+)}
   
   {currentView === 'profile' && renderProfilePage()}
   
