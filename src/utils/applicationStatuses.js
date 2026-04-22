@@ -1,181 +1,250 @@
-/**
- * 🔄 Новая система статусов заявок
- * Workflow: Мастер → Админ (склад) → Мастер (подтверждение) → Завершено
- */
-
-// === Основные статусы заявки ===
-// ✅ Правильный формат - строковые значения совпадают с БД
+// Статусы заявок (глобальные)
 export const APPLICATION_STATUS = {
   PENDING: 'pending',
-  PARTIAL: 'partial',
+  ADMIN_PROCESSING: 'admin_processing',
+  PARTIAL_RECEIVED: 'partial_received',
   RECEIVED: 'received',
   CANCELED: 'canceled',
-  PENDING_EMPLOYEE_CONFIRMATION: 'pending_employee_confirmation',
   PENDING_MASTER_CONFIRMATION: 'pending_master_confirmation',
-  ADMIN_PROCESSING: 'admin_processing',
-  IN_PROGRESS: 'in_progress',
-  SENT_TO_MASTER: 'sent_to_master',
-  AWAITING_CONFIRMATION: 'awaiting_confirmation'
+  PENDING_APPROVAL: 'pending_approval',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
 };
 
-// === Статусы отдельных позиций в заявке ===
+// Статусы отдельных позиций в заявке
 export const ITEM_STATUS = {
-  PENDING: 'pending',                    // Ожидает обработки
-  ON_WAREHOUSE: 'on_warehouse',          // Принято админом на склад
-  SENT_TO_MASTER: 'sent_to_master',      // Отправлено мастеру
-  CONFIRMED: 'confirmed',                // Подтверждено мастером (списано)
-  REJECTED: 'rejected',                  // Отклонено мастером (возврат на склад)
-  CANCELED: 'canceled'                   // Отменено
+  PENDING: 'pending',
+  ON_WAREHOUSE: 'on_warehouse',
+  SENT_TO_MASTER: 'sent_to_master',
+  CONFIRMED: 'confirmed',
+  REJECTED: 'rejected',
 };
 
-// === Типы транзакций склада ===
-export const WAREHOUSE_TRANSACTION_TYPE = {
-  INCOME: 'income',          // Приход (приёмка от поставщика)
-  EXPENSE: 'expense',        // Расход (выдача мастеру после подтверждения)
-  WRITE_OFF: 'write_off',    // Списание (брак, потеря)
-  RETURN: 'return'           // Возврат (отклонено мастером)
-};
-
-// === Карта переходов статусов (валидация) ===
-export const STATUS_TRANSITIONS = {
-  [APPLICATION_STATUS.DRAFT]: [APPLICATION_STATUS.PENDING],
-  [APPLICATION_STATUS.PENDING]: [
-    APPLICATION_STATUS.ADMIN_PROCESSING,
-    APPLICATION_STATUS.CANCELED
-  ],
-  [APPLICATION_STATUS.ADMIN_PROCESSING]: [
-    APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
-    APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE,
-    APPLICATION_STATUS.CANCELED
-  ],
-  [APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: [
-    APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION
-  ],
-  [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: [
-    APPLICATION_STATUS.RECEIVED,
-    APPLICATION_STATUS.PARTIAL_RECEIVED,
-    APPLICATION_STATUS.REJECTED
-  ],
-  [APPLICATION_STATUS.PARTIAL_RECEIVED]: [
-    APPLICATION_STATUS.RECEIVED,
-    APPLICATION_STATUS.REJECTED
-  ],
-  // Терминальные статусы — переходов нет
-  [APPLICATION_STATUS.RECEIVED]: [],
-  [APPLICATION_STATUS.REJECTED]: [],
-  [APPLICATION_STATUS.CANCELED]: []
-};
-
-// === Проверка допустимого перехода ===
-export const canTransitionTo = (fromStatus, toStatus) => {
-  const allowed = STATUS_TRANSITIONS[fromStatus];
-  return Array.isArray(allowed) && allowed.includes(toStatus);
-};
-
-// === Локализация статусов ===
+// Ключи для i18n переводов
 export const STATUS_I18N = {
-  // Заявки
-  [APPLICATION_STATUS.DRAFT]: { ru: 'Черновик', en: 'Draft' },
-  [APPLICATION_STATUS.PENDING]: { ru: 'В работе', en: 'In Work' },
-  [APPLICATION_STATUS.ADMIN_PROCESSING]: { ru: 'Приёмка на склад', en: 'Warehouse Processing' },
-  [APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: { ru: 'Частично на складе', en: 'Partial on Warehouse' },
-  [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: { ru: 'Готово к получению', en: 'Awaiting Confirmation' },
-  [APPLICATION_STATUS.RECEIVED]: { ru: 'Получено', en: 'Received' },
-  [APPLICATION_STATUS.PARTIAL_RECEIVED]: { ru: 'Частично получено', en: 'Partially Received' },
-  [APPLICATION_STATUS.REJECTED]: { ru: 'Отклонено', en: 'Rejected' },
-  [APPLICATION_STATUS.CANCELED]: { ru: 'Отменено', en: 'Canceled' },
+  [APPLICATION_STATUS.PENDING]: 'statusPending',
+  [APPLICATION_STATUS.ADMIN_PROCESSING]: 'statusProcessing',
+  [APPLICATION_STATUS.PARTIAL_RECEIVED]: 'statusPartial',
+  [APPLICATION_STATUS.RECEIVED]: 'statusReceived',
+  [APPLICATION_STATUS.CANCELED]: 'statusCanceled',
+  [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 'statusAwaitingConfirmation',
+  [APPLICATION_STATUS.PENDING_APPROVAL]: 'statusPendingApproval',
+  [APPLICATION_STATUS.APPROVED]: 'statusApproved',
+  [APPLICATION_STATUS.REJECTED]: 'statusRejected',
   
-  // Позиции
-  [ITEM_STATUS.PENDING]: { ru: 'Ожидает', en: 'Pending' },
-  [ITEM_STATUS.ON_WAREHOUSE]: { ru: 'На складе', en: 'On Warehouse' },
-  [ITEM_STATUS.SENT_TO_MASTER]: { ru: 'Отправлено', en: 'Sent' },
-  [ITEM_STATUS.CONFIRMED]: { ru: 'Подтверждено', en: 'Confirmed' },
-  [ITEM_STATUS.REJECTED]: { ru: 'Отклонено', en: 'Rejected' },
-  
-  // Транзакции
-  [WAREHOUSE_TRANSACTION_TYPE.INCOME]: { ru: 'Приход', en: 'Income' },
-  [WAREHOUSE_TRANSACTION_TYPE.EXPENSE]: { ru: 'Расход', en: 'Expense' },
-  [WAREHOUSE_TRANSACTION_TYPE.WRITE_OFF]: { ru: 'Списание', en: 'Write-off' },
-  [WAREHOUSE_TRANSACTION_TYPE.RETURN]: { ru: 'Возврат', en: 'Return' }
+  [ITEM_STATUS.PENDING]: 'itemStatusPending',
+  [ITEM_STATUS.ON_WAREHOUSE]: 'itemStatusOnWarehouse',
+  [ITEM_STATUS.SENT_TO_MASTER]: 'itemStatusSentToMaster',
+  [ITEM_STATUS.CONFIRMED]: 'itemStatusConfirmed',
+  [ITEM_STATUS.REJECTED]: 'itemStatusRejected',
 };
 
-// === Хелпер для получения текста статуса ===
-export const getStatusText = (status, language = 'ru') => {
-  const i18n = STATUS_I18N[status];
-  return i18n?.[language] || i18n?.ru || status;
-};
-
-// === Цветовая схема для UI ===
+// Цвета для статусов (Tailwind CSS classes)
 export const STATUS_COLORS = {
-  // Заявки
-  [APPLICATION_STATUS.DRAFT]: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
-  [APPLICATION_STATUS.PENDING]: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
-  [APPLICATION_STATUS.ADMIN_PROCESSING]: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  [APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200',
-  [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200',
-  [APPLICATION_STATUS.RECEIVED]: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  [APPLICATION_STATUS.PARTIAL_RECEIVED]: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-  [APPLICATION_STATUS.REJECTED]: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
-  [APPLICATION_STATUS.CANCELED]: 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300',
+  [APPLICATION_STATUS.PENDING]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200',
+  [APPLICATION_STATUS.ADMIN_PROCESSING]: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200',
+  [APPLICATION_STATUS.PARTIAL_RECEIVED]: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200',
+  [APPLICATION_STATUS.RECEIVED]: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200',
+  [APPLICATION_STATUS.CANCELED]: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200',
+  [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200',
+  [APPLICATION_STATUS.PENDING_APPROVAL]: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200',
+  [APPLICATION_STATUS.APPROVED]: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200',
+  [APPLICATION_STATUS.REJECTED]: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200',
   
-  // Позиции
-  [ITEM_STATUS.PENDING]: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
-  [ITEM_STATUS.ON_WAREHOUSE]: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  [ITEM_STATUS.SENT_TO_MASTER]: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-  [ITEM_STATUS.CONFIRMED]: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  [ITEM_STATUS.REJECTED]: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+  [ITEM_STATUS.PENDING]: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+  [ITEM_STATUS.ON_WAREHOUSE]: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200',
+  [ITEM_STATUS.SENT_TO_MASTER]: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200',
+  [ITEM_STATUS.CONFIRMED]: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200',
+  [ITEM_STATUS.REJECTED]: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200',
 };
 
-// === Иконки для статусов (Lucide React) ===
+// Иконки для статусов (названия компонентов lucide-react)
 export const STATUS_ICONS = {
-  [APPLICATION_STATUS.DRAFT]: 'FileText',
   [APPLICATION_STATUS.PENDING]: 'Clock',
-  [APPLICATION_STATUS.ADMIN_PROCESSING]: 'Package',
-  [APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: 'Boxes',
-  [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 'Mail',
+  [APPLICATION_STATUS.ADMIN_PROCESSING]: 'Loader2',
+  [APPLICATION_STATUS.PARTIAL_RECEIVED]: 'Package',
   [APPLICATION_STATUS.RECEIVED]: 'CheckCircle',
-  [APPLICATION_STATUS.PARTIAL_RECEIVED]: 'AlertCircle',
-  [APPLICATION_STATUS.REJECTED]: 'XCircle',
-  [APPLICATION_STATUS.CANCELED]: 'Ban',
+  [APPLICATION_STATUS.CANCELED]: 'XCircle',
+  [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 'UserCheck',
+  [APPLICATION_STATUS.PENDING_APPROVAL]: 'FileSearch',
+  [APPLICATION_STATUS.APPROVED]: 'ShieldCheck',
+  [APPLICATION_STATUS.REJECTED]: 'ShieldX',
   
-  [ITEM_STATUS.PENDING]: 'Hourglass',
-  [ITEM_STATUS.ON_WAREHOUSE]: 'Warehouse',
-  [ITEM_STATUS.SENT_TO_MASTER]: 'Send',
-  [ITEM_STATUS.CONFIRMED]: 'CheckCircle2',
-  [ITEM_STATUS.REJECTED]: 'XCircle'
+  [ITEM_STATUS.PENDING]: 'Circle',
+  [ITEM_STATUS.ON_WAREHOUSE]: 'Package',
+  [ITEM_STATUS.SENT_TO_MASTER]: 'Truck',
+  [ITEM_STATUS.CONFIRMED]: 'Check',
+  [ITEM_STATUS.REJECTED]: 'X',
 };
 
-// === Утилиты для фильтрации ===
+// Проверка: активна ли заявка (не завершена и не отменена)
 export const isApplicationActive = (status) => {
-  return [
+  const activeStatuses = [
     APPLICATION_STATUS.PENDING,
     APPLICATION_STATUS.ADMIN_PROCESSING,
-    APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE,
+    APPLICATION_STATUS.PARTIAL_RECEIVED,
     APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
-    APPLICATION_STATUS.PARTIAL_RECEIVED
-  ].includes(status);
+    APPLICATION_STATUS.PENDING_APPROVAL,
+  ];
+  return activeStatuses.includes(status);
 };
 
+// Проверка: завершена ли заявка
 export const isApplicationCompleted = (status) => {
-  return [
+  const completedStatuses = [
     APPLICATION_STATUS.RECEIVED,
+    APPLICATION_STATUS.CANCELED,
     APPLICATION_STATUS.REJECTED,
-    APPLICATION_STATUS.CANCELED
-  ].includes(status);
+  ];
+  return completedStatuses.includes(status);
 };
 
-// utils/applicationStatuses.js
+// Проверка: требует ли заявка подтверждения от мастера
 export const requiresMasterConfirmation = (status) => {
-    return [
-        APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
-        APPLICATION_STATUS.PARTIAL_RECEIVED  // ✅ Важно: частичное получение тоже требует подтверждения
-    ].includes(status);
+  return status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
 };
 
-export const isItemPendingConfirmation = (itemStatus, masterConfirmed, supplierReceived, requestedQty) => {
-  return (
-    itemStatus === ITEM_STATUS.SENT_TO_MASTER &&
-    supplierReceived > 0 &&
-    (masterConfirmed || 0) < requestedQty
-  );
+// Проверка: требует ли заявка согласования (для approval workflow)
+export const requiresApproval = (materials) => {
+  if (!Array.isArray(materials) || materials.length === 0) return false;
+  
+  // Пример логики: если общая сумма > 100000 или есть дорогие позиции
+  const totalAmount = materials.reduce((sum, m) => {
+    const qty = Number(m.quantity) || 0;
+    const price = Number(m.price) || 1000;
+    return sum + qty * price;
+  }, 0);
+  
+  return totalAmount > 100000;
+};
+
+// Получение текста статуса с поддержкой i18n
+export const getStatusText = (status, language = 'ru') => {
+  const i18nKey = STATUS_I18N[status];
+  if (!i18nKey) return status;
+  
+  // Простая локализация (в реальном проекте использовать i18n библиотеку)
+  const translations = {
+    ru: {
+      statusPending: 'В ожидании',
+      statusProcessing: 'В обработке',
+      statusPartial: 'Частично получено',
+      statusReceived: 'Получено',
+      statusCanceled: 'Отменено',
+      statusAwaitingConfirmation: 'Ожидает подтверждения',
+      statusPendingApproval: 'На согласовании',
+      statusApproved: 'Согласовано',
+      statusRejected: 'Отклонено',
+      itemStatusPending: 'Ожидает',
+      itemStatusOnWarehouse: 'На складе',
+      itemStatusSentToMaster: 'Отправлено мастеру',
+      itemStatusConfirmed: 'Подтверждено',
+      itemStatusRejected: 'Отклонено',
+    },
+    en: {
+      statusPending: 'Pending',
+      statusProcessing: 'Processing',
+      statusPartial: 'Partially Received',
+      statusReceived: 'Received',
+      statusCanceled: 'Canceled',
+      statusAwaitingConfirmation: 'Awaiting Confirmation',
+      statusPendingApproval: 'Pending Approval',
+      statusApproved: 'Approved',
+      statusRejected: 'Rejected',
+      itemStatusPending: 'Pending',
+      itemStatusOnWarehouse: 'On Warehouse',
+      itemStatusSentToMaster: 'Sent to Master',
+      itemStatusConfirmed: 'Confirmed',
+      itemStatusRejected: 'Rejected',
+    },
+  };
+  
+  return translations[language]?.[i18nKey] || translations.ru[i18nKey] || status;
+};
+
+// Получение цвета статуса
+export const getStatusColor = (status) => {
+  return STATUS_COLORS[status] || STATUS_COLORS[APPLICATION_STATUS.PENDING];
+};
+
+// Получение иконки статуса
+export const getStatusIcon = (status) => {
+  return STATUS_ICONS[status] || STATUS_ICONS[APPLICATION_STATUS.PENDING];
+};
+
+// Маппинг статусов для сортировки (приоритет отображения)
+export const STATUS_PRIORITY = {
+  [APPLICATION_STATUS.PENDING]: 1,
+  [APPLICATION_STATUS.PENDING_APPROVAL]: 2,
+  [APPLICATION_STATUS.ADMIN_PROCESSING]: 3,
+  [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 4,
+  [APPLICATION_STATUS.PARTIAL_RECEIVED]: 5,
+  [APPLICATION_STATUS.RECEIVED]: 6,
+  [APPLICATION_STATUS.APPROVED]: 7,
+  [APPLICATION_STATUS.REJECTED]: 8,
+  [APPLICATION_STATUS.CANCELED]: 9,
+};
+
+// Валидация перехода между статусами
+export const canTransitionTo = (fromStatus, toStatus) => {
+  const validTransitions = {
+    [APPLICATION_STATUS.PENDING]: [
+      APPLICATION_STATUS.ADMIN_PROCESSING,
+      APPLICATION_STATUS.CANCELED,
+      APPLICATION_STATUS.PENDING_APPROVAL,
+    ],
+    [APPLICATION_STATUS.ADMIN_PROCESSING]: [
+      APPLICATION_STATUS.PARTIAL_RECEIVED,
+      APPLICATION_STATUS.RECEIVED,
+      APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+      APPLICATION_STATUS.CANCELED,
+    ],
+    [APPLICATION_STATUS.PARTIAL_RECEIVED]: [
+      APPLICATION_STATUS.RECEIVED,
+      APPLICATION_STATUS.CANCELED,
+    ],
+    [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: [
+      APPLICATION_STATUS.ADMIN_PROCESSING,
+      APPLICATION_STATUS.RECEIVED,
+      APPLICATION_STATUS.CANCELED,
+    ],
+    [APPLICATION_STATUS.PENDING_APPROVAL]: [
+      APPLICATION_STATUS.APPROVED,
+      APPLICATION_STATUS.REJECTED,
+      APPLICATION_STATUS.PENDING,
+    ],
+    [APPLICATION_STATUS.APPROVED]: [
+      APPLICATION_STATUS.ADMIN_PROCESSING,
+      APPLICATION_STATUS.CANCELED,
+    ],
+    [APPLICATION_STATUS.REJECTED]: [
+      APPLICATION_STATUS.PENDING,
+    ],
+  };
+  
+  return validTransitions[fromStatus]?.includes(toStatus) || false;
+};
+
+// Получение следующего допустимого статуса
+export const getNextAvailableStatuses = (currentStatus) => {
+  const transitions = {
+    [APPLICATION_STATUS.PENDING]: [
+      { status: APPLICATION_STATUS.ADMIN_PROCESSING, label: 'Начать обработку' },
+      { status: APPLICATION_STATUS.CANCELED, label: 'Отменить' },
+    ],
+    [APPLICATION_STATUS.ADMIN_PROCESSING]: [
+      { status: APPLICATION_STATUS.PARTIAL_RECEIVED, label: 'Частичная приёмка' },
+      { status: APPLICATION_STATUS.RECEIVED, label: 'Полная приёмка' },
+      { status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION, label: 'Отправить мастеру' },
+    ],
+    [APPLICATION_STATUS.PARTIAL_RECEIVED]: [
+      { status: APPLICATION_STATUS.RECEIVED, label: 'Завершить приёмку' },
+    ],
+    [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: [
+      { status: APPLICATION_STATUS.RECEIVED, label: 'Завершить после подтверждения' },
+      { status: APPLICATION_STATUS.ADMIN_PROCESSING, label: 'Вернуть в обработку' },
+    ],
+  };
+  
+  return transitions[currentStatus] || [];
 };
