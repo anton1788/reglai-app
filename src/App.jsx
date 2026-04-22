@@ -1915,17 +1915,38 @@ const handleSubmit = async (e) => {
     status: ITEM_STATUS.PENDING
   }));
   
-  // ========== 🆕 НОВОЕ: ПРОВЕРКА НА НЕОБХОДИМОСТЬ СОГЛАСОВАНИЯ ==========
-  // Рассчитываем общую сумму заявки
-  const totalAmount = validMaterials.reduce((sum, m) => 
+ // ========== 🔄 ИСПРАВЛЕННАЯ ЛОГИКА МАРШРУТИЗАЦИИ ==========
+// Рассчитываем общую сумму заявки
+const totalAmount = validMaterials.reduce((sum, m) =>
     sum + (m.quantity * (m.price || 1000)), 0
-  );
-  
-  // Проверяем, требуется ли согласование
-  const needsApproval = requiresApproval(validMaterials);
-  
-  // Определяем начальный статус
-  const initialStatus = needsApproval ? 'pending_approval' : APPLICATION_STATUS.PENDING;
+);
+
+// Проверяем наличие прораба в компании
+const { count: foremanCount } = await supabase
+    .from('company_users')
+    .select('*', { count: 'exact', head: true })
+    .eq('company_id', safeCompanyId)
+    .eq('role', 'foreman');
+
+const hasForeman = foremanCount > 0;
+
+// Проверяем, требуется ли согласование (по сумме/лимитам)
+const needsApproval = requiresApproval(validMaterials);
+
+// Определяем начальный статус и сообщение
+let initialStatus = APPLICATION_STATUS.PENDING;
+let actionMessage = 'Заявка создана и отправлена в работу';
+
+if (needsApproval) {
+    // Если сумма большая -> ждем Руководителя
+    initialStatus = 'pending_approval';
+    actionMessage = '📋 Заявка отправлена на согласование руководителю (ожидает одобрения)';
+} else if (hasForeman) {
+    // Если прораб есть, но сумма маленькая -> идет Прорабу
+    initialStatus = 'pending_foreman'; 
+    actionMessage = '👷 Заявка отправлена Прорабу на проверку';
+}
+// Если нет прораба и нет превышения лимита -> сразу Снабженцу (статус PENDING)
   // ========== КОНЕЦ НОВОГО БЛОКА ==========
   
   // 🔐 Проверка квоты
@@ -2019,7 +2040,7 @@ if (needsApproval) {
   }
   
   await approvalEngine.createApprovalRequest(data[0], safeCompanyId);
-  showNotification('📋 Заявка отправлена на согласование руководителю', 'info');
+  showNotification(actionMessage, needsApproval ? 'info' : 'success');
   
   setFormData({
     objectName: '',
@@ -5546,17 +5567,26 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   
   {currentView === 'received' && (
     <ApplicationList
-      applications={filteredApplications.filter(app => {
-        const hasReceivedMaterials = app.materials?.some(m =>
-          (Number(m.supplier_received_quantity) || 0) > 0 ||
-          (Number(m.received) || 0) > 0
-        );
-        const isCompleted = app.status === APPLICATION_STATUS.RECEIVED ||
-          app.status === APPLICATION_STATUS.PARTIAL_RECEIVED ||
-          app.status === APPLICATION_STATUS.CANCELED;
-        return (isCompleted || hasReceivedMaterials) &&
-          (userRole !== 'master' || app.user_id === user?.id);
-      })}
+     applications={filteredApplications.filter(app => {
+    // ✅ ВАЖНО: Снабженец видит и 'pending_approval', чтобы отслеживать очередь
+    const isVisibleToSupply = userRole === 'supply_admin' && 
+        ['pending', 'pending_foreman', 'pending_approval', 'partial', 'received', 'canceled'].includes(app.status);
+        
+    const hasReceivedMaterials = app.materials?.some(m =>
+        (Number(m.supplier_received_quantity) || 0) > 0 ||
+        (Number(m.received) || 0) > 0
+    );
+    
+    const isCompleted = app.status === APPLICATION_STATUS.RECEIVED ||
+        app.status === APPLICATION_STATUS.PARTIAL_RECEIVED ||
+        app.status === APPLICATION_STATUS.CANCELED;
+    
+    // Снабженец видит заявки по расширенному списку статусов
+    // Остальные роли — по старой логике
+    const matchesStatus = isVisibleToSupply || isCompleted || hasReceivedMaterials;
+    
+    return matchesStatus && (userRole !== 'master' || app.user_id === user?.id);
+})}
       title={t('receivedTab')}
       emptyMessage={userRole === 'foreman' ? t('noReceived') : t('noApplications')}
       isMobile={isMobile}

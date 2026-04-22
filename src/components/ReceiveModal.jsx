@@ -1118,6 +1118,16 @@ const ReceiveModal = memo(function({
             </>
           )}
         </div>
+
+        {/* 🔽 ВСТАВИТЬ ПОДСКАЗКУ ЗДЕСЬ — ПЕРЕД FOOTER */}
+{selectedApplication?.status === 'pending_approval' && (
+  <div className="px-4 sm:px-6 pb-2">
+    <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5 bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-lg border border-orange-200 dark:border-orange-800">
+      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+      <span>{t('applicationPendingApproval') || 'Заявка ожидает одобрения руководителя'}</span>
+    </p>
+  </div>
+)}
         
         {/* Footer */}
         <div className="p-4 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-3xl flex justify-between items-center gap-3">
@@ -1136,24 +1146,33 @@ const ReceiveModal = memo(function({
             </div>
             
             <button
-              onClick={handleSave}
-              disabled={!hasChanges || isSaving}
-              className={'px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg ' + (hasChanges && !isSaving
-                  ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none')}
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                  <span>{t('saving')}</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-4 h-4" aria-hidden="true" />
-                  <span>{t('save')}</span>
-                </>
-              )}
-            </button>
+               onClick={handleSave}
+      disabled={!hasChanges || isSaving || selectedApplication?.status === 'pending_approval'}
+      className={`px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg ${
+        selectedApplication?.status === 'pending_approval'
+          ? 'opacity-50 cursor-not-allowed bg-gray-400 dark:bg-gray-600 text-gray-200 shadow-none'
+          : hasChanges && !isSaving
+            ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
+            : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
+      }`}
+    >
+      {isSaving ? (
+        <>
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          <span>{t('saving')}</span>
+        </>
+      ) : selectedApplication?.status === 'pending_approval' ? (
+        <>
+          <AlertCircle className="w-4 h-4" aria-hidden="true" />
+          <span>{t('applicationPendingApproval') || '⏳ Ожидает одобрения'}</span>
+        </>
+      ) : (
+        <>
+          <CheckCircle className="w-4 h-4" aria-hidden="true" />
+          <span>{t('save')}</span>
+        </>
+      )}
+    </button>
           </div>
         </div>
       </div>
