@@ -1,12 +1,12 @@
 {
-  "currentVersion": "9.8.0",
+  "currentVersion": "9.9.0",
   "releaseDate": "2026-03-27",
   "forceUpdate": false,
   "versions": [
     {
-      "version": "9.8.0",
+      "version": "9.9.0",
       "date": "2026-04-02",
-      "title": "изменен онборд для пользователей по ролям",
+      "title": "БД",
       "changes": [
         "✅ Исправлен расчёт Activation Rate",
         "📊 Улучшена точность трекинга первых заявок",

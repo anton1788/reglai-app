@@ -2,7 +2,7 @@
 // ✅ Service Worker для PWA приложения Reglai
 // Версия: 9
 
-const APP_VERSION = '9.8.0'; // ✅ Синхронизировано с index.html и manifest.json
+const APP_VERSION = '9.9.0'; // ✅ Синхронизировано с index.html и manifest.json
 const CACHE_NAME = `reglai-system-v${APP_VERSION}`;
 const DATA_CACHE_NAME = `reglai-data-v${APP_VERSION}`;
 const OFFLINE_CACHE_NAME = `reglai-offline-v${APP_VERSION}`;
