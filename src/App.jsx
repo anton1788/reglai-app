@@ -3599,6 +3599,27 @@ useEffect(() => {
   return cleanup;
 }, [user, userCompanyId, page, loadApplications, showNotification]);
 
+// 🛡️ Глобальный перехватчик ошибок material_prices (временное решение)
+useEffect(() => {
+  if (userRole === 'master' || userRole === 'foreman') {
+    // Мастерам цены не нужны — подавляем ошибки
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const url = args[0];
+      if (typeof url === 'string' && url.includes('material_prices')) {
+        // Возвращаем "пустой" ответ вместо ошибки
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [], error: null }),
+          text: async () => JSON.stringify({ data: [], error: null })
+        });
+      }
+      return originalFetch.apply(window, args);
+    };
+    return () => { window.fetch = originalFetch; };
+  }
+}, [userRole]);
   // 🎯 Onboarding Tour Logic
 useEffect(() => {
   const checkOnboarding = async () => {
