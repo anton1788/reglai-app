@@ -152,7 +152,8 @@ import { supabase } from './utils/supabaseClient';
 // === APPROVAL WORKFLOW ===
 import ApprovalModal from './components/ApprovalWorkflow/ApprovalModal';
 import { useApproval } from './hooks/useApproval';
-import approvalEngine from './utils/approvalEngine';
+// eslint-disable-next-line no-unused-vars
+import approvalEngine from './utils/approvalEngine'; 
 
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
@@ -498,6 +499,7 @@ const {
   approveApplication,
   rejectApplication,
   escalateApplication,
+  // eslint-disable-next-line no-unused-vars
   requiresApproval
 } = useApproval(userCompanyId, user?.id, userRole);
 
@@ -1915,39 +1917,15 @@ const handleSubmit = async (e) => {
     status: ITEM_STATUS.PENDING
   }));
   
- // ========== 🔄 ИСПРАВЛЕННАЯ ЛОГИКА МАРШРУТИЗАЦИИ ==========
-// Рассчитываем общую сумму заявки
-const totalAmount = validMaterials.reduce((sum, m) =>
-    sum + (m.quantity * (m.price || 1000)), 0
-);
-
-// Проверяем наличие прораба в компании
-const { count: foremanCount } = await supabase
-    .from('company_users')
-    .select('*', { count: 'exact', head: true })
-    .eq('company_id', safeCompanyId)
-    .eq('role', 'foreman');
-
-const hasForeman = foremanCount > 0;
-
-// Проверяем, требуется ли согласование (по сумме/лимитам)
-const needsApproval = requiresApproval(validMaterials);
-
-// Определяем начальный статус и сообщение
+// ========== 🔄 ИСПРАВЛЕННАЯ ЛОГИКА МАРШРУТИЗАЦИИ ==========
+// Заявка от мастера ВСЕГДА создается со статусом pending
 let initialStatus = APPLICATION_STATUS.PENDING;
-let actionMessage = 'Заявка создана и отправлена в работу';
 
-if (needsApproval) {
-    // Если сумма большая -> ждем Руководителя
-    initialStatus = 'pending_approval';
-    actionMessage = '📋 Заявка отправлена на согласование руководителю (ожидает одобрения)';
-} else if (hasForeman) {
-    // Если прораб есть, но сумма маленькая -> идет Прорабу
-    initialStatus = 'pending_foreman'; 
-    actionMessage = '👷 Заявка отправлена Прорабу на проверку';
-}
-// Если нет прораба и нет превышения лимита -> сразу Снабженцу (статус PENDING)
-  // ========== КОНЕЦ НОВОГО БЛОКА ==========
+// ✅ Рассчитываем сумму для отображения/логирования (но не для маршрутизации)
+const totalAmount = validMaterials.reduce((sum, m) =>
+  sum + (m.quantity * (m.price || 1000)), 0
+);
+// ========== КОНЕЦ НОВОГО БЛОКА ==========
   
   // 🔐 Проверка квоты
   if (currentPlan && !planLoading) {
@@ -1972,12 +1950,12 @@ if (needsApproval) {
     client_id: selectedClientId || null,
     created_at: new Date().toISOString(),
     total_amount: totalAmount,
-    status_history: [{
-      user_id: sessionUser.id,
-      user_email: sessionUser.email,
-      action: needsApproval ? 'created_awaiting_approval' : 'created',
-      timestamp: new Date().toISOString()
-    }],
+   status_history: [{
+  user_id: sessionUser.id,
+  user_email: sessionUser.email,
+  action: 'created',  // ✅ Всегда 'created', так как авто-согласование убрано
+  timestamp: new Date().toISOString()
+}],
     viewed_by_supply_admin: false
   };
   
@@ -2023,38 +2001,6 @@ if (needsApproval) {
     
     const realApplicationId = data[0].id;
     
-    // ========== 🆕 НОВОЕ: ЕСЛИ ТРЕБУЕТСЯ СОГЛАСОВАНИЕ ==========
-if (needsApproval) {
-  // Создаем заказ на закупку при сумме > 100000
-  if (totalAmount > 100000) {
-    await supabase
-      .from('purchase_orders')
-      .insert([{
-        application_id: data[0].id,
-        company_id: safeCompanyId,
-        created_by: sessionUser.id,
-        total_amount: totalAmount,
-        status: 'pending_approval',
-        expected_delivery_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
-      }]);
-  }
-  
-  await approvalEngine.createApprovalRequest(data[0], safeCompanyId);
-  showNotification(actionMessage, needsApproval ? 'info' : 'success');
-  
-  setFormData({
-    objectName: '',
-    foremanName: '',
-    foremanPhone: '',
-    materials: [{ description: '', quantity: 1, unit: 'шт' }],
-    cart: []
-  });
-  await deleteDraftFromDB('current_form_draft');
-  setCurrentView('pending');
-  setPage(1);
-  return;
-}
-// ========== КОНЕЦ НОВОГО БЛОКА ==========
     
     await logApplicationCreated(supabase, {
       id: realApplicationId,
@@ -2942,6 +2888,73 @@ const updatedMaterials = materialsFromModal.map(m => {
     ));
     return { success: true, newAppStatus, updatedMaterials };
   }, [user, userCompanyId, WAREHOUSE_ENABLED, showNotification, setApplications]);
+
+  // 🔹 Снабженец берет заявку в работу (поиск поставщика, запрос счета)
+const handleTakeToWork = useCallback(async (application) => {
+  const { error } = await supabase
+    .from('applications')
+    .update({
+      status: APPLICATION_STATUS.ADMIN_PROCESSING,
+      status_history: [...(application.status_history || []), {
+        user_id: user?.id,
+        action: 'taken_to_work',
+        timestamp: new Date().toISOString(),
+        details: 'Снабженец принял заявку в обработку'
+      }]
+    })
+    .eq('id', application.id);
+
+  if (error) { 
+    showNotification('Ошибка обновления статуса', 'error'); 
+    return; 
+  }
+  
+  setApplications(prev => prev.map(a => 
+    a.id === application.id 
+      ? { ...a, status: APPLICATION_STATUS.ADMIN_PROCESSING } 
+      : a
+  ));
+  setShowReceiveModal(false);
+  showNotification('📦 Заявка взята в работу. Теперь вы ищете поставщика.', 'success');
+}, [user?.id, showNotification]);
+
+// 🔹 Снабженец отправляет на согласование (после получения счета/суммы)
+const handleSendForApproval = useCallback(async (application) => {
+  // ⚠️ ВАРИАНТ А: Если approvalEngine нужен — раскомментируйте импорт внизу
+  // const approvalResult = await approvalEngine.createApprovalRequest(application, userCompanyId);
+  // if (!approvalResult) {
+  //   showNotification('⚠️ Не удалось создать запрос на согласование', 'warning');
+  //   return;
+  // }
+
+  const { error } = await supabase
+    .from('applications')
+    .update({
+      status: APPLICATION_STATUS.PENDING_APPROVAL,
+      status_history: [...(application.status_history || []), {
+        user_id: user?.id,
+        action: 'sent_for_approval',
+        timestamp: new Date().toISOString(),
+        details: 'Отправлено руководителю (получен счет)'
+      }]
+    })
+    .eq('id', application.id);
+
+  if (error) { 
+    showNotification('Ошибка обновления статуса', 'error'); 
+    return; 
+  }
+  
+  setApplications(prev => prev.map(a => 
+    a.id === application.id 
+      ? { ...a, status: APPLICATION_STATUS.PENDING_APPROVAL } 
+      : a
+  ));
+  setShowReceiveModal(false);
+  showNotification('📋 Отправлено руководителю на согласование', 'info');
+}, [user?.id, userCompanyId, showNotification]);
+
+
 
   // 📊 NPS Submit Handler
 const handleNpsSubmit = async ({ score, comment }) => {
@@ -6065,6 +6078,8 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
    setShowPhotoCapture(true);
  }}
  onQRClick={() => setShowQRScanner(true)}
+  onTakeToWork={handleTakeToWork}        // ← Добавить
+  onSendForApproval={handleSendForApproval} 
 />
       {renderAdminLoginModal()}
       {renderNotifications()}

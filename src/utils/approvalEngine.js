@@ -30,55 +30,54 @@ class ApprovalEngine {
    * @param {string} companyId - ID компании
    * @returns {Object} - Созданный approval
    */
-  async createApprovalRequest(application, companyId) {
-    // Рассчитываем сумму материалов с реальными ценами
-    const totalAmount = await this.calculateTotalAmount(application.materials);
-    const approvalLevel = this.calculateApprovalLevel(totalAmount);
-    
-    // Авто-согласование
-    if (approvalLevel === 'auto_approve') {
-      return {
-        status: APPROVAL_STATUS.APPROVED,
-        approved_at: new Date().toISOString(),
-        approved_by: 'system',
-        comment: 'Автоматическое согласование (сумма до 50 000 ₽)'
-      };
+    /**
+   * Создать запрос на согласование
+   */
+    async createApprovalRequest(application, companyId) {
+    try {
+      const totalAmount = await this.calculateTotalAmount(application.materials);
+      const approvalLevel = this.calculateApprovalLevel(totalAmount);
+      
+      if (approvalLevel === 'auto_approve') {
+        console.log('✅ [APPROVAL] Авто-согласование суммы:', totalAmount);
+        return { status: 'auto_approved', message: 'Автоматическое согласование' };
+      }
+      
+      const approver = await this.getApproverByRole(companyId, approvalLevel);
+      if (!approver) {
+        console.warn('⚠️ [APPROVAL] Нет доступного согласующего для уровня:', approvalLevel);
+        return null;
+      }
+      
+      // 🔥 ВАЖНО: пишем в approval_requests (а не approvals)
+      const { data, error } = await supabase
+        .from('approval_requests')
+        .insert([{
+          application_id: application.id,
+          company_id: companyId,
+          requester_id: application.user_id,
+          approver_id: approver.user_id,
+          approver_role: approvalLevel,
+          total_amount: totalAmount,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          deadline: new Date(Date.now() + 48 * 3600000).toISOString(),
+          level: approvalLevel
+        }])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ [APPROVAL] Ошибка создания:', error);
+        return null;
+      }
+      
+      console.log('✅ [APPROVAL] Заявка создана в очереди:', data.id);
+      return data;
+    } catch (err) {
+      console.error('❌ [APPROVAL] Критическая ошибка:', err);
+      return null;
     }
-    
-    // Находим ответственного за согласование
-    const approver = await this.getApproverByRole(companyId, approvalLevel);
-    
-    if (!approver) {
-      throw new Error(`Нет доступных согласующих с ролью ${approvalLevel}`);
-    }
-    
-    // Создаем запись в БД
-    const { data, error } = await supabase
-      .from('approvals')
-      .insert([{
-        application_id: application.id,
-        company_id: companyId,
-        approver_user_id: approver.user_id,
-        approver_role: approvalLevel,
-        total_amount: totalAmount,
-        status: APPROVAL_STATUS.PENDING,
-        created_by: application.user_id,
-        created_at: new Date().toISOString(),
-        deadline: new Date(Date.now() + APPROVAL_RULES[approvalLevel].timeout_hours * 3600000),
-        level: approvalLevel
-      }])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    
-    // Отправляем уведомление согласующему
-    await this.notifyApprover(data, application);
-    
-    // Устанавливаем таймаут на согласование
-    this.setApprovalTimeout(data.id, APPROVAL_RULES[approvalLevel].timeout_hours);
-    
-    return data;
   }
   
   /**

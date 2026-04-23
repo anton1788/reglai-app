@@ -406,11 +406,14 @@ const ReceiveModal = memo(function({
   saveReceiveStatus,
   language,
   escapeHtml,
+  onTakeToWork,        // ← ДОБАВИТЬ
+  onSendForApproval,
   t,
   modalMode = 'admin_receive',
   showNotification,
   userCompanyId,
   userId,
+  userRole,
   // eslint-disable-next-line no-unused-vars
   onPhotoClick,
   // eslint-disable-next-line no-unused-vars
@@ -876,6 +879,36 @@ const ReceiveModal = memo(function({
               )}
             </>
           )}
+          {/* 🔹 ПАНЕЛЬ РЕШЕНИЙ ДЛЯ СНАБЖЕНЦА */}
+{modalMode === 'admin_receive' && userRole === 'supply_admin' && (
+  <div className="mt-4 p-4 bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
+    <h4 className="font-semibold text-gray-900 dark:text-white mb-3 text-sm">
+      {t('supplyDecision') || 'Как обработать заявку?'}
+    </h4>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {/* 🔹 В работу */}
+      <button
+        onClick={() => onTakeToWork?.(selectedApplication)}
+        className="px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/25"
+      >
+        <Package className="w-4 h-4" />
+        {t('takeToWork') || '📦 Взять в работу'}
+      </button>
+      
+      {/* 🔹 На согласование */}
+      <button
+        onClick={() => onSendForApproval?.(selectedApplication)}
+        className="px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-orange-500/25"
+      >
+        <Shield className="w-4 h-4" />
+        {t('sendForApproval') || '📋 На согласование'}
+      </button>
+    </div>
+    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+      💡 "В работу" — начать поиск поставщика. "На согласование" — отправить руководителю после получения счета/суммы.
+    </p>
+  </div>
+)}
           
           {/* 🔹 АДМИН: Отправка мастеру */}
           {modalMode === 'admin_send_to_master' && (
@@ -1145,34 +1178,30 @@ const ReceiveModal = memo(function({
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть</span>
             </div>
             
-            <button
-               onClick={handleSave}
-      disabled={!hasChanges || isSaving || selectedApplication?.status === 'pending_approval'}
-      className={`px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg ${
-        selectedApplication?.status === 'pending_approval'
-          ? 'opacity-50 cursor-not-allowed bg-gray-400 dark:bg-gray-600 text-gray-200 shadow-none'
-          : hasChanges && !isSaving
-            ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
-            : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
-      }`}
-    >
-      {isSaving ? (
-        <>
-          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-          <span>{t('saving')}</span>
-        </>
-      ) : selectedApplication?.status === 'pending_approval' ? (
-        <>
-          <AlertCircle className="w-4 h-4" aria-hidden="true" />
-          <span>{t('applicationPendingApproval') || '⏳ Ожидает одобрения'}</span>
-        </>
-      ) : (
-        <>
-          <CheckCircle className="w-4 h-4" aria-hidden="true" />
-          <span>{t('save')}</span>
-        </>
-      )}
-    </button>
+           {/* 🔹 СКРЫВАЕМ "СОХРАНИТЬ" ДЛЯ СНАБЖЕНЦА В РЕЖИМЕ ПРИЁМКИ */}
+{!(modalMode === 'admin_receive' && userRole === 'supply_admin') && (
+  <button
+    onClick={handleSave}
+    disabled={!hasChanges || isSaving}
+    className={`px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg ${
+      hasChanges && !isSaving
+        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
+        : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
+    }`}
+  >
+    {isSaving ? (
+      <>
+        <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+        <span>{t('saving')}</span>
+      </>
+    ) : (
+      <>
+        <CheckCircle className="w-4 h-4" aria-hidden="true" />
+        <span>{t('save')}</span>
+      </>
+    )}
+  </button>
+)}
           </div>
         </div>
       </div>
