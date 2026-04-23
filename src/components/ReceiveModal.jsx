@@ -4,7 +4,7 @@ import {
   X, CheckCircle, XCircle, Package, Warehouse, Send, AlertCircle,
   Loader2, Info, ChevronDown, ChevronUp, Undo2, ShoppingCart,
   ArrowRight, FileText, Download, Mail, CheckCircle2, AlertTriangle,
-  Camera, QrCode
+  Camera, QrCode,Shield 
 } from 'lucide-react';
 import {
   APPLICATION_STATUS,
