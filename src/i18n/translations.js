@@ -819,6 +819,13 @@ type: 'Тип',
 unit: 'Ед. изм.',
 clickToViewDetails: 'нажмите для просмотра деталей',
 
+// ─── Действия снабженца ──────────────────────────────────────────────────
+supplyDecision: 'Как обработать заявку?',
+takeToWork: '📦 Взять в работу',
+sendForApproval: '📋 На согласование',
+autoReorder: 'Автозаказ',
+selectClient: 'Выберите заказчика',
+
 // ─── 🆕 НОВЫЕ: Churn Modal & Common (добавлено) ─────────────────────
 churnModal: {
   title: 'Почему вы уходите?',
@@ -1025,6 +1032,13 @@ secondsShort: 'sec',
 errorDetailsTitle: 'Error details (developers only)',
 hideErrorDetails: 'Hide details',
 showErrorDetails: 'Show details',
+
+// ─── Supply actions ─────────────────────────────────────────────────────
+supplyDecision: 'How to process request?',
+takeToWork: '📦 Take to work',
+sendForApproval: '📋 Send for approval',
+autoReorder: 'Auto-reorder',
+selectClient: 'Select client',
 
  // 🔹 API Documentation
   apiTabOverview: 'Overview',
