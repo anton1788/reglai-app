@@ -47,6 +47,15 @@ export const useApproval = (companyId, userId, userRole) => {
         .eq('company_id', companyId)
         .eq('status', APPROVAL_STATUS.PENDING)
         .order('created_at', { ascending: true });
+
+         console.log('🔍 [APPROVAL DEBUG]', {
+        companyId,
+        userId,
+        userRole,
+        foundRequests: requests?.length || 0,
+        error: error?.message,
+        rawQuery: `SELECT * FROM approval_requests WHERE company_id=${companyId} AND status='pending'`
+      });
       
       if (error) throw error;
       setPendingApprovals(requests || []);

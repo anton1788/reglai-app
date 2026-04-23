@@ -2843,22 +2843,27 @@ useEffect(() => {
   };
 
   const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
-    const updatedMaterials = materialsFromModal.map(m => {
-      const supplierReceived = Number(m.supplier_received_quantity) || 0;
-      const requested = Number(m.quantity) || 0;
-      let itemStatus = ITEM_STATUS.PENDING;
-      if (supplierReceived >= requested && requested > 0) {
-        itemStatus = ITEM_STATUS.ON_WAREHOUSE;
-      } else if (supplierReceived > 0) {
-        itemStatus = ITEM_STATUS.ON_WAREHOUSE;
-      }
-      return {
-        ...m,
-        supplier_received_quantity: supplierReceived,
-        status: itemStatus,
-        supplier_received_at: supplierReceived > 0 ? new Date().toISOString() : m.supplier_received_at
-      };
-    });
+    // 🔧 ИСПРАВЛЕНО: Явное сохранение supplier_received_quantity и received
+const updatedMaterials = materialsFromModal.map(m => {
+  const supplierReceived = Number(m.supplier_received_quantity) || 0;
+  const requested = Number(m.quantity) || 0;
+  
+  let itemStatus = ITEM_STATUS.PENDING;
+  if (supplierReceived >= requested && requested > 0) {
+    itemStatus = ITEM_STATUS.ON_WAREHOUSE;
+  } else if (supplierReceived > 0) {
+    itemStatus = ITEM_STATUS.ON_WAREHOUSE;
+  }
+  
+  return {
+    ...m,
+    // ✅ Явно сохраняем оба поля
+    supplier_received_quantity: supplierReceived,  // ← количество, принятое снабженцем
+    received: Number(m.received) || 0,             // ← количество, подтверждённое мастером
+    status: itemStatus,
+    supplier_received_at: supplierReceived > 0 ? new Date().toISOString() : m.supplier_received_at
+  };
+});
     const allReceived = updatedMaterials.every(m =>
       (m.supplier_received_quantity || 0) >= (m.quantity || 0)
     );
@@ -2896,23 +2901,40 @@ useEffect(() => {
       return { success: false, error };
     }
     if (WAREHOUSE_ENABLED) {
-      for (const mat of updatedMaterials) {
-        const qty = Number(mat.supplier_received_quantity) || 0;
-        if (qty > 0) {
-          await supabase.rpc('update_warehouse_balance', {
-            p_company_id: userCompanyId,
-            p_item_name: (mat.description || '').trim(),
-            p_quantity: qty,
-            p_transaction_type: 'income',
-            p_user_id: user?.id,
-            p_user_email: user?.email,
-            p_comment: `Приёмка: ${application.object_name}`,
-            p_application_id: application.id,
-            p_unit: mat.unit || 'шт'
-          });
-        }
+  for (const mat of updatedMaterials) {
+    const qty = Number(mat.supplier_received_quantity) || 0;
+    if (qty > 0) {
+      // 🔧 ДОБАВИТЬ обработку ответа и ошибок RPC
+      const { error: rpcError, data: rpcData } = await supabase.rpc('update_warehouse_balance', {
+        p_company_id: userCompanyId,
+        p_item_name: (mat.description || '').trim(),
+        p_quantity: qty,
+        p_transaction_type: 'income',
+        p_user_id: user?.id,
+        p_user_email: user?.email,
+        p_comment: `Приёмка: ${application.object_name}`,
+        p_application_id: application.id,
+        p_unit: mat.unit || 'шт'
+      });
+
+      if (rpcError) {
+        console.error('❌ [WAREHOUSE RPC ERROR]', {
+          message: rpcError.message,
+          details: rpcError.details,
+          hint: rpcError.hint,
+          params: { 
+            p_company_id: userCompanyId, 
+            p_item_name: mat.description, 
+            p_quantity: qty 
+          }
+        });
+        showNotification(`⚠️ Ошибка склада: ${rpcError.message}`, 'warning');
+      } else {
+        console.log('✅ [WAREHOUSE] RPC ответ:', rpcData);
       }
     }
+  }
+}
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newAppStatus, materials: updatedMaterials, status_history: [...(app.status_history || []), newHistoryEntry] }
