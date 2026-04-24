@@ -2861,44 +2861,31 @@ useEffect(() => {
   
   // 🏚️ ОБНОВЛЕНИЕ СКЛАДА С ЛОГАМИ
   if (WAREHOUSE_ENABLED) {
-    console.log('🏚️ [WAREHOUSE] Начинаем обновление склада...');
-    
-    for (const mat of updatedMaterials) {
-      const qty = Number(mat.supplier_received_quantity) || 0;
-      if (qty > 0) {
-        console.log('📦 [WAREHOUSE] Отправка в RPC:', {
-          item: mat.description,
-          qty: qty,
-          company_id: userCompanyId,
-          unit: mat.unit
-        });
-        
-        try {
-          const { error: rpcError, data: rpcData } = await supabase.rpc('update_warehouse_balance', {
-            p_company_id: userCompanyId,
-            p_item_name: (mat.description || '').trim(),
-            p_quantity: qty,
-            p_transaction_type: 'income',
-            p_user_id: user?.id,
-            p_user_email: user?.email,
-            p_comment: `Приёмка: ${application.object_name}`,
-            p_application_id: application.id,
-            p_unit: mat.unit || 'шт'
-          });
-          
-          if (rpcError) {
-            console.error('❌ [WAREHOUSE] RPC ошибка:', rpcError);
-            showNotification(`⚠️ Ошибка склада: ${rpcError.message}`, 'warning');
-          } else {
-            console.log('✅ [WAREHOUSE] RPC успех:', rpcData);
-          }
-        } catch (err) {
-          console.error('❌ [WAREHOUSE] Исключение:', err);
-          showNotification('⚠️ Ошибка обновления склада', 'warning');
-        }
+  for (const mat of updatedMaterials) {
+    const qty = Number(mat.supplier_received_quantity) || 0;
+    if (qty > 0) {
+      const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
+        p_company_id: userCompanyId,
+        p_item_name: (mat.description || '').trim(),
+        p_quantity: qty,
+        p_transaction_type: 'income',
+        p_user_id: user?.id,
+        p_user_email: user?.email,
+        p_comment: `Приёмка: ${application.object_name}`,
+        p_application_id: application.id,
+        p_unit: mat.unit || 'шт',
+        p_target_object_name: application.object_name,     // ← ДОБАВИТЬ
+        p_recipient_name: application.foreman_name,        // ← ДОБАВИТЬ
+        p_recipient_phone: application.foreman_phone       // ← ДОБАВИТЬ
+      });
+      
+      if (rpcError) {
+        console.error('❌ RPC ошибка:', rpcError);
+        showNotification(`⚠️ Ошибка склада: ${rpcError.message}`, 'warning');
       }
     }
   }
+}
   
   // Обновляем состояние в UI
   setApplications(prev => prev.map(app =>
@@ -3016,54 +3003,111 @@ const handleNpsSubmit = async ({ score, comment }) => {
 };
 
   const handleSendToMaster = useCallback(async (itemsToSend, application) => {
-    try {
-      const updatedMaterials = application.materials.map((m) => {
-        const item = itemsToSend.find(i =>
-          i.description === m.description &&
-          i.unit === m.unit
-        );
-        if (item && (Number(item.quantityToSend) || 0) > 0) {
-          return {
-            ...m,
-            sent_to_master_quantity: Number(item.quantityToSend),
-            status: ITEM_STATUS.SENT_TO_MASTER,
-            sent_to_master_at: new Date().toISOString(),
-            sent_to_master_by: user?.id
-          };
+  try {
+    console.log('📦 [handleSendToMaster] Начинаем отправку мастеру:', {
+      applicationId: application.id,
+      itemsCount: itemsToSend.length
+    });
+
+    const updatedMaterials = application.materials.map((m) => {
+      const item = itemsToSend.find(i =>
+        i.description === m.description &&
+        i.unit === m.unit
+      );
+      if (item && (Number(item.quantityToSend) || 0) > 0) {
+        const qtyToSend = Number(item.quantityToSend);
+        const alreadySent = Number(m.sent_to_master_quantity) || 0;
+        return {
+          ...m,
+          sent_to_master_quantity: alreadySent + qtyToSend,
+          status: ITEM_STATUS.SENT_TO_MASTER,
+          sent_to_master_at: new Date().toISOString(),
+          sent_to_master_by: user?.id
+        };
+      }
+      return m;
+    });
+
+    const newHistoryEntry = {
+      user_id: user?.id,
+      user_email: user?.email,
+      old_status: application.status,
+      new_status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+      action: 'sent_to_master',
+      timestamp: new Date().toISOString(),
+      details: `Отправлено мастеру: ${itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0).length} позиций`
+    };
+
+    // Обновляем заявку
+    await supabase
+      .from('applications')
+      .update({
+        status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+        materials: updatedMaterials,
+        status_history: [...(application.status_history || []), newHistoryEntry],
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', application.id);
+
+    // ✅ ДОБАВЛЯЕМ СПИСАНИЕ СО СКЛАДА!
+    if (WAREHOUSE_ENABLED) {
+      console.log('🏚️ [WAREHOUSE] Начинаем списание материалов...');
+      
+      for (const item of itemsToSend) {
+        const qtyToSend = Number(item.quantityToSend) || 0;
+        if (qtyToSend > 0) {
+          console.log('📦 [WAREHOUSE] Списание:', {
+            item: item.description,
+            qty: qtyToSend,
+            company_id: userCompanyId
+          });
+
+          const { error: rpcError, data: rpcData } = await supabase.rpc('update_warehouse_balance', {
+            p_company_id: userCompanyId,
+            p_item_name: (item.description || '').trim(),
+            p_quantity: qtyToSend,
+            p_transaction_type: 'expense',
+            p_user_id: user?.id,
+            p_user_email: user?.email,
+            p_comment: `Отправка мастеру: ${application.object_name}`,
+            p_application_id: application.id,
+            p_unit: item.unit || 'шт',
+            p_target_object_name: application.object_name,
+            p_recipient_name: application.foreman_name,
+            p_recipient_phone: application.foreman_phone
+          });
+
+          if (rpcError) {
+            console.error('❌ [WAREHOUSE] Ошибка списания:', rpcError);
+            showNotification(`⚠️ Ошибка списания: ${item.description}`, 'warning');
+          } else {
+            console.log('✅ [WAREHOUSE] Списано:', rpcData);
+          }
         }
-        return m;
-      });
-      const newHistoryEntry = {
-        user_id: user?.id,
-        user_email: user?.email,
-        old_status: application.status,
-        new_status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
-        action: 'sent_to_master',
-        timestamp: new Date().toISOString(),
-        details: `Отправлено мастеру: ${itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0).length} позиций`
-      };
-      await supabase
-        .from('applications')
-        .update({
-          status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
-          materials: updatedMaterials,
-          status_history: [...(application.status_history || []), newHistoryEntry],
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', application.id);
-      setApplications(prev => prev.map(app =>
-        app.id === application.id
-          ? { ...app, status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION, materials: updatedMaterials, status_history: [...(app.status_history || []), newHistoryEntry] }
-          : app
-      ));
-      showNotification('✅ Материалы отправлены мастеру', 'success');
-      return { success: true, updatedMaterials };
-    } catch (err) {
-      console.error('❌ Ошибка в handleSendToMaster:', err);
-      showNotification('Ошибка отправки: ' + err.message, 'error');
-      return { success: false, error: err };
+      }
     }
-  }, [user, showNotification, setApplications]);
+
+    // Обновляем UI
+    setApplications(prev => prev.map(app =>
+      app.id === application.id
+        ? { 
+            ...app, 
+            status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION, 
+            materials: updatedMaterials, 
+            status_history: [...(app.status_history || []), newHistoryEntry] 
+          }
+        : app
+    ));
+
+    showNotification(`✅ Материалы отправлены мастеру (${itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0).length} позиций)`, 'success');
+    return { success: true, updatedMaterials };
+    
+  } catch (err) {
+    console.error('❌ Ошибка в handleSendToMaster:', err);
+    showNotification('Ошибка отправки: ' + err.message, 'error');
+    return { success: false, error: err };
+  }
+}, [user, userCompanyId, WAREHOUSE_ENABLED, showNotification, setApplications]);
 
   const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
     try {
@@ -3110,26 +3154,31 @@ const handleNpsSubmit = async ({ score, comment }) => {
         })
         .eq('id', application.id);
       if (WAREHOUSE_ENABLED) {
-        for (const mat of updatedMaterials) {
-          const qty = Number(mat.received) || 0;
-          if (qty > 0) {
-            await supabase.rpc('update_warehouse_balance', {
-              p_company_id: userCompanyId,
-              p_item_name: (mat.description || '').trim(),
-              p_quantity: qty,
-              p_transaction_type: 'expense',
-              p_user_id: user?.id,
-              p_user_email: user?.email,
-              p_comment: `Выдача мастеру: ${application.object_name}`,
-              p_application_id: application.id,
-              p_unit: mat.unit || 'шт',
-              p_target_object_name: application.object_name,
-              p_recipient_name: application.foreman_name,
-              p_recipient_phone: application.foreman_phone
-            });
-          }
-        }
+  for (const mat of updatedMaterials) {
+    const qty = Number(mat.received) || 0;
+    if (qty > 0) {
+      const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
+        p_company_id: userCompanyId,
+        p_item_name: (mat.description || '').trim(),
+        p_quantity: qty,
+        p_transaction_type: 'expense',
+        p_user_id: user?.id,
+        p_user_email: user?.email,
+        p_comment: `Выдача мастеру: ${application.object_name}`,
+        p_application_id: application.id,
+        p_unit: mat.unit || 'шт',
+        p_target_object_name: application.object_name,     // ← ДОБАВИТЬ
+        p_recipient_name: application.foreman_name,        // ← ДОБАВИТЬ
+        p_recipient_phone: application.foreman_phone       // ← ДОБАВИТЬ
+      });
+      
+      if (rpcError) {
+        console.error('❌ RPC ошибка выдачи:', rpcError);
+        showNotification(`⚠️ Ошибка выдачи: ${mat.description}`, 'warning');
       }
+    }
+  }
+}
       setApplications(prev => prev.map(app =>
         app.id === application.id
           ? { ...app, status: newAppStatus, materials: updatedMaterials, status_history: [...(app.status_history || []), newHistoryEntry] }
