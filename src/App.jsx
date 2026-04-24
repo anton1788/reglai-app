@@ -6087,7 +6087,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   onClose={() => setShowReceiveModal(false)}
   selectedApplication={selectedApplication}
   onAdminReceive={handleAdminReceive} 
-  onAdminReceive={handleAdminReceive}
   onSendToMaster={handleSendToMaster}
   onMasterConfirm={handleMasterConfirm}
   language={language}  // ← УДАЛИТЬ

@@ -1178,8 +1178,8 @@ const ReceiveModal = memo(function({
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть</span>
             </div>
             
-           {/* 🔹 СКРЫВАЕМ "СОХРАНИТЬ" ДЛЯ СНАБЖЕНЦА В РЕЖИМЕ ПРИЁМКИ */}
-{!(modalMode === 'admin_receive' && userRole === 'supply_admin') && (
+          {/* Кнопка сохранения - видна для всех, кто может изменять */}
+{modalMode === 'admin_receive' && (
   <button
     onClick={handleSave}
     disabled={!hasChanges || isSaving}
@@ -1192,12 +1192,12 @@ const ReceiveModal = memo(function({
     {isSaving ? (
       <>
         <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-        <span>{t('saving')}</span>
+        <span>{t('saving') || 'Сохранение...'}</span>
       </>
     ) : (
       <>
         <CheckCircle className="w-4 h-4" aria-hidden="true" />
-        <span>{t('save')}</span>
+        <span>{t('save') || 'Сохранить'}</span>
       </>
     )}
   </button>
