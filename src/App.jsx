@@ -20,7 +20,6 @@ import {
   checkFeatureAccess,
   checkQuota,
   logApiUsage,
-  getUsageStats
 } from './utils/tariffPlans';
 // Добавить импорты
 import { WarehouseBalance } from './components/WarehouseView';
@@ -2517,19 +2516,24 @@ const engagementMetrics = useMemo(() => {
 // 📊 LOG ANALYTICS USAGE (Feature Adoption — с дебаунсом)
 useEffect(() => {
   const logFeatureUsage = async () => {
-    if (!userCompanyId || !user?.id) return;
-    
-    // Логируем использование фичи при переходе на вкладку
-    const feature = currentView;
-    if (feature && ['warehouse', 'chat', 'analytics', 'create'].includes(feature)) {
-      await supabase
-        .from('feature_usage_events')
-        .insert([{
-          company_id: userCompanyId,
-          user_id: user.id,
-          feature_name: feature,
-          event_type: 'view'
-        }]);
+    try {
+      if (!userCompanyId || !user?.id) return;
+      
+      // Логируем использование фичи при переходе на вкладку
+      const feature = currentView;
+      if (feature && ['warehouse', 'chat', 'analytics', 'create'].includes(feature)) {
+        await supabase
+          .from('feature_usage_events')
+          .insert([{
+            company_id: userCompanyId,
+            user_id: user.id,
+            feature_name: feature,
+            event_type: 'view'
+          }]);
+      }
+    } catch (err) {
+      // Игнорируем ошибки - это не критично для работы приложения
+      console.debug('Feature usage log failed (non-critical):', err.message);
     }
   };
   
@@ -2539,7 +2543,11 @@ useEffect(() => {
     const userCtx = getUserContext(user, profileDataForHeader, userRole, userCompanyId);
     
     if (shouldLogFeature('analytics', userCompanyId, lastLoggedRef.current)) {
-      logAnalyticsAccess(supabase, userCtx, 'dashboard');
+      try {
+        logAnalyticsAccess(supabase, userCtx, 'dashboard');
+      } catch (err) {
+        console.debug('Analytics log failed (non-critical):', err.message);
+      }
     }
   }
 }, [currentView, userCompanyId, user, userRole, profileDataForHeader, supabase]);
@@ -3480,48 +3488,66 @@ useEffect(() => {
       return;
     }
     
-    if (!userCompanyId || !supabase) return;
+    if (!userCompanyId || !supabase) {
+      setPlanLoading(false);
+      return;
+    }
+    
     try {
       setPlanLoading(true);
-      const plan = await getCompanyPlan(supabase, userCompanyId);
+      
+      // Добавляем таймаут 10 секунд
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      );
+      
+      const planPromise = getCompanyPlan(supabase, userCompanyId);
+      const plan = await Promise.race([planPromise, timeoutPromise]);
       setCurrentPlan(plan);
       
-      // 🆕 ЗАГРУЗКА ДЕТАЛЕЙ ТАРИФА
-      const { data: companyData } = await supabase
+      // 🆕 ЗАГРУЗКА ДЕТАЛЕЙ ТАРИФА (тоже с таймаутом)
+      const companyPromise = supabase
         .from('companies')
         .select('plan_activated_at, plan_expires_at, promo_code_used, promo_applied_at, promo_discount_percent')
         .eq('id', userCompanyId)
         .single();
       
-      if (companyData) {
+      const companyData = await Promise.race([companyPromise, timeoutPromise]);
+      
+      if (companyData?.data) {
         setCurrentPlanDetails({
-          activated_at: companyData.plan_activated_at,
-          expires_at: companyData.plan_expires_at
+          activated_at: companyData.data.plan_activated_at,
+          expires_at: companyData.data.plan_expires_at
         });
         
-        if (companyData.promo_code_used) {
+        if (companyData.data.promo_code_used) {
           setPromoCodeInfo({
-            code: companyData.promo_code_used,
-            applied_at: companyData.promo_applied_at,
-            discount_percent: companyData.promo_discount_percent
+            code: companyData.data.promo_code_used,
+            applied_at: companyData.data.promo_applied_at,
+            discount_percent: companyData.data.promo_discount_percent
           });
         }
       }
       
-      const quota = await checkQuota(supabase, userCompanyId);
-      setQuotaStatus(quota);
-      
-      // ✅ Добавить использование getUsageStats
-      const stats = await getUsageStats(userCompanyId);
-      console.log('Usage stats:', stats);
+      // Проверка квоты (опционально, с таймаутом)
+      try {
+        const quota = await Promise.race([checkQuota(supabase, userCompanyId), timeoutPromise]);
+        setQuotaStatus(quota);
+      } catch (quotaErr) {
+        console.debug('Quota check failed (non-critical):', quotaErr.message);
+        setQuotaStatus({ dailyUsage: 0, dailyLimit: 100, allowed: true });
+      }
       
     } catch (err) {
-      console.warn('Failed to load plan:', err);
+      console.warn('Failed to load plan (using default):', err.message);
       setCurrentPlan(TARIFF_PLANS.basic);
+      setCurrentPlanDetails(null);
+      setQuotaStatus({ dailyUsage: 0, dailyLimit: 100, allowed: true });
     } finally {
       setPlanLoading(false);
     }
   };
+  
   loadPlan();
 }, [userCompanyId, supabase, userRole, user, isSuperAdmin]);
 
