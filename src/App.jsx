@@ -3017,47 +3017,61 @@ const handleNpsSubmit = async ({ score, comment }) => {
       itemsCount: itemsToSend.length
     });
 
-    const updatedMaterials = application.materials.map((m) => {
-      const item = itemsToSend.find(i =>
-        i.description === m.description &&
-        i.unit === m.unit
+    // Обновляем материалы в заявке
+    const updatedMaterials = application.materials.map((originalMaterial) => {
+      const itemToSend = itemsToSend.find(i => 
+        i.description === originalMaterial.description && 
+        i.unit === originalMaterial.unit
       );
-      if (item && (Number(item.quantityToSend) || 0) > 0) {
-        const qtyToSend = Number(item.quantityToSend);
-        const alreadySent = Number(m.sent_to_master_quantity) || 0;
+      
+      if (itemToSend && (Number(itemToSend.quantityToSend) || 0) > 0) {
+        const qtyToSend = Number(itemToSend.quantityToSend);
+        const alreadySent = Number(originalMaterial.sent_to_master_quantity) || 0;
+        
         return {
-          ...m,
+          ...originalMaterial,
           sent_to_master_quantity: alreadySent + qtyToSend,
           status: ITEM_STATUS.SENT_TO_MASTER,
           sent_to_master_at: new Date().toISOString(),
           sent_to_master_by: user?.id
         };
       }
-      return m;
+      return originalMaterial;
     });
+
+    // Проверяем, все ли материалы отправлены
+    const allSent = updatedMaterials.every(m => 
+      (Number(m.sent_to_master_quantity) || 0) >= (Number(m.supplier_received_quantity) || 0)
+    );
+    
+    const newStatus = allSent 
+      ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION 
+      : APPLICATION_STATUS.PARTIAL_RECEIVED;
 
     const newHistoryEntry = {
       user_id: user?.id,
       user_email: user?.email,
       old_status: application.status,
-      new_status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+      new_status: newStatus,
       action: 'sent_to_master',
       timestamp: new Date().toISOString(),
       details: `Отправлено мастеру: ${itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0).length} позиций`
     };
 
-    // Обновляем заявку
-    await supabase
+    // 1. Обновляем заявку
+    const { error: updateError } = await supabase
       .from('applications')
       .update({
-        status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+        status: newStatus,
         materials: updatedMaterials,
         status_history: [...(application.status_history || []), newHistoryEntry],
         updated_at: new Date().toISOString()
       })
       .eq('id', application.id);
 
-    // ✅ ДОБАВЛЯЕМ СПИСАНИЕ СО СКЛАДА!
+    if (updateError) throw updateError;
+
+    // 2. ✅ СПИСЫВАЕМ СО СКЛАДА (ВАЖНО!)
     if (WAREHOUSE_ENABLED) {
       console.log('🏚️ [WAREHOUSE] Начинаем списание материалов...');
       
@@ -3070,11 +3084,12 @@ const handleNpsSubmit = async ({ score, comment }) => {
             company_id: userCompanyId
           });
 
+          // ✅ ПРАВИЛЬНЫЙ ВЫЗОВ update_warehouse_balance
           const { error: rpcError, data: rpcData } = await supabase.rpc('update_warehouse_balance', {
             p_company_id: userCompanyId,
             p_item_name: (item.description || '').trim(),
             p_quantity: qtyToSend,
-            p_transaction_type: 'expense',
+            p_transaction_type: 'expense',  // expense = списание
             p_user_id: user?.id,
             p_user_email: user?.email,
             p_comment: `Отправка мастеру: ${application.object_name}`,
@@ -3087,7 +3102,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
 
           if (rpcError) {
             console.error('❌ [WAREHOUSE] Ошибка списания:', rpcError);
-            showNotification(`⚠️ Ошибка списания: ${item.description}`, 'warning');
+            showNotification(`⚠️ Ошибка списания: ${item.description} - ${rpcError.message}`, 'warning');
           } else {
             console.log('✅ [WAREHOUSE] Списано:', rpcData);
           }
@@ -3100,7 +3115,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       app.id === application.id
         ? { 
             ...app, 
-            status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION, 
+            status: newStatus, 
             materials: updatedMaterials, 
             status_history: [...(app.status_history || []), newHistoryEntry] 
           }
