@@ -489,15 +489,17 @@ return (
 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('employee')} *</label>
 <select
 value={formData.recipientId}
-onChange={(e) => setFormData(prev => ({ ...prev, recipientId: e.target.value }))}
-className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-required
-disabled={isLoading}
+  onChange={(e) => setFormData(prev => ({ ...prev, recipientId: e.target.value }))}
+  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl"
+  required
+  disabled={isLoading}
 >
-<option value="">{t('selectEmployee')}</option>
-{employees?.map(emp => (
-<option key={emp.id} value={emp.id}>{emp.full_name} {emp.phone && `(${emp.phone})`}</option>
-))}
+  <option value="">{t('selectEmployee')}</option>
+  {employees?.map(emp => (
+    <option key={emp.id} value={emp.id}>
+      {emp.full_name} {emp.phone && `(${emp.phone})`} - {emp.role === 'master' ? 'Мастер' : 'Прораб'}
+    </option>
+  ))}
 </select>
 </div>
 <div>
@@ -826,11 +828,11 @@ setTransactions(trans || []);
 
 if (userRole === 'manager' || userRole === 'supply_admin') {
 const { data: staff } = await supabase
-.from('company_users')
-.select('id, full_name, phone, role')
-.eq('company_id', userCompanyId)
-.eq('is_active', true)
-.eq('role', 'foreman');
+  .from('company_users')
+  .select('id, full_name, phone, role')
+  .eq('company_id', userCompanyId)
+  .eq('is_active', true)
+  .in('role', ['master', 'foreman']);  // ✅ МАСТЕРА И ПРОРАБЫ
 setEmployees(staff || []);
 }
 } catch (error) {
@@ -952,40 +954,62 @@ setActionLoading(prev => ({ ...prev, adjust: null }));
 }, [userCompanyId, user, supabase, t, showNotification, loadWarehouseData]);
 
 const createTransfer = useCallback(async (item, recipientId, objectName, quantity, comment) => {
-setActionLoading(prev => ({ ...prev, transfer: item.id }));
-try {
-const recipient = employees.find(e => e.id === recipientId);
-await supabase.rpc('create_material_transfer', {
-p_company_id: userCompanyId,
-p_issued_to: recipientId,
-p_target_object_name: objectName,
-p_transfer_comment: comment,
-p_items: [{ item_name: item.name, unit: item.unit, issued_quantity: Number(quantity) }]
-});
-await supabase.rpc('update_warehouse_balance', {
-p_company_id: userCompanyId,
-p_item_name: item.name,
-p_quantity: Number(quantity),
-p_transaction_type: 'expense',
-p_user_id: user?.id,
-p_user_email: user?.email,
-p_comment: `Выдача: ${objectName}`,
-p_unit: item.unit,
-p_target_object_name: objectName,
-p_recipient_name: recipient?.full_name,
-p_recipient_phone: recipient?.phone
-});
-showNotification(t('transferred'), 'success');
-await loadWarehouseData();
-setTransferModal({ isOpen: false, item: null });
-} catch (err) {
-console.error('Transfer error:', err);
-showNotification(err.message || t('transferError'), 'error');
-throw err;
-} finally {
-setActionLoading(prev => ({ ...prev, transfer: null }));
-}
-}, [userCompanyId, user, supabase, t, showNotification, loadWarehouseData, employees]);
+  setActionLoading(prev => ({ ...prev, transfer: item.id }));
+  try {
+    // Находим получателя
+    const recipient = employees.find(e => e.id === recipientId);
+    if (!recipient) throw new Error('Сотрудник не найден');
+    
+    // ✅ 1. Проверяем остаток
+    if (Number(item.balance) < Number(quantity)) {
+      showNotification('Недостаточно материала на складе', 'error');
+      throw new Error('Недостаточно материала');
+    }
+    
+    // ✅ 2. Списание со склада через update_warehouse_balance (одна операция)
+    const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
+      p_company_id: userCompanyId,
+      p_item_name: item.name,
+      p_quantity: Number(quantity),
+      p_transaction_type: 'expense',
+      p_user_id: user?.id,
+      p_user_email: user?.email,
+      p_comment: comment || `Выдача: ${objectName}`,
+      p_unit: item.unit || 'шт',
+      p_target_object_name: objectName,
+      p_recipient_name: recipient.full_name,
+      p_recipient_phone: recipient.phone || null
+    });
+    
+    if (rpcError) throw rpcError;
+    
+    // ✅ 3. Логируем выдачу в отдельную таблицу (опционально)
+    await supabase
+      .from('material_issues')
+      .insert([{
+        company_id: userCompanyId,
+        material_name: item.name,
+        quantity: Number(quantity),
+        unit: item.unit || 'шт',
+        employee_id: recipientId,
+        employee_name: recipient.full_name,
+        target_object: objectName,
+        issued_by: user?.id,
+        issued_by_name: profileData?.full_name || user?.email,
+        issued_at: new Date().toISOString()
+      }]);
+    
+    showNotification(t('transferred') || `✅ Выдано ${quantity} ${item.unit} сотруднику ${recipient.full_name}`, 'success');
+    await loadWarehouseData();
+    setTransferModal({ isOpen: false, item: null });
+  } catch (err) {
+    console.error('Transfer error:', err);
+    showNotification(err.message || t('transferError'), 'error');
+    throw err;
+  } finally {
+    setActionLoading(prev => ({ ...prev, transfer: null }));
+  }
+}, [userCompanyId, user, profileData, supabase, t, showNotification, loadWarehouseData, employees]);
 
 const loadItemHistory = useCallback(async (item) => {
 setActionLoading(prev => ({ ...prev, details: item.id }));
