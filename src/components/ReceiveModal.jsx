@@ -521,9 +521,10 @@ const ReceiveModal = memo(function({
         result = await onAdminReceive(localMaterials, selectedApplication);
       }
       else if (modalMode === 'admin_send_to_master' && typeof onSendToMaster === 'function') {
-        const items = itemsToSend.filter(function(i) { return (Number(i.quantityToSend) || 0) > 0; });
-        result = await onSendToMaster(items, selectedApplication);
-      }
+  const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
+  console.log('🔔 Вызов onSendToMaster с items:', items);
+  result = await onSendToMaster(items, selectedApplication);
+}
       else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
         const confirmationsToSend = localMaterials.map(function(m, idx) {
           const conf = confirmations.find(function(c) { return c.materialIndex === idx; });

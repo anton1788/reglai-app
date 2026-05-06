@@ -2825,19 +2825,24 @@ useEffect(() => {
     };
   });
   
-  const allReceived = updatedMaterials.every(m =>
+   const allReceived = updatedMaterials.every(m =>
     (m.supplier_received_quantity || 0) >= (m.quantity || 0)
   );
   const anyReceived = updatedMaterials.some(m =>
     (m.supplier_received_quantity || 0) > 0
   );
   
-  // 🔧 ИСПРАВЛЕНО: Правильное определение статуса
-  const newAppStatus = allReceived
-    ? APPLICATION_STATUS.RECEIVED           // ✅ Получено полностью
+  // 🔧 ИСПРАВЛЕНО: Если есть материалы, требующие отправки мастеру
+  const hasMaterialsToSend = updatedMaterials.some(m =>
+    (m.supplier_received_quantity || 0) > 0 && 
+    ((m.sent_to_master_quantity || 0) < (m.supplier_received_quantity || 0))
+  );
+  
+  const newAppStatus = allReceived && !hasMaterialsToSend
+    ? APPLICATION_STATUS.RECEIVED           // ✅ Если всё принято И отправлено
     : anyReceived
-      ? APPLICATION_STATUS.PARTIAL_RECEIVED // ✅ Частично получено
-      : APPLICATION_STATUS.ADMIN_PROCESSING; // ✅ В обработке
+      ? APPLICATION_STATUS.PARTIAL_RECEIVED // ✅ Частично принято
+      : APPLICATION_STATUS.ADMIN_PROCESSING;
   
   const newHistoryEntry = {
     user_id: user?.id,
@@ -3012,25 +3017,17 @@ const handleNpsSubmit = async ({ score, comment }) => {
 
   const handleSendToMaster = useCallback(async (itemsToSend, application) => {
   try {
-    console.log('📦 [handleSendToMaster] Начинаем отправку мастеру:', {
-      applicationId: application.id,
-      itemsCount: itemsToSend.length
-    });
-
-    // Обновляем материалы в заявке
+    console.log('📦 Отправка мастеру, items:', itemsToSend);
+    
+    // 1. Обновляем материалы
     const updatedMaterials = application.materials.map((originalMaterial) => {
-      const itemToSend = itemsToSend.find(i => 
-        i.description === originalMaterial.description && 
-        i.unit === originalMaterial.unit
-      );
+      const itemToSend = itemsToSend.find(i => i.description === originalMaterial.description);
       
       if (itemToSend && (Number(itemToSend.quantityToSend) || 0) > 0) {
         const qtyToSend = Number(itemToSend.quantityToSend);
-        const alreadySent = Number(originalMaterial.sent_to_master_quantity) || 0;
-        
         return {
           ...originalMaterial,
-          sent_to_master_quantity: alreadySent + qtyToSend,
+          sent_to_master_quantity: (Number(originalMaterial.sent_to_master_quantity) || 0) + qtyToSend,
           status: ITEM_STATUS.SENT_TO_MASTER,
           sent_to_master_at: new Date().toISOString(),
           sent_to_master_by: user?.id
@@ -3038,58 +3035,49 @@ const handleNpsSubmit = async ({ score, comment }) => {
       }
       return originalMaterial;
     });
-
-    // Проверяем, все ли материалы отправлены
+    
+    // 2. Проверяем, все ли материалы отправлены мастеру
     const allSent = updatedMaterials.every(m => 
       (Number(m.sent_to_master_quantity) || 0) >= (Number(m.supplier_received_quantity) || 0)
     );
     
+    // 3. Новый статус заявки
     const newStatus = allSent 
       ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION 
       : APPLICATION_STATUS.PARTIAL_RECEIVED;
-
-    const newHistoryEntry = {
-      user_id: user?.id,
-      user_email: user?.email,
-      old_status: application.status,
-      new_status: newStatus,
-      action: 'sent_to_master',
-      timestamp: new Date().toISOString(),
-      details: `Отправлено мастеру: ${itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0).length} позиций`
-    };
-
-    // 1. Обновляем заявку
+    
+    // 4. Обновляем заявку
     const { error: updateError } = await supabase
       .from('applications')
       .update({
         status: newStatus,
         materials: updatedMaterials,
-        status_history: [...(application.status_history || []), newHistoryEntry],
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        status_history: [
+          ...(application.status_history || []),
+          {
+            action: 'sent_to_master',
+            user_id: user?.id,
+            user_email: user?.email,
+            timestamp: new Date().toISOString(),
+            details: `Отправлено мастеру: ${itemsToSend.length} позиций`
+          }
+        ]
       })
       .eq('id', application.id);
-
+    
     if (updateError) throw updateError;
-
-    // 2. ✅ СПИСЫВАЕМ СО СКЛАДА (ВАЖНО!)
+    
+    // 5. Списание со склада
     if (WAREHOUSE_ENABLED) {
-      console.log('🏚️ [WAREHOUSE] Начинаем списание материалов...');
-      
       for (const item of itemsToSend) {
         const qtyToSend = Number(item.quantityToSend) || 0;
         if (qtyToSend > 0) {
-          console.log('📦 [WAREHOUSE] Списание:', {
-            item: item.description,
-            qty: qtyToSend,
-            company_id: userCompanyId
-          });
-
-          // ✅ ПРАВИЛЬНЫЙ ВЫЗОВ update_warehouse_balance
-          const { error: rpcError, data: rpcData } = await supabase.rpc('update_warehouse_balance', {
+          await supabase.rpc('update_warehouse_balance', {
             p_company_id: userCompanyId,
-            p_item_name: (item.description || '').trim(),
+            p_item_name: item.description.trim(),
             p_quantity: qtyToSend,
-            p_transaction_type: 'expense',  // expense = списание
+            p_transaction_type: 'expense',
             p_user_id: user?.id,
             p_user_email: user?.email,
             p_comment: `Отправка мастеру: ${application.object_name}`,
@@ -3099,34 +3087,22 @@ const handleNpsSubmit = async ({ score, comment }) => {
             p_recipient_name: application.foreman_name,
             p_recipient_phone: application.foreman_phone
           });
-
-          if (rpcError) {
-            console.error('❌ [WAREHOUSE] Ошибка списания:', rpcError);
-            showNotification(`⚠️ Ошибка списания: ${item.description} - ${rpcError.message}`, 'warning');
-          } else {
-            console.log('✅ [WAREHOUSE] Списано:', rpcData);
-          }
         }
       }
     }
-
-    // Обновляем UI
+    
+    // 6. Обновляем UI
     setApplications(prev => prev.map(app =>
       app.id === application.id
-        ? { 
-            ...app, 
-            status: newStatus, 
-            materials: updatedMaterials, 
-            status_history: [...(app.status_history || []), newHistoryEntry] 
-          }
+        ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
-
-    showNotification(`✅ Материалы отправлены мастеру (${itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0).length} позиций)`, 'success');
-    return { success: true, updatedMaterials };
+    
+    showNotification(`✅ Отправлено мастеру ${itemsToSend.length} позиций`, 'success');
+    return { success: true };
     
   } catch (err) {
-    console.error('❌ Ошибка в handleSendToMaster:', err);
+    console.error('Ошибка:', err);
     showNotification('Ошибка отправки: ' + err.message, 'error');
     return { success: false, error: err };
   }

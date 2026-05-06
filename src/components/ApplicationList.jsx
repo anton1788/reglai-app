@@ -904,6 +904,19 @@ aria-label={t('cancelApplication')}
 {t('cancelApplication')}
 </button>
 )}
+{/* 🔸 МАСТЕР: Подтверждение получения - ДЛЯ РОЛИ 'master' */}
+{userRole === 'master' &&
+ requiresMasterConfirmation(application.status) &&
+ application.user_id === user?.id && (
+  <button
+    onClick={() => onOpenReceiveModal(application, 'master_confirm')}
+    className="px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all shadow-lg shadow-green-500/25"
+    aria-label={t('confirmReceipt')}
+  >
+    <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
+    {t('confirmReceipt') || 'Подтвердить'}
+  </button>
+)}
 </>
 )}
 </div>
