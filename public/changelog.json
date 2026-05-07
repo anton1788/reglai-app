@@ -1,12 +1,12 @@
 {
-  "currentVersion": "9.9.18",
+  "currentVersion": "9.9.19",
   "releaseDate": "2026-03-23",
   "forceUpdate": false,
   "versions": [
     {
-      "version": "9.9.18",
+      "version": "9.9.19",
       "date": "2026-04-02",
-      "title": "сделал более пригодным к supabase но оригинал 9.9.12",
+      "title": "исправлен документообород",
       "changes": [
         "✅ Исправлен расчёт Activation Rate",
         "📊 Улучшена точность трекинга первых заявок",
