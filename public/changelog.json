@@ -1,12 +1,12 @@
 {
-  "currentVersion": "9.9.20",
+  "currentVersion": "0.0.0",
   "releaseDate": "2026-03-23",
   "forceUpdate": false,
   "versions": [
     {
-      "version": "9.9.20",
+      "version": "0.0.0",
       "date": "2026-04-02",
-      "title": "исправлен документообород",
+      "title": "Исправлены тарифные планы",
       "changes": [
         "✅ Исправлен расчёт Activation Rate",
         "📊 Улучшена точность трекинга первых заявок",

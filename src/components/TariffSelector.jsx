@@ -1,7 +1,7 @@
 // src/components/TariffSelector.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles, Shield, Headphones } from 'lucide-react';
-import { TARIFF_PLANS, calculateSavings } from '../utils/tariffPlans';
+import { TARIFF_PLANS, calculateSavings, calculatePrice } from '../utils/tariffPlans';
 
 const TariffSelector = ({ 
   currentPlan = 'basic', 
@@ -11,13 +11,17 @@ const TariffSelector = ({
   isLoading = false,
   t,
   onPromoClick,
-  // 🆕 НОВЫЕ ПРОПСЫ
-  currentPlanDetails,     // { activated_at, expires_at, promo_code_used }
-  promoCodeInfo           // { code, discount_percent, applied_at }
+  currentPlanDetails,
+  promoCodeInfo,
+  currentUsersCount = 0,
+  onUsersCountChange
 }) => {
   // Внутреннее состояние для периода, если не передан внешний контроллер
   const [internalBillingPeriod, setInternalBillingPeriod] = useState('monthly');
   const billingPeriod = externalBillingPeriod !== undefined ? externalBillingPeriod : internalBillingPeriod;
+  
+  // 🆕 Состояние для выбранного количества пользователей по каждому тарифу
+  const [selectedUsersByPlan, setSelectedUsersByPlan] = useState({});
   
   const setBillingPeriod = (period) => {
     if (onBillingPeriodChange) {
@@ -57,9 +61,73 @@ const TariffSelector = ({
     return result === key ? fallback : result;
   };
 
+  // 🆕 Обработчик изменения количества пользователей
+  const handleUsersChange = useCallback((planId, usersCount) => {
+    setSelectedUsersByPlan(prev => ({
+      ...prev,
+      [planId]: usersCount
+    }));
+    if (onUsersCountChange) {
+      onUsersCountChange(planId, usersCount);
+    }
+  }, [onUsersCountChange]);
+
+  // 🆕 Получить отображаемое количество пользователей для тарифа
+  const getDisplayUsersCount = useCallback((plan) => {
+    if (isCurrentPlan(plan.id)) {
+      return currentPlanDetails?.users_count || currentUsersCount || plan.includedUsers;
+    }
+    return selectedUsersByPlan[plan.id] || plan.includedUsers;
+  }, [currentPlanDetails, currentUsersCount, selectedUsersByPlan, isCurrentPlan]);
+
+  // 🆕 Проверка, является ли план текущим
+  const isCurrentPlan = useCallback((planId) => currentPlan === planId, [currentPlan]);
+
+  // 💰 Хелпер для расчета цены с учётом промокода
+  const getDisplayPrice = useCallback((plan, period, promoInfo) => {
+    const basePrice = period === 'monthly' ? plan.monthlyPrice : plan.annualPrice;
+    
+    if (promoInfo?.discount_percent && promoInfo.discount_percent > 0) {
+      const discount = Math.round(basePrice * (promoInfo.discount_percent / 100));
+      return {
+        original: basePrice,
+        discounted: basePrice - discount,
+        showDiscount: true,
+        discountPercent: promoInfo.discount_percent
+      };
+    }
+    
+    return {
+      original: basePrice,
+      discounted: basePrice,
+      showDiscount: false
+    };
+  }, []);
+
+  // 🔹 Эффект инициализации слайдера
+  useEffect(() => {
+    if (currentPlanDetails?.users_count) {
+      setSelectedUsersByPlan(prev => ({
+        ...prev,
+        [currentPlan]: currentPlanDetails.users_count
+      }));
+    }
+  }, [currentPlan, currentPlanDetails]);
+
+  // 🆕 Обработчик кнопки выбора тарифа с валидацией
+  const handleSelectClick = useCallback((plan, usersCount) => {
+    // Валидация количества пользователей
+    if (usersCount < plan.includedUsers || usersCount > plan.maxUsers) {
+      console.warn(`Invalid users count: ${usersCount} for plan ${plan.id}`);
+      return;
+    }
+    
+    onSelectPlan(plan.id, usersCount);
+  }, [onSelectPlan]);
+
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-      {/* 🆕 БЛОК ИНФОРМАЦИИ О ТЕКУЩЕМ ТАРИФЕ */}
+      {/* БЛОК ИНФОРМАЦИИ О ТЕКУЩЕМ ТАРИФЕ */}
       {currentPlanDetails && (
         <div className="mb-8 bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 rounded-xl p-5 border border-[#4A6572]/20">
           <div className="flex items-center gap-2 mb-3">
@@ -70,7 +138,6 @@ const TariffSelector = ({
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            {/* Дата активации */}
             <div className="flex items-start gap-2">
               <Calendar className="w-4 h-4 text-gray-500 mt-0.5" />
               <div>
@@ -83,7 +150,6 @@ const TariffSelector = ({
               </div>
             </div>
             
-            {/* Дата окончания */}
             <div className="flex items-start gap-2">
               <Clock className="w-4 h-4 text-gray-500 mt-0.5" />
               <div>
@@ -106,7 +172,6 @@ const TariffSelector = ({
             </div>
           </div>
           
-          {/* 🆕 ИНФОРМАЦИЯ О ПРОМОКОДЕ */}
           {promoCodeInfo && (
             <div className="mt-3 pt-3 border-t border-[#4A6572]/20 flex items-start gap-2">
               <Gift className="w-4 h-4 text-[#F9AA33] mt-0.5" />
@@ -129,9 +194,8 @@ const TariffSelector = ({
             </div>
           )}
           
-          {/* Кнопка продления/смены тарифа */}
           <button
-            onClick={() => onSelectPlan(currentPlan)}
+            onClick={() => onSelectPlan(currentPlan, currentPlanDetails?.users_count || currentUsersCount)}
             className="mt-4 w-full py-2 bg-[#4A6572]/20 text-[#4A6572] dark:text-[#F9AA33] rounded-lg text-sm font-medium hover:bg-[#4A6572]/30 transition-colors"
           >
             {translate('extendPlan', 'Продлить тариф')}
@@ -178,10 +242,15 @@ const TariffSelector = ({
       {/* Карточки тарифов */}
       <div className="grid md:grid-cols-3 gap-6">
         {Object.values(TARIFF_PLANS).map((plan) => {
-          const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.annualPrice;
+          const usersCount = getDisplayUsersCount(plan);
+          
+          // 💰 Расчет цены с поддержкой промокода (ВНУТРИ map для правильного scope)
+          const displayPrice = getDisplayPrice(plan, billingPeriod, promoCodeInfo);
+          const price = calculatePrice(plan, usersCount, billingPeriod === 'annual');
           const savings = calculateSavings(plan);
-          const isCurrent = currentPlan === plan.id;
+          const isCurrent = isCurrentPlan(plan.id);
           const isPopular = plan.popular;
+          const showSlider = plan.maxUsers > plan.includedUsers;
 
           return (
             <div
@@ -206,17 +275,33 @@ const TariffSelector = ({
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                     {translate(`tariff.plans.${plan.id}.name`, plan.name)}
                   </h3>
-                  <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                      {price.toLocaleString('ru-RU')} ₽
-                    </span>
+                  
+                  {/* 💰 Цена с поддержкой промокода */}
+                  <div className="flex items-baseline justify-center gap-1 flex-wrap">
+                    {displayPrice.showDiscount ? (
+                      <>
+                        <span className="text-4xl font-bold text-[#4A6572] dark:text-[#F9AA33]">
+                          {displayPrice.discounted.toLocaleString('ru-RU')} ₽
+                        </span>
+                        <span className="text-lg text-gray-400 line-through">
+                          {displayPrice.original.toLocaleString('ru-RU')} ₽
+                        </span>
+                        <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full whitespace-nowrap">
+                          -{displayPrice.discountPercent}%
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-4xl font-bold text-gray-900 dark:text-white">
+                        {price.toLocaleString('ru-RU')} ₽
+                      </span>
+                    )}
                     <span className="text-gray-500 dark:text-gray-400">
                       /{billingPeriod === 'monthly' 
                         ? translate('tariffSelector.perMonth', 'мес') 
                         : translate('tariffSelector.perYear', 'год')}
                     </span>
                   </div>
-                  {billingPeriod === 'annual' && (
+                  {billingPeriod === 'annual' && !displayPrice.showDiscount && (
                     <p className="text-sm text-green-600 mt-2">
                       {translate('tariffSelector.savings', 'Экономия')} {savings.savingsPercent}% ({savings.savings.toLocaleString()} ₽)
                     </p>
@@ -249,6 +334,35 @@ const TariffSelector = ({
                     </span>
                     <span className="font-semibold">{plan.maxUsers}</span>
                   </div>
+                  
+                  {/* 🆕 СЛАЙДЕР ВЫБОРА ПОЛЬЗОВАТЕЛЕЙ */}
+                  {showSlider && (
+                    <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {translate('tariffSelector.usersCount', 'Количество пользователей')}: {usersCount}
+                      </label>
+                      <input
+                        type="range"
+                        min={plan.includedUsers}
+                        max={plan.maxUsers}
+                        step={1}
+                        value={usersCount}
+                        onChange={(e) => handleUsersChange(plan.id, parseInt(e.target.value))}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                        disabled={isCurrent}
+                        aria-label={translate('tariffSelector.usersSlider', 'Выбор количества пользователей')}
+                      />
+                      <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span>{translate('tariffSelector.included', 'В тарифе')}: {plan.includedUsers}</span>
+                        <span>{translate('tariffSelector.max', 'Максимум')}: {plan.maxUsers}</span>
+                      </div>
+                      {usersCount > plan.includedUsers && (
+                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
+                          +{(usersCount - plan.includedUsers) * (plan.extraUserPrice || 500)} ₽/мес за доп. пользователей
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Функции */}
@@ -287,15 +401,16 @@ const TariffSelector = ({
                   })}
                 </div>
 
-                {/* Кнопка */}
+                {/* Кнопка выбора тарифа */}
                 <button
-                  onClick={() => onSelectPlan(plan.id)}
+                  onClick={() => handleSelectClick(plan, usersCount)}
                   disabled={isCurrent || isLoading}
                   className={`w-full py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
                     isCurrent
                       ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                       : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white hover:shadow-lg'
                   }`}
+                  aria-label={translate('tariffSelector.selectPlanAria', `Выбрать тариф ${plan.name}`)}
                 >
                   {isCurrent ? (
                     <>
@@ -321,6 +436,7 @@ const TariffSelector = ({
             }
           }}
           className="text-sm text-[#4A6572] hover:text-[#F9AA33] transition-colors flex items-center gap-2 mx-auto"
+          aria-label={translate('tariffSelector.promoAria', 'Ввести промокод')}
         >
           <Gift className="w-4 h-4" />
           {translate('havePromoCode', 'Есть промокод?')}
@@ -330,4 +446,4 @@ const TariffSelector = ({
   );
 };
 
-export default TariffSelector;
+export default React.memo(TariffSelector);

@@ -1664,71 +1664,81 @@ const checkForUpdates = useCallback(async () => {
     }
   };
 
-  // ─────────────────────────────────────────────────────────
-  // 👥 INVITE USER - ✅ ИСПРАВЛЕНО С ОТЛАДКОЙ
-  // ─────────────────────────────────────────────────────────
-  const handleInviteUser = async () => {
-    if (!inviteEmail || !inviteRole) {
-      showNotification(t('enterValidEmail'), 'error');
-      return;
+  // 👥 INVITE USER - ✅ С ДОБАВЛЕННОЙ ПРОВЕРКОЙ ЛИМИТА
+// ─────────────────────────────────────────────────────────
+const handleInviteUser = async () => {
+  if (!inviteEmail || !inviteRole) {
+    showNotification(t('enterValidEmail'), 'error');
+    return;
+  }
+
+  // ✅ ДОБАВИТЬ ПРОВЕРКУ ЛИМИТА ПОЛЬЗОВАТЕЛЕЙ
+  const currentUsersCount = employees.length;
+  const maxUsers = currentPlan?.maxUsers || 10;
+  
+  if (currentUsersCount >= maxUsers) {
+    showNotification(`Достигнут лимит пользователей (${maxUsers}). Обновите тариф для добавления новых сотрудников.`, 'error');
+    return;
+  }
+
+  // ✅ ДОБАВИТЬ отладку
+  console.log('[INVITE DEBUG]', {
+    userRole,
+    isCompanyOwner,
+    inviteRole,
+    userCompanyId,
+    userId: user?.id,
+    currentUsersCount,
+    maxUsers
+  });
+
+  if (!canInviteRole(userRole, inviteRole, isCompanyOwner)) {
+    showNotification(t('cantInviteRole'), 'error');
+    return;
+  }
+
+  if (inviteRole === 'super_admin') {
+    showNotification('Роль супер-админа не может быть назначена через интерфейс', 'error');
+    return;
+  }
+
+  if (inviteRole === 'manager' && !isCompanyOwner) {
+    showNotification('Только владелец компании может приглашать менеджеров', 'error');
+    return;
+  }
+
+  if (!userCompanyId) {
+    showNotification('Ошибка: компания не указана', 'error');
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from('invitations')
+      .insert([{
+        email: inviteEmail.trim().toLowerCase(),
+        role: inviteRole,
+        company_id: userCompanyId,
+        invited_by: user?.id,
+        accepted: false,
+        created_at: new Date().toISOString()
+      }]);
+
+    if (error) {
+      console.error('[INVITE ERROR]', error);
+      throw error;
     }
 
-    // ✅ ДОБАВИТЬ отладку
-    console.log('[INVITE DEBUG]', {
-      userRole,
-      isCompanyOwner,
-      inviteRole,
-      userCompanyId,
-      userId: user?.id
-    });
-
-    if (!canInviteRole(userRole, inviteRole, isCompanyOwner)) {
-      showNotification(t('cantInviteRole'), 'error');
-      return;
-    }
-
-    if (inviteRole === 'super_admin') {
-      showNotification('Роль супер-админа не может быть назначена через интерфейс', 'error');
-      return;
-    }
-
-    if (inviteRole === 'manager' && !isCompanyOwner) {
-      showNotification('Только владелец компании может приглашать менеджеров', 'error');
-      return;
-    }
-
-    if (!userCompanyId) {
-      showNotification('Ошибка: компания не указана', 'error');
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('invitations')
-        .insert([{
-          email: inviteEmail.trim().toLowerCase(),
-          role: inviteRole,
-          company_id: userCompanyId,
-          invited_by: user?.id,
-          accepted: false,
-          created_at: new Date().toISOString()
-        }]);
-
-      if (error) {
-        console.error('[INVITE ERROR]', error);
-        throw error;
-      }
-
-      await logUserInvited(supabase, inviteEmail.trim().toLowerCase(), inviteRole, user?.email, userContext);
-      showNotification(t('inviteSent'), 'success');
-      setInviteEmail('');
-      setInviteRole('foreman');
-      setShowInviteModal(false);
-    } catch (err) {
-      console.error('Ошибка отправки приглашения:', err);
-      showNotification(t('inviteFailed') + ': ' + err.message, 'error');
-    }
-  };
+    await logUserInvited(supabase, inviteEmail.trim().toLowerCase(), inviteRole, user?.email, userContext);
+    showNotification(t('inviteSent'), 'success');
+    setInviteEmail('');
+    setInviteRole('foreman');
+    setShowInviteModal(false);
+  } catch (err) {
+    console.error('Ошибка отправки приглашения:', err);
+    showNotification(t('inviteFailed') + ': ' + err.message, 'error');
+  }
+};
 
   // ─────────────────────────────────────────────────────────
   // 🛒 CART MANAGEMENT
@@ -3286,21 +3296,29 @@ const handleNpsSubmit = async ({ score, comment }) => {
     fetchSettings();
   }, []);
 
-  // ─────────────────────────────────────────────────────────
-  // 👥 LOAD EMPLOYEES
-  // ─────────────────────────────────────────────────────────
-  const loadEmployees = useCallback(async () => {
-    if (userRole !== 'manager' || !userCompanyId) return;
-    setLoadingEmployees(true);
-    try {
-      const { data: currentEmployees, error: loadError } = await supabase
-        .from('company_users')
-        .select('*')
-        .eq('company_id', userCompanyId);
-      if (!loadError && currentEmployees && currentEmployees.length > 0) {
-        setEmployees(currentEmployees);
-        return;
+ // 👥 LOAD EMPLOYEES
+// ─────────────────────────────────────────────────────────
+const loadEmployees = useCallback(async () => {
+  if (userRole !== 'manager' || !userCompanyId) return;
+  
+  // ✅ ДОБАВИТЬ ПРОВЕРКУ ЛИМИТА ПРИ ЗАГРУЗКЕ
+  const maxUsers = currentPlan?.maxUsers || 10;
+  
+  setLoadingEmployees(true);
+  try {
+    const { data: currentEmployees, error: loadError } = await supabase
+      .from('company_users')
+      .select('*')
+      .eq('company_id', userCompanyId);
+    
+    if (!loadError && currentEmployees && currentEmployees.length > 0) {
+      // ✅ ПОКАЗАТЬ ПРЕДУПРЕЖДЕНИЕ ПРИ ПРИБЛИЖЕНИИ К ЛИМИТУ
+      if (currentEmployees.length >= maxUsers * 0.8) {
+        showNotification(`⚠️ Внимание: использовано ${currentEmployees.length} из ${maxUsers} доступных пользователей. При достижении лимита приглашение новых сотрудников будет недоступно.`, 'warning');
       }
+      setEmployees(currentEmployees);
+      return;
+    }
       const { data: apps, error: appsError } = await supabase
         .from('applications')
         .select('user_id, foreman_name, foreman_phone')
@@ -3805,51 +3823,98 @@ const handleSelectPlan = async (planId) => {
     showNotification('Ошибка: компания не указана', 'error');
     return;
   }
-  if (!userCompanyId) {
-    showNotification('Ошибка: компания не указана', 'error');
-    return;
-  }
+
   try {
-    // 🔍 ОТЛАДКА: логируем изменение тарифа
-    console.log('🔍 [TARIFF] Changing plan:', {
+    const plan = TARIFF_PLANS[planId];
+    const isAnnual = billingPeriod === 'annual';
+    
+    // 🔐 Базовая цена в зависимости от периода
+    let basePrice = isAnnual ? plan.annualPrice : plan.monthlyPrice;
+    
+    // 🎁 Применяем скидку промокода, если есть
+    let finalPrice = basePrice;
+    let appliedDiscount = 0;
+    
+    if (promoCodeInfo?.discount_percent && promoCodeInfo.discount_percent > 0) {
+      appliedDiscount = Math.round(basePrice * (promoCodeInfo.discount_percent / 100));
+      finalPrice = basePrice - appliedDiscount;
+      
+      console.log('🎁 Promo discount applied:', {
+        original: basePrice,
+        discount_percent: promoCodeInfo.discount_percent,
+        discount_amount: appliedDiscount,
+        final: finalPrice
+      });
+    }
+
+    console.log('🔍 [TARIFF] Updating plan:', {
       userCompanyId,
       planId,
-      userId: user?.id,
-      userEmail: user?.email,
-      userRole
+      billingPeriod,
+      basePrice,
+      finalPrice,
+      appliedDiscount,
+      promoCode: promoCodeInfo?.code
     });
-    
+
+    // 📦 Обновляем компанию с учётом финальной цены
     const { error } = await supabase
       .from('companies')
       .update({
         plan_tier: planId,
+        plan_activated_at: new Date().toISOString(),
+        plan_expires_at: isAnnual 
+          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        // 💰 Сохраняем финальную цену для отчётности
+        current_plan_price: finalPrice,
         updated_at: new Date().toISOString(),
       })
       .eq('id', userCompanyId);
-    
+
     if (error) throw error;
+
+    // 🔄 Обновляем локальный стейт
+    setCurrentPlan({ 
+      ...plan, 
+      currentPrice: finalPrice,
+      originalPrice: basePrice,
+      discountApplied: appliedDiscount > 0
+    });
     
-    setCurrentPlan(TARIFF_PLANS[planId]);
     setShowTariffModal(false);
-    showNotification(`✅ Тариф "${TARIFF_PLANS[planId].name}" активирован`, 'success');
-    
-    // 🔍 ОТЛАДКА АУДИТА
-    console.log('📝 [AUDIT] Calling logAuditAction...');
-    const auditResult = await logAuditAction(supabase, {
-      actionType: 'plan_changed',  // ← Исправлено: было 'settings_changed'
+    showNotification(
+      `✅ Тариф "${plan.name}" активирован${appliedDiscount > 0 ? ` со скидкой ${promoCodeInfo.discount_percent}%` : ''}`, 
+      'success'
+    );
+
+    // 📝 Логирование в аудит
+    await logAuditAction(supabase, {
+      actionType: 'plan_changed',
       entityType: 'company',
       entityId: userCompanyId,
-      oldValue: { plan: currentPlan?.id },
-      newValue: { plan: planId },
+      oldValue: { 
+        plan: currentPlan?.id,
+        price: currentPlan?.currentPrice 
+      },
+      newValue: { 
+        plan: planId, 
+        price: finalPrice,
+        discount: appliedDiscount,
+        promo_code: promoCodeInfo?.code
+      },
       companyId: userCompanyId,
       userId: user?.id,
       userEmail: user?.email,
-      userRole: userRole
+      userRole: userRole,
+      metadata: {
+        billing_period: billingPeriod,
+        promo_applied: !!promoCodeInfo?.code
+      }
     });
-    console.log('📝 [AUDIT] Result:', auditResult);
-    
+
   } catch (err) {
-    console.error('❌ [TARIFF] Plan change error:', err);
+    console.error('❌ [TARIFF] Plan update error:', err);
     showNotification('Не удалось изменить тариф: ' + err.message, 'error');
   }
 };
@@ -3875,6 +3940,26 @@ const checkApiQuota = useCallback(async (apiKeyId = null) => {
   }
   return quota.allowed;
 }, [userCompanyId, supabase, showNotification, userRole, user]);
+
+// 📊 МОНИТОРИНГ ЛИМИТА ПОЛЬЗОВАТЕЛЕЙ (ВСТАВИТЬ СЮДА)
+useEffect(() => {
+  const checkUserLimit = async () => {
+    if (!userCompanyId || !currentPlan) return;
+    
+    const maxUsers = currentPlan.maxUsers || 10;
+    const currentCount = employees.length;
+    
+    if (currentCount >= maxUsers) {
+      console.warn(`⚠️ Лимит пользователей достигнут: ${currentCount}/${maxUsers}`);
+      // Можно показать уведомление, если лимит достигнут
+      if (currentCount === maxUsers) {
+        showNotification(`⚠️ Достигнут лимит пользователей (${maxUsers}). Приглашение новых сотрудников недоступно.`, 'warning');
+      }
+    }
+  };
+  
+  checkUserLimit();
+}, [employees.length, currentPlan, userCompanyId, showNotification]);
 
 // 🎁 Активация промокода
 const handleActivatePromo = async (code) => {
@@ -4007,6 +4092,12 @@ useEffect(() => {
             {(userRole === 'manager' || userRole === 'supply_admin' || isCompanyOwner) && (
   <button
     onClick={() => {
+      // ✅ ДОБАВИТЬ ПРОВЕРКУ ЛИМИТА ПЕРЕД ОТКРЫТИЕМ
+      const maxUsers = currentPlan?.maxUsers || 10;
+      if (employees.length >= maxUsers) {
+        showNotification(`Достигнут лимит пользователей (${maxUsers}). Обновите тариф для приглашения новых сотрудников.`, 'warning');
+        return;
+      }
       handleABTestClick('invite_button', 'invite_click');
       setShowInviteModal(true);
     }}
@@ -6071,17 +6162,21 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     )}
     
     <TariffSelector
-      currentPlan={currentPlan?.id || 'basic'}
-      billingPeriod={billingPeriod}
-      onBillingPeriodChange={setBillingPeriod}
-      onSelectPlan={handleSelectPlan}
-      isLoading={planLoading}
-      t={t}
-      onPromoClick={() => setShowPromoModal(true)}
-      // 🆕 НОВЫЕ ПРОПСЫ
-      currentPlanDetails={currentPlanDetails}
-      promoCodeInfo={promoCodeInfo}
-    />
+  currentPlan={currentPlan?.id || 'basic'}
+  billingPeriod={billingPeriod}
+  onBillingPeriodChange={setBillingPeriod}
+  onSelectPlan={handleSelectPlan}
+  isLoading={planLoading}
+  t={t}
+  onPromoClick={() => setShowPromoModal(true)}
+  // 🆕 НОВЫЕ ПРОПСЫ
+  currentPlanDetails={currentPlanDetails}
+  promoCodeInfo={promoCodeInfo}
+  currentUsersCount={companyUsers?.length || 0}  // ← ДОБАВИТЬ
+  onUsersCountChange={(planId, count) => {       // ← ДОБАВИТЬ (опционально)
+    console.log(`Plan ${planId}: ${count} users`);
+  }}
+/>
     
     {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
   <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
