@@ -1,5 +1,5 @@
 // src/utils/tariffPlans.js
-import { supabase } from './supabaseClient';
+
 
 // ============================================
 // 1. КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ
@@ -140,57 +140,86 @@ export const TARIFF_PLANS = {
 // 2. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 // ============================================
 
+/**
+ * Рассчитывает итоговую цену тарифа с учётом количества пользователей
+ */
 export const calculatePrice = (plan, usersCount, isAnnual = false) => {
-  const extraUsers = Math.max(0, usersCount - plan.includedUsers);
-  const extraCost = extraUsers * plan.extraUserPrice;
-  
-  let basePrice;
-  if (isAnnual) {
-    basePrice = plan.annualPrice;
-  } else {
-    basePrice = plan.monthlyPrice;
-  }
-  
+  if (!plan) return 0;
+  const extraUsers = Math.max(0, usersCount - (plan.includedUsers || 0));
+  const extraCost = extraUsers * (plan.extraUserPrice || 0);
+  const basePrice = isAnnual ? (plan.annualPrice || 0) : (plan.monthlyPrice || 0);
   return basePrice + extraCost;
 };
 
+/**
+ * Рассчитывает цену за одного пользователя
+ */
 export const getPricePerUser = (plan, usersCount, isAnnual = false) => {
+  if (!plan || !usersCount) return 0;
   const total = calculatePrice(plan, usersCount, isAnnual);
   return Math.round(total / usersCount);
 };
 
-export const calculateSavings = (plan, usersCount = plan.includedUsers) => {
-  const monthlyTotal = calculatePrice(plan, usersCount, false);
-  const annualTotal = calculatePrice(plan, usersCount, true);
+/**
+ * Рассчитывает экономию при годовой оплате
+ */
+export const calculateSavings = (plan, usersCount) => {
+  if (!plan) return { monthlyTotal: 0, annualTotal: 0, savings: 0, savingsPercent: 0 };
+  
+  const count = usersCount || plan.includedUsers || 3;
+  const monthlyTotal = calculatePrice(plan, count, false);
+  const annualTotal = calculatePrice(plan, count, true);
   const savings = (monthlyTotal * 12) - annualTotal;
-  const savingsPercent = Math.round((savings / (monthlyTotal * 12)) * 100);
+  const savingsPercent = monthlyTotal > 0 ? Math.round((savings / (monthlyTotal * 12)) * 100) : 0;
   
   return {
     monthlyTotal: monthlyTotal * 12,
     annualTotal,
-    savings,
+    savings: Math.max(0, savings),
     savingsPercent
   };
 };
 
+/**
+ * Рассчитывает стоимость дополнительных пользователей
+ */
 export const getExtraUsersCost = (plan, usersCount) => {
-  const extraUsers = Math.max(0, usersCount - plan.includedUsers);
+  if (!plan) return { count: 0, cost: 0, pricePerUser: 0 };
+  
+  const extraUsers = Math.max(0, usersCount - (plan.includedUsers || 0));
   return {
     count: extraUsers,
-    cost: extraUsers * plan.extraUserPrice,
-    pricePerUser: plan.extraUserPrice
+    cost: extraUsers * (plan.extraUserPrice || 0),
+    pricePerUser: plan.extraUserPrice || 0
   };
 };
 
-export const getAllPlans = () => {
-  return Object.values(TARIFF_PLANS);
+/**
+ * Возвращает все доступные тарифные планы
+ */
+export const getAllPlans = () => Object.values(TARIFF_PLANS);
+
+/**
+ * Форматирует цену для отображения
+ */
+export const formatPrice = (price, currency = '₽') => {
+  if (typeof price !== 'number') return `0 ${currency}`;
+  return new Intl.NumberFormat('ru-RU').format(price) + ` ${currency}`;
 };
 
 // ============================================
-// 3. ОСНОВНЫЕ ФУНКЦИИ
+// 3. ОСНОВНЫЕ ФУНКЦИИ SUPABASE
 // ============================================
 
+/**
+ * Получает тарифный план компании с расширенной информацией
+ * @param {Object} supabaseClient - экземпляр Supabase клиента
+ * @param {string} companyId - ID компании
+ * @returns {Promise<Object>} - объект плана с метаданными
+ */
 export const getCompanyPlan = async (supabaseClient, companyId) => {
+  if (!companyId) return { ...TARIFF_PLANS.basic, isActive: false };
+  
   try {
     const { data, error } = await supabaseClient
       .from('companies')
@@ -202,70 +231,101 @@ export const getCompanyPlan = async (supabaseClient, companyId) => {
         quota_reset_date,
         users_count,
         calculated_price,
-        billing_period
+        billing_period,
+        promo_code_used,
+        promo_applied_at,
+        promo_discount_percent
       `)
       .eq('id', companyId)
       .single();
-      
-    if (error || !data) {
+    
+    if (error || !data?.plan_tier) {
+      const fallback = TARIFF_PLANS.basic;
       return {
-        ...TARIFF_PLANS.basic,
+        ...fallback,
         isActive: false,
         expiresAt: null,
         usageCurrent: 0,
         quotaResetDate: null,
-        usersCount: 3,
-        calculatedPrice: TARIFF_PLANS.basic.monthlyPrice
+        usersCount: fallback.includedUsers,
+        calculatedPrice: fallback.monthlyPrice,
+        billingPeriod: 'monthly',
+        promoInfo: null
       };
     }
     
-    // 🔍 Загрузка актуального количества пользователей
-    const { count: actualUsersCount = 0 } = await supabaseClient
+    // Получаем актуальное количество активных пользователей
+    const { count: actualUsersCount = 0, error: usersError } = await supabaseClient
       .from('company_users')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId)
       .eq('is_active', true);
-      
+    
+    if (usersError) {
+      console.warn('Ошибка получения количества пользователей:', usersError);
+    }
+    
     const plan = TARIFF_PLANS[data.plan_tier] || TARIFF_PLANS.basic;
+    
+    const promoInfo = data.promo_code_used ? {
+      code: data.promo_code_used,
+      appliedAt: data.promo_applied_at,
+      discountPercent: data.promo_discount_percent
+    } : null;
     
     return {
       ...plan,
       isActive: data.subscription_active,
       expiresAt: data.subscription_expires_at,
-      usageCurrent: data.api_usage_current,
+      usageCurrent: data.api_usage_current || 0,
       quotaResetDate: data.quota_reset_date,
-      usersCount: data.users_count || actualUsersCount || 3,
+      usersCount: data.users_count || actualUsersCount || plan.includedUsers,
       calculatedPrice: data.calculated_price,
-      billingPeriod: data.billing_period || 'monthly'
+      billingPeriod: data.billing_period || 'monthly',
+      promoInfo
     };
   } catch (err) {
-    console.error('getCompanyPlan error:', err);
+    console.warn('Ошибка получения тарифа:', err);
+    const fallback = TARIFF_PLANS.basic;
     return {
-      ...TARIFF_PLANS.basic,
+      ...fallback,
       isActive: false,
-      usersCount: 3,
-      calculatedPrice: TARIFF_PLANS.basic.monthlyPrice
+      usersCount: fallback.includedUsers,
+      calculatedPrice: fallback.monthlyPrice
     };
   }
 };
 
+/**
+ * Проверяет доступ к функции по тарифному плану
+ */
 export const checkFeatureAccess = (plan, feature) => {
   if (!plan || !plan.features) return false;
-  return plan.features[feature] === true || 
-         typeof plan.features[feature] === 'string';
+  const featureValue = plan.features[feature];
+  return featureValue === true || typeof featureValue === 'string';
 };
 
+/**
+ * Проверка квоты API для компании
+ * @param {Object} supabaseClient - экземпляр Supabase клиента
+ * @param {string} companyId - ID компании
+ * @param {string|null} apiKeyId - опциональный ID API ключа
+ * @returns {Promise<Object>} - статус квоты
+ */
 export const checkQuota = async (supabaseClient, companyId, apiKeyId = null) => {
   // ✅ Принудительная проверка сброса квоты
   try {
-    const { data: company } = await supabaseClient
+    const { data: company, error: companyError } = await supabaseClient
       .from('companies')
       .select('quota_reset_date, api_usage_current')
       .eq('id', companyId)
       .single();
     
-    if (company && company.quota_reset_date < new Date().toISOString().split('T')[0]) {
-      await supabaseClient.rpc('reset_company_quota', { p_company_id: companyId });
+    if (!companyError && company?.quota_reset_date) {
+      const today = new Date().toISOString().split('T')[0];
+      if (company.quota_reset_date < today) {
+        await supabaseClient.rpc('reset_company_quota', { p_company_id: companyId });
+      }
     }
   } catch (err) {
     console.warn('Auto-reset check failed:', err);
@@ -286,49 +346,56 @@ export const checkQuota = async (supabaseClient, companyId, apiKeyId = null) => 
   
   const { count: dailyCount, error: usageError } = await query;
   
-  // ✅ ИСПРАВЛЕНО: явный return с выравниванием
   if (usageError) {
     console.warn('Ошибка загрузки usage:', usageError);
     const fallbackPlan = TARIFF_PLANS.basic;
     return {
-      allowed: false,
+      allowed: true, // Fail-open для стабильности
       dailyUsage: 0,
       dailyLimit: fallbackPlan.apiQuotaDaily,
       monthlyLimit: fallbackPlan.apiQuotaMonthly,
-      resetAt: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString()
+      resetAt: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString(),
+      warning: 'Не удалось проверить квоту, доступ разрешён'
     };
   }
   
-  const { data: companyData, error: companyError } = await supabaseClient
+  const { data: companyData } = await supabaseClient
     .from('companies')
     .select('plan_tier, api_usage_current')
     .eq('id', companyId)
-    .single();
-  
-  if (companyError) {
-    console.warn('Ошибка загрузки компании:', companyError);
-  }
+    .single()
+    .catch(() => ({ data: null }));
   
   const plan = TARIFF_PLANS[companyData?.plan_tier || 'basic'];
   const dailyUsage = dailyCount || 0;
   const monthlyUsage = companyData?.api_usage_current || 0;
   
+  const dailyLimit = plan.apiQuotaDaily || 100;
+  const monthlyLimit = plan.apiQuotaMonthly || 1000;
+  
   return {
-    allowed: dailyUsage < plan.apiQuotaDaily,
+    allowed: dailyUsage < dailyLimit,
     dailyUsage,
-    dailyLimit: plan.apiQuotaDaily,
-    dailyRemaining: Math.max(0, plan.apiQuotaDaily - dailyUsage),
+    dailyLimit,
+    dailyRemaining: Math.max(0, dailyLimit - dailyUsage),
     monthlyUsage,
-    monthlyLimit: plan.apiQuotaMonthly,
-    monthlyRemaining: Math.max(0, plan.apiQuotaMonthly - monthlyUsage),
+    monthlyLimit,
+    monthlyRemaining: Math.max(0, monthlyLimit - monthlyUsage),
     resetAt: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString(),
-    planId: plan.id
+    planId: plan.id,
+    isNearLimit: dailyUsage >= dailyLimit * 0.8
   };
 };
 
+/**
+ * Логирование использования API
+ * @param {Object} supabaseClient - экземпляр Supabase клиента
+ * @param {Object} data - данные для логирования
+ */
 export const logApiUsage = async (supabaseClient, data) => {
   try {
-    const { error } = await supabaseClient.from('api_usage_logs').insert([{
+    // Логируем запрос (без await для производительности)
+    supabaseClient.from('api_usage_logs').insert([{
       api_key_id: data.apiKeyId,
       company_id: data.companyId,
       endpoint: data.endpoint,
@@ -337,16 +404,16 @@ export const logApiUsage = async (supabaseClient, data) => {
       response_time_ms: data.responseTimeMs,
       request_size_bytes: data.requestSizeBytes,
       response_size_bytes: data.responseSizeBytes,
-      ip_address: data.ipAddress,
-      user_agent: data.userAgent,
+      ip_address: data.ipAddress || null,
+      user_agent: data.userAgent || null,
       created_at: new Date().toISOString()
-    }]);
-    
-    if (error) throw error;
-    
-    const { error: incrementError } = await supabaseClient.rpc('increment_api_usage', {
-      p_company_id: data.companyId
+    }]).then(({ error }) => {
+      if (error) console.warn('Failed to log API usage:', error);
     });
+    
+    // Инкремент счётчика (важно дождаться)
+    const { error: incrementError } = await supabaseClient
+      .rpc('increment_api_usage', { p_company_id: data.companyId });
     
     if (incrementError) {
       console.warn('Failed to increment API usage counter:', incrementError);
@@ -357,25 +424,28 @@ export const logApiUsage = async (supabaseClient, data) => {
   }
 };
 
-export const getUsageStats = async (companyId) => {
+/**
+ * Получение статистики использования для компании
+ */
+export const getUsageStats = async (supabaseClient, companyId) => {
   try {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
     const [monthlyApps, monthlyUsers, dailyApi] = await Promise.all([
-      supabase
+      supabaseClient
         .from('applications')
         .select('*', { count: 'exact', head: true })
         .eq('company_id', companyId)
         .gte('created_at', monthStart.toISOString()),
       
-      supabase
+      supabaseClient
         .from('company_users')
         .select('*', { count: 'exact', head: true })
         .eq('company_id', companyId),
       
-      supabase
+      supabaseClient
         .from('api_usage_logs')
         .select('*', { count: 'exact', head: true })
         .eq('company_id', companyId)
@@ -383,9 +453,9 @@ export const getUsageStats = async (companyId) => {
     ]);
     
     return {
-      applications: monthlyApps.count || 0,
-      users: monthlyUsers.count || 0,
-      dailyApiCalls: dailyApi.count || 0,
+      applications: monthlyApps?.count || 0,
+      users: monthlyUsers?.count || 0,
+      dailyApiCalls: dailyApi?.count || 0,
       lastUpdated: new Date().toISOString()
     };
   } catch (error) {
@@ -394,6 +464,9 @@ export const getUsageStats = async (companyId) => {
   }
 };
 
+/**
+ * Проверка квоты через RPC функцию (альтернативный метод)
+ */
 export const checkQuotaViaRPC = async (supabaseClient, companyId, apiKeyId = null) => {
   try {
     const { data, error } = await supabaseClient.rpc('check_quota', {
@@ -403,19 +476,22 @@ export const checkQuotaViaRPC = async (supabaseClient, companyId, apiKeyId = nul
     
     if (error) throw error;
     return {
-      allowed: data.allowed,
-      dailyUsage: data.daily_usage,
-      dailyLimit: data.daily_limit,
-      monthlyUsage: data.monthly_usage,
-      monthlyLimit: data.monthly_limit,
-      remaining: data.remaining
+      allowed: data?.allowed ?? false,
+      dailyUsage: data?.daily_usage ?? 0,
+      dailyLimit: data?.daily_limit ?? 0,
+      monthlyUsage: data?.monthly_usage ?? 0,
+      monthlyLimit: data?.monthly_limit ?? 0,
+      remaining: data?.remaining ?? 0
     };
   } catch (err) {
     console.error('checkQuotaViaRPC error:', err);
-    return { allowed: false, error: err.message };
+    return { allowed: true, error: err.message }; // Fail-open
   }
 };
 
+/**
+ * Получение статистики использования для конкретного API ключа
+ */
 export const getKeyUsageStats = async (supabaseClient, apiKeyId, period = 'day') => {
   const now = new Date();
   let startDate;
@@ -437,15 +513,17 @@ export const getKeyUsageStats = async (supabaseClient, apiKeyId, period = 'day')
   if (error) throw error;
   
   const stats = {
-    totalRequests: data.length,
-    successRequests: data.filter(d => d.status_code >= 200 && d.status_code < 300).length,
-    errorRequests: data.filter(d => d.status_code >= 400).length,
-    avgResponseTime: data.reduce((sum, d) => sum + (d.response_time_ms || 0), 0) / (data.length || 1),
+    totalRequests: data?.length || 0,
+    successRequests: data?.filter(d => d.status_code >= 200 && d.status_code < 300).length || 0,
+    errorRequests: data?.filter(d => d.status_code >= 400).length || 0,
+    avgResponseTime: data?.length 
+      ? Math.round(data.reduce((sum, d) => sum + (d.response_time_ms || 0), 0) / data.length)
+      : 0,
     byEndpoint: {},
     byStatusCode: {}
   };
   
-  data.forEach(log => {
+  (data || []).forEach(log => {
     stats.byEndpoint[log.endpoint] = (stats.byEndpoint[log.endpoint] || 0) + 1;
     stats.byStatusCode[log.status_code] = (stats.byStatusCode[log.status_code] || 0) + 1;
   });
@@ -453,11 +531,15 @@ export const getKeyUsageStats = async (supabaseClient, apiKeyId, period = 'day')
   return stats;
 };
 
-export const formatPrice = (price, currency = '₽') => {
-  return new Intl.NumberFormat('ru-RU').format(price) + ` ${currency}`;
-};
-
-// 🔄 Обновить план компании (ИСПРАВЛЕНО)
+/**
+ * Обновление тарифного плана компании
+ * @param {Object} supabaseClient - экземпляр Supabase клиента
+ * @param {string} companyId - ID компании
+ * @param {string} planId - ID нового плана
+ * @param {number} usersCount - количество пользователей
+ * @param {boolean} isAnnual - годовая оплата
+ * @returns {Promise<Object>} - обновлённые данные компании
+ */
 export const updateCompanyPlan = async (
   supabaseClient, 
   companyId, 
@@ -466,22 +548,21 @@ export const updateCompanyPlan = async (
   isAnnual = false
 ) => {
   const plan = TARIFF_PLANS[planId];
-  if (!plan) throw new Error('Invalid plan');
+  if (!plan) throw new Error(`Invalid plan ID: ${planId}`);
   
-  // 🔐 Валидация минимума
-  if (usersCount < 1) {
+  // 🔐 Валидация входных данных
+  if (!usersCount || usersCount < 1) {
     throw new Error('Количество пользователей должно быть не менее 1');
   }
   
-  // 🔐 Валидация максимума
-  if (usersCount > plan.maxUsers) {
-    throw new Error(`Превышен лимит пользователей для тарифа ${plan.name}: макс. ${plan.maxUsers}`);
+  if (usersCount > (plan.maxUsers || 10)) {
+    throw new Error(`Превышен лимит пользователей для тарифа "${plan.name}": макс. ${plan.maxUsers}`);
   }
   
   // 💰 Расчёт итоговой цены
-  const extraUsers = Math.max(0, usersCount - plan.includedUsers);
-  const extraCost = extraUsers * plan.extraUserPrice;
-  const basePrice = isAnnual ? plan.annualPrice : plan.monthlyPrice;
+  const extraUsers = Math.max(0, usersCount - (plan.includedUsers || 0));
+  const extraCost = extraUsers * (plan.extraUserPrice || 0);
+  const basePrice = isAnnual ? (plan.annualPrice || 0) : (plan.monthlyPrice || 0);
   const calculatedPrice = basePrice + extraCost;
   
   const expiresAt = new Date();
@@ -503,22 +584,25 @@ export const updateCompanyPlan = async (
     .select()
     .single();
     
-  if (error) throw error;
+  if (error) {
+    console.error('Ошибка обновления тарифа:', error);
+    throw new Error(`Не удалось обновить тариф: ${error.message}`);
+  }
   
-  // 📝 Логируем изменение в audit_logs (опционально)
+  // 📝 Логируем изменение в audit_logs
   try {
     await supabaseClient.from('audit_logs').insert({
       company_id: companyId,
       action_type: 'plan_changed',
       entity_type: 'company',
       entity_id: companyId,
-      old_value: { plan: data.plan_tier, users: data.users_count },
+      old_value: { plan: data?.plan_tier, users: data?.users_count },
       new_value: { plan: planId, users: usersCount, price: calculatedPrice },
       user_id: null,
       created_at: new Date().toISOString()
     });
   } catch (logErr) {
-    console.warn('Не удалось записать аудит:', logErr);
+    console.warn('Не удалось записать аудит изменения тарифа:', logErr);
   }
   
   return { ...data, calculatedPrice, usersCount };

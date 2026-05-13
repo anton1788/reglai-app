@@ -1,10 +1,10 @@
 {
-  "currentVersion": "0.0.0",
+  "currentVersion": "1.0.0",
   "releaseDate": "2026-03-23",
   "forceUpdate": false,
   "versions": [
     {
-      "version": "0.0.0",
+      "version": "1.0.0",
       "date": "2026-04-02",
       "title": "Исправлены тарифные планы",
       "changes": [
