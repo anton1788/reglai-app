@@ -14,6 +14,7 @@ import ClientConfirmation from './components/ClientPortal/ClientConfirmation';
 import ClientPhotos from './components/ClientPortal/ClientPhotos';
 import ClientWorkAct from './components/ClientPortal/ClientWorkAct';
 import DocumentGenerator from './components/DocumentGenerator';
+import { CompanyProfileForm } from './components/CompanyProfileForm';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -3942,6 +3943,49 @@ useEffect(() => {
   initializeABTests();
 }, [user?.id]);
 
+// Напоминание о заполнении реквизитов компании
+useEffect(() => {
+  const checkCompanyProfile = async () => {
+    if (!userCompanyId || !supabase) return;
+    
+    // Только для ролей, которые могут редактировать
+    if (userRole !== 'manager' && userRole !== 'director' && !isCompanyOwner) return;
+    
+    try {
+      const { data } = await supabase
+        .from('companies')
+        .select('inn, logo_url, company_profile_completed')
+        .eq('id', userCompanyId)
+        .single();
+      
+      // Если ИНН не заполнен и нет флага заполнения
+      if (data && !data.inn && !data.company_profile_completed) {
+        // Показываем напоминание 1 раз в день
+        const lastReminder = localStorage.getItem(`profile_reminder_${userCompanyId}`);
+        const today = new Date().toDateString();
+        
+        if (lastReminder !== today) {
+          setTimeout(() => {
+            showNotification(
+              '🏢 Заполните реквизиты компании для корректного оформления документов',
+              'warning',
+              false,
+              () => setCurrentView('companyProfile')
+            );
+          }, 3000); // Показываем через 3 секунды после загрузки
+          localStorage.setItem(`profile_reminder_${userCompanyId}`, today);
+        }
+      }
+    } catch (err) {
+      console.debug('Check company profile error:', err);
+    }
+  };
+  
+  // Задержка, чтобы не отвлекать пользователя сразу
+  const timer = setTimeout(checkCompanyProfile, 5000);
+  return () => clearTimeout(timer);
+}, [userCompanyId, userRole, isCompanyOwner, supabase, showNotification]);
+
   // ─────────────────────────────────────────────────────────
   // 🎨 RENDER FUNCTIONS
   // ─────────────────────────────────────────────────────────
@@ -4185,6 +4229,12 @@ useEffect(() => {
       { id: 'chat', label: t('chat') || 'Чат', icon: MessageCircle, condition: true },
       { id: 'audit', label: t('audit'), icon: History, condition: currentUserPermissions.canViewAudit },
       { id: 'calendar', label: t('calendar') || 'Календарь', icon: Calendar, condition: currentUserPermissions.canViewAnalytics },
+      { 
+  id: 'companyProfile', 
+  label: 'Реквизиты', 
+  icon: Building, 
+  condition: userRole === 'manager' || userRole === 'director' || isCompanyOwner 
+},
       { id: 'inwork', label: language === 'ru' ? 'В работе' : 'In Work', icon: Briefcase, condition: userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin' || userRole === 'manager' },
       { id: 'confirmation', label: language === 'ru' ? 'Подтверждение' : 'Confirmation', icon: CheckCircle, condition: userRole === 'master' || userRole === 'foreman' },
       { id: 'warehouse', label: language === 'ru' ? 'Склад' : 'Warehouse', icon: Package, condition: userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || isAdminMode },
@@ -6146,6 +6196,19 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 
 {currentView === 'clientWorkAct' && userRole === 'client' && (
   <ClientWorkAct clientId={clientId} t={t} />
+)}
+{currentView === 'companyProfile' && (
+  <CompanyProfileForm 
+    companyId={userCompanyId}
+    supabase={supabase}
+    onSave={() => {
+      showNotification('✅ Реквизиты компании сохранены!', 'success');
+      // Обновляем данные в DocumentGenerator при необходимости
+      if (currentView === 'documents') {
+        // Можно добавить принудительное обновление через forceReload или событие
+      }
+    }}
+  />
 )}
 </main>
       <ReceiveModal

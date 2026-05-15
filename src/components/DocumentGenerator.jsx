@@ -58,10 +58,10 @@ const DocumentGenerator = ({
       setLoadingCompanyDetails(true);
       try {
         const { data, error } = await supabase
-          .from('company_details')
-          .select('*')
-          .eq('company_id', userCompanyId)
-          .maybeSingle();
+  .from('companies')
+  .select('*')
+  .eq('id', userCompanyId)
+  .single();
         if (!error && data) {
           setCompanyDetails(data);
         }
