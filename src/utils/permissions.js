@@ -2,13 +2,14 @@
 
 // === Конфигурация ролей ===
 export const ROLE_OPTIONS = [
+  { value: 'super_admin', label: 'Супер-администратор' },
+  { value: 'manager', label: 'Руководитель' },
+  { value: 'client_manager', label: 'Менеджер по работе с клиентами' }, // 👈 ДОБАВЛЕНО
+  { value: 'supply_admin', label: 'Снабженец' },
   { value: 'master', label: 'Мастер (Исполнитель)' },
   { value: 'foreman', label: 'Прораб' },
-  { value: 'supply_admin', label: 'Снабженец' },
-  { value: 'manager', label: 'Руководитель' },        // ← ИСПРАВЛЕНО: был director, стал manager
   { value: 'accountant', label: 'Бухгалтер' },
-  { value: 'client', label: 'Заказчик' },
-  { value: 'super_admin', label: 'Супер-администратор' }
+  { value: 'client', label: 'Заказчик' }
 ];
 
 // === Права доступа для каждой роли ===
@@ -27,8 +28,9 @@ export const ROLE_PERMISSIONS = {
     canViewAll: false,             // Не видит все заявки своей компании
     canViewOnlyCompleted: false,   // Не видит только завершённые
     canViewAudit: false,           // Аудит — в админке отдельно
+    canManageClients: false,       // Не управляет клиентами напрямую
   },
-  manager: {                       // ← ИСПРАВЛЕНО: был director, стал manager (Руководитель)
+  manager: {
     canCreate: false,              // ❌ Руководитель не создает заявки
     canViewAnalytics: true,
     canViewAudit: true,
@@ -36,7 +38,23 @@ export const ROLE_PERMISSIONS = {
     canManageTariffs: true,        // Может управлять тарифами
     canManageCompany: false,
     canReceiveMaterials: true,
-    canManageWarehouse: true
+    canManageWarehouse: true,
+    canManageClients: true,        // 👈 Может управлять клиентами
+  },
+  client_manager: {                // 👈 НОВАЯ РОЛЬ
+    canCreate: false,              // Не создаёт заявки
+    canViewAnalytics: true,        // Может смотреть аналитику по клиентам
+    canViewAudit: false,           // Не видит аудит
+    canManageUsers: false,         // Не управляет пользователями компании
+    canManageTariffs: false,       // Не управляет тарифами
+    canManageCompany: false,       // Не управляет компанией
+    canReceiveMaterials: false,    // Не принимает материалы
+    canManageWarehouse: false,     // Не управляет складом
+    canManageClients: true,        // ✅ Может управлять клиентами
+    canInviteClients: true,        // ✅ Может приглашать клиентов
+    canViewClientStats: true,      // ✅ Может смотреть статистику клиентов
+    canCommunicateWithClients: true, // ✅ Может общаться с клиентами
+    canViewClientApplications: true,  // ✅ Может смотреть заявки клиентов
   },
   master: {
     canCreate: true,               // ✅ Прораб создает заявки
@@ -46,9 +64,10 @@ export const ROLE_PERMISSIONS = {
     canManageTariffs: false,       // ❌ Не видит тарифы
     canManageCompany: false,
     canReceiveMaterials: false,
-    canManageWarehouse: false
+    canManageWarehouse: false,
+    canManageClients: false,       // Не управляет клиентами
   },
-  foreman: {                       // ОТДЕЛЬНЫЙ ПРОРАБ (расширенные права)
+  foreman: {
     canCreate: true,
     canViewAnalytics: true,
     canManageUsers: false,
@@ -56,7 +75,8 @@ export const ROLE_PERMISSIONS = {
     canManageWarehouse: true,
     canViewAudit: false,
     canManageTariffs: false,
-    canManageCompany: false
+    canManageCompany: false,
+    canManageClients: false,       // Не управляет клиентами
   },
   supply_admin: {
     canCreate: true,               // ✅ Снабженец создает заявки
@@ -66,7 +86,8 @@ export const ROLE_PERMISSIONS = {
     canManageTariffs: false,       // ❌ Не видит тарифы
     canManageCompany: false,
     canReceiveMaterials: true,
-    canManageWarehouse: true
+    canManageWarehouse: true,
+    canManageClients: false,       // Не управляет клиентами
   },
   accountant: {
     canCreate: false,              // ❌ Бухгалтер не создает заявки
@@ -76,7 +97,8 @@ export const ROLE_PERMISSIONS = {
     canManageTariffs: false,
     canManageCompany: false,
     canReceiveMaterials: false,
-    canManageWarehouse: false
+    canManageWarehouse: false,
+    canManageClients: false,       // Не управляет клиентами
   },
   client: {
     canViewOwnObjects: true,        // Только свои объекты
@@ -92,7 +114,8 @@ export const ROLE_PERMISSIONS = {
     canViewAudit: false,            // Не видит аудит
     canManageUsers: false,
     canManageTariffs: false,
-    canManageCompany: false
+    canManageCompany: false,
+    canManageClients: false,
   }
 };
 
@@ -131,9 +154,25 @@ export const isSuperAdmin = (userRole, userMetadata) => {
 // === Проверка, является ли пользователь заказчиком ===
 export const isClient = (userRole) => userRole === 'client';
 
+// === Проверка, может ли пользователь управлять клиентами ===
+export const canManageClients = (userRole) => {
+  return hasPermission(userRole, 'canManageClients');
+};
+
+// === Проверка, может ли пользователь приглашать клиентов ===
+export const canInviteClients = (userRole) => {
+  return hasPermission(userRole, 'canInviteClients');
+};
+
 // === Проверка, может ли пользователь приглашать другие роли ===
 export const canInviteRole = (inviterRole, targetRole, isCompanyOwner) => {
   if (inviterRole === 'super_admin') return false;
+  
+  // 👈 НОВЫЕ ПРАВИЛА ДЛЯ CLIENT_MANAGER
+  if (inviterRole === 'client_manager') {
+    // Менеджер по работе с клиентами может приглашать только клиентов
+    return targetRole === 'client';
+  }
   
   if (inviterRole === 'manager' && targetRole === 'client') {
     return true;
@@ -141,6 +180,11 @@ export const canInviteRole = (inviterRole, targetRole, isCompanyOwner) => {
   
   if (targetRole === 'super_admin') return false;
   if (targetRole === 'manager' && !isCompanyOwner) return false;
+  
+  // 👈 Client manager может приглашать только клиентов
+  if (targetRole === 'client_manager' && inviterRole !== 'manager' && !isCompanyOwner) {
+    return false;
+  }
   
   if (targetRole === 'foreman') {
     return inviterRole === 'manager' || inviterRole === 'supply_admin' || isCompanyOwner;
@@ -163,6 +207,14 @@ export const getAvailableRolesForInvite = (userRole, isCompanyOwner) => {
   if (isSuperAdmin(userRole, { role: userRole })) {
     return [];
   }
+  
+  // 👈 Client manager может приглашать только клиентов
+  if (userRole === 'client_manager') {
+    return ROLE_OPTIONS.filter(role => 
+      role.value === 'client' && canInviteRole(userRole, role.value, isCompanyOwner)
+    );
+  }
+  
   return ROLE_OPTIONS.filter(role => 
     canInviteRole(userRole, role.value, isCompanyOwner)
   );
@@ -184,6 +236,8 @@ export default {
   getRolePermissions,
   isSuperAdmin,
   isClient,
+  canManageClients,
+  canInviteClients,
   canInviteRole,
   getAvailableRolesForInvite,
   isSuperAdminStrict

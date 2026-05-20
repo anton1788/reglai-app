@@ -83,7 +83,9 @@ import {
   getRolePermissions,
   isSuperAdmin,
   canInviteRole,
-  getAvailableRolesForInvite
+  getAvailableRolesForInvite,
+  canManageClients,
+  canInviteClients  
 } from './utils/permissions';
 import { STATUS_I18N_KEYS } from './utils/helpers';
 import {
@@ -1211,6 +1213,36 @@ const ROLE_ONBOARDING_HIGHLIGHTS = useMemo(() => ({
     position: { top: '60px', left: '95%' }
   }
 ],
+client_manager: [
+  {
+    selector: '[data-nav="clients"]',
+    title: 'Управление клиентами',
+    description: 'Здесь вы можете просматривать всех заказчиков компании, их заявки и активность.',
+    actionLabel: 'Перейти к клиентам',
+    position: { top: '120px', left: '50%' }
+  },
+  {
+    selector: '[data-nav="inviteClient"]',
+    title: 'Пригласить заказчика',
+    description: 'Добавляйте новых заказчиков в систему по email.',
+    actionLabel: 'Пригласить',
+    position: { top: '120px', left: '85%' }
+  },
+  {
+    selector: '[data-nav="analytics"]',
+    title: 'Аналитика по клиентам',
+    description: 'Отслеживайте активность и заявки ваших заказчиков.',
+    actionLabel: 'Открыть аналитику',
+    position: { top: '120px', left: '75%' }
+  },
+  {
+    selector: '[data-profile-menu]',
+    title: 'Профиль',
+    description: 'Ваши личные настройки и данные.',
+    actionLabel: 'Открыть профиль',
+    position: { top: '60px', left: '95%' }
+  }
+],
   foreman: [
     {
       selector: '[data-nav="create"]',
@@ -1857,10 +1889,10 @@ const handleSubmit = async (e) => {
   e.preventDefault();
 
   // 🔐 Проверка роли - только прораб, снабженец могут создавать
-  if (userRole !== 'master' && userRole !== 'foreman' && userRole !== 'supply_admin') {
-    showNotification('У вашей роли нет прав на создание заявок', 'error');
-    return;
-  }
+  if (userRole !== 'master' && userRole !== 'foreman' && userRole !== 'supply_admin' && userRole !== 'client_manager') {
+  showNotification('У вашей роли нет прав на создание заявок', 'error');
+  return;
+}
   
   // 🔐 Базовые проверки
   if (!user) {
@@ -3950,7 +3982,7 @@ useEffect(() => {
     if (!userCompanyId || !supabase) return;
     
     // Только для ролей, которые могут редактировать
-    if (userRole !== 'manager' && userRole !== 'director' && !isCompanyOwner) return;
+    if (userRole !== 'manager' && userRole !== 'director' && userRole !== 'client_manager' && !isCompanyOwner) return;
     
     try {
       const { data } = await supabase
@@ -4049,7 +4081,7 @@ useEffect(() => {
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             {/* ✅ ИСПРАВЛЕНО: Кнопка приглашения теперь видна на мобильных */}
-            {(userRole === 'manager' || userRole === 'supply_admin' || isCompanyOwner) && (
+            {(userRole === 'manager' || userRole === 'supply_admin' || userRole === 'client_manager' || isCompanyOwner) && (
   <button
     onClick={() => {
       handleABTestClick('invite_button', 'invite_click');
@@ -4226,7 +4258,7 @@ useEffect(() => {
   icon: Plus, 
   condition: userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin' 
 },
-      { id: 'inviteClient', label: 'Пригласить заказчика', icon: UserPlus, condition: userRole === 'manager' || userRole === 'director' },
+      { id: 'inviteClient', label: 'Пригласить заказчика', icon: UserPlus, condition: canInviteClients(userRole) || userRole === 'manager' || userRole === 'director' },
       { id: 'chat', label: t('chat') || 'Чат', icon: MessageCircle, condition: true },
       { id: 'audit', label: t('audit'), icon: History, condition: currentUserPermissions.canViewAudit },
       { id: 'calendar', label: t('calendar') || 'Календарь', icon: Calendar, condition: currentUserPermissions.canViewAnalytics },
@@ -4256,7 +4288,7 @@ useEffect(() => {
       { id: 'documents', label: 'Документы', icon: FileText, condition: userRole !== 'super_admin' },
       { id: 'analytics', label: t('analytics'), icon: BarChart3, condition: currentUserPermissions.canViewAnalytics },
       { id: 'employees', label: t('employees'), icon: Users, condition: userRole === 'manager' },
-      { id: 'clients', label: 'Клиенты', icon: Users, condition: userRole === 'manager' || userRole === 'director' || isCompanyOwner },
+      { id: 'clients', label: 'Клиенты', icon: Users, condition: canManageClients(userRole) || isCompanyOwner },
       { id: 'api', label: 'API', icon: Code, condition: userRole === 'manager' || isCompanyOwner },
       { id: 'invite', label: t('inviteUser'), icon: User, condition: userRole === 'manager' || userRole === 'supply_admin' || isCompanyOwner },
       { id: 'cart', label: t('cart'), icon: ShoppingCart, condition: formData.cart.length > 0 },
