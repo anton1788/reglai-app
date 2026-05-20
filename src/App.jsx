@@ -6,6 +6,7 @@ import QuotaUsage from './components/QuotaUsage';
 import ClientDashboard from './components/ClientPortal/ClientDashboard';
 import ClientInviteModal from './components/Manager/ClientInviteModal';
 import ClientRegister from './components/pages/ClientRegister';
+import { ClientManager } from './components/ClientManager/ClientManager';
 import ClientChat from './components/ClientPortal/ClientChat';
 import ClientDocuments from './components/ClientPortal/ClientDocuments';
 import ClientApplications from './components/ClientPortal/ClientApplications';
@@ -4255,6 +4256,7 @@ useEffect(() => {
       { id: 'documents', label: 'Документы', icon: FileText, condition: userRole !== 'super_admin' },
       { id: 'analytics', label: t('analytics'), icon: BarChart3, condition: currentUserPermissions.canViewAnalytics },
       { id: 'employees', label: t('employees'), icon: Users, condition: userRole === 'manager' },
+      { id: 'clients', label: 'Клиенты', icon: Users, condition: userRole === 'manager' || userRole === 'director' || isCompanyOwner },
       { id: 'api', label: 'API', icon: Code, condition: userRole === 'manager' || isCompanyOwner },
       { id: 'invite', label: t('inviteUser'), icon: User, condition: userRole === 'manager' || userRole === 'supply_admin' || isCompanyOwner },
       { id: 'cart', label: t('cart'), icon: ShoppingCart, condition: formData.cart.length > 0 },
@@ -4343,7 +4345,7 @@ useEffect(() => {
     {/* Группа 1: Основные */}
     <div className="space-y-1">
         <h3 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Разделы</h3>
-        {navItems.filter(item => ['create', 'inwork', 'received', 'history', 'chat', 'analytics'].includes(item.id) && item.condition).map((item) => (
+        {navItems.filter(item => ['create', 'inwork', 'received', 'history', 'chat', 'analytics', 'clients'].includes(item.id) && item.condition).map((item) => (
             <button
                 key={item.id}
                 onClick={() => {
@@ -5990,6 +5992,14 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   {currentView === 'analytics' && renderAnalyticsDashboard()}
   
   {currentView === 'employees' && renderEmployeesList()}
+  {currentView === 'clients' && (
+  <ClientManager
+    companyId={userCompanyId}
+    t={t}
+    showNotification={showNotification}
+    onInviteClick={() => setShowClientInviteModal(true)}
+  />
+)}
   
   {currentView === 'warehouse' && (
     <WarehouseView
