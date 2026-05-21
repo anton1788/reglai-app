@@ -4,7 +4,6 @@ import { supabase } from './supabaseClient';
  * Загружает список всех клиентов компании
  */
 export async function loadClients(companyId) {
-  // Убираем связь с users, так как её нет
   const { data, error } = await supabase
     .from('company_users')
     .select(`
@@ -22,10 +21,10 @@ export async function loadClients(companyId) {
 
   if (error) throw error;
   
-  // Возвращаем данные без email (или можно попробовать получить email другим способом)
+  // Возвращаем данные (email пока недоступен)
   return data.map(client => ({
     ...client,
-    email: null // email пока не доступен
+    email: null
   }));
 }
 
@@ -33,7 +32,6 @@ export async function loadClients(companyId) {
  * Загружает статистику по клиенту (заявки, активные объекты и т.д.)
  */
 export async function loadClientStats(companyId, clientId) {
-  // Получаем все заявки клиента
   const { data: applications, error: appsError } = await supabase
     .from('applications')
     .select('id, status, created_at, total_amount, object_name')
