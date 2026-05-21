@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
  * Загружает список всех клиентов компании
  */
 export async function loadClients(companyId) {
+  // Убираем связь с users, так как её нет
   const { data, error } = await supabase
     .from('company_users')
     .select(`
@@ -11,11 +12,9 @@ export async function loadClients(companyId) {
       user_id,
       full_name,
       phone,
-      email,
       is_active,
       created_at,
-      updated_at,
-      users!inner (email)
+      updated_at
     `)
     .eq('company_id', companyId)
     .eq('role', 'client')
@@ -23,10 +22,10 @@ export async function loadClients(companyId) {
 
   if (error) throw error;
   
-  // Обогащаем данными email из связанной таблицы
+  // Возвращаем данные без email (или можно попробовать получить email другим способом)
   return data.map(client => ({
     ...client,
-    email: client.users?.email || client.email
+    email: null // email пока не доступен
   }));
 }
 
