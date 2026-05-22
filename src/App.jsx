@@ -6025,12 +6025,21 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   
   {currentView === 'employees' && renderEmployeesList()}
   {currentView === 'clients' && (
-  <ClientManager
-    companyId={userCompanyId}
-    t={t}
-    showNotification={showNotification}
-    onInviteClick={() => setShowClientInviteModal(true)}
-  />
+  <>
+    {!userCompanyId ? (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4A6572]"></div>
+        <p className="ml-3 text-gray-500">Загрузка данных компании...</p>
+      </div>
+    ) : (
+      <ClientManager
+        companyId={userCompanyId}
+        t={t}
+        showNotification={showNotification}
+        onInviteClick={() => setShowClientInviteModal(true)}
+      />
+    )}
+  </>
 )}
   
   {currentView === 'warehouse' && (
