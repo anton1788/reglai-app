@@ -5234,7 +5234,7 @@ useEffect(() => {
   if (!showSignupModal) return null;
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] fade-enter"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] fade-enter overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="signup-modal-title"
@@ -5243,11 +5243,26 @@ useEffect(() => {
           setShowSignupModal(false);
         }
       }}
+      style={{ 
+        position: 'fixed', 
+        top: 0, 
+        left: 0, 
+        right: 0, 
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
     >
-      {/* Увеличиваем max-h и делаем отступы меньше */}
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md md:max-w-lg lg:max-w-xl p-4 md:p-6 dark:bg-gray-800 max-h-[95vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4 md:mb-6">
-          <h3 id="signup-modal-title" className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
+      <div 
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 dark:bg-gray-800"
+        style={{ maxHeight: '90vh', overflowY: 'auto', margin: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h3 id="signup-modal-title" className="text-xl font-bold text-gray-900 dark:text-white">
             {t('signupTitle')}
           </h3>
           <button
@@ -5255,10 +5270,10 @@ useEffect(() => {
             className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label={t('close')}
           >
-            <X className="w-5 h-5 md:w-6 md:h-6" aria-hidden="true" />
+            <X className="w-6 h-6" aria-hidden="true" />
           </button>
         </div>
-        <form onSubmit={handleSignup} className="space-y-3 md:space-y-4">
+        <form onSubmit={handleSignup} className="space-y-4">
           <div>
             <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t('yourEmail')} *
@@ -5268,7 +5283,7 @@ useEffect(() => {
               type="email"
               value={signupEmail}
               onChange={(e) => setSignupEmail(e.target.value)}
-              className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="you@example.com"
               required
             />
@@ -5282,7 +5297,7 @@ useEffect(() => {
               type="text"
               value={signupFullName}
               onChange={(e) => setSignupFullName(e.target.value)}
-              className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder={t('fullName')}
               required
             />
@@ -5296,7 +5311,7 @@ useEffect(() => {
               type="tel"
               value={signupPhone}
               onChange={(e) => setSignupPhone(formatPhone(e.target.value))}
-              className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="+7 (___) ___-__-__"
               required
             />
@@ -5311,7 +5326,7 @@ useEffect(() => {
                 type="text"
                 value={signupCompanyName}
                 onChange={(e) => setSignupCompanyName(e.target.value)}
-                className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder={t('companyName')}
                 required={!invitedCompany}
               />
@@ -5326,7 +5341,7 @@ useEffect(() => {
               type="password"
               value={signupPassword}
               onChange={(e) => setSignupPassword(e.target.value)}
-              className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="••••••••"
               required
               minLength={6}
@@ -5341,7 +5356,7 @@ useEffect(() => {
               type="password"
               value={signupConfirmPassword}
               onChange={(e) => setSignupConfirmPassword(e.target.value)}
-              className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="••••••••"
               required
             />
@@ -5355,7 +5370,7 @@ useEffect(() => {
               className="mt-1 w-4 h-4 text-[#4A6572] border-gray-300 rounded focus:ring-[#4A6572]"
               required
             />
-            <label htmlFor="signup-consent" className="ml-2 text-xs md:text-sm text-gray-600 dark:text-gray-400">
+            <label htmlFor="signup-consent" className="ml-2 text-sm text-gray-600 dark:text-gray-400">
               {t('consentText')}{' '}
               <button
                 type="button"
@@ -5368,11 +5383,11 @@ useEffect(() => {
           </div>
           <button
             type="submit"
-            className="w-full py-2.5 md:py-3 px-4 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm md:text-base"
+            className="w-full py-3 px-4 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
           >
             {t('signup')}
           </button>
-          <p className="text-center text-xs md:text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-center text-sm text-gray-600 dark:text-gray-400">
             {language === 'ru' ? 'Уже есть аккаунт?' : 'Already have an account?'}{' '}
             <button
               type="button"
