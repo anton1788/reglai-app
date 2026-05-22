@@ -5231,164 +5231,165 @@ useEffect(() => {
   );
 
   const renderSignupModal = () => {
-    if (!showSignupModal) return null;
-    return (
-      <div
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] fade-enter"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="signup-modal-title"
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setShowSignupModal(false);
-          }
-        }}
-      >
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full md:max-w-lg lg:max-w-xl p-6 dark:bg-gray-800 max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-between mb-6">
-            <h3 id="signup-modal-title" className="text-xl font-bold text-gray-900 dark:text-white">
-              {t('signupTitle')}
-            </h3>
-            <button
-              onClick={() => setShowSignupModal(false)}
-              className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-              aria-label={t('close')}
-            >
-              <X className="w-6 h-6" aria-hidden="true" />
-            </button>
+  if (!showSignupModal) return null;
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] fade-enter"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="signup-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          setShowSignupModal(false);
+        }
+      }}
+    >
+      {/* Увеличиваем max-h и делаем отступы меньше */}
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md md:max-w-lg lg:max-w-xl p-4 md:p-6 dark:bg-gray-800 max-h-[95vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4 md:mb-6">
+          <h3 id="signup-modal-title" className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
+            {t('signupTitle')}
+          </h3>
+          <button
+            onClick={() => setShowSignupModal(false)}
+            className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label={t('close')}
+          >
+            <X className="w-5 h-5 md:w-6 md:h-6" aria-hidden="true" />
+          </button>
+        </div>
+        <form onSubmit={handleSignup} className="space-y-3 md:space-y-4">
+          <div>
+            <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('yourEmail')} *
+            </label>
+            <input
+              id="signup-email"
+              type="email"
+              value={signupEmail}
+              onChange={(e) => setSignupEmail(e.target.value)}
+              className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              placeholder="you@example.com"
+              required
+            />
           </div>
-          <form onSubmit={handleSignup} className="space-y-4">
+          <div>
+            <label htmlFor="signup-fullname" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('fullName')} *
+            </label>
+            <input
+              id="signup-fullname"
+              type="text"
+              value={signupFullName}
+              onChange={(e) => setSignupFullName(e.target.value)}
+              className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              placeholder={t('fullName')}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="signup-phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('phoneNumber')} *
+            </label>
+            <input
+              id="signup-phone"
+              type="tel"
+              value={signupPhone}
+              onChange={(e) => setSignupPhone(formatPhone(e.target.value))}
+              className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              placeholder="+7 (___) ___-__-__"
+              required
+            />
+          </div>
+          {!invitedCompany && (
             <div>
-              <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('yourEmail')} *
+              <label htmlFor="signup-company" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('companyName')} *
               </label>
               <input
-                id="signup-email"
-                type="email"
-                value={signupEmail}
-                onChange={(e) => setSignupEmail(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="you@example.com"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="signup-fullname" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('fullName')} *
-              </label>
-              <input
-                id="signup-fullname"
+                id="signup-company"
                 type="text"
-                value={signupFullName}
-                onChange={(e) => setSignupFullName(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder={t('fullName')}
-                required
+                value={signupCompanyName}
+                onChange={(e) => setSignupCompanyName(e.target.value)}
+                className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder={t('companyName')}
+                required={!invitedCompany}
               />
             </div>
-            <div>
-              <label htmlFor="signup-phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('phoneNumber')} *
-              </label>
-              <input
-                id="signup-phone"
-                type="tel"
-                value={signupPhone}
-                onChange={(e) => setSignupPhone(formatPhone(e.target.value))}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="+7 (___) ___-__-__"
-                required
-              />
-            </div>
-            {!invitedCompany && (
-              <div>
-                <label htmlFor="signup-company" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('companyName')} *
-                </label>
-                <input
-                  id="signup-company"
-                  type="text"
-                  value={signupCompanyName}
-                  onChange={(e) => setSignupCompanyName(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder={t('companyName')}
-                  required={!invitedCompany}
-                />
-              </div>
-            )}
-            <div>
-              <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('yourPassword')} *
-              </label>
-              <input
-                id="signup-password"
-                type="password"
-                value={signupPassword}
-                onChange={(e) => setSignupPassword(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="••••••••"
-                required
-                minLength={6}
-              />
-            </div>
-            <div>
-              <label htmlFor="signup-confirm-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('confirmPassword')} *
-              </label>
-              <input
-                id="signup-confirm-password"
-                type="password"
-                value={signupConfirmPassword}
-                onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-            <div className="flex items-start">
-              <input
-                id="signup-consent"
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                className="mt-1 w-4 h-4 text-[#4A6572] border-gray-300 rounded focus:ring-[#4A6572]"
-                required
-              />
-              <label htmlFor="signup-consent" className="ml-2 text-sm text-gray-600 dark:text-gray-400">
-                {t('consentText')}{' '}
-                <button
-                  type="button"
-                  onClick={() => setPrivacyPolicyOpen(true)}
-                  className="text-[#4A6572] hover:underline dark:text-[#F9AA33]"
-                >
-                  {t('privacyPolicy')}
-                </button>
-              </label>
-            </div>
-            <button
-              type="submit"
-              className="w-full py-3 px-4 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
-            >
-              {t('signup')}
-            </button>
-            <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-              {language === 'ru' ? 'Уже есть аккаунт?' : 'Already have an account?'}{' '}
+          )}
+          <div>
+            <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('yourPassword')} *
+            </label>
+            <input
+              id="signup-password"
+              type="password"
+              value={signupPassword}
+              onChange={(e) => setSignupPassword(e.target.value)}
+              className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              placeholder="••••••••"
+              required
+              minLength={6}
+            />
+          </div>
+          <div>
+            <label htmlFor="signup-confirm-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('confirmPassword')} *
+            </label>
+            <input
+              id="signup-confirm-password"
+              type="password"
+              value={signupConfirmPassword}
+              onChange={(e) => setSignupConfirmPassword(e.target.value)}
+              className="w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              placeholder="••••••••"
+              required
+            />
+          </div>
+          <div className="flex items-start">
+            <input
+              id="signup-consent"
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+              className="mt-1 w-4 h-4 text-[#4A6572] border-gray-300 rounded focus:ring-[#4A6572]"
+              required
+            />
+            <label htmlFor="signup-consent" className="ml-2 text-xs md:text-sm text-gray-600 dark:text-gray-400">
+              {t('consentText')}{' '}
               <button
                 type="button"
-                onClick={() => {
-                  setShowSignupModal(false);
-                  setCurrentView('login');
-                }}
-                className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium"
+                onClick={() => setPrivacyPolicyOpen(true)}
+                className="text-[#4A6572] hover:underline dark:text-[#F9AA33]"
               >
-                {t('login')}
+                {t('privacyPolicy')}
               </button>
-            </p>
-          </form>
-        </div>
+            </label>
+          </div>
+          <button
+            type="submit"
+            className="w-full py-2.5 md:py-3 px-4 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm md:text-base"
+          >
+            {t('signup')}
+          </button>
+          <p className="text-center text-xs md:text-sm text-gray-600 dark:text-gray-400">
+            {language === 'ru' ? 'Уже есть аккаунт?' : 'Already have an account?'}{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setShowSignupModal(false);
+                setCurrentView('login');
+              }}
+              className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium"
+            >
+              {t('login')}
+            </button>
+          </p>
+        </form>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   // ✅ ИСПРАВЛЕНО: Модальное окно приглашения с увеличенным z-index
   const renderInviteModal = () => {

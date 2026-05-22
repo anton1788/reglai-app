@@ -1,12 +1,12 @@
 {
-  "currentVersion": "5.0.0",
+  "currentVersion": "6.0.0",
   "releaseDate": "2026-03-23",
   "forceUpdate": false,
   "versions": [
     {
-      "version": "5.0.0",
+      "version": "6.0.0",
       "date": "2026-04-02",
-      "title": "Создан клиет менеджер(доработан)",
+      "title": "изменение масштаба регистрации",
       "changes": [
         "✅ Исправлен расчёт Activation Rate",
         "📊 Улучшена точность трекинга первых заявок",
