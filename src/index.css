@@ -2,13 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Убираем ограничения для корневого элемента */
+/* Убираем все ограничения для корневого элемента */
 #root {
   width: 100%;
   min-height: 100vh;
   margin: 0;
   padding: 0;
-  text-align: left;
+}
+
+/* Убираем отступы у body */
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
 }
 
 /* Остальные стили */
@@ -49,17 +55,17 @@
 }
 
 /* ======================================== */
-/* СТИЛИ ДЛЯ МОДАЛЬНЫХ ОКОН */
+/* ГЛОБАЛЬНЫЕ СТИЛИ ДЛЯ МОДАЛЬНЫХ ОКОН */
 /* ======================================== */
 
-/* Только для модальных окон */
-div[class*="z-\\[10000\\]"],
-div[class*="z-\\[10001\\]"] {
+/* Все модальные окна на весь экран */
+.fixed.inset-0.bg-black\/80,
+.fixed.inset-0.bg-black {
   padding: 0 !important;
 }
 
-div[class*="z-\\[10000\\]"] > div,
-div[class*="z-\\[10001\\]"] > div {
+.fixed.inset-0.bg-black\/80 > div,
+.fixed.inset-0.bg-black > div {
   width: 100% !important;
   height: 100% !important;
   max-width: none !important;
