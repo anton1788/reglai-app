@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Стили для корневого элемента - НЕ МЕНЯЕМ */
 #root {
   max-width: 1280px;
   margin: 0 auto;
@@ -53,18 +54,18 @@
 }
 
 /* ======================================== */
-/* ГЛОБАЛЬНЫЕ СТИЛИ ДЛЯ ВСЕХ МОДАЛЬНЫХ ОКОН */
+/* ГЛОБАЛЬНЫЕ СТИЛИ ТОЛЬКО ДЛЯ МОДАЛЬНЫХ ОКОН */
 /* ======================================== */
 
-/* Убираем отступы у всех модальных окон */
-.fixed.inset-0.bg-black\/80,
-.fixed.inset-0.bg-black {
+/* Применяем стили ТОЛЬКО к модальным окнам с z-index */
+div[class*="fixed"][class*="inset-0"][class*="bg-black"][class*="z-\\[10000\\]"],
+div[class*="fixed"][class*="inset-0"][class*="bg-black"][class*="z-\\[10001\\]"] {
   padding: 0 !important;
 }
 
-/* Делаем все модальные окна на весь экран */
-.fixed.inset-0.bg-black\/80 > div,
-.fixed.inset-0.bg-black > div {
+/* Контейнер внутри модального окна */
+div[class*="fixed"][class*="inset-0"][class*="bg-black"][class*="z-\\[10000\\]"] > div,
+div[class*="fixed"][class*="inset-0"][class*="bg-black"][class*="z-\\[10001\\]"] > div {
   width: 100% !important;
   height: 100% !important;
   max-width: none !important;
@@ -73,25 +74,20 @@
   margin: 0 !important;
 }
 
-/* Убираем скругление у всех модальных окон */
-.fixed.inset-0.bg-black\/80 > div.rounded-2xl,
-.fixed.inset-0.bg-black > div.rounded-2xl,
-.fixed.inset-0.bg-black\/80 > div.rounded-xl,
-.fixed.inset-0.bg-black > div.rounded-xl {
+/* Убираем скругление у модальных окон */
+div[class*="rounded-2xl"],
+div[class*="rounded-xl"] {
   border-radius: 0 !important;
 }
 
-/* Убираем ограничение по высоте */
-*[class*="max-h-\\[90vh\\]"],
-*[class*="max-h-\\[85vh\\]"],
-*[class*="max-h-\\[80vh\\]"] {
+/* Убираем ограничения высоты ТОЛЬКО в модальных окнах */
+div[class*="z-\\[10000\\]"] div[class*="max-h-"],
+div[class*="z-\\[10001\\]"] div[class*="max-h-"] {
   max-height: none !important;
 }
 
-/* Убираем ограничение по ширине */
-*[class*="max-w-7xl"],
-*[class*="max-w-6xl"],
-*[class*="max-w-5xl"],
-*[class*="max-w-4xl"] {
+/* Убираем ограничения ширины ТОЛЬКО в модальных окнах */
+div[class*="z-\\[10000\\]"] div[class*="max-w-"],
+div[class*="z-\\[10001\\]"] div[class*="max-w-"] {
   max-width: none !important;
 }
