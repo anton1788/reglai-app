@@ -89,10 +89,10 @@
   "handle_links": "preferred",
   "launch_handler": { "client_mode": ["navigate-existing", "auto"] },
 
-  "id": "reglai-vik-v7.0.0",
+  "id": "reglai-vik-v8.0.0",
 
   "serviceworker": {
-    "src": "/sw.js?v=7.0.0",
+    "src": "/sw.js?v=8.0.0",
     "scope": "/",
     "update_via_cache": "none",
     "type": "module"
