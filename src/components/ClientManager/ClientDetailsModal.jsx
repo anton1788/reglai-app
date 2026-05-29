@@ -1,15 +1,21 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { X, Mail, Phone, Calendar, Package } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Mail, Phone, Calendar, Package, CheckCircle, Clock, DollarSign, Building, User, Activity, FileText, ExternalLink } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
+import { formatLastActivity } from '../../utils/clientManager';
 
 export const ClientDetailsModal = ({ isOpen, onClose, client, companyId }) => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState(null);
 
-  // ✅ Оборачиваем функцию в useCallback, чтобы избежать лишних перерендеров
-  const loadClientApplications = useCallback(async () => {
-    if (!companyId || !client?.id) return;
-    
+  useEffect(() => {
+    if (isOpen && client && companyId) {
+      loadClientApplications();
+      loadClientStats();
+    }
+  }, [isOpen, client, companyId]);
+
+  const loadClientApplications = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -27,38 +33,71 @@ export const ClientDetailsModal = ({ isOpen, onClose, client, companyId }) => {
     } finally {
       setLoading(false);
     }
-  }, [companyId, client?.id]); // ✅ Добавляем зависимости
+  };
 
-  useEffect(() => {
-    if (isOpen && client && companyId) {
-      loadClientApplications();
+  const loadClientStats = async () => {
+    try {
+      const { data: applications, error } = await supabase
+        .from('applications')
+        .select('id, status, created_at, total_amount, object_name')
+        .eq('company_id', companyId)
+        .eq('client_id', client.id);
+
+      if (error) throw error;
+
+      const totalAmount = applications?.reduce((sum, a) => sum + (a.total_amount || 0), 0) || 0;
+      const activeApps = applications?.filter(a => 
+        ['pending', 'partial', 'admin_processing', 'pending_approval'].includes(a.status)
+      ).length || 0;
+      const completedApps = applications?.filter(a => a.status === 'received').length || 0;
+      const uniqueObjects = new Set(applications?.map(a => a.object_name)).size || 0;
+
+      setStats({
+        totalApplications: applications?.length || 0,
+        activeApplications: activeApps,
+        completedApplications: completedApps,
+        totalAmount,
+        uniqueObjects,
+        lastActivity: applications?.[0]?.created_at || null
+      });
+    } catch (error) {
+      console.error('Ошибка загрузки статистики:', error);
     }
-  }, [isOpen, client, companyId, loadClientApplications]); // ✅ Добавляем loadClientApplications в зависимости
-
-  if (!isOpen || !client) return null;
+  };
 
   const getStatusBadge = (status) => {
     const statusMap = {
       pending: { text: 'Ожидает', color: 'bg-yellow-100 text-yellow-700' },
       partial: { text: 'Частично', color: 'bg-orange-100 text-orange-700' },
       received: { text: 'Выполнена', color: 'bg-green-100 text-green-700' },
-      canceled: { text: 'Отменена', color: 'bg-red-100 text-red-700' }
+      canceled: { text: 'Отменена', color: 'bg-red-100 text-red-700' },
+      admin_processing: { text: 'В обработке', color: 'bg-blue-100 text-blue-700' },
+      pending_approval: { text: 'На согласовании', color: 'bg-purple-100 text-purple-700' }
     };
     const s = statusMap[status] || { text: status, color: 'bg-gray-100 text-gray-700' };
     return <span className={`px-2 py-0.5 text-xs rounded-full ${s.color}`}>{s.text}</span>;
   };
 
+  if (!isOpen || !client) return null;
+
+  const registeredDate = client.created_at 
+    ? new Date(client.created_at).toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' })
+    : '—';
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center p-5 border-b border-gray-200/50 dark:border-gray-700/50">
           <div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white">
               {client.full_name || 'Клиент'}
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Заказчик • {client.role || 'client'}
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2">
+              <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700">
+                Заказчик
+              </span>
+              <span>• В компании с {registeredDate}</span>
             </p>
           </div>
           <button
@@ -74,10 +113,10 @@ export const ClientDetailsModal = ({ isOpen, onClose, client, companyId }) => {
           {/* Контактная информация */}
           <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-4">
             <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <Mail className="w-4 h-4" />
+              <User className="w-4 h-4" />
               Контактная информация
             </h4>
-            <div className="space-y-2 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               <div className="flex items-center text-gray-600 dark:text-gray-400">
                 <Mail className="w-4 h-4 mr-2" />
                 <span>{client.email || '—'}</span>
@@ -88,10 +127,50 @@ export const ClientDetailsModal = ({ isOpen, onClose, client, companyId }) => {
               </div>
               <div className="flex items-center text-gray-600 dark:text-gray-400">
                 <Calendar className="w-4 h-4 mr-2" />
-                <span>В компании с {new Date(client.created_at).toLocaleDateString('ru-RU')}</span>
+                <span>Зарегистрирован: {registeredDate}</span>
+              </div>
+              <div className="flex items-center text-gray-600 dark:text-gray-400">
+                <Activity className="w-4 h-4 mr-2" />
+                <span>Последняя активность: {formatLastActivity(stats?.lastActivity)}</span>
               </div>
             </div>
           </div>
+
+          {/* Статистика */}
+          {stats && (
+            <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-4">
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <Activity className="w-4 h-4" />
+                Статистика
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalApplications}</div>
+                  <div className="text-xs text-gray-500">Всего заявок</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">{stats.activeApplications}</div>
+                  <div className="text-xs text-gray-500">В работе</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{stats.completedApplications}</div>
+                  <div className="text-xs text-gray-500">Выполнено</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">{stats.uniqueObjects}</div>
+                  <div className="text-xs text-gray-500">Объектов</div>
+                </div>
+              </div>
+              {stats.totalAmount > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 text-center">
+                  <span className="text-sm text-gray-500">Общая сумма заявок:</span>
+                  <span className="ml-2 text-lg font-bold text-gray-900 dark:text-white">
+                    {stats.totalAmount.toLocaleString('ru-RU')} ₽
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Заявки клиента */}
           <div>
@@ -104,27 +183,33 @@ export const ClientDetailsModal = ({ isOpen, onClose, client, companyId }) => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#4A6572] mx-auto"></div>
               </div>
             ) : applications.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+                <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
                 Нет заявок
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-80 overflow-y-auto">
                 {applications.map(app => (
-                  <div key={app.id} className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                  <div key={app.id} className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-gray-600/50 transition-colors">
                     <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{app.object_name}</p>
-                        <p className="text-xs text-gray-500">{new Date(app.created_at).toLocaleString('ru-RU')}</p>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                          <Building className="w-4 h-4 text-gray-400" />
+                          {app.object_name}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {new Date(app.created_at).toLocaleString('ru-RU')}
+                        </p>
                       </div>
                       {getStatusBadge(app.status)}
                     </div>
                     <div className="flex justify-between text-sm mt-2">
                       <span className="text-gray-600 dark:text-gray-400">
-                        {app.materials?.length || 0} позиций
+                        📦 {app.materials?.length || 0} позиций
                       </span>
                       {app.total_amount > 0 && (
                         <span className="font-medium text-gray-700 dark:text-gray-300">
-                          {app.total_amount.toLocaleString('ru-RU')} ₽
+                          💰 {app.total_amount.toLocaleString('ru-RU')} ₽
                         </span>
                       )}
                     </div>
