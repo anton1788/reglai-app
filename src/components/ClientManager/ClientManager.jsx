@@ -259,12 +259,13 @@ export const ClientManager = ({ companyId, t, onInviteClick }) => {
 
       {/* 👈 ДОБАВЛЕНА АНАЛИТИКА КЛИЕНТА */}
       {selectedClientForAnalytics && (
-        <ClientAnalytics
-          clientId={selectedClientForAnalytics.id}
-          companyId={companyId}
-          onClose={() => setSelectedClientForAnalytics(null)}
-        />
-      )}
+  <ClientAnalytics
+    clientId={selectedClientForAnalytics.id}
+    companyId={companyId}
+    clientName={selectedClientForAnalytics.full_name}  // 👈 ДОБАВИТЬ ЭТУ СТРОКУ
+    onClose={() => setSelectedClientForAnalytics(null)}
+  />
+)}
     </div>
   );
 };
