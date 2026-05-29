@@ -5,7 +5,10 @@ import {
   X, Calendar, DollarSign, FileText, CheckCircle, Clock, 
   AlertCircle, TrendingUp, TrendingDown, Package, Building,
   Download, Printer, Eye, BarChart3, PieChart, CreditCard,
-  FileCheck, FileX, Plus, Minus, History, Maximize2, Minimize2
+  FileCheck, FileX, Plus, Minus, History, Maximize2, Minimize2,
+  User, Phone, Mail, MapPin, Briefcase, Calendar as CalendarIcon,
+  ChevronRight, ExternalLink, Layers, ShoppingBag, Truck,
+  Edit, Trash2, MoreVertical, Filter, Search, ArrowUpDown
 } from 'lucide-react';
 
 // Вспомогательные функции
@@ -14,17 +17,27 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
+const formatDateTime = (date) => {
+  if (!date) return '—';
+  return new Date(date).toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
 const formatCurrency = (amount) => {
   if (!amount) return '0 ₽';
   return amount.toLocaleString('ru-RU') + ' ₽';
 };
 
+const formatNumber = (num) => {
+  if (!num) return '0';
+  return num.toLocaleString('ru-RU');
+};
+
 const getStatusBadge = (status) => {
   const statuses = {
-    active: { text: 'Активен', color: 'bg-green-100 text-green-700' },
-    completed: { text: 'Завершён', color: 'bg-blue-100 text-blue-700' },
-    suspended: { text: 'Приостановлен', color: 'bg-yellow-100 text-yellow-700' },
-    closed: { text: 'Закрыт', color: 'bg-gray-100 text-gray-700' }
+    active: { text: 'Активен', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+    completed: { text: 'Завершён', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    suspended: { text: 'Приостановлен', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+    closed: { text: 'Закрыт', color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-400' }
   };
   const s = statuses[status] || statuses.active;
   return <span className={`px-2 py-0.5 text-xs rounded-full ${s.color}`}>{s.text}</span>;
@@ -32,14 +45,14 @@ const getStatusBadge = (status) => {
 
 const getApplicationStatusBadge = (status) => {
   const statusMap = {
-    pending: { text: 'Ожидает', color: 'bg-yellow-100 text-yellow-700' },
-    partial: { text: 'Частично', color: 'bg-orange-100 text-orange-700' },
-    received: { text: 'Выполнена', color: 'bg-green-100 text-green-700' },
-    canceled: { text: 'Отменена', color: 'bg-red-100 text-red-700' },
-    admin_processing: { text: 'В обработке', color: 'bg-blue-100 text-blue-700' },
-    pending_approval: { text: 'На согласовании', color: 'bg-purple-100 text-purple-700' }
+    pending: { text: 'Ожидает', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+    partial: { text: 'Частично', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+    received: { text: 'Выполнена', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+    canceled: { text: 'Отменена', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+    admin_processing: { text: 'В обработке', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    pending_approval: { text: 'На согласовании', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' }
   };
-  const s = statusMap[status] || { text: status, color: 'bg-gray-100 text-gray-700' };
+  const s = statusMap[status] || { text: status || 'Неизвестно', color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-400' };
   return <span className={`px-2 py-0.5 text-xs rounded-full ${s.color}`}>{s.text}</span>;
 };
 
@@ -50,8 +63,16 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
   const [stats, setStats] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState('all');
   const [selectedContract, setSelectedContract] = useState(null);
+  const [selectedApplication, setSelectedApplication] = useState(null);
   const [showContractModal, setShowContractModal] = useState(false);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [applicationFilter, setApplicationFilter] = useState('all');
+  const [contractSortBy, setContractSortBy] = useState('totalAmount');
+  const [contractSortOrder, setContractSortOrder] = useState('desc');
+  const [applicationSortBy, setApplicationSortBy] = useState('created_at');
+  const [applicationSortOrder, setApplicationSortOrder] = useState('desc');
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
@@ -69,6 +90,7 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      // Загружаем заявки
       const { data: apps, error: appsError } = await supabase
         .from('applications')
         .select('*')
@@ -91,15 +113,47 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
         filteredApps = apps.filter(a => new Date(a.created_at) >= startDate);
       }
 
-      setApplications(filteredApps);
+      // Фильтрация по поиску
+      if (searchTerm) {
+        filteredApps = filteredApps.filter(a => 
+          a.object_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          a.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          a.id?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
 
+      // Фильтрация по статусу
+      if (applicationFilter !== 'all') {
+        filteredApps = filteredApps.filter(a => a.status === applicationFilter);
+      }
+
+      // Сортировка заявок
+      const sortedApps = [...filteredApps].sort((a, b) => {
+        let aVal = a[applicationSortBy];
+        let bVal = b[applicationSortBy];
+        if (applicationSortBy === 'total_amount') {
+          aVal = a.total_amount || 0;
+          bVal = b.total_amount || 0;
+        }
+        if (applicationSortBy === 'created_at') {
+          aVal = new Date(a.created_at);
+          bVal = new Date(b.created_at);
+        }
+        if (aVal < bVal) return applicationSortOrder === 'asc' ? -1 : 1;
+        if (aVal > bVal) return applicationSortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      setApplications(sortedApps);
+
+      // Формируем контракты
       const contractsMap = new Map();
       filteredApps.forEach(app => {
-        const key = app.object_name;
+        const key = app.object_name || 'Без объекта';
         if (!contractsMap.has(key)) {
           contractsMap.set(key, {
             id: key,
-            objectName: app.object_name,
+            objectName: app.object_name || 'Без объекта',
             totalAmount: 0,
             applications: [],
             status: 'active',
@@ -107,6 +161,7 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
             lastActivity: app.created_at,
             completedCount: 0,
             pendingCount: 0,
+            canceledCount: 0,
             totalMaterials: 0
           });
         }
@@ -116,12 +171,33 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
         contract.totalMaterials += app.materials?.length || 0;
         if (app.status === 'received') contract.completedCount++;
         if (['pending', 'partial', 'admin_processing'].includes(app.status)) contract.pendingCount++;
+        if (app.status === 'canceled') contract.canceledCount++;
         if (new Date(app.created_at) < new Date(contract.startDate)) contract.startDate = app.created_at;
         if (new Date(app.created_at) > new Date(contract.lastActivity)) contract.lastActivity = app.created_at;
       });
 
-      setContracts(Array.from(contractsMap.values()));
+      let contractsList = Array.from(contractsMap.values());
+      
+      // Сортировка контрактов
+      contractsList.sort((a, b) => {
+        let aVal = a[contractSortBy];
+        let bVal = b[contractSortBy];
+        if (contractSortBy === 'totalAmount') {
+          aVal = a.totalAmount;
+          bVal = b.totalAmount;
+        }
+        if (contractSortBy === 'applicationsCount') {
+          aVal = a.applications.length;
+          bVal = b.applications.length;
+        }
+        if (aVal < bVal) return contractSortOrder === 'asc' ? -1 : 1;
+        if (aVal > bVal) return contractSortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
 
+      setContracts(contractsList);
+
+      // Статистика
       const totalAmount = filteredApps.reduce((sum, a) => sum + (a.total_amount || 0), 0);
       const completedAmount = filteredApps.filter(a => a.status === 'received').reduce((sum, a) => sum + (a.total_amount || 0), 0);
       const pendingAmount = filteredApps.filter(a => ['pending', 'partial', 'admin_processing'].includes(a.status)).reduce((sum, a) => sum + (a.total_amount || 0), 0);
@@ -132,10 +208,11 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
         completedAmount,
         pendingAmount,
         averageAmount: filteredApps.length > 0 ? totalAmount / filteredApps.length : 0,
-        uniqueObjects: new Set(filteredApps.map(a => a.object_name)).size,
+        uniqueObjects: new Set(filteredApps.map(a => a.object_name).filter(Boolean)).size,
         totalMaterials: filteredApps.reduce((sum, a) => sum + (a.materials?.length || 0), 0),
         completedCount: filteredApps.filter(a => a.status === 'received').length,
-        pendingCount: filteredApps.filter(a => ['pending', 'partial', 'admin_processing'].includes(a.status)).length
+        pendingCount: filteredApps.filter(a => ['pending', 'partial', 'admin_processing'].includes(a.status)).length,
+        canceledCount: filteredApps.filter(a => a.status === 'canceled').length
       });
 
     } catch (error) {
@@ -143,13 +220,13 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
     } finally {
       setLoading(false);
     }
-  }, [clientId, companyId, selectedPeriod]);
+  }, [clientId, companyId, selectedPeriod, searchTerm, applicationFilter, contractSortBy, contractSortOrder, applicationSortBy, applicationSortOrder]);
 
   useEffect(() => {
     if (clientId && companyId) {
       loadData();
     }
-  }, [clientId, companyId, selectedPeriod, loadData]);
+  }, [clientId, companyId, selectedPeriod, searchTerm, applicationFilter, contractSortBy, contractSortOrder, applicationSortBy, applicationSortOrder, loadData]);
 
   if (loading) {
     return (
@@ -164,21 +241,28 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
 
   return (
     <div className={`fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[10000] fade-enter ${isFullscreen ? 'p-0' : 'p-4'}`}>
-      <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ${
+      <div className={`bg-white dark:bg-gray-800 shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ${
         isFullscreen 
           ? 'w-full h-full rounded-none' 
           : 'w-full max-w-7xl max-h-[90vh] rounded-2xl'
       }`}>
         {/* Header */}
-        <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-[#4A6572]/5 to-transparent">
-          <div>
-            <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <BarChart3 className="w-6 h-6 text-[#4A6572]" />
+        <div className="flex justify-between items-center p-5 border-b border-gray-200/50 dark:border-gray-700/50 bg-gradient-to-r from-[#4A6572]/5 to-transparent">
+          <div className="flex-1">
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <BarChart3 className="w-7 h-7 text-[#4A6572]" />
               Аналитика клиента
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {clientName || 'Клиент'} • {getPeriodLabel()} • {stats?.totalApplications || 0} заявок
-            </p>
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {clientName || 'Клиент'} • {getPeriodLabel()}
+              </p>
+              {stats && (
+                <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+                  {stats.totalApplications} заявок
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -197,8 +281,8 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
           </div>
         </div>
 
-        {/* Content - увеличенные отступы и размеры */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           
           {/* Фильтр по периоду */}
           <div className="flex flex-wrap gap-2 justify-end">
@@ -211,10 +295,10 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
               <button
                 key={period.key}
                 onClick={() => setSelectedPeriod(period.key)}
-                className={`px-3 sm:px-4 py-1.5 text-sm rounded-lg transition-colors ${
+                className={`px-4 py-2 text-sm rounded-lg transition-colors ${
                   selectedPeriod === period.key 
                     ? 'bg-[#4A6572] text-white' 
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
               >
                 {period.label}
@@ -222,82 +306,122 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
             ))}
           </div>
 
-          {/* Карточки статистики - увеличенные */}
+          {/* Карточки статистики */}
           {stats && (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-4 border border-blue-200/50">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-5 border border-blue-200/50 hover:shadow-lg transition-shadow cursor-pointer"
+                     onClick={() => {}}>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500">Общая сумма</p>
-                      <p className="text-2xl sm:text-3xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(stats.totalAmount)}</p>
+                      <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(stats.totalAmount)}</p>
                     </div>
-                    <DollarSign className="w-10 h-10 text-blue-500 opacity-50" />
+                    <DollarSign className="w-12 h-12 text-blue-500 opacity-50" />
                   </div>
                 </div>
                 
-                <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-4 border border-green-200/50">
+                <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-5 border border-green-200/50 hover:shadow-lg transition-shadow cursor-pointer"
+                     onClick={() => setApplicationFilter('received')}>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500">Выполнено</p>
-                      <p className="text-2xl sm:text-3xl font-bold text-green-700 dark:text-green-300">{formatCurrency(stats.completedAmount)}</p>
+                      <p className="text-3xl font-bold text-green-700 dark:text-green-300">{formatCurrency(stats.completedAmount)}</p>
                     </div>
-                    <CheckCircle className="w-10 h-10 text-green-500 opacity-50" />
+                    <CheckCircle className="w-12 h-12 text-green-500 opacity-50" />
                   </div>
                 </div>
                 
-                <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl p-4 border border-orange-200/50">
+                <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl p-5 border border-orange-200/50 hover:shadow-lg transition-shadow cursor-pointer"
+                     onClick={() => setApplicationFilter('pending')}>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500">В работе</p>
-                      <p className="text-2xl sm:text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(stats.pendingAmount)}</p>
+                      <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(stats.pendingAmount)}</p>
                     </div>
-                    <Clock className="w-10 h-10 text-orange-500 opacity-50" />
+                    <Clock className="w-12 h-12 text-orange-500 opacity-50" />
                   </div>
                 </div>
                 
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-200/50">
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-5 border border-purple-200/50 hover:shadow-lg transition-shadow cursor-pointer"
+                     onClick={() => setApplicationFilter('all')}>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500">Всего заявок</p>
-                      <p className="text-2xl sm:text-3xl font-bold text-purple-700 dark:text-purple-300">{stats.totalApplications}</p>
+                      <p className="text-3xl font-bold text-purple-700 dark:text-purple-300">{stats.totalApplications}</p>
                     </div>
-                    <FileText className="w-10 h-10 text-purple-500 opacity-50" />
+                    <FileText className="w-12 h-12 text-purple-500 opacity-50" />
                   </div>
                 </div>
               </div>
 
               {/* Дополнительная статистика */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-3 text-center">
-                  <div className="text-xl font-bold text-gray-900 dark:text-white">{stats.uniqueObjects}</div>
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.uniqueObjects}</div>
                   <div className="text-xs text-gray-500">Объектов</div>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-3 text-center">
-                  <div className="text-xl font-bold text-gray-900 dark:text-white">{stats.totalMaterials}</div>
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white">{formatNumber(stats.totalMaterials)}</div>
                   <div className="text-xs text-gray-500">Позиций материалов</div>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-3 text-center">
-                  <div className="text-xl font-bold text-green-600">{stats.completedCount}</div>
-                  <div className="text-xs text-gray-500">Завершённых заявок</div>
+                  <div className="text-2xl font-bold text-green-600">{stats.completedCount}</div>
+                  <div className="text-xs text-gray-500">Завершённых</div>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-3 text-center">
-                  <div className="text-xl font-bold text-orange-600">{stats.pendingCount}</div>
-                  <div className="text-xs text-gray-500">Активных заявок</div>
+                  <div className="text-2xl font-bold text-orange-600">{stats.pendingCount}</div>
+                  <div className="text-xs text-gray-500">Активных</div>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-3 text-center">
+                  <div className="text-2xl font-bold text-red-600">{stats.canceledCount || 0}</div>
+                  <div className="text-xs text-gray-500">Отменённых</div>
+                </div>
+              </div>
+
+              {/* Средний чек */}
+              <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-700/50 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Средняя сумма заявки</span>
+                  <span className="text-2xl font-bold text-[#4A6572]">{formatCurrency(stats.averageAmount)}</span>
                 </div>
               </div>
             </>
           )}
 
-          {/* Контракты - увеличенная область */}
+          {/* Договоры / Контракты */}
           <div>
-            <h4 className="font-semibold text-lg text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <FileCheck className="w-5 h-5 text-green-600" />
-              Договоры / Контракты ({contracts.length})
-            </h4>
-            <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+            <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
+              <h4 className="font-semibold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-green-600" />
+                Договоры / Контракты ({contracts.length})
+              </h4>
+              <div className="flex gap-2">
+                <select
+                  value={contractSortBy}
+                  onChange={(e) => setContractSortBy(e.target.value)}
+                  className="px-3 py-1.5 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                >
+                  <option value="totalAmount">По сумме</option>
+                  <option value="applicationsCount">По кол-ву заявок</option>
+                  <option value="startDate">По дате начала</option>
+                  <option value="lastActivity">По последней активности</option>
+                </select>
+                <button
+                  onClick={() => setContractSortOrder(contractSortOrder === 'asc' ? 'desc' : 'asc')}
+                  className="px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600"
+                >
+                  {contractSortOrder === 'asc' ? '↑' : '↓'}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
               {contracts.map(contract => (
-                <div key={contract.id} className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-4 hover:shadow-md transition-shadow">
+                <div key={contract.id} className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-5 hover:shadow-md transition-all cursor-pointer"
+                     onClick={() => {
+                       setSelectedContract(contract);
+                       setShowContractModal(true);
+                     }}>
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -317,67 +441,130 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
                         <span>🔄 Последняя активность: {formatDate(contract.lastActivity)}</span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedContract(contract);
-                        setShowContractModal(true);
-                      }}
-                      className="px-4 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
-                    >
-                      <Eye className="w-4 h-4" />
-                      Детали
-                    </button>
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
                   </div>
                 </div>
               ))}
               {contracts.length === 0 && (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
-                  <FileText className="w-16 h-16 mx-auto mb-2 opacity-50" />
-                  Нет контрактов
+                <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+                  <FileText className="w-16 h-16 mx-auto mb-3 opacity-50" />
+                  <p>Нет контрактов</p>
+                  <p className="text-sm mt-1">Заявки не найдены</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* История заявок - увеличенная область */}
+          {/* История заявок */}
           <div>
-            <h4 className="font-semibold text-lg text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <History className="w-5 h-5 text-blue-600" />
-              История заявок
-            </h4>
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+            <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
+              <h4 className="font-semibold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                <History className="w-5 h-5 text-blue-600" />
+                История заявок ({applications.length})
+              </h4>
+              <div className="flex gap-2 flex-wrap">
+                {/* Поиск */}
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Поиск заявок..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9 pr-3 py-1.5 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600 w-48"
+                  />
+                </div>
+                {/* Фильтр по статусу */}
+                <select
+                  value={applicationFilter}
+                  onChange={(e) => setApplicationFilter(e.target.value)}
+                  className="px-3 py-1.5 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                >
+                  <option value="all">Все статусы</option>
+                  <option value="received">Выполненные</option>
+                  <option value="pending">Ожидают</option>
+                  <option value="partial">Частично</option>
+                  <option value="admin_processing">В обработке</option>
+                  <option value="canceled">Отменённые</option>
+                </select>
+                {/* Сортировка */}
+                <select
+                  value={applicationSortBy}
+                  onChange={(e) => setApplicationSortBy(e.target.value)}
+                  className="px-3 py-1.5 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                >
+                  <option value="created_at">По дате создания</option>
+                  <option value="total_amount">По сумме</option>
+                </select>
+                <button
+                  onClick={() => setApplicationSortOrder(applicationSortOrder === 'asc' ? 'desc' : 'asc')}
+                  className="px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600"
+                >
+                  {applicationSortOrder === 'asc' ? '↑' : '↓'}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
               {applications.map(app => (
-                <div key={app.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50 hover:shadow-md transition-shadow">
+                <div key={app.id} className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50 hover:shadow-md transition-all cursor-pointer"
+                     onClick={() => {
+                       setSelectedApplication(app);
+                       setShowApplicationModal(true);
+                     }}>
                   <div className="flex justify-between items-start mb-3 flex-wrap gap-2">
                     <div>
                       <p className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                         <Building className="w-4 h-4 text-gray-400" />
-                        {app.object_name}
+                        {app.object_name || 'Без объекта'}
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
-                        Создана: {new Date(app.created_at).toLocaleString('ru-RU')}
+                        Создана: {formatDateTime(app.created_at)}
                       </p>
+                      {app.id && (
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          ID: {app.id.slice(0, 8)}...
+                        </p>
+                      )}
                     </div>
                     {getApplicationStatusBadge(app.status)}
                   </div>
-                  <div className="flex flex-wrap justify-between text-sm mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      📦 {app.materials?.length || 0} позиций
+                  {app.description && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">
+                      {app.description}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap justify-between text-sm mt-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                      <Package className="w-4 h-4" />
+                      {app.materials?.length || 0} позиций
                     </span>
                     {app.total_amount > 0 && (
-                      <span className="font-semibold text-gray-700 dark:text-gray-300">
-                        💰 {app.total_amount.toLocaleString('ru-RU')} ₽
+                      <span className="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                        <DollarSign className="w-4 h-4" />
+                        {formatCurrency(app.total_amount)}
                       </span>
                     )}
                   </div>
                 </div>
               ))}
+              {applications.length === 0 && (
+                <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+                  <FileText className="w-16 h-16 mx-auto mb-3 opacity-50" />
+                  <p>Нет заявок</p>
+                  <p className="text-sm mt-1">Попробуйте изменить фильтры</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200/50 dark:border-gray-700/50 flex justify-end bg-gray-50/50 dark:bg-gray-800/50">
+        <div className="p-4 border-t border-gray-200/50 dark:border-gray-700/50 flex justify-between bg-gray-50/50 dark:bg-gray-800/50">
+          {stats && (
+            <div className="text-sm text-gray-500">
+              Всего материалов: {formatNumber(stats.totalMaterials)} позиций
+            </div>
+          )}
           <button
             onClick={onClose}
             className="px-5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium"
@@ -387,7 +574,7 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
         </div>
       </div>
 
-      {/* Модальное окно деталей контракта - тоже увеличенное */}
+      {/* Модальное окно деталей контракта */}
       {showContractModal && selectedContract && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[10001] fade-enter">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col">
@@ -405,25 +592,25 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
             </div>
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 text-center">
                   <p className="text-xs text-gray-500">Общая сумма</p>
                   <p className="text-xl font-bold text-green-600">{formatCurrency(selectedContract.totalAmount)}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 text-center">
                   <p className="text-xs text-gray-500">Всего заявок</p>
                   <p className="text-xl font-bold">{selectedContract.applications.length}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 text-center">
                   <p className="text-xs text-gray-500">Выполнено</p>
                   <p className="text-xl font-bold text-green-600">{selectedContract.completedCount}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 text-center">
                   <p className="text-xs text-gray-500">В работе</p>
                   <p className="text-xl font-bold text-orange-600">{selectedContract.pendingCount}</p>
                 </div>
               </div>
               
-              <div className="bg-gray-50 rounded-lg p-4">
+              <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4">
                 <p className="text-xs text-gray-500 mb-2">Даты</p>
                 <div className="flex flex-wrap justify-between gap-2 text-sm">
                   <span>📅 Начало: {formatDate(selectedContract.startDate)}</span>
@@ -435,9 +622,15 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
                 <h4 className="font-semibold mb-3">Список заявок по контракту</h4>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {selectedContract.applications.map(app => (
-                    <div key={app.id} className="bg-gray-50 rounded-lg p-3">
+                    <div key={app.id} 
+                         className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+                         onClick={() => {
+                           setSelectedApplication(app);
+                           setShowApplicationModal(true);
+                           setShowContractModal(false);
+                         }}>
                       <div className="flex justify-between items-center flex-wrap gap-2">
-                        <span className="text-sm font-medium">📅 {new Date(app.created_at).toLocaleDateString()}</span>
+                        <span className="text-sm font-medium">📅 {formatDate(app.created_at)}</span>
                         {getApplicationStatusBadge(app.status)}
                       </div>
                       <div className="flex justify-between items-center mt-2 text-sm">
@@ -453,6 +646,98 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
             </div>
             <div className="p-5 border-t flex justify-end">
               <button onClick={() => setShowContractModal(false)} className="px-5 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium">
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно деталей заявки */}
+      {showApplicationModal && selectedApplication && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[10001] fade-enter">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center p-5 border-b">
+              <div>
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-[#4A6572]" />
+                  Детали заявки
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">ID: {selectedApplication.id}</p>
+              </div>
+              <button onClick={() => setShowApplicationModal(false)} className="p-2 rounded-lg hover:bg-gray-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Информация о заявке */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">Объект</p>
+                  <p className="font-medium">{selectedApplication.object_name || '—'}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">Статус</p>
+                  <div className="mt-1">{getApplicationStatusBadge(selectedApplication.status)}</div>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">Дата создания</p>
+                  <p className="font-medium">{formatDateTime(selectedApplication.created_at)}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">Общая сумма</p>
+                  <p className="font-bold text-green-600">{formatCurrency(selectedApplication.total_amount)}</p>
+                </div>
+              </div>
+
+              {/* Описание */}
+              {selectedApplication.description && (
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4">
+                  <p className="text-xs text-gray-500 mb-2">Описание</p>
+                  <p className="text-sm whitespace-pre-wrap">{selectedApplication.description}</p>
+                </div>
+              )}
+
+              {/* Материалы */}
+              {selectedApplication.materials && selectedApplication.materials.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    Материалы ({selectedApplication.materials.length})
+                  </h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {selectedApplication.materials.map((material, idx) => (
+                      <div key={idx} className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium">{material.name || material.material_name || 'Материал'}</p>
+                            {material.article && (
+                              <p className="text-xs text-gray-500">Артикул: {material.article}</p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            {material.quantity && (
+                              <p className="text-sm">{material.quantity} {material.unit || 'шт'}</p>
+                            )}
+                            {material.price && (
+                              <p className="text-sm font-medium text-green-600">{formatCurrency(material.price)}</p>
+                            )}
+                          </div>
+                        </div>
+                        {material.comment && (
+                          <p className="text-xs text-gray-500 mt-1">{material.comment}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-5 border-t flex justify-between">
+              <div className="text-sm text-gray-500">
+                Позиций: {selectedApplication.materials?.length || 0}
+              </div>
+              <button onClick={() => setShowApplicationModal(false)} className="px-5 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium">
                 Закрыть
               </button>
             </div>
