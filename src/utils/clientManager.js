@@ -14,6 +14,8 @@ export async function loadClients(companyId) {
       full_name,
       phone,
       email,
+      object_name,
+      notes,
       is_active,
       created_at,
       updated_at
@@ -31,20 +33,17 @@ export async function loadClients(companyId) {
 }
 
 /**
- * Загружает статистику по клиенту (заявки, активные объекты и т.д.)
+ * Загружает статистику по клиенту
  */
 export async function loadClientStats(companyId, clientId) {
-  console.log('📊 loadClientStats для клиента:', clientId);
-  
-  // Получаем все заявки клиента
-  const { data: applications, error: appsError } = await supabase
+  const { data: applications, error } = await supabase
     .from('applications')
     .select('id, status, created_at, total_amount, object_name')
     .eq('company_id', companyId)
     .eq('client_id', clientId);
 
-  if (appsError) {
-    console.error('❌ Ошибка загрузки заявок:', appsError);
+  if (error) {
+    console.error('Ошибка загрузки статистики:', error);
     return {
       totalApplications: 0,
       activeApplications: 0,
@@ -66,12 +65,11 @@ export async function loadClientStats(companyId, clientId) {
     lastActivity: applications?.[0]?.created_at || null
   };
 
-  console.log('📊 Статистика для клиента:', stats);
   return stats;
 }
 
 /**
- * Обновляет статус клиента (активен/заблокирован)
+ * Обновляет статус клиента
  */
 export async function updateClientStatus(clientId, isActive) {
   const { error } = await supabase
@@ -87,7 +85,7 @@ export async function updateClientStatus(clientId, isActive) {
 }
 
 /**
- * Удаляет клиента из компании (помечает как удалённого)
+ * Удаляет клиента из компании
  */
 export async function removeClient(clientId) {
   const { error } = await supabase

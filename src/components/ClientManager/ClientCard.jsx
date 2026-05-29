@@ -90,6 +90,13 @@ export const ClientCard = ({ client, stats, onView, onToggleStatus, onDelete }) 
             <Phone className="w-4 h-4 mr-2 flex-shrink-0" />
             <span>{client.phone || '—'}</span>
           </div>
+          {/* 👇 ДОБАВЛЕН БЛОК С ОБЪЕКТОМ */}
+          {client.object_name && (
+            <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+              <Building className="w-4 h-4 mr-2 flex-shrink-0" />
+              <span className="truncate">Объект: {client.object_name}</span>
+            </div>
+          )}
         </div>
 
         {/* Статистика */}

@@ -125,6 +125,13 @@ export const ClientDetailsModal = ({ isOpen, onClose, client, companyId }) => {
                 <Phone className="w-4 h-4 mr-2" />
                 <span>{client.phone || '—'}</span>
               </div>
+              {/* 👇 ДОБАВЛЕН ОБЪЕКТ */}
+              {client.object_name && (
+                <div className="flex items-center text-gray-600 dark:text-gray-400">
+                  <Building className="w-4 h-4 mr-2" />
+                  <span>Объект: {client.object_name}</span>
+                </div>
+              )}
               <div className="flex items-center text-gray-600 dark:text-gray-400">
                 <Calendar className="w-4 h-4 mr-2" />
                 <span>Зарегистрирован: {registeredDate}</span>
@@ -134,6 +141,18 @@ export const ClientDetailsModal = ({ isOpen, onClose, client, companyId }) => {
                 <span>Последняя активность: {formatLastActivity(stats?.lastActivity)}</span>
               </div>
             </div>
+            {/* 👇 ДОБАВЛЕНЫ ПРИМЕЧАНИЯ */}
+            {client.notes && (
+              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                <div className="flex items-start gap-2 text-sm">
+                  <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
+                  <div>
+                    <span className="text-xs text-gray-500">Примечания:</span>
+                    <p className="text-gray-600 dark:text-gray-400 mt-1">{client.notes}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Статистика */}
