@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { loadClients, loadClientStats, updateClientStatus, removeClient } from '../utils/clientManager';
-// ⬇️ УДАЛИТЬ ЭТУ СТРОКУ (supabase не используется)
-// import { supabase } from '../utils/supabaseClient';
 
 export function useClientManager(companyId) {
   const [clients, setClients] = useState([]);
@@ -9,21 +7,40 @@ export function useClientManager(companyId) {
   const [selectedClient, setSelectedClient] = useState(null);
   const [clientStats, setClientStats] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'active', 'inactive'
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  console.log('🔵 useClientManager вызван, companyId:', companyId);
 
   // Загрузка клиентов
   const refreshClients = useCallback(async () => {
-    if (!companyId) return;
+    console.log('🔄 refreshClients начал работу, companyId:', companyId);
+    
+    if (!companyId) {
+      console.log('❌ Нет companyId, устанавливаем loading=false');
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     try {
+      console.log('📡 Вызываем loadClients...');
       const data = await loadClients(companyId);
-      setClients(data);
+      console.log('✅ loadClients вернул:', data);
+      setClients(data || []);
     } catch (error) {
-      console.error('Ошибка загрузки клиентов:', error);
+      console.error('❌ Ошибка загрузки клиентов:', error);
+      setClients([]);
     } finally {
+      console.log('🏁 Устанавливаем loading=false');
       setLoading(false);
     }
   }, [companyId]);
+
+  // ✅ ВОТ ЭТОТ useEffect НУЖНО ДОБАВИТЬ
+  useEffect(() => {
+    console.log('🔵 useEffect сработал, companyId:', companyId);
+    refreshClients();
+  }, [companyId, refreshClients]);
 
   // Загрузка статистики для клиента
   const loadStatsForClient = useCallback(async (clientId) => {
@@ -38,9 +55,10 @@ export function useClientManager(companyId) {
     }
   }, [companyId]);
 
-  // Загрузка статистики для всех клиентов при монтировании
+  // Загрузка статистики для всех клиентов
   useEffect(() => {
     if (clients.length > 0) {
+      console.log('📊 Загрузка статистики для', clients.length, 'клиентов');
       clients.forEach(client => {
         loadStatsForClient(client.id);
       });
@@ -83,12 +101,18 @@ export function useClientManager(companyId) {
   // Фильтрация клиентов
   const filteredClients = clients.filter(client => {
     const matchesSearch = client.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
                          client.phone?.includes(searchTerm);
     const matchesStatus = statusFilter === 'all' ||
                          (statusFilter === 'active' && client.is_active) ||
                          (statusFilter === 'inactive' && !client.is_active);
     return matchesSearch && matchesStatus;
+  });
+
+  console.log('📤 useClientManager возвращает:', {
+    clientsCount: filteredClients.length,
+    loading,
+    hasCompanyId: !!companyId
   });
 
   return {
