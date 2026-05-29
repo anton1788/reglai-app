@@ -1,6 +1,6 @@
 // ⬇️ УДАЛИТЬ useState из импорта (не используется)
 import React from 'react';
-import { Search, Users, Filter, UserPlus, RefreshCw, Activity, Building, Calendar, Package } from 'lucide-react';
+import { Search, Users, Filter, UserPlus, RefreshCw, Activity, Building, Calendar, Package, TrendingUp, DollarSign } from 'lucide-react';
 import { useClientManager } from '../../hooks/useClientManager';
 import { ClientCard } from './ClientCard';
 import { ClientDetailsModal } from './ClientDetailsModal';
@@ -44,6 +44,29 @@ export const ClientManager = ({ companyId, t, onInviteClick }) => {
     loadStatsForClient(client.id);
   };
 
+  // Функции для фильтрации по кликам на статистику
+  const handleStatClick = (type) => {
+    switch(type) {
+      case 'all':
+        setStatusFilter('all');
+        setSearchTerm('');
+        break;
+      case 'active':
+        setStatusFilter('active');
+        setSearchTerm('');
+        break;
+      case 'applications':
+        // Показать клиентов с заявками (можно расширить)
+        // Здесь можно добавить дополнительную логику
+        break;
+      case 'inwork':
+        // Здесь можно добавить дополнительную логику
+        break;
+      default:
+        break;
+    }
+  };
+
   if (loading && clients.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -74,45 +97,83 @@ export const ClientManager = ({ companyId, t, onInviteClick }) => {
         </button>
       </div>
 
-      {/* Статистика */}
+      {/* Статистика - активные кнопки */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200/50 dark:border-gray-700/50">
+        <button
+          onClick={() => handleStatClick('all')}
+          className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200/50 dark:border-gray-700/50 hover:shadow-md transition-all text-left group"
+        >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{aggregatedStats.totalClients}</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-[#4A6572] transition-colors">
+                {aggregatedStats.totalClients}
+              </p>
               <p className="text-xs text-gray-500">Всего клиентов</p>
             </div>
-            <Users className="w-8 h-8 text-[#4A6572] opacity-50" />
+            <Users className="w-8 h-8 text-[#4A6572] opacity-50 group-hover:opacity-100 transition-opacity" />
           </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200/50 dark:border-gray-700/50">
+        </button>
+        
+        <button
+          onClick={() => handleStatClick('active')}
+          className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200/50 dark:border-gray-700/50 hover:shadow-md transition-all text-left group"
+        >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xl font-bold text-green-600">{aggregatedStats.activeClients}</p>
+              <p className="text-2xl font-bold text-green-600 group-hover:text-green-700 transition-colors">
+                {aggregatedStats.activeClients}
+              </p>
               <p className="text-xs text-gray-500">Активных</p>
             </div>
-            <Activity className="w-8 h-8 text-green-500 opacity-50" />
+            <Activity className="w-8 h-8 text-green-500 opacity-50 group-hover:opacity-100 transition-opacity" />
           </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200/50 dark:border-gray-700/50">
+        </button>
+        
+        <button
+          onClick={() => handleStatClick('applications')}
+          className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200/50 dark:border-gray-700/50 hover:shadow-md transition-all text-left group"
+        >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{aggregatedStats.totalApplications}</p>
+              <p className="text-2xl font-bold text-blue-600 group-hover:text-blue-700 transition-colors">
+                {aggregatedStats.totalApplications}
+              </p>
               <p className="text-xs text-gray-500">Всего заявок</p>
             </div>
-            <Package className="w-8 h-8 text-blue-500 opacity-50" />
+            <Package className="w-8 h-8 text-blue-500 opacity-50 group-hover:opacity-100 transition-opacity" />
           </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200/50 dark:border-gray-700/50">
+        </button>
+        
+        <button
+          onClick={() => handleStatClick('inwork')}
+          className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200/50 dark:border-gray-700/50 hover:shadow-md transition-all text-left group"
+        >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{aggregatedStats.activeApplications}</p>
+              <p className="text-2xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors">
+                {aggregatedStats.activeApplications}
+              </p>
               <p className="text-xs text-gray-500">В работе</p>
             </div>
-            <Building className="w-8 h-8 text-orange-500 opacity-50" />
+            <TrendingUp className="w-8 h-8 text-orange-500 opacity-50 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </button>
+      </div>
+
+      {/* Общая сумма (дополнительная карточка) */}
+      {aggregatedStats.totalAmount > 0 && (
+        <div className="mb-6 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-4 border border-green-200/50 dark:border-green-800/50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-green-600" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Общая сумма всех заявок:</span>
+            </div>
+            <span className="text-xl font-bold text-green-600">
+              {aggregatedStats.totalAmount.toLocaleString('ru-RU')} ₽
+            </span>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Фильтры и поиск */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -120,7 +181,7 @@ export const ClientManager = ({ companyId, t, onInviteClick }) => {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Поиск по имени, email или телефону..."
+            placeholder="Поиск по имени, email, телефону или объекту..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572] focus:border-transparent"

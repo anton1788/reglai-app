@@ -100,14 +100,16 @@ export function useClientManager(companyId) {
 
   // Фильтрация клиентов
   const filteredClients = clients.filter(client => {
-    const matchesSearch = client.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         client.phone?.includes(searchTerm);
-    const matchesStatus = statusFilter === 'all' ||
-                         (statusFilter === 'active' && client.is_active) ||
-                         (statusFilter === 'inactive' && !client.is_active);
-    return matchesSearch && matchesStatus;
-  });
+  const matchesSearch = 
+    client.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    client.phone?.includes(searchTerm) ||
+    (client.object_name && client.object_name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const matchesStatus = statusFilter === 'all' ||
+                       (statusFilter === 'active' && client.is_active) ||
+                       (statusFilter === 'inactive' && !client.is_active);
+  return matchesSearch && matchesStatus;
+});
 
   console.log('📤 useClientManager возвращает:', {
     clientsCount: filteredClients.length,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Mail, Phone, Calendar, Activity, MoreVertical, Eye, Power, Trash2, Building, FileText, DollarSign } from 'lucide-react';
+import { User, Mail, Phone, Calendar, Activity, MoreVertical, Eye, Power, Trash2, Building, FileText, DollarSign, MapPin } from 'lucide-react';
 import { formatLastActivity } from '../../utils/clientManager';
 
 export const ClientCard = ({ client, stats, onView, onToggleStatus, onDelete }) => {
@@ -7,7 +7,6 @@ export const ClientCard = ({ client, stats, onView, onToggleStatus, onDelete }) 
   const lastActivity = stats?.lastActivity;
   const fullName = client.full_name || client.fullName || '—';
   
-  // Форматируем дату регистрации
   const registeredDate = client.created_at 
     ? new Date(client.created_at).toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' })
     : '—';
@@ -80,6 +79,16 @@ export const ClientCard = ({ client, stats, onView, onToggleStatus, onDelete }) 
 
         {/* Контактная информация */}
         <div className="mt-4 space-y-2">
+          {/* 👇 ОБЪЕКТ ВЛАДЕНИЯ - ВЫДЕЛЕНО КРУПНЕЕ */}
+          {client.object_name && (
+            <div className="flex items-center text-sm bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg -mx-1">
+              <MapPin className="w-4 h-4 mr-2 text-blue-500 flex-shrink-0" />
+              <span className="font-medium text-blue-700 dark:text-blue-300 truncate">
+                {client.object_name}
+              </span>
+            </div>
+          )}
+          
           {client.email && (
             <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
               <Mail className="w-4 h-4 mr-2 flex-shrink-0" />
@@ -90,13 +99,6 @@ export const ClientCard = ({ client, stats, onView, onToggleStatus, onDelete }) 
             <Phone className="w-4 h-4 mr-2 flex-shrink-0" />
             <span>{client.phone || '—'}</span>
           </div>
-          {/* 👇 ДОБАВЛЕН БЛОК С ОБЪЕКТОМ */}
-          {client.object_name && (
-            <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-              <Building className="w-4 h-4 mr-2 flex-shrink-0" />
-              <span className="truncate">Объект: {client.object_name}</span>
-            </div>
-          )}
         </div>
 
         {/* Статистика */}
