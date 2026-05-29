@@ -2,14 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Стили для корневого элемента - НЕ МЕНЯЕМ */
+/* Убираем ограничения для корневого элемента */
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  text-align: left;
 }
 
+/* Остальные стили */
 .logo {
   height: 6em;
   padding: 1.5em;
@@ -46,48 +48,22 @@
   color: #888;
 }
 
-@media (max-width: 767px) {
-  .app-title {
-    font-size: 1rem;
-    max-width: 100px;
-  }
-}
-
 /* ======================================== */
-/* ГЛОБАЛЬНЫЕ СТИЛИ ТОЛЬКО ДЛЯ МОДАЛЬНЫХ ОКОН */
+/* СТИЛИ ДЛЯ МОДАЛЬНЫХ ОКОН */
 /* ======================================== */
 
-/* Применяем стили ТОЛЬКО к модальным окнам с z-index */
-div[class*="fixed"][class*="inset-0"][class*="bg-black"][class*="z-\\[10000\\]"],
-div[class*="fixed"][class*="inset-0"][class*="bg-black"][class*="z-\\[10001\\]"] {
+/* Только для модальных окон */
+div[class*="z-\\[10000\\]"],
+div[class*="z-\\[10001\\]"] {
   padding: 0 !important;
 }
 
-/* Контейнер внутри модального окна */
-div[class*="fixed"][class*="inset-0"][class*="bg-black"][class*="z-\\[10000\\]"] > div,
-div[class*="fixed"][class*="inset-0"][class*="bg-black"][class*="z-\\[10001\\]"] > div {
+div[class*="z-\\[10000\\]"] > div,
+div[class*="z-\\[10001\\]"] > div {
   width: 100% !important;
   height: 100% !important;
   max-width: none !important;
   max-height: none !important;
   border-radius: 0 !important;
   margin: 0 !important;
-}
-
-/* Убираем скругление у модальных окон */
-div[class*="rounded-2xl"],
-div[class*="rounded-xl"] {
-  border-radius: 0 !important;
-}
-
-/* Убираем ограничения высоты ТОЛЬКО в модальных окнах */
-div[class*="z-\\[10000\\]"] div[class*="max-h-"],
-div[class*="z-\\[10001\\]"] div[class*="max-h-"] {
-  max-height: none !important;
-}
-
-/* Убираем ограничения ширины ТОЛЬКО в модальных окнах */
-div[class*="z-\\[10000\\]"] div[class*="max-w-"],
-div[class*="z-\\[10001\\]"] div[class*="max-w-"] {
-  max-width: none !important;
 }
