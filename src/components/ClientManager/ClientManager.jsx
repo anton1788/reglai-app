@@ -1,9 +1,9 @@
-// ⬇️ УДАЛИТЬ useState из импорта (не используется)
-import React from 'react';
+import React, { useState } from 'react';
 import { Search, Users, Filter, UserPlus, RefreshCw, Activity, Building, Calendar, Package, TrendingUp, DollarSign } from 'lucide-react';
 import { useClientManager } from '../../hooks/useClientManager';
 import { ClientCard } from './ClientCard';
 import { ClientDetailsModal } from './ClientDetailsModal';
+import { ClientAnalytics } from './ClientAnalytics'; // 👈 ДОБАВЛЕН ИМПОРТ
 
 export const ClientManager = ({ companyId, t, onInviteClick }) => {
   const {
@@ -21,6 +21,9 @@ export const ClientManager = ({ companyId, t, onInviteClick }) => {
     toggleClientStatus,
     deleteClient
   } = useClientManager(companyId);
+
+  // 👈 ДОБАВЛЕНО СОСТОЯНИЕ ДЛЯ АНАЛИТИКИ
+  const [selectedClientForAnalytics, setSelectedClientForAnalytics] = useState(null);
 
   // Агрегированная статистика
   const aggregatedStats = clients.reduce((acc, client) => {
@@ -42,6 +45,11 @@ export const ClientManager = ({ companyId, t, onInviteClick }) => {
   const handleViewClient = (client) => {
     setSelectedClient(client);
     loadStatsForClient(client.id);
+  };
+
+  // 👈 ДОБАВЛЕН ОБРАБОТЧИК ДЛЯ АНАЛИТИКИ
+  const handleViewAnalytics = (client) => {
+    setSelectedClientForAnalytics(client);
   };
 
   // Функции для фильтрации по кликам на статистику
@@ -234,6 +242,7 @@ export const ClientManager = ({ companyId, t, onInviteClick }) => {
               onView={handleViewClient}
               onToggleStatus={toggleClientStatus}
               onDelete={deleteClient}
+              onViewAnalytics={handleViewAnalytics} // 👈 ДОБАВЛЕН ПРОПС
               t={t}
             />
           ))}
@@ -247,6 +256,15 @@ export const ClientManager = ({ companyId, t, onInviteClick }) => {
         client={selectedClient}
         companyId={companyId}
       />
+
+      {/* 👈 ДОБАВЛЕНА АНАЛИТИКА КЛИЕНТА */}
+      {selectedClientForAnalytics && (
+        <ClientAnalytics
+          clientId={selectedClientForAnalytics.id}
+          companyId={companyId}
+          onClose={() => setSelectedClientForAnalytics(null)}
+        />
+      )}
     </div>
   );
 };

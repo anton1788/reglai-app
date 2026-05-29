@@ -1,8 +1,8 @@
 import React from 'react';
-import { User, Mail, Phone, Calendar, Activity, MoreVertical, Eye, Power, Trash2, Building, FileText, DollarSign, MapPin } from 'lucide-react';
+import { User, Mail, Phone, Calendar, Activity, MoreVertical, Eye, Power, Trash2, Building, FileText, DollarSign, MapPin, BarChart3 } from 'lucide-react';
 import { formatLastActivity } from '../../utils/clientManager';
 
-export const ClientCard = ({ client, stats, onView, onToggleStatus, onDelete }) => {
+export const ClientCard = ({ client, stats, onView, onToggleStatus, onDelete, onViewAnalytics }) => {
   const isActive = client.is_active;
   const lastActivity = stats?.lastActivity;
   const fullName = client.full_name || client.fullName || '—';
@@ -50,6 +50,13 @@ export const ClientCard = ({ client, stats, onView, onToggleStatus, onDelete }) 
               >
                 <Eye className="w-4 h-4" />
                 Подробнее
+              </button>
+              <button
+                onClick={() => onViewAnalytics(client)}
+                className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+              >
+                <BarChart3 className="w-4 h-4" />
+                Аналитика
               </button>
               <button
                 onClick={() => onToggleStatus(client.id, !isActive)}
