@@ -45,8 +45,8 @@ const SYSTEM_CHANNELS = [
   { id: 'announcements', label: '📢 Объявления', icon: '📢', description: 'Важные объявления', type: CHANNEL_TYPES.SYSTEM, adminOnly: true, roles: [ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.SUPPLY_ADMIN] }
 ];
 
-const REACTION_EMOJIS = Object.freeze(['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '🤔']);
-const CHANNEL_ICONS = ['💬', '📦', '👷', '📢', '🔧', '📋', '🎯', '💡', '🚀', '⭐'];
+const REACTION_EMOJIS = Object.freeze(['👍', '❤️', '😂', '', '😢', '', '🎉', '🤔']);
+const CHANNEL_ICONS = ['💬', '📦', '👷', '📢', '', '📋', '🎯', '💡', '🚀', '⭐'];
 
 // ─────────────────────────────────────────────────────────────
 // 🧩 Helper: Проверка прав доступа
@@ -90,7 +90,7 @@ const canDeleteMessage = (msg, userId, userRole) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🧩 CreateChannelModal Component
+// 🧩 CreateChannelModal Component (FIXED)
 // ─────────────────────────────────────────────────────────────
 const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUser, t }) => {
   const [channelName, setChannelName] = useState('');
@@ -155,9 +155,10 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Header - фиксированный */}
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Plus className="w-5 h-5 text-[#4A6572]" />
             {t?.('chat.createChannel') || 'Создать канал'}
@@ -171,7 +172,8 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+        {/* Form - прокручиваемый */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -278,7 +280,7 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
                 />
               </div>
 
-              <div className="max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-xl">
+              <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-xl">
                 {filteredUsers.length === 0 ? (
                   <p className="p-3 text-sm text-gray-500 dark:text-gray-400 text-center">
                     {t?.('chat.noUsersFound') || 'Пользователи не найдены'}
@@ -321,7 +323,8 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
           )}
         </form>
 
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3 bg-gray-50/50 dark:bg-gray-900/30">
+        {/* Footer - фиксированный */}
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3 bg-gray-50/50 dark:bg-gray-900/30 flex-shrink-0">
           <button
             type="button"
             onClick={onClose}
@@ -830,14 +833,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
   // ✅ Исправленный cleanup-эффект для formatCacheRef
   useEffect(() => {
-    // Копируем значение рефа в локальную переменную для безопасного использования в cleanup
     const cacheRef = formatCacheRef;
     const timerRef = mentionTimerRef;
     const subRef = subscriptionRef;
     
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
-      // Используем локальную ссылку на реф, а не форматCacheRef.current напрямую
       const cache = cacheRef.current;
       if (cache && typeof cache.clear === 'function') cache.clear();
       if (subRef.current) subRef.current.unsubscribe();
