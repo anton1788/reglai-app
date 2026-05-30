@@ -81,16 +81,6 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
   // Состояние для UnifiedDocumentManager
   const [showUnifiedDocs, setShowUnifiedDocs] = useState(false);
 
-  // eslint-disable-next-line no-unused-vars
-  const getPeriodLabel = useCallback(() => {
-    switch(selectedPeriod) {
-      case 'month': return 'за последний месяц';
-      case 'quarter': return 'за последний квартал';
-      case 'year': return 'за последний год';
-      default: return 'за всё время';
-    }
-  }, [selectedPeriod]);
-
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -251,7 +241,7 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
         title={`Аналитика клиента: ${clientName || 'Клиент'}`}
         showCloseButton={true}
       >
-        <div className="p-6 space-y-6">
+        <div className="space-y-6">
           
           {/* Фильтр по периоду */}
           <div className="flex flex-wrap gap-2 justify-end">
@@ -278,7 +268,7 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
           {/* Карточки статистики */}
           {stats && (
             <>
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-5 border border-blue-200/50 hover:shadow-lg transition-shadow cursor-pointer w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-5 border border-blue-200/50 hover:shadow-lg transition-shadow cursor-pointer">
                   <div className="flex items-center justify-between">
                     <div>
