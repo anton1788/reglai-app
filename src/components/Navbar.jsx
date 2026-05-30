@@ -1,0 +1,440 @@
+// src/components/Navbar.jsx
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Menu, X, Search, User, LogOut, Settings, HelpCircle, 
+  Bell, ChevronDown, Home, Package, ClipboardList, 
+  Users, BarChart3, FileText, FolderOpen, Moon, Sun,
+  Building, CreditCard, Truck, Calendar, MessageCircle,
+  Plus, Download, Upload, RefreshCw, UserPlus, Briefcase,
+  CheckCircle, Archive, ShoppingCart, Code, Shield, Sparkles,
+  Globe, WifiOff, Loader2
+} from 'lucide-react';
+
+const Navbar = ({ 
+  user, 
+  companyName, 
+  userRole, 
+  onLogout, 
+  onNavigate, 
+  currentPage,
+  onInvite,
+  // eslint-disable-next-line no-unused-vars
+  onInviteClient,
+  onOpenTariffs,
+  onOpenCompanyProfile,
+  isOnline,
+  offlineDraftsCount,
+  theme,
+  onToggleTheme,
+  // eslint-disable-next-line no-unused-vars
+  language,
+  onToggleLanguage,
+  // eslint-disable-next-line no-unused-vars
+  t,
+  notifications = [],
+  onMarkNotificationRead,
+  onClearNotifications
+}) => {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const profileRef = useRef(null);
+  const notificationsRef = useRef(null);
+  const searchRef = useRef(null);
+
+  // Закрытие меню при клике вне
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setIsProfileOpen(false);
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setIsNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Глобальный поиск по Ctrl+K или /
+  useEffect(() => {
+    const handleGlobalSearch = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+      if (e.key === '/' && document.activeElement !== searchRef.current) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', handleGlobalSearch);
+    return () => document.removeEventListener('keydown', handleGlobalSearch);
+  }, []);
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      onNavigate?.(`/search?q=${encodeURIComponent(searchQuery)}`);
+      setSearchQuery('');
+      setIsMobileMenuOpen(false);
+    }
+  };
+
+  const getRoleLabel = () => {
+    const roles = {
+      master: 'Прораб',
+      foreman: 'Мастер',
+      manager: 'Руководитель',
+      supply_admin: 'Снабженец',
+      accountant: 'Бухгалтер',
+      client: 'Заказчик',
+      client_manager: 'Менеджер по клиентам',
+      director: 'Директор'
+    };
+    return roles[userRole] || userRole;
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  return (
+    <nav className="bg-white dark:bg-gray-900 shadow-lg sticky top-0 z-50 w-full">
+      <div className="w-full px-4">
+        <div className="flex justify-between items-center h-16">
+          
+          {/* Логотип и название */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              aria-label="Меню"
+            >
+              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+            
+            <button 
+              onClick={() => onNavigate?.('/')}
+              className="flex items-center gap-2 group cursor-pointer"
+            >
+              <div className="w-9 h-9 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-all">
+                <span className="text-white font-bold text-lg">Р</span>
+              </div>
+              <div className="hidden sm:block">
+                <span className="font-bold text-gray-800 dark:text-white text-lg">Реглай</span>
+                {companyName && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400 block -mt-0.5">
+                    {companyName}
+                  </span>
+                )}
+              </div>
+            </button>
+          </div>
+
+          {/* Поиск - центрированный */}
+          <div className="hidden md:flex items-center flex-1 max-w-md mx-4">
+            <form onSubmit={handleSearch} className="w-full">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  placeholder="Поиск... (Ctrl+K /)"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-16 py-2 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white transition-all"
+                />
+                <kbd className="absolute right-3 top-1/2 transform -translate-y-1/2 px-2 py-0.5 text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 rounded-md hidden sm:block">
+                  ⌘K
+                </kbd>
+              </div>
+            </form>
+          </div>
+
+          {/* Правая часть */}
+          <div className="flex items-center gap-1">
+            {/* Статус офлайн */}
+            {!isOnline && (
+              <div className="flex items-center px-2 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-lg text-xs font-medium">
+                <WifiOff className="w-3 h-3 mr-1" />
+                <span className="hidden sm:inline">Офлайн</span>
+                {offlineDraftsCount > 0 && (
+                  <span className="ml-1">({offlineDraftsCount})</span>
+                )}
+              </div>
+            )}
+
+            {/* Быстрые действия */}
+            <div className="relative group">
+              <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <Plus className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              </button>
+              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                <div className="p-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-gray-100 dark:border-gray-700">Быстрые действия</p>
+                  <button 
+                    onClick={() => { onNavigate?.('/applications/new'); setIsMobileMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  >
+                    <Plus className="w-4 h-4 text-blue-500" />
+                    Создать заявку
+                  </button>
+                  <button 
+                    onClick={() => { onInvite?.(); setIsMobileMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  >
+                    <UserPlus className="w-4 h-4 text-green-500" />
+                    Пригласить сотрудника
+                  </button>
+                  <button 
+                    onClick={() => { onNavigate?.('/warehouse'); setIsMobileMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  >
+                    <Package className="w-4 h-4 text-orange-500" />
+                    Управление складом
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Уведомления */}
+            <div className="relative" ref={notificationsRef}>
+              <button
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                <Bell className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                )}
+              </button>
+              
+              {isNotificationsOpen && (
+                <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                  <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Уведомления</h3>
+                    {notifications.length > 0 && (
+                      <button 
+                        onClick={onClearNotifications}
+                        className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                      >
+                        Очистить все
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">Нет уведомлений</p>
+                      </div>
+                    ) : (
+                      notifications.map(notif => (
+                        <div 
+                          key={notif.id} 
+                          className={`p-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${!notif.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                          onClick={() => onMarkNotificationRead?.(notif.id)}
+                        >
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">{notif.title}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{notif.message}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{notif.time}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Переключение темы */}
+            <button
+              onClick={onToggleTheme}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              aria-label="Сменить тему"
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5 text-gray-600 dark:text-gray-400" /> : <Moon className="w-5 h-5 text-gray-600 dark:text-gray-400" />}
+            </button>
+
+            {/* Переключение языка */}
+            <button
+              onClick={onToggleLanguage}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              aria-label="Сменить язык"
+            >
+              <Globe className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            </button>
+
+            {/* Профиль */}
+            <div className="relative" ref={profileRef}>
+              <button
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+              >
+                <div className="w-8 h-8 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-lg flex items-center justify-center">
+                  <User className="w-4 h-4 text-white" />
+                </div>
+                <div className="hidden lg:block text-left">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Пользователь'}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {getRoleLabel()}
+                  </p>
+                </div>
+                <ChevronDown className="w-4 h-4 text-gray-500 hidden lg:block" />
+              </button>
+
+              {isProfileOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                  <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-[#4A6572]/5 to-transparent">
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {user?.user_metadata?.full_name || 'Пользователь'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{user?.email}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
+                      <Briefcase className="w-3 h-3" />
+                      {getRoleLabel()}
+                    </p>
+                  </div>
+                  <div className="p-2">
+                    <button 
+                      onClick={() => { onNavigate?.('/profile'); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                    >
+                      <User className="w-4 h-4" />
+                      Профиль
+                    </button>
+                    <button 
+                      onClick={() => { onOpenCompanyProfile?.(); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                    >
+                      <Building className="w-4 h-4" />
+                      Реквизиты компании
+                    </button>
+                    <button 
+                      onClick={() => { onOpenTariffs?.(); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                    >
+                      <Sparkles className="w-4 h-4 text-yellow-500" />
+                      Тарифы
+                    </button>
+                    <hr className="my-2 border-gray-200 dark:border-gray-700" />
+                    <button 
+                      onClick={() => { onNavigate?.('/settings'); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                    >
+                      <Settings className="w-4 h-4" />
+                      Настройки
+                    </button>
+                    <button 
+                      onClick={() => { onNavigate?.('/help'); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                    >
+                      <HelpCircle className="w-4 h-4" />
+                      Помощь
+                    </button>
+                    <hr className="my-2 border-gray-200 dark:border-gray-700" />
+                    <button
+                      onClick={onLogout}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Выйти
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Мобильное меню */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 fade-enter max-h-[calc(100vh-64px)] overflow-y-auto">
+          {/* Поиск в мобильной версии */}
+          <form onSubmit={handleSearch} className="p-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Поиск..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A6572] bg-gray-50 dark:bg-gray-800"
+              />
+            </div>
+          </form>
+          
+          <div className="p-2">
+            {/* Основные разделы */}
+            <div className="space-y-1">
+              <p className="px-3 pt-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Основные</p>
+              <NavMobileItem icon={Home} label="Главная" onClick={() => onNavigate?.('/')} current={currentPage === 'dashboard'} />
+              <NavMobileItem icon={ClipboardList} label="Заявки" onClick={() => onNavigate?.('/applications')} current={currentPage === 'applications'} />
+              <NavMobileItem icon={Package} label="Склад" onClick={() => onNavigate?.('/warehouse')} current={currentPage === 'warehouse'} />
+              <NavMobileItem icon={Users} label="Клиенты" onClick={() => onNavigate?.('/clients')} current={currentPage === 'clients'} />
+              <NavMobileItem icon={BarChart3} label="Аналитика" onClick={() => onNavigate?.('/analytics')} current={currentPage === 'analytics'} />
+            </div>
+            
+            <hr className="my-3 border-gray-100 dark:border-gray-800" />
+            
+            {/* Инструменты */}
+            <div className="space-y-1">
+              <p className="px-3 pt-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Инструменты</p>
+              <NavMobileItem icon={MessageCircle} label="Чат" onClick={() => onNavigate?.('/chat')} current={currentPage === 'chat'} />
+              <NavMobileItem icon={Calendar} label="Календарь" onClick={() => onNavigate?.('/calendar')} current={currentPage === 'calendar'} />
+              <NavMobileItem icon={FileText} label="Документы" onClick={() => onNavigate?.('/documents')} current={currentPage === 'documents'} />
+            </div>
+            
+            <hr className="my-3 border-gray-100 dark:border-gray-800" />
+            
+            {/* Управление */}
+            <div className="space-y-1">
+              <p className="px-3 pt-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Управление</p>
+              <NavMobileItem icon={UserPlus} label="Пригласить" onClick={() => { onInvite?.(); setIsMobileMenuOpen(false); }} />
+              <NavMobileItem icon={Building} label="Реквизиты" onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }} />
+              <NavMobileItem icon={Sparkles} label="Тарифы" onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }} />
+            </div>
+            
+            <hr className="my-3 border-gray-100 dark:border-gray-800" />
+            
+            {/* Профиль */}
+            <div className="space-y-1">
+              <NavMobileItem icon={User} label="Профиль" onClick={() => { onNavigate?.('/profile'); setIsMobileMenuOpen(false); }} />
+              <NavMobileItem icon={Settings} label="Настройки" onClick={() => { onNavigate?.('/settings'); setIsMobileMenuOpen(false); }} />
+              <button
+                onClick={onLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              >
+                <LogOut className="w-5 h-5" />
+                Выйти
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+};
+
+// Компонент для мобильного меню
+const NavMobileItem = ({ icon: Icon, label, onClick, current }) => {
+  // Icon используется, но ESLint не видит из-за деструктуризации
+  const IconComponent = Icon;
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-4 py-3 text-sm rounded-lg transition-colors ${
+        current 
+          ? 'bg-[#4A6572]/10 text-[#4A6572] dark:text-[#F9AA33]' 
+          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+      }`}
+    >
+      <IconComponent className="w-5 h-5" />
+      {label}
+    </button>
+  );
+};
+
+export default Navbar;
