@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Убираем все ограничения для корневого элемента */
 html, body, #root {
   width: 100%;
   min-height: 100vh;
@@ -12,13 +13,26 @@ html, body, #root {
 #root {
   display: flex;
   flex-direction: column;
+  max-width: none !important;
+  padding: 0 !important;
 }
 
 /* Навигация всегда сверху */
 nav, 
-header {
-  position: relative;
+header,
+[class*="Navbar"],
+[class*="navbar"] {
+  position: sticky;
+  top: 0;
   z-index: 100 !important;
+  width: 100%;
+}
+
+/* Для обучающего окна (onboarding) */
+[class*="onboarding"],
+[class*="tour"],
+[class*="guide"] {
+  z-index: 101 !important;
 }
 
 /* Остальные стили */
