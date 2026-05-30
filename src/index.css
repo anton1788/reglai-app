@@ -2,16 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ======================================== */
-/* БАЗОВЫЕ СТИЛИ ДЛЯ ВСЕГО ПРИЛОЖЕНИЯ */
-/* ======================================== */
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 html, body, #root {
   width: 100%;
   min-height: 100vh;
@@ -24,42 +14,11 @@ html, body, #root {
   flex-direction: column;
 }
 
-/* ======================================== */
-/* СТИЛИ ДЛЯ НАВИГАЦИИ */
-/* ======================================== */
-
+/* Навигация всегда сверху */
 nav, 
-header,
-[class*="Navbar"],
-[class*="navbar"],
-[class*="Header"] {
+header {
   position: relative;
   z-index: 100 !important;
-}
-
-/* ======================================== */
-/* СТИЛИ ДЛЯ МОДАЛЬНЫХ ОКОН */
-/* ======================================== */
-
-div[class*="fixed inset-0"],
-div[class*="fixed"][class*="inset-0"] {
-  padding: 0 !important;
-  z-index: 50 !important;
-}
-
-div[class*="fixed inset-0"] > div,
-div[class*="fixed"][class*="inset-0"] > div {
-  width: 100% !important;
-  height: 100% !important;
-  border-radius: 0 !important;
-  margin: 0 !important;
-}
-
-/* Затемнение для модальных окон */
-div[class*="bg-black/80"],
-div[class*="bg-black\/80"] {
-  background-color: rgba(0, 0, 0, 0.6) !important;
-  backdrop-filter: blur(2px);
 }
 
 /* Остальные стили */
