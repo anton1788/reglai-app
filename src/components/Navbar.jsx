@@ -204,8 +204,13 @@ const Navbar = ({
               className="flex items-center gap-2 group cursor-pointer"
             >
               <div className="w-9 h-9 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-all">
-                <span className="text-white font-bold text-lg">Р</span>
-              </div>
+  <img 
+    src="/icon-512.png" 
+    alt="Reglai logo" 
+    className="w-6 h-6"
+    style={{ objectFit: 'contain' }}
+  />
+</div>
               <div className="hidden sm:block">
                 <span className="font-bold text-gray-800 dark:text-white text-lg">Реглай</span>
                 {companyName && (
