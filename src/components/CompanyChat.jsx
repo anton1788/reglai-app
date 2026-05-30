@@ -3,11 +3,11 @@ import React, {
   useState, useEffect, useRef, useCallback, useMemo, memo 
 } from 'react';
 import { 
-  Send, Smile, Paperclip, Edit2, Trash2, X, Check, 
-  AtSign, Loader2, MessageCircle
+  Send, Smile, Paperclip, Edit2, Trash2, X, Check, Clock,
+  AtSign, Loader2, MessageCircle, File, CheckCheck, Volume2, VolumeX,
+  Search, PlusCircle, Users
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
-// ✅ ИМПОРТ для Feature Adoption логирования
 import { 
   logChatAccess, 
   getUserContext, 
@@ -24,19 +24,50 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   realtime: { params: { apikey: SUPABASE_ANON_KEY } }
 });
 
-// ✅ Константы — определены ПЕРЕД любыми компонентами
+// Расширенные каналы с ролевым доступом
 const CHANNELS = [
-  { id: 'general', label: '# Общий', icon: '💬', description: 'Общие вопросы' },
-  { id: 'supply', label: '📦 Снабжение', icon: '📦', description: 'Закупки и материалы' },
-  { id: 'foremen', label: '👷 Прорабы', icon: '👷', description: 'Для прорабов' },
-  { id: 'announcements', label: '📢 Объявления', icon: '📢', adminOnly: true, description: 'Важные объявления' }
+  { 
+    id: 'general', 
+    label: '# Общий', 
+    icon: '💬', 
+    description: 'Общие вопросы для всех сотрудников',
+    allowedRoles: null // все (кроме клиентов)
+  },
+  { 
+    id: 'supply', 
+    label: '📦 Снабжение', 
+    icon: '📦', 
+    description: 'Закупки, поставки, склад',
+    allowedRoles: ['supply_admin', 'manager', 'director', 'super_admin'] 
+  },
+  { 
+    id: 'foremen', 
+    label: '👷 Прорабы', 
+    icon: '👷', 
+    description: 'Оперативная связь с прорабами',
+    allowedRoles: ['master', 'foreman', 'supply_admin', 'manager', 'director'] 
+  },
+  { 
+    id: 'announcements', 
+    label: '📢 Объявления', 
+    icon: '📢', 
+    description: 'Важные объявления руководства',
+    allowedRoles: ['manager', 'supply_admin', 'director', 'super_admin'] 
+  },
+  { 
+    id: 'finance', 
+    label: '💰 Финансы', 
+    icon: '💰', 
+    description: 'Бюджет, сметы, оплаты',
+    allowedRoles: ['accountant', 'manager', 'director', 'super_admin'] 
+  }
 ];
 
 const REACTION_EMOJIS = Object.freeze(['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '🤔']);
-const MESSAGES_LIMIT = 50;
+const MESSAGES_PER_PAGE = 50;
 
 // ─────────────────────────────────────────────────────────────
-// 🧩 MessageItem — БЕЗ кастомной функции сравнения
+// 🧩 MessageItem — с модерацией и задачей
 // ─────────────────────────────────────────────────────────────
 const MessageItem = memo(function MessageItem({ 
   msg, 
@@ -55,12 +86,34 @@ const MessageItem = memo(function MessageItem({
   formatTime, 
   t, 
   language,
-  textareaRef 
+  textareaRef,
+  readStatusMap,
+  onMarkAsRead,
+  canModerate,
+  onCreateTask
 }) {
   const isDeleted = msg.deleted_at;
   const isEdited = msg.edited_at;
   const messageTime = new Date(msg.created_at);
+  const messageRef = useRef(null);
   
+  useEffect(() => {
+    if (!messageRef.current || isOwn || isDeleted) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && !msg.read_by_user) {
+            onMarkAsRead?.(msg.id);
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+    observer.observe(messageRef.current);
+    return () => observer.disconnect();
+  }, [msg.id, isOwn, isDeleted, msg.read_by_user, onMarkAsRead]);
+
   const reactionCounts = useMemo(() => {
     if (!msg.reactions?.length) return {};
     return msg.reactions.reduce((acc, r) => { 
@@ -69,12 +122,24 @@ const MessageItem = memo(function MessageItem({
     }, {});
   }, [msg.reactions]);
 
+  const readCount = readStatusMap?.[msg.id] || 0;
+
   return (
-    <article className={`group flex gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
-      <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0 ${isOwn ? 'order-2' : ''}`}>
-        <span className="text-white text-xs font-medium">
+    <article 
+      ref={messageRef}
+      className={`group flex gap-3 animate-fade-in ${isOwn ? 'flex-row-reverse' : ''}`}
+    >
+      <div className={`relative flex-shrink-0 ${isOwn ? 'order-2 ml-2' : 'mr-2'}`}>
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm transition-transform group-hover:scale-105 ${
+          isOwn 
+            ? 'bg-gradient-to-br from-[#F9AA33] to-[#F57C00] text-gray-900' 
+            : 'bg-gradient-to-br from-[#4A6572] to-[#344955] text-white'
+        }`}>
           {msg.user?.user_metadata?.full_name?.[0]?.toUpperCase() || '?'}
-        </span>
+        </div>
+        {msg.user?.user_metadata?.role === 'manager' && (
+          <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-blue-500 rounded-full border-2 border-white dark:border-gray-800" title="Менеджер" />
+        )}
       </div>
       <div className={`max-w-[85%] md:max-w-[75%] ${isOwn ? 'order-1' : ''}`}>
         {!isOwn && !isDeleted && (
@@ -89,13 +154,15 @@ const MessageItem = memo(function MessageItem({
             )}
           </div>
         )}
-        <div className={`rounded-2xl px-4 py-2.5 ${
+        <div className={`rounded-2xl px-4 py-2.5 transition-all duration-200 ${
           isOwn 
-            ? 'bg-[#4A6572] text-white rounded-br-md' 
-            : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md'
+            ? 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-br-md shadow-md' 
+            : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md shadow-sm border border-gray-100 dark:border-gray-600'
         }`}>
           {isDeleted ? (
-            <span className="text-gray-400 dark:text-gray-500 italic text-sm">[Удалено]</span>
+            <span className="text-gray-400 dark:text-gray-500 italic text-sm flex items-center gap-1">
+              <Trash2 className="w-3 h-3" /> {t?.('chat.deleted') || 'Удалено'}
+            </span>
           ) : isEditing ? (
             <div className="flex gap-2 items-start">
               <textarea 
@@ -131,9 +198,26 @@ const MessageItem = memo(function MessageItem({
               </div>
             </div>
           ) : (
-            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+            <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
               {formatMessage?.(msg.content, msg.id)}
-            </p>
+              {msg.attachments?.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {msg.attachments.map((att, idx) => (
+                    <div key={idx} className="relative group/att">
+                      {att.type?.startsWith('image/') ? (
+                        <a href={att.url} target="_blank" rel="noopener noreferrer">
+                          <img src={att.url} alt="attachment" className="max-w-[200px] max-h-[150px] rounded-lg border border-gray-300 dark:border-gray-600" />
+                        </a>
+                      ) : (
+                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded">
+                          <File className="w-3 h-3" /> {att.name}
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
         <div className={`flex items-center gap-2 mt-1 text-xs ${isOwn ? 'justify-end' : ''}`}>
@@ -145,6 +229,15 @@ const MessageItem = memo(function MessageItem({
             {formatTime?.(msg.created_at)}
             {isEdited && !isDeleted && <span className="ml-1 italic">{t?.('chat.edited') || '(изм.)'}</span>}
           </time>
+          {isOwn && !isDeleted && (
+            <span className="inline-flex items-center gap-0.5">
+              {readCount > 0 ? (
+                <CheckCheck className="w-3 h-3 text-blue-500" title={`Прочитано ${readCount} пользователями`} />
+              ) : (
+                <Clock className="w-3 h-3 text-gray-400" title="Отправлено" />
+              )}
+            </span>
+          )}
           {!isDeleted && !isEditing && (
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="relative">
@@ -177,27 +270,35 @@ const MessageItem = memo(function MessageItem({
                 )}
               </div>
               {isOwn && (
-                <>
-                  <button 
-                    onClick={() => onStartEdit?.(msg)} 
-                    className="p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded transition-colors" 
-                    title={t?.('chat.edit') || 'Редактировать'}
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button 
-                    onClick={() => onDelete?.(msg.id)} 
-                    className="p-1 hover:bg-red-100/50 dark:hover:bg-red-900/30 rounded transition-colors text-red-500" 
-                    title={t?.('chat.delete') || 'Удалить'}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </>
+                <button 
+                  onClick={() => onStartEdit?.(msg)} 
+                  className="p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded transition-colors" 
+                  title={t?.('chat.edit') || 'Редактировать'}
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {(isOwn || canModerate) && (
+                <button 
+                  onClick={() => onDelete?.(msg.id)} 
+                  className="p-1 hover:bg-red-100/50 dark:hover:bg-red-900/30 rounded transition-colors text-red-500" 
+                  title={t?.('chat.delete') || 'Удалить'}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {canModerate && (
+                <button 
+                  onClick={() => onCreateTask?.(msg)}
+                  className="p-1 hover:bg-green-100/50 dark:hover:bg-green-900/30 rounded transition-colors text-green-600"
+                  title="Создать задачу"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                </button>
               )}
             </div>
           )}
         </div>
-        {/* Реакции */}
         {Object.keys(reactionCounts).length > 0 && !isEditing && !isDeleted && (
           <div className={`flex flex-wrap gap-1 mt-2 ${isOwn ? 'justify-end' : ''}`}>
             {Object.entries(reactionCounts).map(([emoji, count]) => {
@@ -224,9 +325,78 @@ const MessageItem = memo(function MessageItem({
 });
 
 // ─────────────────────────────────────────────────────────────
+// 🧩 КОМПОНЕНТ ПОИСКА ПО СООБЩЕНИЯМ
+// ─────────────────────────────────────────────────────────────
+const SearchModal = ({ isOpen, onClose, onSearch, t }) => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setQuery('');
+      setResults([]);
+    }
+  }, [isOpen]);
+
+  const handleSearch = async () => {
+    if (!query.trim()) return;
+    setLoading(true);
+    const resultsData = await onSearch(query);
+    setResults(resultsData);
+    setLoading(false);
+  };
+
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+        <div className="p-4 border-b border-gray-200/50 dark:border-gray-700/50 flex justify-between items-center">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t?.('chat.search') || 'Поиск сообщений'}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4 border-b border-gray-200/50 dark:border-gray-700/50 flex gap-2">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder={t?.('chat.searchPlaceholder') || 'Введите текст для поиска...'}
+            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          />
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] flex items-center gap-2"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            {t?.('chat.search') || 'Найти'}
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {results.length === 0 && !loading && query && <div className="text-center text-gray-500">{t?.('chat.noResults') || 'Ничего не найдено'}</div>}
+          {results.map(msg => (
+            <div key={msg.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span className="font-medium">{msg.user_name}</span>
+                <span>{new Date(msg.created_at).toLocaleString()}</span>
+              </div>
+              <p className="text-sm">{msg.content.substring(0, 200)}</p>
+              <div className="mt-1 text-xs text-gray-400">Канал: {msg.channel}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
 // 🧩 ОСНОВНОЙ КОМПОНЕНТ
 // ─────────────────────────────────────────────────────────────
-const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotification }) => {
+const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotification, onCreateTask }) => {
   // ───────── STATE ─────────
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -239,8 +409,15 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [companyUsers, setCompanyUsers] = useState([]);
-  const [uploadingFile, setUploadingFile] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState('connected');
+  const [readStatusMap, setReadStatusMap] = useState({});
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(true);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [oldestCreatedAt, setOldestCreatedAt] = useState(null);
+  const [typingUsers, setTypingUsers] = useState([]);
 
   // ───────── REFS ─────────
   const messagesEndRef = useRef(null);
@@ -249,6 +426,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const subscriptionRef = useRef(null);
   const mentionTimerRef = useRef(null);
   const formatCacheRef = useRef(new Map());
+  const audioRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const typingChannelRef = useRef(null);
+  const oldestCreatedAtRef = useRef(oldestCreatedAt);
+
+  useEffect(() => { oldestCreatedAtRef.current = oldestCreatedAt; }, [oldestCreatedAt]);
 
   // ───────── HELPERS ─────────
   const formatTime = useCallback((dateString) => {
@@ -260,8 +443,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   }, [language]);
 
   const isChannelAvailable = useCallback((channel) => {
-    if (!channel.adminOnly) return true;
-    return userRole === 'manager' || userRole === 'supply_admin' || userRole === 'super_admin';
+    if (!channel.allowedRoles) return true;
+    return channel.allowedRoles.includes(userRole);
   }, [userRole]);
 
   const availableChannels = useMemo(() => 
@@ -269,16 +452,18 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     [isChannelAvailable]
   );
 
+  const canModerate = useMemo(() => 
+    ['manager', 'supply_admin', 'director', 'super_admin'].includes(userRole),
+    [userRole]
+  );
+
   const formatMessage = useCallback((text, messageId) => {
     if (!text) return null;
-    
     const cacheKey = `${messageId}_${text.length}`;
     const cached = formatCacheRef.current.get(cacheKey);
     if (cached) return cached;
-    
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const parts = text.split(urlRegex);
-    
     const result = parts.map((part, i) => {
       if (part?.match?.(urlRegex)) {
         return (
@@ -305,71 +490,81 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       }
       return <span key={`text-${i}-${messageId}`}>{part}</span>;
     });
-    
     if (formatCacheRef.current.size > 100) {
       const firstKey = formatCacheRef.current.keys().next().value;
       formatCacheRef.current.delete(firstKey);
     }
     formatCacheRef.current.set(cacheKey, result);
-    
     return result;
   }, []);
 
-  // ───────── EFFECTS ─────────
-  useEffect(() => {
-    channelRef.current = activeChannel;
-  }, [activeChannel]);
+  const loadReadCounts = useCallback(async (messageIds) => {
+    if (!messageIds.length) return;
+    const { data, error } = await supabase
+      .from('message_reads')
+      .select('message_id')
+      .in('message_id', messageIds);
+    if (!error && data) {
+      const counts = data.reduce((acc, row) => {
+        acc[row.message_id] = (acc[row.message_id] || 0) + 1;
+        return acc;
+      }, {});
+      setReadStatusMap(prev => ({ ...prev, ...counts }));
+    }
+  }, []);
 
-  // Загрузка пользователей
-  useEffect(() => {
-    if (!userCompanyId) return;
-    let mounted = true;
-    
-    const loadUsers = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('company_users')
-          .select('user_id, full_name, role, phone')
-          .eq('company_id', userCompanyId)
-          .eq('is_active', true)
-          .order('full_name', { ascending: true });
-        
-        if (error) throw error;
-        if (mounted) setCompanyUsers(data || []);
-      } catch (err) {
-        console.error('❌ Error loading users:', err);
-      }
-    };
-    
-    loadUsers();
-    return () => { mounted = false; };
-  }, [userCompanyId]);
-
-  // Загрузка сообщений
-  const loadMessages = useCallback(async () => {
-    if (!userCompanyId) return;
-    setLoading(true);
+  const markMessageAsRead = useCallback(async (messageId) => {
+    if (!user?.id) return;
     try {
-      const { data: messagesData, error: msgError } = await supabase
+      await supabase.from('message_reads').upsert({
+        message_id: messageId,
+        user_id: user.id,
+        read_at: new Date().toISOString()
+      }, { onConflict: 'message_id, user_id' });
+      setReadStatusMap(prev => ({ ...prev, [messageId]: (prev[messageId] || 0) + 1 }));
+    } catch (err) {
+      console.warn('Ошибка отметки прочтения:', err);
+    }
+  }, [user?.id]);
+
+  const loadMessages = useCallback(async (loadMore = false) => {
+    if (!userCompanyId) return;
+    if (loadMore && !hasMore) return;
+    if (loadMore) setLoadingMore(true);
+    else setLoading(true);
+    try {
+      let query = supabase
         .from('company_messages')
         .select('*')
         .eq('company_id', userCompanyId)
         .eq('channel', channelRef.current)
         .is('deleted_at', null)
-        .order('created_at', { ascending: true })
-        .limit(100);
+        .order('created_at', { ascending: false })
+        .limit(MESSAGES_PER_PAGE);
       
+      if (loadMore && oldestCreatedAtRef.current) {
+        query = query.lt('created_at', oldestCreatedAtRef.current);
+      }
+      
+      const { data: messagesData, error: msgError } = await query;
       if (msgError) throw msgError;
+      if (!messagesData.length) {
+        setHasMore(false);
+        if (loadMore) setLoadingMore(false);
+        else setLoading(false);
+        return;
+      }
       
-      const messageIds = messagesData?.map(m => m.id) || [];
+      const oldestDate = messagesData[messagesData.length - 1]?.created_at;
+      if (oldestDate) setOldestCreatedAt(oldestDate);
+      
+      const messageIds = messagesData.map(m => m.id);
       let reactionsMap = {};
-      
-      if (messageIds.length > 0) {
+      if (messageIds.length) {
         const { data: reactionsData } = await supabase
           .from('message_reactions')
           .select('message_id, emoji, user_id')
           .in('message_id', messageIds);
-        
         if (reactionsData) {
           reactionsMap = reactionsData.reduce((acc, r) => {
             if (!acc[r.message_id]) acc[r.message_id] = [];
@@ -377,57 +572,86 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
             return acc;
           }, {});
         }
+        await loadReadCounts(messageIds);
       }
       
-      const userIds = [...new Set(messagesData?.map(m => m.user_id).filter(Boolean))];
+      const userIds = [...new Set(messagesData.map(m => m.user_id).filter(Boolean))];
       let usersMap = {};
-      
-      if (userIds.length > 0) {
+      if (userIds.length) {
         const { data: usersData } = await supabase
           .from('company_users')
-          .select('user_id, full_name, role, phone')
+          .select('user_id, full_name, role, phone, email')
           .in('user_id', userIds)
           .eq('company_id', userCompanyId);
-        
         usersMap = (usersData || []).reduce((acc, u) => {
           acc[u.user_id] = { 
-            email: null, 
+            email: u.email,
             user_metadata: { full_name: u.full_name, role: u.role, phone: u.phone } 
           };
           return acc;
         }, {});
       }
       
-      const enrichedMessages = (messagesData || []).map(msg => ({
+      const enriched = messagesData.map(msg => ({
         ...msg,
         user: usersMap[msg.user_id] || { email: null, user_metadata: { full_name: 'Пользователь' } },
         reactions: reactionsMap[msg.id] || []
       }));
       
-      setMessages(enrichedMessages);
+      if (loadMore) {
+        setMessages(prev => [...enriched.reverse(), ...prev]);
+      } else {
+        setMessages(enriched.reverse());
+      }
+      setHasMore(messagesData.length === MESSAGES_PER_PAGE);
     } catch (err) {
       console.error('Ошибка загрузки сообщений:', err);
       showNotification?.(t?.('chat.sendMessageError') || 'Ошибка загрузки чата', 'error');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [userCompanyId, showNotification, t]);
+  }, [userCompanyId, showNotification, t, loadReadCounts, hasMore]);
 
+  // Загрузка пользователей
   useEffect(() => {
-    loadMessages();
+    if (!userCompanyId) return;
+    let mounted = true;
+    const loadUsers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('company_users')
+          .select('user_id, full_name, role, phone, email')
+          .eq('company_id', userCompanyId)
+          .eq('is_active', true)
+          .order('full_name', { ascending: true });
+        if (error) throw error;
+        if (mounted) setCompanyUsers(data || []);
+      } catch (err) {
+        console.error('❌ Error loading users:', err);
+      }
+    };
+    loadUsers();
+    return () => { mounted = false; };
+  }, [userCompanyId]);
+
+  // Загрузка сообщений при смене канала
+  useEffect(() => {
+    channelRef.current = activeChannel;
+    setMessages([]);
+    setHasMore(true);
+    setOldestCreatedAt(null);
+    loadMessages(false);
   }, [activeChannel, loadMessages]);
 
   // Realtime подписка
   useEffect(() => {
     if (!userCompanyId || !activeChannel) return;
-    
     if (subscriptionRef.current) {
       subscriptionRef.current.unsubscribe();
       subscriptionRef.current = null;
     }
-
     const channelName = `chat:${userCompanyId}:${activeChannel}`;
-    
     const subscription = supabase
       .channel(channelName)
       .on('postgres_changes', {
@@ -440,7 +664,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         try {
           const [reactionsRes, userRes] = await Promise.all([
             supabase.from('message_reactions').select('emoji, user_id').eq('message_id', payload.new.id),
-            supabase.from('company_users').select('full_name, role, phone').eq('user_id', payload.new.user_id).maybeSingle()
+            supabase.from('company_users').select('full_name, role, phone, email').eq('user_id', payload.new.user_id).maybeSingle()
           ]);
           const enrichedMessage = {
             ...payload.new,
@@ -452,6 +676,20 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
             return [...prev, enrichedMessage];
           });
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          if (payload.new.user_id !== user?.id) {
+            if (notificationSoundEnabled && audioRef.current) {
+              audioRef.current.play().catch(e => console.debug('audio play blocked', e));
+            }
+            const userName = userRes.data?.full_name || 'Пользователь';
+            showNotification?.(`💬 Новое сообщение от ${userName} в ${CHANNELS.find(c => c.id === activeChannel)?.label}`, 'info');
+            if (Notification.permission === 'granted') {
+              new Notification(`Новое сообщение в ${CHANNELS.find(c => c.id === activeChannel)?.label}`, {
+                body: `${userName}: ${payload.new.content.substring(0, 100)}`,
+                icon: '/icon-192.png',
+                tag: `chat_${userCompanyId}_${activeChannel}`,
+              });
+            }
+          }
         } catch (err) {
           console.error('❌ Error processing new message:', err);
         }
@@ -462,9 +700,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         table: 'company_messages',
         filter: `company_id=eq.${userCompanyId}`
       }, (payload) => {
-        setMessages(prev => prev.map(m => 
-          m.id === payload.new.id ? { ...m, ...payload.new } : m
-        ));
+        setMessages(prev => {
+          if (payload.new.deleted_at) {
+            return prev.filter(m => m.id !== payload.new.id);
+          }
+          return prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m);
+        });
       })
       .on('postgres_changes', {
         event: 'DELETE',
@@ -480,157 +721,93 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') setConnectionStatus('connected');
-        else if (status === 'CHANNEL_ERROR') setConnectionStatus('error');
+        else if (status === 'CHANNEL_ERROR') {
+          setConnectionStatus('error');
+          setTimeout(() => subscriptionRef.current?.subscribe(), 3000);
+        }
       });
-
     subscriptionRef.current = subscription;
-    
     return () => {
       if (subscriptionRef.current) {
         subscriptionRef.current.unsubscribe();
         subscriptionRef.current = null;
       }
     };
-  }, [userCompanyId, activeChannel]);
+  }, [userCompanyId, activeChannel, user?.id, showNotification, notificationSoundEnabled]);
+
+  // Typing индикатор
+  useEffect(() => {
+    if (!userCompanyId || !activeChannel) return;
+    const typingChannel = supabase.channel(`typing:${userCompanyId}:${activeChannel}`);
+    typingChannel
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload.userId !== user?.id) {
+          setTypingUsers(prev => {
+            if (prev.some(u => u.userId === payload.userId)) return prev;
+            return [...prev, { userId: payload.userId, name: payload.name, timestamp: Date.now() }];
+          });
+          setTimeout(() => {
+            setTypingUsers(prev => prev.filter(u => u.userId !== payload.userId));
+          }, 2000);
+        }
+      })
+      .on('broadcast', { event: 'stop_typing' }, ({ payload }) => {
+        setTypingUsers(prev => prev.filter(u => u.userId !== payload.userId));
+      })
+      .subscribe();
+    typingChannelRef.current = typingChannel;
+    return () => {
+      if (typingChannelRef.current) typingChannelRef.current.unsubscribe();
+    };
+  }, [userCompanyId, activeChannel, user?.id]);
+
+  const sendTyping = useCallback(() => {
+    if (!typingChannelRef.current) return;
+    typingChannelRef.current.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { userId: user?.id, name: user?.user_metadata?.full_name || 'Пользователь' }
+    });
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      typingChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'stop_typing',
+        payload: { userId: user?.id }
+      });
+    }, 1500);
+  }, [user?.id, user?.user_metadata?.full_name]);
 
   // Автоскролл
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
-  // ✅ FEATURE ADOPTION: логируем использование чата с дебаунсом
-useEffect(() => {
-  if (userCompanyId && user?.id) {
-    const userCtx = getUserContext(user, null, userRole, userCompanyId);
-    
-    if (shouldLogFeature('chat', userCompanyId, {})) {
-      logChatAccess(supabase, userCtx, 'open')
-        .catch(err => console.warn('[CHAT] Аудит не записан:', err));
+  // Звук и уведомления
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
     }
-  }
-}, [userCompanyId, user, userRole, supabase]);
-
-  const sendMessage = useCallback(async () => {
-  const content = newMessage.trim();
-  if (!content || !user?.id || sending) return;
-
-  // ✅ Получаем company_id из сессии
-  const { data: { session } } = await supabase.auth.getSession();
-  const safeCompanyId = session?.user?.user_metadata?.company_id || userCompanyId;
-  
-  if (!safeCompanyId) {
-    showNotification?.('Ошибка: компания не указана', 'error');
-    return;
-  }
-
-  setSending(true);
-  try {
-    const mentionRegex = /@([^\s,;!?.]+)/g;
-    const mentions = [...content.matchAll(mentionRegex)].map(m => m[1].toLowerCase());
-    const mentionedUsers = companyUsers.filter(u => 
-      mentions.includes(u.full_name?.toLowerCase().replace(/\s+/g, ''))
-    );
-
-    // ✅ ИСПРАВЛЕНО: используем 'content' вместо 'message'
-    const { data, error } = await supabase
-      .from('company_messages')
-      .insert([{
-        company_id: safeCompanyId,
-        channel: activeChannel,
-        user_id: user.id,
-        content: content,  // ← ИСПРАВЛЕНО!
-        attachments: [],
-        created_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Упоминания
-    if (mentionedUsers.length > 0 && data?.id) {
-      await supabase.from('message_mentions').insert(
-        mentionedUsers.map(u => ({
-          message_id: data.id,
-          mentioned_user_id: u.user_id,
-          created_at: new Date().toISOString()
-        }))
-      );
-    }
-
-    // ✅ Аудит
-    try {
-      const { logChatAccess } = await import('../utils/auditLogger');
-      const { getUserContext } = await import('../utils/auditLogger');
-      const userCtx = getUserContext(user, null, userRole, safeCompanyId);
-      await logChatAccess(supabase, userCtx, 'send_message');
-    } catch (auditErr) {
-      console.warn('[CHAT] Аудит не записан:', auditErr);
-    }
-
-    setNewMessage('');
-    setShowMentions(false);
-    textareaRef.current?.focus();
-    
-  } catch (err) {
-    console.error('❌ Send error:', err);
-    
-    // 🔍 Детальная отладка
-    if (err?.code === '23502') {
-      showNotification?.('Ошибка: поле content не может быть пустым', 'error');
-    } else if (err?.code === '23503') {
-      showNotification?.('Ошибка: компания не найдена', 'error');
-    } else {
-      showNotification?.(t?.('chat.sendError') || 'Не удалось отправить', 'error');
-    }
-  } finally {
-    setSending(false);
-  }
-}, [newMessage, user, userCompanyId, activeChannel, companyUsers, sending, showNotification, t, userRole]);
-  const handleTextareaChange = useCallback((e) => {
-    const value = e.target.value;
-    setNewMessage(value);
-    
-    if (value.includes('@')) {
-      if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
-      mentionTimerRef.current = setTimeout(() => {
-        const match = value.match(/@([^\s,;!?.]+)$/);
-        if (match) {
-          setShowMentions(true);
-          setMentionQuery(match[0]);
-        } else {
-          setShowMentions(false);
-        }
-      }, 100);
-    } else {
-      setShowMentions(false);
-    }
-    
-    e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+    audioRef.current = new Audio('/notification.mp3');
+    audioRef.current.volume = 0.5;
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
   }, []);
 
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (editingMessageId) {
-        saveEdit(editingMessageId);
-      } else {
-        sendMessage();
+  useEffect(() => {
+    if (userCompanyId && user?.id) {
+      const userCtx = getUserContext(user, null, userRole, userCompanyId);
+      if (shouldLogFeature('chat', userCompanyId, {})) {
+        logChatAccess(supabase, userCtx, 'open').catch(err => console.warn('[CHAT] Аудит не записан:', err));
       }
-      return;
     }
-    if (e.key === '@' && !showMentions) {
-      setShowMentions(true);
-      setMentionQuery('@');
-    }
-    if (e.key === 'Escape') {
-      setShowMentions(false);
-      setShowReactionsPicker(null);
-      if (editingMessageId) cancelEdit();
-    }
-  }, [editingMessageId, showMentions, sendMessage]);
+  }, [userCompanyId, user, userRole]);
 
+  // Обработчики
   const startEdit = useCallback((message) => {
     if (message.user_id !== user?.id) return;
     setEditingMessageId(message.id);
@@ -647,8 +824,10 @@ useEffect(() => {
         .update({ content: content, edited_at: new Date().toISOString() })
         .eq('id', messageId)
         .eq('user_id', user?.id);
-      
       if (error) throw error;
+      setMessages(prev => prev.map(m => 
+        m.id === messageId ? { ...m, content, edited_at: new Date().toISOString() } : m
+      ));
       setEditingMessageId(null);
       setEditText('');
       showNotification?.(t?.('chat.messageUpdated') || 'Сообщение обновлено', 'success');
@@ -669,22 +848,19 @@ useEffect(() => {
       const { error } = await supabase
         .from('company_messages')
         .update({ content: '[Удалено]', deleted_at: new Date().toISOString() })
-        .eq('id', messageId)
-        .eq('user_id', user?.id);
-      
+        .eq('id', messageId);
       if (error) throw error;
       showNotification?.(t?.('chat.deleted') || 'Сообщение удалено', 'info');
     } catch (err) {
       console.error('❌ Delete error:', err);
       showNotification?.(t?.('chat.deleteError') || 'Ошибка удаления', 'error');
     }
-  }, [user?.id, showNotification, t]);
+  }, [showNotification, t]);
 
   const toggleReaction = useCallback(async (messageId, emoji) => {
     if (!user?.id) return;
     const message = messages.find(m => m.id === messageId);
     const hasReaction = message?.reactions?.some(r => r.emoji === emoji && r.user_id === user.id);
-
     try {
       if (hasReaction) {
         await supabase.from('message_reactions').delete()
@@ -702,55 +878,127 @@ useEffect(() => {
     setShowReactionsPicker(null);
   }, [user?.id, messages, showNotification, t]);
 
-  const handleFileUpload = useCallback(async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !userCompanyId) return;
+  const sendMessage = useCallback(async () => {
+    const content = newMessage.trim();
+    if (!content || !user?.id || sending) return;
 
-    const maxSize = 10 * 1024 * 1024;
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 
-                          'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    
-    if (file.size > maxSize) {
-      showNotification?.(t?.('chat.fileTooLarge') || 'Файл слишком большой (макс. 10MB)', 'error');
-      e.target.value = '';
-      return;
-    }
-    if (!allowedTypes.includes(file.type)) {
-      showNotification?.(t?.('chat.fileTypeNotAllowed') || 'Недопустимый тип файла', 'error');
-      e.target.value = '';
+    const { data: { session } } = await supabase.auth.getSession();
+    const safeCompanyId = session?.user?.user_metadata?.company_id || userCompanyId;
+    if (!safeCompanyId) {
+      showNotification?.('Ошибка: компания не указана', 'error');
       return;
     }
 
-    setUploadingFile(true);
+    setSending(true);
     try {
-      const fileName = `${userCompanyId}/${Date.now()}_${file.name.replace(/[^a-z0-9.-]/gi, '_')}`;
-      const { error: uploadError } = await supabase.storage
-        .from('chat-attachments')
-        .upload(fileName, file, { upsert: false });
-      
-      if (uploadError) throw uploadError;
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from('chat-attachments')
-        .getPublicUrl(fileName);
-      
-      const fileLink = `\n📎 [${file.name}](${publicUrl})`;
-      setNewMessage(prev => prev + fileLink);
-      showNotification?.(t?.('chat.fileAttached') || 'Файл прикреплён', 'success');
+      const mentionRegex = /@([^\s,;!?.]+)/g;
+      const mentions = [...content.matchAll(mentionRegex)].map(m => m[1].toLowerCase());
+      const mentionedUsers = companyUsers.filter(u => 
+        mentions.includes(u.full_name?.toLowerCase().replace(/\s+/g, ''))
+      );
+
+      const attachments = attachedFiles.filter(f => f.uploadedUrl).map(f => ({
+        name: f.file.name,
+        url: f.uploadedUrl,
+        type: f.file.type,
+        size: f.file.size
+      }));
+
+      const { data, error } = await supabase
+        .from('company_messages')
+        .insert([{
+          company_id: safeCompanyId,
+          channel: activeChannel,
+          user_id: user.id,
+          content: content,
+          attachments: attachments,
+          created_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (mentionedUsers.length > 0 && data?.id) {
+        await supabase.from('message_mentions').insert(
+          mentionedUsers.map(u => ({
+            message_id: data.id,
+            mentioned_user_id: u.user_id,
+            created_at: new Date().toISOString()
+          }))
+        );
+      }
+
+      setNewMessage('');
+      setShowMentions(false);
+      setAttachedFiles([]);
+      textareaRef.current?.focus();
     } catch (err) {
-      console.error('❌ Upload error:', err);
-      showNotification?.(t?.('chat.uploadError') || 'Не удалось загрузить файл', 'error');
+      console.error('❌ Send error:', err);
+      showNotification?.(t?.('chat.sendError') || 'Не удалось отправить', 'error');
     } finally {
-      setUploadingFile(false);
-      e.target.value = '';
+      setSending(false);
     }
+  }, [newMessage, user, userCompanyId, activeChannel, companyUsers, sending, showNotification, t, attachedFiles]);
+
+  const handleFileUpload = useCallback(async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    const newAttachments = [];
+    for (const file of files) {
+      const maxSize = 10 * 1024 * 1024;
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 
+                            'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (file.size > maxSize) {
+        showNotification?.(t?.('chat.fileTooLarge') || 'Файл слишком большой (макс. 10MB)', 'error');
+        continue;
+      }
+      if (!allowedTypes.includes(file.type)) {
+        showNotification?.(t?.('chat.fileTypeNotAllowed') || 'Недопустимый тип файла', 'error');
+        continue;
+      }
+      let preview = null;
+      if (file.type.startsWith('image/')) {
+        preview = URL.createObjectURL(file);
+      }
+      newAttachments.push({ file, preview, uploading: true });
+    }
+    setAttachedFiles(prev => [...prev, ...newAttachments]);
+    for (const attach of newAttachments) {
+      try {
+        const fileName = `${userCompanyId}/${Date.now()}_${attach.file.name.replace(/[^a-z0-9.-]/gi, '_')}`;
+        const { error: uploadError } = await supabase.storage
+          .from('chat-attachments')
+          .upload(fileName, attach.file, { upsert: false });
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from('chat-attachments').getPublicUrl(fileName);
+        setAttachedFiles(prev => prev.map(a => 
+          a.file === attach.file ? { ...a, uploadedUrl: publicUrl, uploading: false } : a
+        ));
+        setNewMessage(prev => prev + `\n📎 [${attach.file.name}](${publicUrl})`);
+      } catch (err) {
+        console.error('Upload error:', err);
+        showNotification?.(`Ошибка загрузки ${attach.file.name}`, 'error');
+        setAttachedFiles(prev => prev.filter(a => a.file !== attach.file));
+      } finally {
+        if (attach.preview) URL.revokeObjectURL(attach.preview);
+      }
+    }
+    e.target.value = '';
   }, [userCompanyId, showNotification, t]);
 
-  const filteredMentions = useMemo(() => {
-    if (!mentionQuery.trim() || mentionQuery === '@') return companyUsers.slice(0, 5);
-    const query = mentionQuery.toLowerCase().replace('@', '').trim();
-    return companyUsers.filter(u => u.full_name?.toLowerCase().includes(query)).slice(0, 5);
-  }, [mentionQuery, companyUsers]);
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length) {
+      handleFileUpload({ target: { files } });
+    }
+  }, [handleFileUpload]);
 
   const insertMention = useCallback((userName) => {
     setNewMessage(prev => {
@@ -762,23 +1010,118 @@ useEffect(() => {
     textareaRef.current?.focus();
   }, []);
 
+  const handleTextareaChange = useCallback((e) => {
+    const value = e.target.value;
+    setNewMessage(value);
+    sendTyping();
+    if (value.includes('@')) {
+      if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
+      mentionTimerRef.current = setTimeout(() => {
+        const match = value.match(/@([^\s,;!?.]+)$/);
+        if (match) {
+          setShowMentions(true);
+          setMentionQuery(match[0]);
+        } else {
+          setShowMentions(false);
+        }
+      }, 100);
+    } else {
+      setShowMentions(false);
+    }
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+  }, [sendTyping]);
+
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (editingMessageId) {
+        saveEdit(editingMessageId);
+      } else {
+        sendMessage();
+      }
+      return;
+    }
+    if (e.key === '@' && !showMentions) {
+      setShowMentions(true);
+      setMentionQuery('@');
+    }
+    if (e.key === 'Escape') {
+      setShowMentions(false);
+      setShowReactionsPicker(null);
+      if (editingMessageId) cancelEdit();
+    }
+  }, [editingMessageId, showMentions, saveEdit, sendMessage, cancelEdit]);
+
+  const filteredMentions = useMemo(() => {
+    if (!mentionQuery.trim() || mentionQuery === '@') return companyUsers.slice(0, 5);
+    const query = mentionQuery.toLowerCase().replace('@', '').trim();
+    return companyUsers.filter(u => u.full_name?.toLowerCase().includes(query)).slice(0, 5);
+  }, [mentionQuery, companyUsers]);
+
+  const handleSearch = useCallback(async (query) => {
+    if (!query.trim()) return [];
+    const { data, error } = await supabase
+      .from('company_messages')
+      .select('id, content, created_at, channel, user_id')
+      .eq('company_id', userCompanyId)
+      .ilike('content', `%${query}%`)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) {
+      showNotification?.(t?.('chat.searchError') || 'Ошибка поиска', 'error');
+      return [];
+    }
+    const userIds = [...new Set(data.map(m => m.user_id))];
+    const { data: users } = await supabase
+      .from('company_users')
+      .select('user_id, full_name')
+      .in('user_id', userIds);
+    const userMap = (users || []).reduce((acc, u) => { acc[u.user_id] = u.full_name; return acc; }, {});
+    return data.map(m => ({ ...m, user_name: userMap[m.user_id] || 'Пользователь' }));
+  }, [userCompanyId, showNotification, t]);
+
+  const handleCreateTask = useCallback((msg) => {
+    if (!onCreateTask) {
+      showNotification?.('Функция создания задачи временно недоступна', 'info');
+      return;
+    }
+    onCreateTask({
+      title: `Задача из чата: ${msg.content.substring(0, 50)}`,
+      description: msg.content,
+      channel: activeChannel,
+      messageId: msg.id
+    });
+  }, [onCreateTask, activeChannel, showNotification]);
+
   // Cleanup
   useEffect(() => {
+    const cache = formatCacheRef.current;
     return () => {
       if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
-      formatCacheRef.current.clear();
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
-      }
+      cache.clear();
+      if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
+      if (typingChannelRef.current) typingChannelRef.current.unsubscribe();
     };
   }, []);
 
-  // ───────── RENDER ─────────
   const currentChannel = CHANNELS.find(c => c.id === activeChannel);
+
+  // Если роль клиента – показываем заглушку (после всех хуков)
+  if (userRole === 'client') {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-140px)]">
+        <div className="text-center text-gray-500">
+          <MessageCircle className="w-16 h-16 mx-auto mb-3 opacity-50" />
+          <p>Чат недоступен для заказчиков</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-140px)] bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-      {/* Sidebar */}
       <aside className="w-48 border-r border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30 p-3 hidden md:block">
         <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
           {t?.('chat.channels') || 'Каналы'}
@@ -798,14 +1141,14 @@ useEffect(() => {
               >
                 <span className="text-base">{channel.icon}</span>
                 <span className="truncate flex-1">{channel.label}</span>
-                {channel.adminOnly && (
-                  <span className="text-[10px] bg-[#F9AA33]/20 text-[#F9AA33] px-1.5 py-0.5 rounded">ADM</span>
+                {channel.allowedRoles && channel.allowedRoles.length > 0 && (
+                  <span className="text-[10px] bg-[#F9AA33]/20 text-[#F9AA33] px-1.5 py-0.5 rounded">огранич.</span>
                 )}
               </button>
             );
           })}
         </nav>
-        <div className="mt-4 pt-3 border-t border-gray-200/50 dark:border-gray-700/50 px-2">
+        <div className="mt-4 pt-3 border-t border-gray-200/50 dark:border-gray-700/50 px-2 space-y-2">
           <div className="flex items-center gap-2 text-xs">
             <span className={`w-2 h-2 rounded-full ${
               connectionStatus === 'connected' ? 'bg-green-500' : 
@@ -819,10 +1162,23 @@ useEffect(() => {
                   : (t?.('chat.offline') || 'Оффлайн')}
             </span>
           </div>
+          <button
+            onClick={() => setNotificationSoundEnabled(prev => !prev)}
+            className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700"
+          >
+            {notificationSoundEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
+            {notificationSoundEnabled ? 'Звук вкл' : 'Звук выкл'}
+          </button>
+          <button
+            onClick={() => setShowSearchModal(true)}
+            className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 w-full"
+          >
+            <Search className="w-3 h-3" />
+            Поиск
+          </button>
         </div>
       </aside>
 
-      {/* Main Chat */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="px-4 py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
           <div className="flex items-center gap-2 md:hidden">
@@ -851,47 +1207,95 @@ useEffect(() => {
           </div>
         </header>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4" data-chat-messages>
+        <div 
+          className="flex-1 overflow-y-auto p-4 space-y-4" 
+          data-chat-messages
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
           {loading ? (
             <div className="flex flex-col items-center justify-center h-32 gap-2">
               <Loader2 className="w-6 h-6 animate-spin text-[#4A6572]" />
               <span className="text-sm text-gray-500">{t?.('chat.loading') || 'Загрузка...'}</span>
             </div>
-          ) : messages.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p className="font-medium">{t?.('chat.noMessages') || 'Нет сообщений'}</p>
-              <p className="text-sm mt-1">{t?.('chat.startDiscussion') || 'Начните обсуждение!'}</p>
-            </div>
           ) : (
-            messages.map(msg => (
-              <MessageItem
-                key={msg.id}
-                msg={msg}
-                user={user}
-                isOwn={msg.user_id === user?.id}
-                isEditing={editingMessageId === msg.id}
-                editText={editText}
-                onStartEdit={startEdit}
-                onSaveEdit={saveEdit}
-                onCancelEdit={cancelEdit}
-                onDelete={deleteMessage}
-                onToggleReaction={toggleReaction}
-                showReactionsPicker={showReactionsPicker}
-                setShowReactionsPicker={setShowReactionsPicker}
-                formatMessage={formatMessage}
-                formatTime={formatTime}
-                t={t}
-                language={language}
-                textareaRef={textareaRef}
-              />
-            ))
+            <>
+              {hasMore && messages.length >= MESSAGES_PER_PAGE && (
+                <div className="flex justify-center">
+                  <button
+                    onClick={() => loadMessages(true)}
+                    disabled={loadingMore}
+                    className="px-4 py-2 text-xs bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                  >
+                    {loadingMore ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Загрузить ещё'}
+                  </button>
+                </div>
+              )}
+              {messages.map(msg => (
+                <MessageItem
+                  key={msg.id}
+                  msg={msg}
+                  user={user}
+                  isOwn={msg.user_id === user?.id}
+                  isEditing={editingMessageId === msg.id}
+                  editText={editText}
+                  onStartEdit={startEdit}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={cancelEdit}
+                  onDelete={deleteMessage}
+                  onToggleReaction={toggleReaction}
+                  showReactionsPicker={showReactionsPicker}
+                  setShowReactionsPicker={setShowReactionsPicker}
+                  formatMessage={formatMessage}
+                  formatTime={formatTime}
+                  t={t}
+                  language={language}
+                  textareaRef={textareaRef}
+                  readStatusMap={readStatusMap}
+                  onMarkAsRead={markMessageAsRead}
+                  canModerate={canModerate}
+                  onCreateTask={handleCreateTask}
+                />
+              ))}
+              <div ref={messagesEndRef} />
+            </>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
-        {/* Mentions Dropdown */}
+        {typingUsers.length > 0 && (
+          <div className="px-4 py-1 text-xs text-gray-500 italic flex items-center gap-1">
+            <Users className="w-3 h-3" />
+            {typingUsers.map(u => u.name).join(', ')} {t?.('chat.typing') || 'печатает...'}
+          </div>
+        )}
+
+        {attachedFiles.length > 0 && (
+          <div className="px-4 pt-2 pb-1 flex flex-wrap gap-2 border-t border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30">
+            {attachedFiles.map((file, idx) => (
+              <div key={idx} className="relative w-16 h-16 rounded border border-gray-300 dark:border-gray-600 overflow-hidden bg-white dark:bg-gray-700">
+                {file.preview ? (
+                  <img src={file.preview} className="w-full h-full object-cover" alt="preview" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">
+                    <File className="w-5 h-5" />
+                  </div>
+                )}
+                {file.uploading && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  </div>
+                )}
+                <button
+                  onClick={() => setAttachedFiles(prev => prev.filter((_, i) => i !== idx))}
+                  className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 text-white"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {showMentions && filteredMentions.length > 0 && (
           <div className="absolute bottom-28 left-4 right-4 md:left-auto md:right-8 md:w-72 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 z-30 overflow-hidden">
             <div className="p-2 border-b border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30">
@@ -926,28 +1330,19 @@ useEffect(() => {
           </div>
         )}
 
-        {/* Input Area */}
         <div className="p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-white/50 dark:bg-gray-800/50">
           <div className="flex items-end gap-2">
             <label 
-              className={`p-2.5 rounded-xl cursor-pointer transition-all ${
-                uploadingFile 
-                  ? 'bg-gray-200 dark:bg-gray-700 cursor-wait' 
-                  : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300'
-              }`} 
+              className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300" 
               title={t?.('chat.attachFile') || 'Прикрепить файл'}
             >
-              {uploadingFile ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Paperclip className="w-5 h-5" />
-              )}
+              <Paperclip className="w-5 h-5" />
               <input 
                 type="file" 
                 onChange={handleFileUpload} 
-                disabled={uploadingFile} 
                 className="hidden" 
                 accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" 
+                multiple
               />
             </label>
             <div className="flex-1 relative">
@@ -969,33 +1364,30 @@ useEffect(() => {
             </div>
             <button 
               onClick={sendMessage} 
-              disabled={!newMessage.trim() || sending || uploadingFile}
+              disabled={!newMessage.trim() || sending}
               className={`p-2.5 rounded-xl transition-all flex items-center justify-center ${
-                !newMessage.trim() || sending || uploadingFile
+                !newMessage.trim() || sending
                   ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed' 
                   : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white hover:shadow-lg active:scale-95'
               }`}
             >
-              {sending ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5" />
-              )}
+              {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </button>
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400 dark:text-gray-500">
-            <span>
-              <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> — отправить
-            </span>
-            <span>
-              <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Shift+Enter</kbd> — новая строка
-            </span>
-            <span>
-              <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">@</kbd> — упомянуть
-            </span>
+            <span><kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> — отправить</span>
+            <span><kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Shift+Enter</kbd> — новая строка</span>
+            <span><kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">@</kbd> — упомянуть</span>
           </div>
         </div>
       </div>
+
+      <SearchModal
+        isOpen={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+        onSearch={handleSearch}
+        t={t}
+      />
     </div>
   );
 };

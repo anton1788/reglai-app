@@ -1,10 +1,10 @@
 {
-  "currentVersion": "0.0.5",
+  "currentVersion": "0.0.6",
   "releaseDate": "2026-03-23",
   "forceUpdate": false,
   "versions": [
     {
-      "version": "0.0.5",
+      "version": "0.0.6",
       "date": "2026-04-02",
       "title": "вынесена навигационная панель в Navbar",
       "changes": [
