@@ -23,9 +23,11 @@ export const FullscreenModal = ({ isOpen, onClose, title, children, showCloseBut
           )}
         </div>
         
-        {/* Content */}
+        {/* Content - центрированный с ограничением ширины */}
         <div className="flex-1 overflow-y-auto">
-          {children}
+          <div className="max-w-7xl mx-auto w-full px-6 py-6">
+            {children}
+          </div>
         </div>
       </div>
     </div>

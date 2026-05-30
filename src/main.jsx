@@ -8,7 +8,7 @@ import App from './App.jsx'
 import { initOfflineModule, checkOfflineSupport } from './utils/offlineStorage'
 
 // ✅ Версия приложения
-const APP_VERSION = '9.9.4';
+const APP_VERSION = '9.9.5';
 
 // ─────────────────────────────────────────────────────────
 // 🔹 Регистрация Service Worker
