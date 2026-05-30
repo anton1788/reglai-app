@@ -6,7 +6,6 @@
 /* БАЗОВЫЕ СТИЛИ ДЛЯ ВСЕГО ПРИЛОЖЕНИЯ */
 /* ======================================== */
 
-/* Убираем все ограничения */
 * {
   margin: 0;
   padding: 0;
@@ -26,10 +25,9 @@ html, body, #root {
 }
 
 /* ======================================== */
-/* СТИЛИ ДЛЯ НАВИГАЦИИ - ВСЕГДА ПОВЕРХ */
+/* СТИЛИ ДЛЯ НАВИГАЦИИ */
 /* ======================================== */
 
-/* Навигационная панель всегда сверху */
 nav, 
 header,
 [class*="Navbar"],
@@ -40,70 +38,31 @@ header,
 }
 
 /* ======================================== */
-/* СТИЛИ ДЛЯ ВСЕХ МОДАЛЬНЫХ ОКОН */
+/* СТИЛИ ДЛЯ МОДАЛЬНЫХ ОКОН */
 /* ======================================== */
 
-/* Все модальные окна - полный экран, но под навигацией */
 div[class*="fixed inset-0"],
 div[class*="fixed"][class*="inset-0"] {
   padding: 0 !important;
   z-index: 50 !important;
 }
 
-/* Контейнер внутри модального окна */
 div[class*="fixed inset-0"] > div,
 div[class*="fixed"][class*="inset-0"] > div {
   width: 100% !important;
   height: 100% !important;
-  max-width: none !important;
-  max-height: none !important;
   border-radius: 0 !important;
   margin: 0 !important;
 }
 
-/* Убираем скругления у всех окон */
-.rounded-2xl,
-.rounded-xl,
-.rounded-lg {
-  border-radius: 0 !important;
-}
-
-/* Убираем ограничения размеров */
-.max-w-7xl,
-.max-w-6xl,
-.max-w-5xl,
-.max-w-4xl,
-.max-w-3xl,
-.max-w-2xl,
-.max-w-xl {
-  max-width: none !important;
-}
-
-.max-h-\[90vh\],
-.max-h-\[85vh\],
-.max-h-\[80vh\] {
-  max-height: none !important;
-}
-
-/* Затемнение для модальных окон - полупрозрачное */
+/* Затемнение для модальных окон */
 div[class*="bg-black/80"],
 div[class*="bg-black\/80"] {
   background-color: rgba(0, 0, 0, 0.6) !important;
   backdrop-filter: blur(2px);
 }
 
-/* ======================================== */
-/* АДАПТИВНЫЕ СТИЛИ */
-/* ======================================== */
-
-@media (max-width: 768px) {
-  /* На мобильных устройствах */
-  div[class*="fixed inset-0"] > div {
-    padding: 0 !important;
-  }
-}
-
-/* Остальные стили (логотип и т.д.) */
+/* Остальные стили */
 .logo {
   height: 6em;
   padding: 1.5em;
