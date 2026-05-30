@@ -1,4 +1,5 @@
 // src/App.jsx
+/* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 // === ТАРИФЫ И КВОТЫ ===
 import TariffSelector from './components/TariffSelector';
@@ -4016,176 +4017,6 @@ useEffect(() => {
   return () => clearTimeout(timer);
 }, [userCompanyId, userRole, isCompanyOwner, supabase, showNotification]);
 
-  // ─────────────────────────────────────────────────────────
-  // 🎨 RENDER FUNCTIONS
-  // ─────────────────────────────────────────────────────────
-  const renderHeader = () => (
-    <header className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-[10000] page-enter">
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
-          <div className="flex items-center space-x-3">
-            <div className="bg-gradient-to-br from-[#4A6572] to-[#344955] p-2.5 rounded-xl shadow-md">
-              <img
-                src="/icon-512.png"
-                alt="Reglai logo"
-                className="w-6 h-6"
-                style={{ objectFit: 'contain' }}
-              />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold bg-gradient-to-r from-[#4A6572] to-[#344955] bg-clip-text text-transparent">
-                Реглай
-              </h1>
-              {userCompany && !isSuperAdmin(userRole, user?.user_metadata) && (
-  <p className="text-xs text-gray-500 dark:text-gray-400">{userCompany}</p>
-)}
-            </div>
-          </div>
-          <div className="flex items-center space-x-4">
-             {/* ← ДОБАВИТЬ ГЛОБАЛЬНЫЙ ПОИСК ЗДЕСЬ */}
-  {user && (
-    <div className="hidden md:block w-64">
-      <GlobalSearch
-        supabase={supabase}
-        userCompanyId={userCompanyId}
-        onResultSelect={(result) => {
-          if (result.type === 'application') {
-            setSelectedApplication(result.data);
-            setShowReceiveModal(true);
-          } else if (result.type === 'user') {
-            setCurrentView('employees');
-          } else if (result.type === 'company') {
-            setCurrentView('employees');
-          }
-        }}
-        t={t}
-        showNotification={showNotification}
-      />
-    </div>
-  )}
-            <button
-              onClick={handleLanguageChange}
-              className="p-2 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
-              aria-label={language === 'ru' ? 'Switch to English' : 'Переключить на русский'}
-            >
-              <Globe className="w-5 h-5" aria-hidden="true" />
-            </button>
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
-              aria-label={theme === 'dark' ? t('toggleLightMode') : t('toggleDarkMode')}
-            >
-              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-            {/* ✅ ИСПРАВЛЕНО: Кнопка приглашения теперь видна на мобильных */}
-            {(userRole === 'manager' || userRole === 'supply_admin' || userRole === 'client_manager' || isCompanyOwner) && (
-  <button
-    onClick={() => {
-      handleABTestClick('invite_button', 'invite_click');
-      setShowInviteModal(true);
-    }}
-    className={`flex items-center ${
-      abTestVariants.invite_button === 'icon_only'
-        ? 'space-x-0 px-3 py-2'
-        : 'space-x-2 px-3 py-2'
-    } bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white text-sm font-medium rounded-xl hover:shadow-md transition-shadow`}
-    aria-label={t('inviteUser')}
-  >
-    <User className="w-4 h-4" />
-    {abTestVariants.invite_button !== 'icon_only' && (
-      <span className="hidden sm:inline">{t('inviteUser')}</span>
-    )}
-  </button>
-)}
-            {user && (
-              <div className="flex items-center space-x-2">
-                {!isOnline ? (
-                  <div className="flex items-center px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-lg text-xs font-medium animate-pulse">
-                    <WifiOff className="w-4 h-4 mr-1" />
-                    <span>{t('offlineMode')}</span>
-                    {offlineDrafts.length > 0 && (
-                      <span className="ml-1">({formatNumber(offlineDrafts.length)} {t('drafts')})</span>
-                    )}
-                  </div>
-                ) : syncProgress.total > 0 && syncProgress.current < syncProgress.total ? (
-                  <div className="flex items-center px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-lg text-xs font-medium">
-                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                    <span>{formatNumber(syncProgress.current)}/{formatNumber(syncProgress.total)} {t('sendingDrafts')}</span>
-                  </div>
-                ) : null}
-                <button
-                  onClick={forceReload}
-                  className="px-3 py-1.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center gap-1 transition-colors"
-                  title="Перезагрузить данные"
-                  aria-label={t('refreshData') || 'Обновить данные'}
-                >
-                  <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span className="hidden sm:inline">{t('refreshData') || 'Обновить'}</span>
-                </button>
-              </div>
-            )}
-            {user && (
-              <div className="relative" ref={profileMenuRef}>
-                <button
-  onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-  data-profile-menu  // ← ДОБАВИТЬ ЭТУ СТРОКУ
-  className="flex items-center space-x-2 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors border border-gray-200/50 dark:border-gray-700/50"
-  aria-label={t('myData')}
->
-                  <div className="w-8 h-8 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-lg flex items-center justify-center">
-                    <User className="w-4 h-4 text-white" aria-hidden="true" />
-                  </div>
-                  <div className="hidden sm:block text-left">
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {profileDataForHeader.fullName || user?.email?.split('@')[0]}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {getRoleLabel(userRole)}
-                    </p>
-                  </div>
-                </button>
-                {profileMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-lg py-2 z-50 border border-gray-200/50 dark:border-gray-700/50 fade-enter">
-                    <button
-                      onClick={() => setCurrentView('profile')}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-[#4A6572] dark:hover:text-[#F9AA33]"
-                    >
-                      {t('myData')}
-                    </button>
-                    <button
-                      onClick={handleLogout}
-                      className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                    >
-                      {t('logout')}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-            {!user && (
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => setCurrentView('login')}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-[#4A6572] dark:hover:text-[#F9AA33] hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-xl transition-colors"
-                >
-                  {t('login')}
-                </button>
-                <button
-                  onClick={() => setShowSignupModal(true)}
-                  className="px-4 py-2 text-sm font-medium bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl hover:shadow-md transition-shadow"
-                >
-                  {t('signup')}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </header>
-  );
-
-
-
   const renderLandingPage = () => (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#F5F7FA] via-white to-[#E4EDF5] page-enter">
       <div className="absolute inset-0 overflow-hidden">
@@ -5477,7 +5308,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-bl from-[#F9AA33]/5 to-transparent rounded-full blur-3xl"></div>
       <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-[#4A6572]/5 to-transparent rounded-full blur-3xl"></div>
     </div>
-    {renderHeader()}
     <Navbar
       user={user}
       companyName={userCompany}
