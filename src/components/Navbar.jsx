@@ -7,7 +7,9 @@ import {
   Building, CreditCard, Truck, Calendar, MessageCircle,
   Plus, Download, Upload, RefreshCw, UserPlus, Briefcase,
   CheckCircle, Archive, ShoppingCart, Code, Shield, Sparkles,
-  Globe, WifiOff, Loader2
+  Globe, WifiOff, Loader2, History, Eye, Clock, AlertCircle,
+  Target, TrendingUp, PieChart, Box, Layers, ShoppingBag,
+  Award, Zap, Star, Heart, MapPin, Phone, Mail, Link
 } from 'lucide-react';
 
 const Navbar = ({ 
@@ -18,22 +20,21 @@ const Navbar = ({
   onNavigate, 
   currentPage,
   onInvite,
-  // eslint-disable-next-line no-unused-vars
-  onInviteClient,
   onOpenTariffs,
   onOpenCompanyProfile,
   isOnline,
   offlineDraftsCount,
   theme,
   onToggleTheme,
-  // eslint-disable-next-line no-unused-vars
-  language,
   onToggleLanguage,
-  // eslint-disable-next-line no-unused-vars
-  t,
   notifications = [],
   onMarkNotificationRead,
-  onClearNotifications
+  onClearNotifications,
+  // Дополнительные пропсы для полной функциональности
+  pendingApprovalsCount = 0,
+  cartItemsCount = 0,
+  isAdminMode = false,
+  onToggleAdminMode
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -91,12 +92,94 @@ const Navbar = ({
       accountant: 'Бухгалтер',
       client: 'Заказчик',
       client_manager: 'Менеджер по клиентам',
-      director: 'Директор'
+      director: 'Директор',
+      super_admin: 'Супер Админ'
     };
     return roles[userRole] || userRole;
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Все пункты навигации в зависимости от роли
+  const getNavItems = () => {
+    const items = [];
+
+    // Главная
+    items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
+
+    // Заявки - для всех
+    items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
+
+    // В работе и история - для мастера и прораба
+    if (userRole === 'master' || userRole === 'foreman') {
+      items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
+      items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
+    }
+
+    // Склад - для менеджера, снабженца, прораба
+    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman') {
+      items.push({ id: 'warehouse', label: 'Склад', icon: Package, path: '/warehouse' });
+    }
+
+    // Клиенты - для менеджера и владельца
+    if (userRole === 'manager' || userRole === 'client_manager') {
+      items.push({ id: 'clients', label: 'Клиенты', icon: Users, path: '/clients' });
+    }
+
+    // Аналитика - для всех с правами
+    items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
+
+    // Документы - для всех
+    items.push({ id: 'documents', label: 'Документы', icon: FileText, path: '/documents' });
+
+    // Чат - для всех
+    items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
+
+    // Календарь - для всех
+    items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
+
+    // Согласование - для руководителя
+    if (userRole === 'manager' || userRole === 'director') {
+      items.push({ 
+        id: 'approvals', 
+        label: `Согласование ${pendingApprovalsCount > 0 ? `(${pendingApprovalsCount})` : ''}`, 
+        icon: CheckCircle, 
+        path: '/approvals' 
+      });
+    }
+
+    // Сотрудники - для менеджера
+    if (userRole === 'manager') {
+      items.push({ id: 'employees', label: 'Сотрудники', icon: Users, path: '/employees' });
+    }
+
+    // Корзина - если есть товары
+    if (cartItemsCount > 0) {
+      items.push({ id: 'cart', label: `Корзина (${cartItemsCount})`, icon: ShoppingCart, path: '/cart' });
+    }
+
+    // API - для менеджера
+    if (userRole === 'manager') {
+      items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
+    }
+
+    // Аудит - с правами
+    items.push({ id: 'audit', label: 'Аудит', icon: Eye, path: '/audit' });
+
+    // Задачи
+    items.push({ id: 'tasks', label: 'Задачи', icon: Target, path: '/tasks' });
+
+    // Заказчик
+    if (userRole === 'client') {
+      items.push({ id: 'clientDashboard', label: 'Мой объект', icon: Home, path: '/client' });
+      items.push({ id: 'clientDocuments', label: 'Мои документы', icon: FileText, path: '/client/documents' });
+      items.push({ id: 'clientChat', label: 'Чат с прорабом', icon: MessageCircle, path: '/client/chat' });
+    }
+
+    return items;
+  };
+
+  const navItems = getNavItems();
 
   return (
     <nav className="bg-white dark:bg-gray-900 shadow-lg sticky top-0 z-50 w-full">
@@ -164,6 +247,19 @@ const Navbar = ({
               </div>
             )}
 
+            {/* Режим админа */}
+            {isAdminMode && (
+              <div className="flex items-center px-2 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 rounded-lg text-xs font-medium">
+                <Shield className="w-3 h-3 mr-1" />
+                <span className="hidden sm:inline">Админ режим</span>
+                {onToggleAdminMode && (
+                  <button onClick={onToggleAdminMode} className="ml-1 text-xs underline">
+                    Выйти
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Быстрые действия */}
             <div className="relative group">
               <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
@@ -192,6 +288,13 @@ const Navbar = ({
                   >
                     <Package className="w-4 h-4 text-orange-500" />
                     Управление складом
+                  </button>
+                  <button 
+                    onClick={() => { onNavigate?.('/documents'); setIsMobileMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  >
+                    <FileText className="w-4 h-4 text-purple-500" />
+                    Создать документ
                   </button>
                 </div>
               </div>
@@ -318,6 +421,15 @@ const Navbar = ({
                       <Sparkles className="w-4 h-4 text-yellow-500" />
                       Тарифы
                     </button>
+                    {userRole === 'super_admin' && (
+                      <button 
+                        onClick={() => { onNavigate?.('/superAdmin'); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                      >
+                        <Shield className="w-4 h-4 text-purple-500" />
+                        Панель администратора
+                      </button>
+                    )}
                     <hr className="my-2 border-gray-200 dark:border-gray-700" />
                     <button 
                       onClick={() => { onNavigate?.('/settings'); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
@@ -349,6 +461,48 @@ const Navbar = ({
         </div>
       </div>
 
+      {/* Десктопная навигация - горизонтальное меню */}
+      <div className="hidden lg:block border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+        <div className="w-full px-4">
+          <div className="flex overflow-x-auto no-scrollbar gap-1 py-2">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentPage === item.id || 
+                (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
+                (item.id === 'clients' && currentPage === 'clientDashboard');
+              
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    onNavigate?.(item.path);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`group relative flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 whitespace-nowrap ${
+                    isActive
+                      ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33] border border-[#4A6572]/20 dark:border-[#F9AA33]/20'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 hover:text-[#4A6572] dark:hover:text-[#F9AA33]'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="text-sm font-medium">{item.label}</span>
+                  {item.id === 'approvals' && pendingApprovalsCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {pendingApprovalsCount}
+                    </span>
+                  )}
+                  {item.id === 'cart' && cartItemsCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {cartItemsCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Мобильное меню */}
       {isMobileMenuOpen && (
         <div className="lg:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 fade-enter max-h-[calc(100vh-64px)] overflow-y-auto">
@@ -367,73 +521,76 @@ const Navbar = ({
           </form>
           
           <div className="p-2">
-            {/* Основные разделы */}
-            <div className="space-y-1">
-              <p className="px-3 pt-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Основные</p>
-              <NavMobileItem icon={Home} label="Главная" onClick={() => onNavigate?.('/')} current={currentPage === 'dashboard'} />
-              <NavMobileItem icon={ClipboardList} label="Заявки" onClick={() => onNavigate?.('/applications')} current={currentPage === 'applications'} />
-              <NavMobileItem icon={Package} label="Склад" onClick={() => onNavigate?.('/warehouse')} current={currentPage === 'warehouse'} />
-              <NavMobileItem icon={Users} label="Клиенты" onClick={() => onNavigate?.('/clients')} current={currentPage === 'clients'} />
-              <NavMobileItem icon={BarChart3} label="Аналитика" onClick={() => onNavigate?.('/analytics')} current={currentPage === 'analytics'} />
-            </div>
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentPage === item.id ||
+                (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history'));
+              
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    onNavigate?.(item.path);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-sm rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {item.id === 'approvals' && pendingApprovalsCount > 0 && (
+                    <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
+                      {pendingApprovalsCount}
+                    </span>
+                  )}
+                  {item.id === 'cart' && cartItemsCount > 0 && (
+                    <span className="px-2 py-0.5 bg-orange-500 text-white text-xs rounded-full">
+                      {cartItemsCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
             
             <hr className="my-3 border-gray-100 dark:border-gray-800" />
             
-            {/* Инструменты */}
-            <div className="space-y-1">
-              <p className="px-3 pt-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Инструменты</p>
-              <NavMobileItem icon={MessageCircle} label="Чат" onClick={() => onNavigate?.('/chat')} current={currentPage === 'chat'} />
-              <NavMobileItem icon={Calendar} label="Календарь" onClick={() => onNavigate?.('/calendar')} current={currentPage === 'calendar'} />
-              <NavMobileItem icon={FileText} label="Документы" onClick={() => onNavigate?.('/documents')} current={currentPage === 'documents'} />
-            </div>
-            
+            {/* Дополнительные действия в мобильном меню */}
+            <button
+              onClick={() => { onInvite?.(); setIsMobileMenuOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+            >
+              <UserPlus className="w-5 h-5 text-green-500" />
+              Пригласить сотрудника
+            </button>
+            <button
+              onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+            >
+              <Sparkles className="w-5 h-5 text-yellow-500" />
+              Тарифы
+            </button>
+            <button
+              onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+            >
+              <Building className="w-5 h-5" />
+              Реквизиты
+            </button>
             <hr className="my-3 border-gray-100 dark:border-gray-800" />
-            
-            {/* Управление */}
-            <div className="space-y-1">
-              <p className="px-3 pt-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Управление</p>
-              <NavMobileItem icon={UserPlus} label="Пригласить" onClick={() => { onInvite?.(); setIsMobileMenuOpen(false); }} />
-              <NavMobileItem icon={Building} label="Реквизиты" onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }} />
-              <NavMobileItem icon={Sparkles} label="Тарифы" onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }} />
-            </div>
-            
-            <hr className="my-3 border-gray-100 dark:border-gray-800" />
-            
-            {/* Профиль */}
-            <div className="space-y-1">
-              <NavMobileItem icon={User} label="Профиль" onClick={() => { onNavigate?.('/profile'); setIsMobileMenuOpen(false); }} />
-              <NavMobileItem icon={Settings} label="Настройки" onClick={() => { onNavigate?.('/settings'); setIsMobileMenuOpen(false); }} />
-              <button
-                onClick={onLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-              >
-                <LogOut className="w-5 h-5" />
-                Выйти
-              </button>
-            </div>
+            <button
+              onClick={onLogout}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+            >
+              <LogOut className="w-5 h-5" />
+              Выйти
+            </button>
           </div>
         </div>
       )}
     </nav>
-  );
-};
-
-// Компонент для мобильного меню
-const NavMobileItem = ({ icon: Icon, label, onClick, current }) => {
-  // Icon используется, но ESLint не видит из-за деструктуризации
-  const IconComponent = Icon;
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-sm rounded-lg transition-colors ${
-        current 
-          ? 'bg-[#4A6572]/10 text-[#4A6572] dark:text-[#F9AA33]' 
-          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-      }`}
-    >
-      <IconComponent className="w-5 h-5" />
-      {label}
-    </button>
   );
 };
 
