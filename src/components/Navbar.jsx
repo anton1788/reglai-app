@@ -3,14 +3,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, X, Search, User, LogOut, Settings, HelpCircle, 
   Bell, ChevronDown, Home, Package, ClipboardList, 
-  Users, BarChart3, FileText, FolderOpen, Moon, Sun,
-  Building, CreditCard, Truck, Calendar, MessageCircle,
-  Plus, Download, Upload, RefreshCw, UserPlus, Briefcase,
-  CheckCircle, Archive, ShoppingCart, Code, Shield, Sparkles,
-  Globe, WifiOff, Loader2, History, Eye, Clock, AlertCircle,
-  Target, TrendingUp, PieChart, Box, Layers, ShoppingBag,
-  Award, Zap, Star, Heart, MapPin, Phone, Mail, Link,
-  ChevronLeft, ChevronRight
+  Users, BarChart3, FileText, Moon, Sun,
+  Building, Calendar, MessageCircle,
+  Plus, UserPlus, Briefcase,
+  CheckCircle, ShoppingCart, Code, Shield, Sparkles,
+  Globe, WifiOff, History, Eye, Clock,
+  Target, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 const Navbar = ({ 
@@ -90,7 +88,7 @@ const Navbar = ({
     checkScroll();
     window.addEventListener('resize', checkScroll);
     return () => window.removeEventListener('resize', checkScroll);
-  }, [navItems]);
+  }, []);
 
   const scrollNav = (direction) => {
     if (navScrollRef.current) {
