@@ -92,6 +92,8 @@ const canDeleteMessage = (msg, userId, userRole) => {
 // ─────────────────────────────────────────────────────────────
 // 🧩 CreateChannelModal Component
 // ─────────────────────────────────────────────────────────────
+// Замените компонент CreateChannelModal на этот исправленный:
+
 const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUser, t }) => {
   const [channelName, setChannelName] = useState('');
   const [description, setDescription] = useState('');
@@ -155,18 +157,24 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+      <div className="w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col my-8">
+        {/* Header - фиксированный */}
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0 bg-white dark:bg-gray-800">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Plus className="w-5 h-5 text-[#4A6572]" />
             {t?.('chat.createChannel') || 'Создать канал'}
           </h3>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+          <button 
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            aria-label="Закрыть"
+          >
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
+        {/* Form - прокручиваемый */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
@@ -186,6 +194,7 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
               placeholder={t?.('chat.channelNamePlaceholder') || 'Например: Проект А...'}
               className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent text-sm"
               maxLength={50}
+              autoFocus
             />
           </div>
 
@@ -316,6 +325,7 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
           )}
         </form>
 
+        {/* Footer - фиксированный */}
         <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3 bg-gray-50/50 dark:bg-gray-900/30 flex-shrink-0">
           <button
             type="button"
