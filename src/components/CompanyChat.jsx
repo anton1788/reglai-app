@@ -45,8 +45,8 @@ const SYSTEM_CHANNELS = [
   { id: 'announcements', label: '📢 Объявления', icon: '📢', description: 'Важные объявления', type: CHANNEL_TYPES.SYSTEM, adminOnly: true, roles: [ROLES.SUPER_ADMIN, ROLES.MANAGER, ROLES.SUPPLY_ADMIN] }
 ];
 
-const REACTION_EMOJIS = Object.freeze(['👍', '❤️', '😂', '', '😢', '', '🎉', '🤔']);
-const CHANNEL_ICONS = ['💬', '📦', '👷', '📢', '', '📋', '🎯', '💡', '🚀', '⭐'];
+const REACTION_EMOJIS = Object.freeze(['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '🤔']);
+const CHANNEL_ICONS = ['💬', '📦', '👷', '📢', '⭐', '📋', '🎯', '💡', '🚀', '🎨'];
 
 // ─────────────────────────────────────────────────────────────
 // 🧩 Helper: Проверка прав доступа
@@ -90,7 +90,7 @@ const canDeleteMessage = (msg, userId, userRole) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🧩 CreateChannelModal Component (FIXED)
+// 🧩 CreateChannelModal Component
 // ─────────────────────────────────────────────────────────────
 const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUser, t }) => {
   const [channelName, setChannelName] = useState('');
@@ -157,22 +157,16 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header - фиксированный */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Plus className="w-5 h-5 text-[#4A6572]" />
             {t?.('chat.createChannel') || 'Создать канал'}
           </h3>
-          <button 
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            aria-label="Закрыть"
-          >
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
-        {/* Form - прокручиваемый */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
@@ -296,7 +290,6 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
                         className={`w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
                           isSelected ? 'bg-[#4A6572]/5' : ''
                         }`}
-                        aria-pressed={isSelected}
                       >
                         <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
                           isSelected ? 'bg-[#4A6572] border-[#4A6572]' : 'border-gray-300 dark:border-gray-600'
@@ -323,7 +316,6 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
           )}
         </form>
 
-        {/* Footer - фиксированный */}
         <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3 bg-gray-50/50 dark:bg-gray-900/30 flex-shrink-0">
           <button
             type="button"
@@ -385,21 +377,6 @@ const ChannelSettingsModal = ({ isOpen, onClose, channel, companyUsers, currentU
     }
   }, [isOpen, channel?.id, loadMembers]);
 
-  const handleAddMember = async (userId) => {
-    try {
-      await onAddMember(channel.id, userId);
-      loadMembers();
-    } catch (err) { console.error('❌ Add member error:', err); }
-  };
-
-  const handleRemoveMember = async (userId) => {
-    if (!window.confirm(t?.('chat.confirmRemoveMember') || 'Удалить участника?')) return;
-    try {
-      await onRemoveMember(channel.id, userId);
-      loadMembers();
-    } catch (err) { console.error('❌ Remove member error:', err); }
-  };
-
   const availableUsers = useMemo(() => {
     const memberIds = members.map(m => m.user_id);
     return companyUsers.filter(u => !memberIds.includes(u.user_id) && u.user_id !== currentUser?.id);
@@ -420,7 +397,7 @@ const ChannelSettingsModal = ({ isOpen, onClose, channel, companyUsers, currentU
           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <span className="text-xl">{channel.icon}</span>{channel.name}
           </h3>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg" aria-label="Закрыть">
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
@@ -447,10 +424,10 @@ const ChannelSettingsModal = ({ isOpen, onClose, channel, companyUsers, currentU
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {userData?.full_name}{isCreator && <span className="ml-2 text-[10px] text-[#F9AA33]">создатель</span>}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{userData?.role} • {member.role}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{userData?.role}</p>
                       </div>
                       {!isCreator && !isCurrentUser && canManageChannel(channel, currentUser?.id, currentUser?.user_metadata?.role) && (
-                        <button onClick={() => handleRemoveMember(member.user_id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title={t?.('chat.removeMember') || 'Удалить'}>
+                        <button onClick={() => onRemoveMember(channel.id, member.user_id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
                           <X className="w-4 h-4" />
                         </button>
                       )}
@@ -473,7 +450,7 @@ const ChannelSettingsModal = ({ isOpen, onClose, channel, companyUsers, currentU
                   <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">{t?.('chat.noMoreUsers') || 'Нет доступных пользователей'}</p>
                 ) : (
                   filteredAvailableUsers.map(user => (
-                    <button key={user.user_id} onClick={() => handleAddMember(user.user_id)} className="w-full px-3 py-2 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg transition-colors text-left">
+                    <button key={user.user_id} onClick={() => onAddMember(channel.id, user.user_id)} className="w-full px-3 py-2 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg transition-colors text-left">
                       <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center">
                         <span className="text-white text-xs font-medium">{user.full_name?.[0]?.toUpperCase() || '?'}</span>
                       </div>
@@ -535,8 +512,8 @@ const MessageItem = memo(function MessageItem({
             <div className="flex gap-2 items-start">
               <textarea ref={textareaRef} value={editText} onChange={(e) => onStartEdit({ ...msg, message: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSaveEdit(msg.id); } if (e.key === 'Escape') onCancelEdit(); }} className="flex-1 bg-black/10 dark:bg-white/10 rounded-lg px-2 py-1 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#F9AA33] min-h-[60px]" rows={2} autoFocus />
               <div className="flex flex-col gap-1">
-                <button onClick={() => onSaveEdit(msg.id)} className="p-1 hover:bg-green-500/20 text-green-600 rounded-lg" aria-label="Сохранить"><Check className="w-4 h-4" /></button>
-                <button onClick={onCancelEdit} className="p-1 hover:bg-red-500/20 text-red-600 rounded-lg" aria-label="Отмена"><X className="w-4 h-4" /></button>
+                <button onClick={() => onSaveEdit(msg.id)} className="p-1 hover:bg-green-500/20 text-green-600 rounded-lg"><Check className="w-4 h-4" /></button>
+                <button onClick={onCancelEdit} className="p-1 hover:bg-red-500/20 text-red-600 rounded-lg"><X className="w-4 h-4" /></button>
               </div>
             </div>
           ) : (
@@ -551,13 +528,13 @@ const MessageItem = memo(function MessageItem({
           {!isDeleted && !isEditing && (
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="relative">
-                <button onClick={() => setShowReactionsPicker?.(showReactionsPicker === msg.id ? null : msg.id)} className="p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded-full" aria-label="Реакция"><Smile className="w-3.5 h-3.5 text-gray-500" /></button>
+                <button onClick={() => setShowReactionsPicker?.(showReactionsPicker === msg.id ? null : msg.id)} className="p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded-full"><Smile className="w-3.5 h-3.5 text-gray-500" /></button>
                 {showReactionsPicker === msg.id && (
                   <div className="absolute bottom-full left-0 mb-2 p-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 flex flex-wrap gap-1 z-50">
                     {REACTION_EMOJIS.map(emoji => {
                       const hasReacted = msg.reactions?.some(r => r.emoji === emoji && r.user_id === user?.id);
                       return (
-                        <button key={emoji} onClick={() => onToggleReaction?.(msg.id, emoji)} className={`p-2 rounded-lg transition-all text-lg ${hasReacted ? 'bg-[#4A6572]/10 scale-110' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`} aria-pressed={hasReacted}>{emoji}</button>
+                        <button key={emoji} onClick={() => onToggleReaction?.(msg.id, emoji)} className={`p-2 rounded-lg transition-all text-lg ${hasReacted ? 'bg-[#4A6572]/10 scale-110' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>{emoji}</button>
                       );
                     })}
                   </div>
@@ -565,8 +542,8 @@ const MessageItem = memo(function MessageItem({
               </div>
               {(canEdit || canDelete) && (
                 <div className="flex items-center pl-1 border-l border-gray-300 dark:border-gray-600 ml-1">
-                  {canEdit && <button onClick={() => onStartEdit?.(msg)} className="p-1 hover:bg-blue-100/50 rounded text-blue-500" aria-label="Редактировать"><Edit2 className="w-3.5 h-3.5" /></button>}
-                  {canDelete && <button onClick={() => onDelete?.(msg.id)} className="p-1 hover:bg-red-100/50 rounded text-red-500" aria-label="Удалить"><Trash2 className="w-3.5 h-3.5" /></button>}
+                  {canEdit && <button onClick={() => onStartEdit?.(msg)} className="p-1 hover:bg-blue-100/50 rounded text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>}
+                  {canDelete && <button onClick={() => onDelete?.(msg.id)} className="p-1 hover:bg-red-100/50 rounded text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>}
                 </div>
               )}
             </div>
@@ -577,7 +554,7 @@ const MessageItem = memo(function MessageItem({
             {Object.entries(reactionCounts).map(([emoji, count]) => {
               const hasReacted = msg.reactions?.some(r => r.emoji === emoji && r.user_id === user?.id);
               return (
-                <button key={`${msg.id}-${emoji}`} onClick={() => onToggleReaction?.(msg.id, emoji)} className={`px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 transition-all ${hasReacted ? 'bg-[#4A6572]/10 text-[#4A6572] dark:text-[#F9AA33]' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200'}`} aria-pressed={hasReacted}>{emoji} <span className="opacity-80">{count}</span></button>
+                <button key={`${msg.id}-${emoji}`} onClick={() => onToggleReaction?.(msg.id, emoji)} className={`px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 transition-all ${hasReacted ? 'bg-[#4A6572]/10 text-[#4A6572] dark:text-[#F9AA33]' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200'}`}>{emoji} <span className="opacity-80">{count}</span></button>
               );
             })}
           </div>
@@ -600,10 +577,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editText, setEditText] = useState('');
   const [showReactionsPicker, setShowReactionsPicker] = useState(null);
-  const [showMentions, setShowMentions] = useState(false); // eslint-disable-line no-unused-vars
-  const [mentionQuery, setMentionQuery] = useState('');
   const [companyUsers, setCompanyUsers] = useState([]);
-  const [uploadingFile, setUploadingFile] = useState(false); // eslint-disable-line no-unused-vars
   const [connectionStatus, setConnectionStatus] = useState('connected');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -765,7 +739,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       if (error) throw error;
       if (mentionedUsers.length > 0 && data?.id) await supabase.from('message_mentions').insert(mentionedUsers.map(u => ({ message_id: data.id, mentioned_user_id: u.user_id, created_at: new Date().toISOString() })));
       try { const userCtx = getUserContext(user, null, userRole, safeCompanyId); await logChatAccess(supabase, userCtx, 'send_message'); } catch (auditErr) { console.warn('[CHAT] Аудит не записан:', auditErr); }
-      setNewMessage(''); setShowMentions(false); textareaRef.current?.focus();
+      setNewMessage(''); textareaRef.current?.focus();
     } catch (err) { console.error('❌ Send error:', err); showNotification?.(t?.('chat.sendError') || 'Не удалось отправить', 'error'); } finally { setSending(false); }
   }, [newMessage, user, userCompanyId, activeChannel, companyUsers, sending, showNotification, t, userRole, channels]);
 
@@ -788,10 +762,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
   const handleTextareaChange = useCallback((e) => {
     const value = e.target.value; setNewMessage(value);
-    if (value.includes('@')) {
-      if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
-      mentionTimerRef.current = setTimeout(() => { const match = value.match(/@([^\s,;!?.]+)$/); if (match) { setShowMentions(true); setMentionQuery(match[0]); } else { setShowMentions(false); } }, 100);
-    } else { setShowMentions(false); }
     e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
   }, []);
 
@@ -800,7 +770,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (editingMessageId) saveEdit(editingMessageId); else sendMessage(); return; }
-    if (e.key === 'Escape') { setShowMentions(false); setShowReactionsPicker(null); if (editingMessageId) cancelEdit(); }
+    if (e.key === 'Escape') { setShowReactionsPicker(null); if (editingMessageId) cancelEdit(); }
   }, [editingMessageId, sendMessage, saveEdit, cancelEdit]);
 
   const startEdit = useCallback((message) => { if (!canEditMessage(message, user?.id, userRole)) return; setEditingMessageId(message.id); setEditText(message.content); setTimeout(() => textareaRef.current?.focus(), 50); }, [user?.id, userRole]);
@@ -814,7 +784,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     if (file.size > maxSize) { showNotification?.(t?.('chat.fileTooLarge') || 'Файл слишком большой (макс. 10MB)', 'error'); if (e?.target) e.target.value = ''; return; }
     if (!allowedTypes.includes(file.type)) { showNotification?.(t?.('chat.fileTypeNotAllowed') || 'Недопустимый тип файла', 'error'); if (e?.target) e.target.value = ''; return; }
-    setUploadingFile(true);
     try {
       const fileName = `${userCompanyId}/${Date.now()}_${file.name.replace(/[^a-z0-9.-]/gi, '_')}`;
       const { error: uploadError } = await supabase.storage.from('chat-attachments').upload(fileName, file, { upsert: false });
@@ -823,15 +792,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       const fileLink = `\n📎 [${file.name}](${publicUrl})`;
       setNewMessage(prev => prev + fileLink);
       showNotification?.(t?.('chat.fileAttached') || 'Файл прикреплён', 'success');
-    } catch (err) { console.error('❌ Upload error:', err); showNotification?.(t?.('chat.uploadError') || 'Не удалось загрузить файл', 'error'); } finally { setUploadingFile(false); if (e?.target) e.target.value = ''; }
+    } catch (err) { console.error('❌ Upload error:', err); showNotification?.(t?.('chat.uploadError') || 'Не удалось загрузить файл', 'error'); } finally { if (e?.target) e.target.value = ''; }
   }, [userCompanyId, showNotification, t]);
 
-  // eslint-disable-next-line no-unused-vars
-  const filteredMentions = useMemo(() => { if (!mentionQuery.trim() || mentionQuery === '@') return companyUsers.slice(0, 5); const query = mentionQuery.toLowerCase().replace('@', '').trim(); return companyUsers.filter(u => u.full_name?.toLowerCase().includes(query)).slice(0, 5); }, [mentionQuery, companyUsers]);
-  // eslint-disable-next-line no-unused-vars
-  const insertMention = useCallback((userName) => { setNewMessage(prev => prev.replace(/@([^\s]*)$/, `@${userName} `)); setShowMentions(false); setMentionQuery(''); textareaRef.current?.focus(); }, []);
-
-  // ✅ Исправленный cleanup-эффект для formatCacheRef
   useEffect(() => {
     const cacheRef = formatCacheRef;
     const timerRef = mentionTimerRef;
@@ -843,7 +806,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       if (cache && typeof cache.clear === 'function') cache.clear();
       if (subRef.current) subRef.current.unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const currentChannel = [...SYSTEM_CHANNELS, ...channels].find(c => c.id === activeChannel);
@@ -851,58 +813,183 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const canManageCurrentChannel = currentChannel && canManageChannel(currentChannel, user?.id, userRole);
 
   return (
-    <div className="flex h-[calc(100vh-140px)] bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-      <aside className="w-64 border-r border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30 p-4 hidden md:flex flex-col">
-        <div className="flex items-center justify-between mb-4 px-2">
-          <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2"><MessageCircle className="w-4 h-4" /> {t?.('chat.channels') || 'Каналы'}</h3>
-          {canCreateChannel(userRole) && <button onClick={() => setShowCreateModal(true)} className="p-1.5 hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 rounded-lg text-[#4A6572] dark:text-[#F9AA33] transition-colors" title={t?.('chat.createChannel') || 'Создать канал'} aria-label="Создать канал"><Plus className="w-4 h-4" /></button>}
-        </div>
-        <nav className="space-y-1 flex-1 overflow-y-auto">
-          {allChannels.map(channel => {
-            const isActive = activeChannel === channel.id;
-            const isSystem = channel.type === CHANNEL_TYPES.SYSTEM;
-            return (
-              <button key={channel.id} onClick={() => setActiveChannel(channel.id)} className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${isActive ? 'bg-[#4A6572] text-white shadow-md' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'}`} aria-current={isActive ? 'page' : undefined}>
-                <span className="text-lg">{channel.icon}</span><span className="truncate flex-1">{channel.label || channel.name}</span>
-                {(!isSystem && channel.is_private || isSystem && channel.adminOnly) && <Shield className={`w-3 h-3 ${isActive ? 'text-white/80' : 'text-gray-400'}`} />}
+    <div className="flex flex-col w-full h-full bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Sidebar Desktop */}
+        <aside className="w-64 border-r border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30 p-4 hidden md:flex flex-col overflow-y-auto">
+          <div className="flex items-center justify-between mb-4 px-2 flex-shrink-0">
+            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+              <MessageCircle className="w-4 h-4" /> {t?.('chat.channels') || 'Каналы'}
+            </h3>
+            {canCreateChannel(userRole) && (
+              <button onClick={() => setShowCreateModal(true)} className="p-1.5 hover:bg-[#4A6572]/10 rounded-lg text-[#4A6572] transition-colors">
+                <Plus className="w-4 h-4" />
               </button>
-            );
-          })}
-        </nav>
-        {isCustomChannel && canManageCurrentChannel && <button onClick={() => { setActiveCustomChannel(currentChannel); setShowSettingsModal(true); }} className="mt-3 px-3 py-2 text-xs text-gray-500 dark:text-gray-400 hover:text-[#4A6572] dark:hover:text-[#F9AA33] flex items-center gap-2 transition-colors"><Settings className="w-3.5 h-3.5" />{t?.('chat.channelSettings') || 'Настройки'}</button>}
-        <div className="mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50 px-2"><div className="flex items-center gap-2 text-xs"><span className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} /><span className="text-gray-500 dark:text-gray-400">{connectionStatus === 'connected' ? 'Онлайн' : 'Оффлайн'}</span></div></div>
-      </aside>
-
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="px-4 py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="md:hidden"><select value={activeChannel} onChange={(e) => setActiveChannel(e.target.value)} className="text-sm bg-gray-100 dark:bg-gray-700 rounded-lg px-2 py-1">{allChannels.map(ch => <option key={ch.id} value={ch.id}>{ch.label || ch.name}</option>)}</select></div>
-            <div className="flex items-center gap-3"><span className="text-2xl bg-gray-100 dark:bg-gray-700 w-10 h-10 rounded-full flex items-center justify-center">{currentChannel?.icon}</span><div><h2 className="font-bold text-gray-900 dark:text-white">{currentChannel?.label || currentChannel?.name}</h2><p className="text-xs text-gray-500 dark:text-gray-400">{currentChannel?.description}</p></div></div>
+            )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-gray-500"><MessageCircle className="w-4 h-4" /><span>{messages.length}</span></div>
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {loading ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-[#4A6572]" /></div> : messages.length === 0 ? <div className="text-center py-12 text-gray-500"><p>{t?.('chat.noMessages') || 'Нет сообщений'}</p></div> : messages.map(msg => <MessageItem key={msg.id} msg={msg} user={user} userRole={userRole} isOwn={msg.user_id === user?.id} isEditing={editingMessageId === msg.id} editText={editText} onStartEdit={startEdit} onSaveEdit={saveEdit} onCancelEdit={cancelEdit} onDelete={deleteMessage} onToggleReaction={toggleReaction} showReactionsPicker={showReactionsPicker} setShowReactionsPicker={setShowReactionsPicker} formatMessage={formatMessage} formatTime={formatTime} t={t} language={language} textareaRef={textareaRef} />)}
-          <div ref={messagesEndRef} />
-        </div>
-
-        <div className="p-4 border-t border-gray-200/50 dark:border-gray-700/50">
-          <div className="flex items-end gap-2">
-            <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50" title={t?.('chat.attachFile') || 'Прикрепить файл'}>
-              {uploadingFile ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
-              <input type="file" onChange={handleFileUpload} disabled={uploadingFile} className="hidden" accept="image/*,.pdf,.doc,.docx" />
-            </label>
-            <div className="flex-1 relative">
-              <textarea ref={textareaRef} value={newMessage} onChange={handleTextareaChange} onKeyDown={handleKeyDown} placeholder={t?.('chat.placeholder') || 'Введите сообщение...'} className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-[#4A6572] resize-none text-sm" rows={1} style={{ minHeight: '44px', maxHeight: '120px' }} />
-            </div>
-            <button onClick={sendMessage} disabled={!newMessage.trim() || sending} className={`p-2.5 rounded-xl ${!newMessage.trim() || sending ? 'bg-gray-200 cursor-not-allowed' : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white'}`} aria-label="Отправить">
-              {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+          
+          <nav className="space-y-1 flex-1 overflow-y-auto">
+            {allChannels.map(channel => {
+              const isActive = activeChannel === channel.id;
+              return (
+                <button
+                  key={channel.id}
+                  onClick={() => setActiveChannel(channel.id)}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${
+                    isActive 
+                      ? 'bg-[#4A6572] text-white shadow-md' 
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                  }`}
+                >
+                  <span className="text-lg">{channel.icon}</span>
+                  <span className="truncate flex-1">{channel.label || channel.name}</span>
+                  {(!isCustomChannel && channel.adminOnly || (channel.type === CHANNEL_TYPES.CUSTOM && channel.is_private)) && (
+                    <Shield className={`w-3 h-3 ${isActive ? 'text-white/80' : 'text-gray-400'}`} />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+          
+          {isCustomChannel && canManageCurrentChannel && (
+            <button onClick={() => { setActiveCustomChannel(currentChannel); setShowSettingsModal(true); }} className="mt-3 px-3 py-2 text-xs text-gray-500 dark:text-gray-400 hover:text-[#4A6572] dark:hover:text-[#F9AA33] flex items-center gap-2 transition-colors">
+              <Settings className="w-3.5 h-3.5" />{t?.('chat.channelSettings') || 'Настройки'}
             </button>
+          )}
+          
+          <div className="flex-shrink-0 mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50 px-2">
+            <div className="flex items-center gap-2 text-xs">
+              <span className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className="text-gray-500 dark:text-gray-400">
+                {connectionStatus === 'connected' ? 'Онлайн' : 'Оффлайн'}
+              </span>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Header */}
+          <header className="flex-shrink-0 px-4 py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
+            <div className="flex items-center gap-3">
+              <div className="md:hidden">
+                <select 
+                  value={activeChannel} 
+                  onChange={(e) => setActiveChannel(e.target.value)}
+                  className="text-sm bg-gray-100 dark:bg-gray-700 rounded-lg px-2 py-1"
+                >
+                  {allChannels.map(ch => (
+                    <option key={ch.id} value={ch.id}>{ch.label || ch.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <span className="text-2xl bg-gray-100 dark:bg-gray-700 w-10 h-10 rounded-full flex items-center justify-center">
+                  {currentChannel?.icon}
+                </span>
+                <div>
+                  <h2 className="font-bold text-gray-900 dark:text-white">{currentChannel?.label || currentChannel?.name}</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+                    {currentChannel?.description}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
+              <MessageCircle className="w-3.5 h-3.5" />
+              <span>{messages.length}</span>
+            </div>
+          </header>
+
+          {/* Messages List - scrollable */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center h-40 gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
+                <span className="text-sm text-gray-500">{t?.('chat.loading') || 'Загрузка...'}</span>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                  <MessageCircle className="w-8 h-8 opacity-50" />
+                </div>
+                <p className="font-medium text-lg">{t?.('chat.noMessages') || 'Нет сообщений'}</p>
+                <p className="text-sm mt-1 opacity-70">{t?.('chat.startDiscussion') || 'Начните обсуждение!'}</p>
+              </div>
+            ) : (
+              messages.map(msg => (
+                <MessageItem
+                  key={msg.id}
+                  msg={msg}
+                  user={user}
+                  userRole={userRole}
+                  isOwn={msg.user_id === user?.id}
+                  isEditing={editingMessageId === msg.id}
+                  editText={editText}
+                  onStartEdit={startEdit}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={cancelEdit}
+                  onDelete={deleteMessage}
+                  onToggleReaction={toggleReaction}
+                  showReactionsPicker={showReactionsPicker}
+                  setShowReactionsPicker={setShowReactionsPicker}
+                  formatMessage={formatMessage}
+                  formatTime={formatTime}
+                  t={t}
+                  language={language}
+                  textareaRef={textareaRef}
+                />
+              ))
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Area - fixed */}
+          <div className="flex-shrink-0 p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-white/50 dark:bg-gray-800/50">
+            <div className="flex items-end gap-2">
+              <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300">
+                <Paperclip className="w-5 h-5" />
+                <input type="file" onChange={handleFileUpload} className="hidden" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+              </label>
+
+              <div className="flex-1 relative">
+                <textarea
+                  ref={textareaRef}
+                  value={newMessage}
+                  onChange={handleTextareaChange}
+                  onKeyDown={handleKeyDown}
+                  placeholder={t?.('chat.placeholder') || 'Введите сообщение...'}
+                  className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700/50 border border-gray-200/50 dark:border-gray-600/50 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent resize-none text-sm transition-all placeholder-gray-400 dark:placeholder-gray-500"
+                  rows={1}
+                  style={{ minHeight: '44px', maxHeight: '120px' }}
+                />
+              </div>
+
+              <button
+                onClick={sendMessage}
+                disabled={!newMessage.trim() || sending}
+                className={`p-2.5 rounded-xl transition-all flex items-center justify-center ${
+                  !newMessage.trim() || sending
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white hover:shadow-lg active:scale-95'
+                }`}
+              >
+                {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+              </button>
+            </div>
+            
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+              <span><kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> — отправить</span>
+              <span><kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Shift+Enter</kbd> — новая строка</span>
+              <span><kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">@</kbd> — упомянуть</span>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Modals */}
       <CreateChannelModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} onCreate={handleCreateChannel} companyUsers={companyUsers} currentUser={user} t={t} />
       <ChannelSettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} channel={activeCustomChannel} companyUsers={companyUsers} currentUser={user} onAddMember={handleAddMember} onRemoveMember={handleRemoveMember} t={t} />
     </div>
