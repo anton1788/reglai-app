@@ -6,14 +6,14 @@ import {
   ChevronDown, RotateCcw, Undo2, Info, Minus, Camera
 } from 'lucide-react';
 import MaterialCart from './MaterialCart';
-import ClientSelector from './ClientSelector'; // Добавлен импорт ClientSelector
+import ClientSelector from './ClientSelector';
 
 // ─────────────────────────────────────────────────────────────
 // 📦 КОНСТАНТЫ
 // ─────────────────────────────────────────────────────────────
 
 const UNIT_OPTIONS = ['шт', 'кг', 'м', 'м²', 'м³', 'л', 'уп', 'комплект', 'набор'];
-const PHONE_REGEX = /^[\d\s+()-]{10,20}$/;
+const PHONE_REGEX = /^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$/;
 const MAX_INPUT_LENGTH = 500;
 const DEBOUNCE_MS = 300;
 const ANIMATION_DURATION = 200;
@@ -133,7 +133,6 @@ const FormHeader = memo(({ t }) => (
 FormHeader.displayName = 'FormHeader';
 
 const QuickActions = memo(({ onCloneLast, onDownloadTemplate, onImportExcel, onSaveTemplate, t }) => {
-  // 🔹 Tailwind не поддерживает динамические классы — используем мапу стилей
   const actionStyles = {
     blue: 'from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 focus:ring-blue-500',
     gray: 'from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 focus:ring-gray-500',
@@ -151,7 +150,6 @@ const QuickActions = memo(({ onCloneLast, onDownloadTemplate, onImportExcel, onS
   return (
     <div className="flex flex-wrap gap-2 mb-6" role="group" aria-label={t('quickActions')}>
       {actions.map((action, idx) => {
-        // 🔹 Выносим иконку в отдельную переменную — ESLint видит использование
         const Icon = action.icon;
         return (
           <button
@@ -227,7 +225,7 @@ const ObjectInput = memo(({
       </div>
       
       {error && (
-        <p id="objectName-error" className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5" role="alert">
+        <p id="objectName-error" className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5 form-error" role="alert">
           <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
           {error}
         </p>
@@ -255,7 +253,6 @@ const ObjectInput = memo(({
                 e.preventDefault();
                 onSelect(obj);
               }}
-              onMouseEnter={() => {}}
             >
               <div className="flex items-center gap-2">
                 <Package className="w-4 h-4 text-gray-400" aria-hidden="true" />
@@ -270,8 +267,7 @@ const ObjectInput = memo(({
 });
 ObjectInput.displayName = 'ObjectInput';
 
-// 🔹 ИСПРАВЛЕНИЕ: Удалили неиспользуемый проп 't' из ForemanField
-const ForemanField = memo(({ id, label, value, onChange, type = 'text', placeholder, error, pattern }) => (
+const ForemanField = memo(({ id, label, value, onChange, type = 'text', placeholder, error }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
       {label} <span className="text-red-500" aria-hidden="true">*</span>
@@ -286,11 +282,10 @@ const ForemanField = memo(({ id, label, value, onChange, type = 'text', placehol
       }`}
       placeholder={placeholder}
       required
-      pattern={pattern}
       aria-invalid={!!error}
     />
     {error && (
-      <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5" role="alert">
+      <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5 form-error" role="alert">
         <AlertCircle className="w-4 h-4" aria-hidden="true" />
         {error}
       </p>
@@ -404,7 +399,6 @@ const MaterialRow = memo(({
       aria-labelledby={`material-label-${index}`}
     >
       <div className="flex flex-col lg:flex-row gap-4">
-        {/* Description with autocomplete */}
         <div className="flex-1 relative">
           <label htmlFor={`material-${index}`} className="sr-only">{t('materialDescription')}</label>
           <input
@@ -454,9 +448,7 @@ const MaterialRow = memo(({
           )}
         </div>
         
-        {/* Quantity + Unit + Actions */}
         <div className="flex items-center gap-3">
-          {/* Quantity Stepper */}
           <div className="quantity-stepper flex items-center gap-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-1">
             <button
               type="button"
@@ -486,7 +478,6 @@ const MaterialRow = memo(({
             </button>
           </div>
           
-          {/* Unit Select */}
           <select
             value={material.unit}
             onChange={(e) => onUpdate(index, 'unit', e.target.value)}
@@ -498,7 +489,6 @@ const MaterialRow = memo(({
             ))}
           </select>
           
-          {/* Photo Button */}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -510,7 +500,6 @@ const MaterialRow = memo(({
               <Camera className="w-4.5 h-4.5" aria-hidden="true" />
             </button>
             
-            {/* Remove Button */}
             <button
               type="button"
               onClick={() => onRemove(index)}
@@ -524,7 +513,6 @@ const MaterialRow = memo(({
         </div>
       </div>
       
-      {/* Display captured photos */}
       {photos.length > 0 && (
         <div className="flex gap-2 mt-3 flex-wrap">
           {photos.map((url, i) => (
@@ -537,9 +525,7 @@ const MaterialRow = memo(({
               <button
                 type="button"
                 onClick={() => {
-                  // Optional: handle photo removal
                   const newPhotos = photos.filter((_, idx) => idx !== i);
-                  // You would need to pass this up to parent
                   if (onUpdate) {
                     onUpdate(index, 'photos', newPhotos);
                   }
@@ -749,7 +735,6 @@ const CreateApplicationForm = memo(({
   capturedPhotos,
   selectedApplication,
   onAddPhoto,
-  // Добавленные пропсы
   selectedClientId,
   onClientSelect,
   companyId
@@ -760,7 +745,7 @@ const CreateApplicationForm = memo(({
   
   const [objectSearch, setObjectSearch] = useState('');
   const [activeObjectIndex, setActiveObjectIndex] = useState(-1);
-  const [formErrors, setFormErrors] = useState({});
+  const [formErrors, setFormErrors] = useState({}); // ✅ ДОБАВЛЕНО ДЛЯ ВАЛИДАЦИИ
   
   const objectListRef = useRef(null);
   const formRef = useRef(null);
@@ -801,18 +786,44 @@ const CreateApplicationForm = memo(({
   }, [formData, isLoading]);
 
   // ─────────────────────────────────────────────────────────
+  // ✅ ФУНКЦИЯ ВАЛИДАЦИИ (ДОБАВЛЕНА)
+  // ─────────────────────────────────────────────────────────
+  
+  const validateForm = useCallback(() => {
+    const errors = {};
+    
+    if (!formData.objectName?.trim()) {
+      errors.objectName = t('requiredField') || 'Укажите название объекта';
+    }
+    
+    if (!formData.foremanName?.trim()) {
+      errors.foremanName = t('requiredField') || 'Укажите ФИО прораба';
+    }
+    
+    if (!PHONE_REGEX.test(formData.foremanPhone)) {
+      errors.foremanPhone = t('invalidPhone') || 'Неверный формат телефона. Пример: +7 (999) 123-45-67';
+    }
+    
+    const validMaterials = formData.materials.filter(m => m.description?.trim() && m.quantity > 0);
+    if (validMaterials.length === 0) {
+      errors.materials = t('invalidMaterials') || 'Добавьте хотя бы один материал';
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [formData, t]);
+
+  // ─────────────────────────────────────────────────────────
   // ⌨️ KEYBOARD SHORTCUTS
   // ─────────────────────────────────────────────────────────
   
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ctrl+Enter / Cmd+Enter — отправить форму
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && canSubmit && !isLoading) {
         e.preventDefault();
         formRef.current?.requestSubmit();
         return;
       }
-      // Escape — закрыть модалки/списки
       if (e.key === 'Escape') {
         setShowObjectSuggestions(false);
       }
@@ -849,22 +860,16 @@ const CreateApplicationForm = memo(({
     selectMaterial(index, suggestion);
   }, [selectMaterial]);
 
-  const validateForm = useCallback(() => {
-    const errors = {};
-    if (!formData.objectName.trim()) errors.objectName = t('requiredField');
-    if (!formData.foremanName.trim()) errors.foremanName = t('requiredField');
-    if (!PHONE_REGEX.test(formData.foremanPhone)) errors.foremanPhone = t('invalidPhone');
-    if (formData.materials.some(m => !m.description.trim() || m.quantity < 1)) {
-      errors.materials = t('invalidMaterials');
-    }
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [formData, t]);
-
+  // ✅ ОБНОВЛЕННЫЙ onSubmit С ВАЛИДАЦИЕЙ
   const onSubmit = useCallback((e) => {
     e.preventDefault();
     if (validateForm()) {
       handleSubmit(e);
+    } else {
+      const firstError = document.querySelector('.form-error');
+      if (firstError) {
+        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
   }, [validateForm, handleSubmit]);
 
@@ -910,6 +915,7 @@ const CreateApplicationForm = memo(({
             onChange={(e) => {
               setObjectSearch(e.target.value);
               handleObjectInput?.(e);
+              if (formErrors.objectName) setFormErrors(prev => ({ ...prev, objectName: null }));
             }}
             onFocus={() => setShowObjectSuggestions(true)}
             onKeyDown={handleObjectKeyDown}
@@ -919,6 +925,7 @@ const CreateApplicationForm = memo(({
             onSelect={(obj) => {
               selectObject(obj);
               setShowObjectSuggestions(false);
+              if (formErrors.objectName) setFormErrors(prev => ({ ...prev, objectName: null }));
             }}
             error={formErrors.objectName}
             t={t}
@@ -954,11 +961,13 @@ const CreateApplicationForm = memo(({
             id="foremanPhone"
             label={t('foremanPhone')}
             value={formData.foremanPhone}
-            onChange={handlePhoneChange}
+            onChange={(e) => {
+              handlePhoneChange(e);
+              if (formErrors.foremanPhone) setFormErrors(prev => ({ ...prev, foremanPhone: null }));
+            }}
             type="tel"
             placeholder={t('phonePlaceholder')}
             error={formErrors.foremanPhone}
-            pattern="^[\d\s+()-]{10,20}$"
           />
 
           {/* Warehouse Info */}
@@ -999,8 +1008,9 @@ const CreateApplicationForm = memo(({
               </button>
             </div>
             
+            {/* ✅ ОТОБРАЖЕНИЕ ОШИБКИ МАТЕРИАЛОВ */}
             {formErrors.materials && (
-              <p className="mb-4 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5" role="alert">
+              <p className="mb-4 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5 form-error" role="alert">
                 <AlertCircle className="w-4 h-4" aria-hidden="true" />
                 {formErrors.materials}
               </p>

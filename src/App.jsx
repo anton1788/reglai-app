@@ -18,6 +18,8 @@ import ClientWorkAct from './components/ClientPortal/ClientWorkAct';
 import DocumentGenerator from './components/DocumentGenerator';
 import { CompanyProfileForm } from './components/CompanyProfileForm';
 import Navbar from './components/Navbar';
+import ErrorBoundary from './components/ErrorBoundary';
+import LoadingOverlay from './components/LoadingOverlay';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -5303,632 +5305,635 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   }
 
   return (
-  <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#F5F7FA] via-white to-[#E4EDF5] dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 page-enter">
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-bl from-[#F9AA33]/5 to-transparent rounded-full blur-3xl"></div>
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-[#4A6572]/5 to-transparent rounded-full blur-3xl"></div>
-    </div>
-    <Navbar
-      user={user}
-      companyName={userCompany}
-      userRole={userRole}
-      onLogout={handleLogout}
-      onNavigate={(path) => {
-        // Основные маршруты
-        if (path === '/') setCurrentView('create');
-        else if (path === '/applications') setCurrentView('inwork');
-        else if (path === '/applications/new') setCurrentView('create');
-        else if (path === '/warehouse') setCurrentView('warehouse');
-        else if (path === '/clients') setCurrentView('clients');
-        else if (path === '/analytics') setCurrentView('analytics');
-        else if (path === '/profile') setCurrentView('profile');
-        else if (path === '/documents') setCurrentView('documents');
-        else if (path === '/chat') setCurrentView('chat');
-        else if (path === '/calendar') setCurrentView('calendar');
-        else if (path === '/settings') setCurrentView('settings');
-        else if (path === '/tariffs') setCurrentView('tariffs');
-        else if (path === '/companyProfile') setCurrentView('companyProfile');
-        else if (path === '/inwork') setCurrentView('inwork');
-        else if (path === '/history') setCurrentView('history');
-        else if (path === '/approvals') setCurrentView('approvals');
-        else if (path === '/employees') setCurrentView('employees');
-        else if (path === '/api') setCurrentView('api');
-        else if (path === '/audit') setCurrentView('audit');
-        else if (path === '/tasks') setCurrentView('tasks');
-        else if (path === '/help') setCurrentView('help');
-        else if (path === '/superAdmin') setCurrentView('superAdmin');
-        else if (path === '/search') {
-          // Обработка поиска
-          const params = new URLSearchParams(path.split('?')[1]);
-          const query = params.get('q');
-          if (query) {
-            setSearchTerm(query);
-            setCurrentView('inwork');
-          }
-        }
-        // Для заказчика
-        else if (path === '/client') setCurrentView('clientDashboard');
-        else if (path === '/client/documents') setCurrentView('clientDocuments');
-        else if (path === '/client/chat') setCurrentView('clientChat');
-      }}
-      currentPage={currentView}
-      onInvite={() => setShowInviteModal(true)}
-      onOpenTariffs={() => setCurrentView('tariffs')}
-      onOpenCompanyProfile={() => setCurrentView('companyProfile')}
-      isOnline={isOnline}
-      offlineDraftsCount={offlineDrafts.length}
-      theme={theme}
-      onToggleTheme={toggleTheme}
-      onToggleLanguage={handleLanguageChange}
-      notifications={[]}
-      pendingApprovalsCount={pendingApprovals?.length || 0}
-      cartItemsCount={formData.cart?.length || 0}
-      isAdminMode={isAdminMode}
-      onToggleAdminMode={() => setIsAdminMode(false)}
-    />
-    <main className="py-6">
-  {currentView === 'create' && (
-    <CreateApplicationForm
-      formData={formData}
-      setFormData={setFormData}
-      templates={templates}
-      showTemplateModal={showTemplateModal}
-      setShowTemplateModal={setShowTemplateModal}
-      templateName={templateName}
-      setTemplateName={setTemplateName}
-      selectedClientId={selectedClientId}
-    onClientSelect={setSelectedClientId}
+  <ErrorBoundary 
+    supabase={supabase}
     companyId={userCompanyId}
-      t={t}
-      language={language}
-      showNotification={showNotification}
-      handleSubmit={handleSubmit}
-      onAddPhoto={(materialIndex) => {
-  setActiveMaterialIndex(materialIndex);
-  setShowPhotoCapture(true);
-}}
-      handleObjectInput={handleObjectInput}
-      handlePhoneChange={handlePhoneChange}
-      addMaterial={addMaterial}
-      removeMaterial={removeMaterial}
-      updateMaterial={updateMaterial}
-      moveToCart={moveToCart}
-      restoreFromCart={restoreFromCart}
-      removeFromCartPermanently={removeFromCartPermanently}
-      selectMaterial={selectMaterial}
-      selectObject={selectObject}
-      saveTemplate={saveTemplate}
-      loadTemplate={loadTemplate}
-      filteredObjects={filteredObjects}
-      showObjectSuggestions={showObjectSuggestions}
-      setShowObjectSuggestions={setShowObjectSuggestions}
-      objectInputRef={objectInputRef}
-      materialHistory={materialHistory}
-      showMaterialSuggestions={showMaterialSuggestions}
-      setShowMaterialSuggestions={setShowMaterialSuggestions}
-      unitOptions={unitOptions}
-      isLoading={isLoading}
-      onExcelImport={handleExcelImport}
-      onCloneLast={cloneLastApplication}
-      onDownloadTemplate={downloadExcelTemplate}
-      fileInputRef={fileInputRef}
-      capturedPhotos={capturedPhotos}
-    />
-  )}
-  
-  {currentView === 'received' && (
-    <ApplicationList
-     applications={filteredApplications.filter(app => {
-    // ✅ ВАЖНО: Снабженец видит и 'pending_approval', чтобы отслеживать очередь
-    const isVisibleToSupply = userRole === 'supply_admin' && 
-        ['pending', 'pending_foreman', 'pending_approval', 'partial', 'received', 'canceled'].includes(app.status);
-        
-    const hasReceivedMaterials = app.materials?.some(m =>
-        (Number(m.supplier_received_quantity) || 0) > 0 ||
-        (Number(m.received) || 0) > 0
-    );
-    
-    const isCompleted = app.status === APPLICATION_STATUS.RECEIVED ||
-        app.status === APPLICATION_STATUS.PARTIAL_RECEIVED ||
-        app.status === APPLICATION_STATUS.CANCELED;
-    
-    // Снабженец видит заявки по расширенному списку статусов
-    // Остальные роли — по старой логике
-    const matchesStatus = isVisibleToSupply || isCompleted || hasReceivedMaterials;
-    
-    return matchesStatus && (userRole !== 'master' || app.user_id === user?.id);
-})}
-      title={t('receivedTab')}
-      emptyMessage={userRole === 'foreman' ? t('noReceived') : t('noApplications')}
-      isMobile={isMobile}
-      user={user}
-      userRole={userRole}
-      viewMode="inwork"
-      isAdminMode={isAdminMode}
-      permissions={currentUserPermissions}
-      t={t}
-      language={language}
-      uniqueDates={uniqueDates}
-      page={page}
-      totalPages={totalPages}
-      onAdminLogout={handleAdminLogout}
-      onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
-      onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
-      onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
-      onOpenReceiveModal={openReceiveModal}
-      onCancelApplication={cancelApplication}
-      onAddComment={addComment}
-      onToggleComments={(appId) => setShowComments(prev => ({
-        ...prev,
-        [appId]: !(prev[appId] || false)
-      }))}
-      onPageChange={setPage}
-      searchTerm={searchTerm}
-      statusFilter={statusFilter}
-      dateFilter={dateFilter}
-      viewedFilter={viewedFilter}
-      onSearchChange={setSearchTerm}
-      onStatusFilterChange={setStatusFilter}
-      onDateFilterChange={setDateFilter}
-      onViewedFilterChange={setViewedFilter}
-      onClearFilters={clearFilters}
-      expandedMaterials={expandedMaterials}
-      onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
-        ...prev,
-        [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
-      }))}
-      comments={comments}
-      showComments={showComments}
-      isExportingPDF={isExportingPDF}
-      isExportingXLSX={isExportingXLSX}
-    />
-  )}
-  
-  {currentView === 'audit' && (
-    <AuditView
-      supabase={supabase}
-      userCompanyId={userCompanyId}
-      userCompany={userCompany}
-      t={t}
-      showNotification={showNotification}
-      language={language}
-      userRole={userRole}
-    />
-  )}
-  
-  {currentView === 'calendar' && (
-    <CalendarView
-      supabase={supabase}
-      userCompanyId={userCompanyId}
-      user={user}
-      userRole={userRole}
-      t={t}
-      language={language}
-      showNotification={showNotification}
-      onEventClick={(type, data) => {
-        if (type === 'application') {
-          setSelectedApplication(data);
-          setShowReceiveModal(true);
-        }
-      }}
-    />
-  )}
-  
-  {currentView === 'inwork' && (
-    <ApplicationList
-      applications={filteredApplications.filter(app => {
-        return isApplicationActive(app.status) &&
-          (userRole !== 'master' || app.user_id === user?.id);
-      })}
-      title={language === 'ru' ? 'В работе' : 'In Work'}
-      emptyMessage={language === 'ru' ? 'Нет заявок в работе' : 'No applications in work'}
-      isMobile={isMobile}
-      user={user}
-      userRole={userRole}
-      isAdminMode={isAdminMode}
-      permissions={currentUserPermissions}
-      t={t}
-      language={language}
-      uniqueDates={uniqueDates}
-      page={page}
-      totalPages={totalPages}
-      onAdminLogout={handleAdminLogout}
-      onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
-      onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
-      onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
-      onOpenReceiveModal={openReceiveModal}
-      onCancelApplication={cancelApplication}
-      onAddComment={addComment}
-      onToggleComments={(appId) => setShowComments(prev => ({
-        ...prev,
-        [appId]: !(prev[appId] || false)
-      }))}
-      onPageChange={setPage}
-      searchTerm={searchTerm}
-      statusFilter={statusFilter}
-      dateFilter={dateFilter}
-      viewedFilter={viewedFilter}
-      onSearchChange={setSearchTerm}
-      onStatusFilterChange={setStatusFilter}
-      onDateFilterChange={setDateFilter}
-      onViewedFilterChange={setViewedFilter}
-      onClearFilters={clearFilters}
-      expandedMaterials={expandedMaterials}
-      onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
-        ...prev,
-        [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
-      }))}
-      comments={comments}
-      showComments={showComments}
-      isExportingPDF={isExportingPDF}
-      isExportingXLSX={isExportingXLSX}
-    />
-  )}
-  
-  {currentView === 'confirmation' && (
-    <ApplicationList
-      applications={filteredApplications.filter(app =>
-        requiresMasterConfirmation(app.status) && app.user_id === user?.id
-      )}
-      title={language === 'ru' ? 'Заявки на подтверждение' : 'Applications for Confirmation'}
-      emptyMessage={language === 'ru' ? 'Нет заявок, требующих подтверждения' : 'No applications requiring confirmation'}
-      isMobile={isMobile}
-      user={user}
-      userRole={userRole}
-      isAdminMode={isAdminMode}
-      permissions={currentUserPermissions}
-      t={t}
-      language={language}
-      uniqueDates={uniqueDates}
-      page={page}
-      totalPages={totalPages}
-      onAdminLogout={handleAdminLogout}
-      onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
-      onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
-      onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
-      onOpenReceiveModal={openReceiveModal}
-      onCancelApplication={cancelApplication}
-      onAddComment={addComment}
-      onToggleComments={(appId) => setShowComments(prev => ({
-        ...prev,
-        [appId]: !(prev[appId] || false)
-      }))}
-      onPageChange={setPage}
-      searchTerm={searchTerm}
-      statusFilter={statusFilter}
-      dateFilter={dateFilter}
-      viewedFilter={viewedFilter}
-      onSearchChange={setSearchTerm}
-      onStatusFilterChange={setStatusFilter}
-      onDateFilterChange={setDateFilter}
-      onViewedFilterChange={setViewedFilter}
-      onClearFilters={clearFilters}
-      expandedMaterials={expandedMaterials}
-      onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
-        ...prev,
-        [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
-      }))}
-      comments={comments}
-      showComments={showComments}
-      isExportingPDF={isExportingPDF}
-      isExportingXLSX={isExportingXLSX}
-    />
-  )}
-  
-  {currentView === 'history' && (
-    <ApplicationList
-      applications={filteredApplications.filter(app =>
-        isApplicationCompleted(app.status)
-      )}
-      title={t('history')}
-      emptyMessage={t('noHistory')}
-      isMobile={isMobile}
-      user={user}
-      userRole={userRole}
-      isAdminMode={isAdminMode}
-      permissions={currentUserPermissions}
-      t={t}
-      language={language}
-      uniqueDates={uniqueDates}
-      page={page}
-      totalPages={totalPages}
-      onAdminLogout={handleAdminLogout}
-      onDownloadHTML={downloadHTMLFile}
-      onDownloadPDF={downloadPDF}
-      onDownloadXLSX={downloadXLSXFile}
-      onOpenReceiveModal={openReceiveModal}
-      onCancelApplication={cancelApplication}
-      onAddComment={addComment}
-      onToggleComments={(appId) => setShowComments(prev => ({
-        ...prev,
-        [appId]: !(prev[appId] || false)
-      }))}
-      onPageChange={setPage}
-      searchTerm={searchTerm}
-      statusFilter={statusFilter}
-      dateFilter={dateFilter}
-      viewedFilter={viewedFilter}
-      onSearchChange={setSearchTerm}
-      onStatusFilterChange={setStatusFilter}
-      onDateFilterChange={setDateFilter}
-      onViewedFilterChange={setViewedFilter}
-      onClearFilters={clearFilters}
-      expandedMaterials={expandedMaterials}
-      onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
-        ...prev,
-        [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
-      }))}
-      comments={comments}
-      showComments={showComments}
-      isExportingPDF={isExportingPDF}
-      isExportingXLSX={isExportingXLSX}
-    />
-  )}
-  
-  {currentView === 'analytics' && renderAnalyticsDashboard()}
-  
-  {currentView === 'employees' && renderEmployeesList()}
-  {currentView === 'clients' && (
-  <>
-    {!userCompanyId ? (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4A6572]"></div>
-        <p className="ml-3 text-gray-500">Загрузка данных компании...</p>
-      </div>
-    ) : (
-      <ClientManager
-        companyId={userCompanyId}
-        t={t}
-        showNotification={showNotification}
-        onInviteClick={() => setShowClientInviteModal(true)}
-      />
-    )}
-  </>
-)}
-  
-  {currentView === 'warehouse' && (
-    <WarehouseView
-      supabase={supabase}
-      userCompanyId={userCompanyId}
-      user={user}
-      userRole={userRole}
-      profileData={profileDataForHeader} 
-      t={t}
-      language={language}
-      showNotification={showNotification}
-      applications={applications}
-      onOpenApplication={(appId) => {
-        const app = applications.find(a => a.id === appId);
-        if (app) {
-          setSelectedApplication(app);
-          setShowReceiveModal(true);
-        }
-      }}
-    />
-  )}
-
-  {currentView === 'documents' && (
-  <DocumentGenerator
-    applications={isAdminMode ? allApplications : applications}
-    user={user}
-    userCompanyId={userCompanyId}
-    userRole={userRole}
-    t={t}
-    showNotification={showNotification}
-    companyName={userCompany}
-    supabase={supabase}
-  />
-)}
-  
-  {currentView === 'profile' && renderProfilePage()}
-  
-  {currentView === 'cart' && (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-      <MaterialCart
-        cart={formData.cart}
-        restoreMaterial={restoreFromCart}
-        removeMaterialPermanently={removeFromCartPermanently}
-        t={t}
-        isStandaloneView={true}
-      />
-      <button
-        onClick={() => setCurrentView('create')}
-        className="mt-4 px-4 py-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium"
-      >
-        ← Вернуться к заявке
-      </button>
-    </div>
-  )}
-  
-  {currentView === 'superAdmin' && isSuperAdmin(userRole, user?.user_metadata) && (
-    <SuperAdminPanel
-      supabase={supabase}
-      currentUser={user}
-      t={t}
-      language={language}
-      showNotification={showNotification}
-    />
-  )}
-  {currentView === 'tariffs' && isSuperAdmin(userRole, user?.user_metadata) && (
-  <SuperAdminCompanyTariffs
-    supabase={supabase}
-    showNotification={showNotification}
-    t={t}
-  />
-)}
-  
-  {currentView === 'tasks' && (
-    <TaskBoard
-      user={user}
-      userCompanyId={userCompanyId}
-      applications={applications}
-      showNotification={showNotification}
-      language={language}
-      userRole={userRole}
-    />
-  )}
-  
-  {currentView === 'chat' && (
-    <CompanyChat
-      user={user}
-      userCompanyId={userCompanyId}
-      userRole={userRole}
-      t={t}
-      language={language}
-      showNotification={showNotification}
-    />
-  )}
-    {currentView === 'approvals' && renderApprovalsQueue()}
-  {currentView === 'api' && (
-  <APIDocumentation
-    user={user}
-    userCompanyId={userCompanyId}
-    showNotification={showNotification}
-    t={t}              // ← функция перевода
-    language={language} // ← текущий язык
-  />
-)}
-{currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && 
- (isCompanyOwner || userRole === 'manager' || userRole === 'director') && (
-  <div className="max-w-7xl mx-auto p-4 page-enter">
-    <div className="flex items-center justify-between mb-6">
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-        {t('tariffSelector.title', 'Управление тарифом')}
-      </h2>
-      {isAdminMode && (
-        <button
-          onClick={handleAdminLogout}
-          className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
-        >
-          {t('exitAdminMode', 'Выйти из режима админа')}
-        </button>
-      )}
-    </div>
-    
-    {userCompanyId && !planLoading && (
-      <div className="mb-6">
-        <QuotaUsage 
-          userCompanyId={userCompanyId} 
-          supabase={supabase} 
-          quotaStatus={quotaStatus} 
-        />
-      </div>
-    )}
-    
-    <TariffSelector
-      currentPlan={currentPlan?.id || 'basic'}
-      billingPeriod={billingPeriod}
-      onBillingPeriodChange={setBillingPeriod}
-      onSelectPlan={handleSelectPlan}
-      isLoading={planLoading}
-      t={t}
-      onPromoClick={() => setShowPromoModal(true)}
-      // 🆕 НОВЫЕ ПРОПСЫ
-      currentPlanDetails={currentPlanDetails}
-      promoCodeInfo={promoCodeInfo}
-    />
-    
-    {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
-  <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
-    <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
-      {t('currentPlan', 'Ваш текущий план')}:
-    </h4>
-    <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
-      <span>📦 {currentPlan.name}</span>
-      <span>💰 {billingPeriod === 'monthly' 
-        ? `${currentPlan.monthlyPrice} ₽/мес` 
-        : `${currentPlan.annualPrice} ₽/год`}</span>
-      <span>🔑 {currentPlan.maxApiKeys} API ключей</span>
-      <span>👥 {currentPlan.maxUsers} пользователей</span>
-      {currentPlan.isActive && (
-        <span className="text-green-600">✅ Активен</span>
-      )}
-    </div>
-  </div>
-)}
-  </div>
-)}
-
-                      {/* Вкладки для заказчика */}
-            {currentView === 'clientDashboard' && userRole === 'client' && (
-              <ClientDashboard 
-                clientId={clientId}
-                t={t}
-              />
-            )}
-
-            {currentView === 'clientChat' && userRole === 'client' && (
-              <ClientChat 
-                clientId={clientId}
-                companyId={userCompanyId}
-                user={user}
-                t={t}
-              />
-            )}
-
-            {currentView === 'clientDocuments' && userRole === 'client' && (
-              <ClientDocuments 
-                clientId={clientId}
-                t={t}
-              />
-            )}
-
-            {currentView === 'clientApplications' && userRole === 'client' && (
-  <ClientApplications clientId={clientId} t={t} />
-)}
-
-{currentView === 'clientCalendar' && userRole === 'client' && (
-  <ClientCalendar clientId={clientId} t={t} />
-)}
-
-{currentView === 'clientConfirmation' && userRole === 'client' && (
-  <ClientConfirmation clientId={clientId} t={t} />
-)}
-
-{currentView === 'clientPhotos' && userRole === 'client' && (
-  <ClientPhotos clientId={clientId} t={t} />
-)}
-
-{currentView === 'clientWorkAct' && userRole === 'client' && (
-  <ClientWorkAct clientId={clientId} t={t} />
-)}
-{currentView === 'companyProfile' && (
-  <CompanyProfileForm 
-    companyId={userCompanyId}
-    supabase={supabase}
-    onSave={() => {
-      showNotification('✅ Реквизиты компании сохранены!', 'success');
-      // Обновляем данные в DocumentGenerator при необходимости
-      if (currentView === 'documents') {
-        // Можно добавить принудительное обновление через forceReload или событие
-      }
+    onError={(error, errorInfo) => {
+      console.error('[Global Error]', error, errorInfo);
     }}
-  />
-)}
-</main>
+    autoRedirect={true}
+    redirectUrl="/"
+    showDetails={import.meta.env.MODE === 'development'}
+  >
+    <LoadingOverlay 
+      isLoading={isLoading && !user} 
+      message="Загрузка приложения..." 
+      fullScreen 
+    />
+    
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#F5F7FA] via-white to-[#E4EDF5] dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 page-enter">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-bl from-[#F9AA33]/5 to-transparent rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-[#4A6572]/5 to-transparent rounded-full blur-3xl"></div>
+      </div>
+      <Navbar
+        user={user}
+        companyName={userCompany}
+        userRole={userRole}
+        onLogout={handleLogout}
+        onNavigate={(path) => {
+          // Основные маршруты
+          if (path === '/') setCurrentView('create');
+          else if (path === '/applications') setCurrentView('inwork');
+          else if (path === '/applications/new') setCurrentView('create');
+          else if (path === '/warehouse') setCurrentView('warehouse');
+          else if (path === '/clients') setCurrentView('clients');
+          else if (path === '/analytics') setCurrentView('analytics');
+          else if (path === '/profile') setCurrentView('profile');
+          else if (path === '/documents') setCurrentView('documents');
+          else if (path === '/chat') setCurrentView('chat');
+          else if (path === '/calendar') setCurrentView('calendar');
+          else if (path === '/settings') setCurrentView('settings');
+          else if (path === '/tariffs') setCurrentView('tariffs');
+          else if (path === '/companyProfile') setCurrentView('companyProfile');
+          else if (path === '/inwork') setCurrentView('inwork');
+          else if (path === '/history') setCurrentView('history');
+          else if (path === '/approvals') setCurrentView('approvals');
+          else if (path === '/employees') setCurrentView('employees');
+          else if (path === '/api') setCurrentView('api');
+          else if (path === '/audit') setCurrentView('audit');
+          else if (path === '/tasks') setCurrentView('tasks');
+          else if (path === '/help') setCurrentView('help');
+          else if (path === '/superAdmin') setCurrentView('superAdmin');
+          else if (path === '/search') {
+            const params = new URLSearchParams(path.split('?')[1]);
+            const query = params.get('q');
+            if (query) {
+              setSearchTerm(query);
+              setCurrentView('inwork');
+            }
+          }
+          // Для заказчика
+          else if (path === '/client') setCurrentView('clientDashboard');
+          else if (path === '/client/documents') setCurrentView('clientDocuments');
+          else if (path === '/client/chat') setCurrentView('clientChat');
+        }}
+        currentPage={currentView}
+        onInvite={() => setShowInviteModal(true)}
+        onOpenTariffs={() => setCurrentView('tariffs')}
+        onOpenCompanyProfile={() => setCurrentView('companyProfile')}
+        isOnline={isOnline}
+        offlineDraftsCount={offlineDrafts.length}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onToggleLanguage={handleLanguageChange}
+        notifications={[]}
+        pendingApprovalsCount={pendingApprovals?.length || 0}
+        cartItemsCount={formData.cart?.length || 0}
+        isAdminMode={isAdminMode}
+        onToggleAdminMode={() => setIsAdminMode(false)}
+      />
+      <main className="py-6">
+        {/* Весь существующий контент main остается без изменений */}
+        {currentView === 'create' && (
+          <CreateApplicationForm
+            formData={formData}
+            setFormData={setFormData}
+            templates={templates}
+            showTemplateModal={showTemplateModal}
+            setShowTemplateModal={setShowTemplateModal}
+            templateName={templateName}
+            setTemplateName={setTemplateName}
+            selectedClientId={selectedClientId}
+            onClientSelect={setSelectedClientId}
+            companyId={userCompanyId}
+            t={t}
+            language={language}
+            showNotification={showNotification}
+            handleSubmit={handleSubmit}
+            onAddPhoto={(materialIndex) => {
+              setActiveMaterialIndex(materialIndex);
+              setShowPhotoCapture(true);
+            }}
+            handleObjectInput={handleObjectInput}
+            handlePhoneChange={handlePhoneChange}
+            addMaterial={addMaterial}
+            removeMaterial={removeMaterial}
+            updateMaterial={updateMaterial}
+            moveToCart={moveToCart}
+            restoreFromCart={restoreFromCart}
+            removeFromCartPermanently={removeFromCartPermanently}
+            selectMaterial={selectMaterial}
+            selectObject={selectObject}
+            saveTemplate={saveTemplate}
+            loadTemplate={loadTemplate}
+            filteredObjects={filteredObjects}
+            showObjectSuggestions={showObjectSuggestions}
+            setShowObjectSuggestions={setShowObjectSuggestions}
+            objectInputRef={objectInputRef}
+            materialHistory={materialHistory}
+            showMaterialSuggestions={showMaterialSuggestions}
+            setShowMaterialSuggestions={setShowMaterialSuggestions}
+            unitOptions={unitOptions}
+            isLoading={isLoading}
+            onExcelImport={handleExcelImport}
+            onCloneLast={cloneLastApplication}
+            onDownloadTemplate={downloadExcelTemplate}
+            fileInputRef={fileInputRef}
+            capturedPhotos={capturedPhotos}
+          />
+        )}
+        
+        {currentView === 'received' && (
+          <ApplicationList
+            applications={filteredApplications.filter(app => {
+              const isVisibleToSupply = userRole === 'supply_admin' && 
+                ['pending', 'pending_foreman', 'pending_approval', 'partial', 'received', 'canceled'].includes(app.status);
+              const hasReceivedMaterials = app.materials?.some(m =>
+                (Number(m.supplier_received_quantity) || 0) > 0 ||
+                (Number(m.received) || 0) > 0
+              );
+              const isCompleted = app.status === APPLICATION_STATUS.RECEIVED ||
+                app.status === APPLICATION_STATUS.PARTIAL_RECEIVED ||
+                app.status === APPLICATION_STATUS.CANCELED;
+              const matchesStatus = isVisibleToSupply || isCompleted || hasReceivedMaterials;
+              return matchesStatus && (userRole !== 'master' || app.user_id === user?.id);
+            })}
+            title={t('receivedTab')}
+            emptyMessage={userRole === 'foreman' ? t('noReceived') : t('noApplications')}
+            isMobile={isMobile}
+            user={user}
+            userRole={userRole}
+            viewMode="inwork"
+            isAdminMode={isAdminMode}
+            permissions={currentUserPermissions}
+            t={t}
+            language={language}
+            uniqueDates={uniqueDates}
+            page={page}
+            totalPages={totalPages}
+            onAdminLogout={handleAdminLogout}
+            onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
+            onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
+            onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
+            onOpenReceiveModal={openReceiveModal}
+            onCancelApplication={cancelApplication}
+            onAddComment={addComment}
+            onToggleComments={(appId) => setShowComments(prev => ({
+              ...prev,
+              [appId]: !(prev[appId] || false)
+            }))}
+            onPageChange={setPage}
+            searchTerm={searchTerm}
+            statusFilter={statusFilter}
+            dateFilter={dateFilter}
+            viewedFilter={viewedFilter}
+            onSearchChange={setSearchTerm}
+            onStatusFilterChange={setStatusFilter}
+            onDateFilterChange={setDateFilter}
+            onViewedFilterChange={setViewedFilter}
+            onClearFilters={clearFilters}
+            expandedMaterials={expandedMaterials}
+            onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
+              ...prev,
+              [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
+            }))}
+            comments={comments}
+            showComments={showComments}
+            isExportingPDF={isExportingPDF}
+            isExportingXLSX={isExportingXLSX}
+          />
+        )}
+        
+        {currentView === 'audit' && (
+          <AuditView
+            supabase={supabase}
+            userCompanyId={userCompanyId}
+            userCompany={userCompany}
+            t={t}
+            showNotification={showNotification}
+            language={language}
+            userRole={userRole}
+          />
+        )}
+        
+        {currentView === 'calendar' && (
+          <CalendarView
+            supabase={supabase}
+            userCompanyId={userCompanyId}
+            user={user}
+            userRole={userRole}
+            t={t}
+            language={language}
+            showNotification={showNotification}
+            onEventClick={(type, data) => {
+              if (type === 'application') {
+                setSelectedApplication(data);
+                setShowReceiveModal(true);
+              }
+            }}
+          />
+        )}
+        
+        {currentView === 'inwork' && (
+          <ApplicationList
+            applications={filteredApplications.filter(app => {
+              return isApplicationActive(app.status) &&
+                (userRole !== 'master' || app.user_id === user?.id);
+            })}
+            title={language === 'ru' ? 'В работе' : 'In Work'}
+            emptyMessage={language === 'ru' ? 'Нет заявок в работе' : 'No applications in work'}
+            isMobile={isMobile}
+            user={user}
+            userRole={userRole}
+            isAdminMode={isAdminMode}
+            permissions={currentUserPermissions}
+            t={t}
+            language={language}
+            uniqueDates={uniqueDates}
+            page={page}
+            totalPages={totalPages}
+            onAdminLogout={handleAdminLogout}
+            onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
+            onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
+            onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
+            onOpenReceiveModal={openReceiveModal}
+            onCancelApplication={cancelApplication}
+            onAddComment={addComment}
+            onToggleComments={(appId) => setShowComments(prev => ({
+              ...prev,
+              [appId]: !(prev[appId] || false)
+            }))}
+            onPageChange={setPage}
+            searchTerm={searchTerm}
+            statusFilter={statusFilter}
+            dateFilter={dateFilter}
+            viewedFilter={viewedFilter}
+            onSearchChange={setSearchTerm}
+            onStatusFilterChange={setStatusFilter}
+            onDateFilterChange={setDateFilter}
+            onViewedFilterChange={setViewedFilter}
+            onClearFilters={clearFilters}
+            expandedMaterials={expandedMaterials}
+            onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
+              ...prev,
+              [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
+            }))}
+            comments={comments}
+            showComments={showComments}
+            isExportingPDF={isExportingPDF}
+            isExportingXLSX={isExportingXLSX}
+          />
+        )}
+        
+        {currentView === 'confirmation' && (
+          <ApplicationList
+            applications={filteredApplications.filter(app =>
+              requiresMasterConfirmation(app.status) && app.user_id === user?.id
+            )}
+            title={language === 'ru' ? 'Заявки на подтверждение' : 'Applications for Confirmation'}
+            emptyMessage={language === 'ru' ? 'Нет заявок, требующих подтверждения' : 'No applications requiring confirmation'}
+            isMobile={isMobile}
+            user={user}
+            userRole={userRole}
+            isAdminMode={isAdminMode}
+            permissions={currentUserPermissions}
+            t={t}
+            language={language}
+            uniqueDates={uniqueDates}
+            page={page}
+            totalPages={totalPages}
+            onAdminLogout={handleAdminLogout}
+            onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
+            onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
+            onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
+            onOpenReceiveModal={openReceiveModal}
+            onCancelApplication={cancelApplication}
+            onAddComment={addComment}
+            onToggleComments={(appId) => setShowComments(prev => ({
+              ...prev,
+              [appId]: !(prev[appId] || false)
+            }))}
+            onPageChange={setPage}
+            searchTerm={searchTerm}
+            statusFilter={statusFilter}
+            dateFilter={dateFilter}
+            viewedFilter={viewedFilter}
+            onSearchChange={setSearchTerm}
+            onStatusFilterChange={setStatusFilter}
+            onDateFilterChange={setDateFilter}
+            onViewedFilterChange={setViewedFilter}
+            onClearFilters={clearFilters}
+            expandedMaterials={expandedMaterials}
+            onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
+              ...prev,
+              [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
+            }))}
+            comments={comments}
+            showComments={showComments}
+            isExportingPDF={isExportingPDF}
+            isExportingXLSX={isExportingXLSX}
+          />
+        )}
+        
+        {currentView === 'history' && (
+          <ApplicationList
+            applications={filteredApplications.filter(app =>
+              isApplicationCompleted(app.status)
+            )}
+            title={t('history')}
+            emptyMessage={t('noHistory')}
+            isMobile={isMobile}
+            user={user}
+            userRole={userRole}
+            isAdminMode={isAdminMode}
+            permissions={currentUserPermissions}
+            t={t}
+            language={language}
+            uniqueDates={uniqueDates}
+            page={page}
+            totalPages={totalPages}
+            onAdminLogout={handleAdminLogout}
+            onDownloadHTML={downloadHTMLFile}
+            onDownloadPDF={downloadPDF}
+            onDownloadXLSX={downloadXLSXFile}
+            onOpenReceiveModal={openReceiveModal}
+            onCancelApplication={cancelApplication}
+            onAddComment={addComment}
+            onToggleComments={(appId) => setShowComments(prev => ({
+              ...prev,
+              [appId]: !(prev[appId] || false)
+            }))}
+            onPageChange={setPage}
+            searchTerm={searchTerm}
+            statusFilter={statusFilter}
+            dateFilter={dateFilter}
+            viewedFilter={viewedFilter}
+            onSearchChange={setSearchTerm}
+            onStatusFilterChange={setStatusFilter}
+            onDateFilterChange={setDateFilter}
+            onViewedFilterChange={setViewedFilter}
+            onClearFilters={clearFilters}
+            expandedMaterials={expandedMaterials}
+            onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
+              ...prev,
+              [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
+            }))}
+            comments={comments}
+            showComments={showComments}
+            isExportingPDF={isExportingPDF}
+            isExportingXLSX={isExportingXLSX}
+          />
+        )}
+        
+        {currentView === 'analytics' && renderAnalyticsDashboard()}
+        
+        {currentView === 'employees' && renderEmployeesList()}
+        
+        {currentView === 'clients' && (
+          <>
+            {!userCompanyId ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4A6572]"></div>
+                <p className="ml-3 text-gray-500">Загрузка данных компании...</p>
+              </div>
+            ) : (
+              <ClientManager
+                companyId={userCompanyId}
+                t={t}
+                showNotification={showNotification}
+                onInviteClick={() => setShowClientInviteModal(true)}
+              />
+            )}
+          </>
+        )}
+        
+        {currentView === 'warehouse' && (
+          <WarehouseView
+            supabase={supabase}
+            userCompanyId={userCompanyId}
+            user={user}
+            userRole={userRole}
+            profileData={profileDataForHeader} 
+            t={t}
+            language={language}
+            showNotification={showNotification}
+            applications={applications}
+            onOpenApplication={(appId) => {
+              const app = applications.find(a => a.id === appId);
+              if (app) {
+                setSelectedApplication(app);
+                setShowReceiveModal(true);
+              }
+            }}
+          />
+        )}
+        
+        {currentView === 'documents' && (
+          <DocumentGenerator
+            applications={isAdminMode ? allApplications : applications}
+            user={user}
+            userCompanyId={userCompanyId}
+            userRole={userRole}
+            t={t}
+            showNotification={showNotification}
+            companyName={userCompany}
+            supabase={supabase}
+          />
+        )}
+        
+        {currentView === 'profile' && renderProfilePage()}
+        
+        {currentView === 'cart' && (
+          <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+            <MaterialCart
+              cart={formData.cart}
+              restoreMaterial={restoreFromCart}
+              removeMaterialPermanently={removeFromCartPermanently}
+              t={t}
+              isStandaloneView={true}
+            />
+            <button
+              onClick={() => setCurrentView('create')}
+              className="mt-4 px-4 py-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium"
+            >
+              ← Вернуться к заявке
+            </button>
+          </div>
+        )}
+        
+        {currentView === 'superAdmin' && isSuperAdmin(userRole, user?.user_metadata) && (
+          <SuperAdminPanel
+            supabase={supabase}
+            currentUser={user}
+            t={t}
+            language={language}
+            showNotification={showNotification}
+          />
+        )}
+        
+        {currentView === 'tariffs' && isSuperAdmin(userRole, user?.user_metadata) && (
+          <SuperAdminCompanyTariffs
+            supabase={supabase}
+            showNotification={showNotification}
+            t={t}
+          />
+        )}
+        
+        {currentView === 'tasks' && (
+          <TaskBoard
+            user={user}
+            userCompanyId={userCompanyId}
+            applications={applications}
+            showNotification={showNotification}
+            language={language}
+            userRole={userRole}
+          />
+        )}
+        
+        {currentView === 'chat' && (
+          <CompanyChat
+            user={user}
+            userCompanyId={userCompanyId}
+            userRole={userRole}
+            t={t}
+            language={language}
+            showNotification={showNotification}
+          />
+        )}
+        
+        {currentView === 'approvals' && renderApprovalsQueue()}
+        
+        {currentView === 'api' && (
+          <APIDocumentation
+            user={user}
+            userCompanyId={userCompanyId}
+            showNotification={showNotification}
+            t={t}
+            language={language}
+          />
+        )}
+        
+        {currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && 
+          (isCompanyOwner || userRole === 'manager' || userRole === 'director') && (
+            <div className="max-w-7xl mx-auto p-4 page-enter">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {t('tariffSelector.title', 'Управление тарифом')}
+                </h2>
+                {isAdminMode && (
+                  <button
+                    onClick={handleAdminLogout}
+                    className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  >
+                    {t('exitAdminMode', 'Выйти из режима админа')}
+                  </button>
+                )}
+              </div>
+              
+              {userCompanyId && !planLoading && (
+                <div className="mb-6">
+                  <QuotaUsage 
+                    userCompanyId={userCompanyId} 
+                    supabase={supabase} 
+                    quotaStatus={quotaStatus} 
+                  />
+                </div>
+              )}
+              
+              <TariffSelector
+                currentPlan={currentPlan?.id || 'basic'}
+                billingPeriod={billingPeriod}
+                onBillingPeriodChange={setBillingPeriod}
+                onSelectPlan={handleSelectPlan}
+                isLoading={planLoading}
+                t={t}
+                onPromoClick={() => setShowPromoModal(true)}
+                currentPlanDetails={currentPlanDetails}
+                promoCodeInfo={promoCodeInfo}
+              />
+              
+              {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
+                <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                    {t('currentPlan', 'Ваш текущий план')}:
+                  </h4>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
+                    <span>📦 {currentPlan.name}</span>
+                    <span>💰 {billingPeriod === 'monthly' 
+                      ? `${currentPlan.monthlyPrice} ₽/мес` 
+                      : `${currentPlan.annualPrice} ₽/год`}</span>
+                    <span>🔑 {currentPlan.maxApiKeys} API ключей</span>
+                    <span>👥 {currentPlan.maxUsers} пользователей</span>
+                    {currentPlan.isActive && (
+                      <span className="text-green-600">✅ Активен</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        
+        {/* Вкладки для заказчика */}
+        {currentView === 'clientDashboard' && userRole === 'client' && (
+          <ClientDashboard clientId={clientId} t={t} />
+        )}
+        
+        {currentView === 'clientChat' && userRole === 'client' && (
+          <ClientChat clientId={clientId} companyId={userCompanyId} user={user} t={t} />
+        )}
+        
+        {currentView === 'clientDocuments' && userRole === 'client' && (
+          <ClientDocuments clientId={clientId} t={t} />
+        )}
+        
+        {currentView === 'clientApplications' && userRole === 'client' && (
+          <ClientApplications clientId={clientId} t={t} />
+        )}
+        
+        {currentView === 'clientCalendar' && userRole === 'client' && (
+          <ClientCalendar clientId={clientId} t={t} />
+        )}
+        
+        {currentView === 'clientConfirmation' && userRole === 'client' && (
+          <ClientConfirmation clientId={clientId} t={t} />
+        )}
+        
+        {currentView === 'clientPhotos' && userRole === 'client' && (
+          <ClientPhotos clientId={clientId} t={t} />
+        )}
+        
+        {currentView === 'clientWorkAct' && userRole === 'client' && (
+          <ClientWorkAct clientId={clientId} t={t} />
+        )}
+        
+        {currentView === 'companyProfile' && (
+          <CompanyProfileForm 
+            companyId={userCompanyId}
+            supabase={supabase}
+            onSave={() => {
+              showNotification('✅ Реквизиты компании сохранены!', 'success');
+            }}
+          />
+        )}
+      </main>
+      
+      {/* Все модальные окна остаются без изменений */}
       <ReceiveModal
-  isOpen={showReceiveModal}
-  onClose={() => setShowReceiveModal(false)}
-  selectedApplication={selectedApplication}
-  onAdminReceive={handleAdminReceive} 
-  onSendToMaster={handleSendToMaster}
-  onMasterConfirm={handleMasterConfirm}
-  language={language}  // ← УДАЛИТЬ
-  escapeHtml={escapeHtml}
-  userRole={userRole}
-  t={t}
-  modalMode={selectedApplication?.modalMode || 'admin_receive'}
-  showNotification={showNotification}
-   onPhotoClick={(materialIndex) => {     // ← ДОБАВИТЬ
-   setActiveMaterialIndex(materialIndex);
-   setShowPhotoCapture(true);
- }}
- onQRClick={() => setShowQRScanner(true)}
-  onTakeToWork={handleTakeToWork}        // ← Добавить
-  onSendForApproval={handleSendForApproval} 
-/>
+        isOpen={showReceiveModal}
+        onClose={() => setShowReceiveModal(false)}
+        selectedApplication={selectedApplication}
+        onAdminReceive={handleAdminReceive} 
+        onSendToMaster={handleSendToMaster}
+        onMasterConfirm={handleMasterConfirm}
+        language={language}
+        escapeHtml={escapeHtml}
+        userRole={userRole}
+        t={t}
+        modalMode={selectedApplication?.modalMode || 'admin_receive'}
+        showNotification={showNotification}
+        onPhotoClick={(materialIndex) => {
+          setActiveMaterialIndex(materialIndex);
+          setShowPhotoCapture(true);
+        }}
+        onQRClick={() => setShowQRScanner(true)}
+        onTakeToWork={handleTakeToWork}
+        onSendForApproval={handleSendForApproval} 
+      />
+      
       {renderAdminLoginModal()}
       {renderNotifications()}
+      
       {!isSuperAdmin(userRole, user?.user_metadata) && showTutorial && (
         <TutorialModal
           steps={tutorialSteps}
@@ -5939,154 +5944,150 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           t={t}
         />
       )}
+      
       <AnalyticsDetailModal
-  isOpen={!!analyticsDetailType}
-  onClose={() => setAnalyticsDetailType(null)}
-  analyticsDetailType={analyticsDetailType}
-  allApplications={allApplications}
-  applications={applications}
-  isAdminMode={isAdminMode}
-  isExportingSection={isExportingSection}
-  exportAnalyticsSectionAsPDF={exportAnalyticsSectionAsPDF}
-  exportAnalyticsSectionData={exportAnalyticsSectionData}
-  t={t}
-  language={language}
-  escapeHtml={escapeHtml}
-  getStatusText={getStatusText}
-  getStatusWithOverdue={getStatusWithOverdue}
-  activationMetrics={activationMetrics}
-  timeToFirstValue={timeToFirstValue}
-  featureAdoption={featureAdoption}
-  npsMetrics={npsMetrics}
-  npsResponses={npsResponses}   
-  getRoleLabel={getRoleLabel}
-  churnMetrics={churnMetrics}
-  churnReasons={churnReasons}
-  getReasonColorClass={getReasonColorClass}
-  // ✅ НОВЫЕ ПРОПСЫ
-  retentionMetrics={retentionMetrics}
-  engagementMetrics={engagementMetrics}
-/>
+        isOpen={!!analyticsDetailType}
+        onClose={() => setAnalyticsDetailType(null)}
+        analyticsDetailType={analyticsDetailType}
+        allApplications={allApplications}
+        applications={applications}
+        isAdminMode={isAdminMode}
+        isExportingSection={isExportingSection}
+        exportAnalyticsSectionAsPDF={exportAnalyticsSectionAsPDF}
+        exportAnalyticsSectionData={exportAnalyticsSectionData}
+        t={t}
+        language={language}
+        escapeHtml={escapeHtml}
+        getStatusText={getStatusText}
+        getStatusWithOverdue={getStatusWithOverdue}
+        activationMetrics={activationMetrics}
+        timeToFirstValue={timeToFirstValue}
+        featureAdoption={featureAdoption}
+        npsMetrics={npsMetrics}
+        npsResponses={npsResponses}   
+        getRoleLabel={getRoleLabel}
+        churnMetrics={churnMetrics}
+        churnReasons={churnReasons}
+        getReasonColorClass={getReasonColorClass}
+        retentionMetrics={retentionMetrics}
+        engagementMetrics={engagementMetrics}
+      />
+      
       {privacyPolicyOpen && <PrivacyPolicyModal />}
       {renderSignupModal()}
       {renderInviteModal()}
-
-      {/* 🧪 A/B Test: Pricing Display */}
-{abTestVariants.pricing_display && (
-  <div className="mb-4 p-3 bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 rounded-lg">
-    {abTestVariants.pricing_display === 'annual' ? (
-      <div className="text-center">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Специальная цена при оплате за год
-        </p>
-        <p className="text-2xl font-bold text-[#4A6572] dark:text-[#F9AA33]">
-          9 900 ₽ <span className="text-sm font-normal">/ год</span>
-        </p>
-        <p className="text-xs text-green-600">
-          Экономия 40% по сравнению с месячной оплатой
-        </p>
-      </div>
-    ) : (
-      <div className="text-center">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Гибкая оплата по месяцам
-        </p>
-        <p className="text-2xl font-bold text-[#4A6572] dark:text-[#F9AA33]">
-          990 ₽ <span className="text-sm font-normal">/ месяц</span>
-        </p>
-        <p className="text-xs text-gray-500">
-          Отмена в любой момент
-        </p>
-      </div>
-    )}
-  </div>
-)}
-
+      
+      {/* A/B Test: Pricing Display */}
+      {abTestVariants.pricing_display && (
+        <div className="mb-4 p-3 bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 rounded-lg">
+          {abTestVariants.pricing_display === 'annual' ? (
+            <div className="text-center">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Специальная цена при оплате за год
+              </p>
+              <p className="text-2xl font-bold text-[#4A6572] dark:text-[#F9AA33]">
+                9 900 ₽ <span className="text-sm font-normal">/ год</span>
+              </p>
+              <p className="text-xs text-green-600">
+                Экономия 40% по сравнению с месячной оплатой
+              </p>
+            </div>
+          ) : (
+            <div className="text-center">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Гибкая оплата по месяцам
+              </p>
+              <p className="text-2xl font-bold text-[#4A6572] dark:text-[#F9AA33]">
+                990 ₽ <span className="text-sm font-normal">/ месяц</span>
+              </p>
+              <p className="text-xs text-gray-500">
+                Отмена в любой момент
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+      
       {/* NPS Survey Modal */}
-<NpsSurveyModal
-  isOpen={showNpsSurvey}
-  onClose={() => setShowNpsSurvey(false)}
-  onSubmit={handleNpsSubmit}
-  isLoading={npsSubmitting}
-/>
-      {/* Модальное окно обновления */}
-<VersionUpdateModal
-  isOpen={showUpdateModal}
-  onClose={() => {
-    setShowUpdateModal(false);
-    // Сохраняем, что пользователь отказался от этого обновления
-    if (updateInfo?.to) {
-      localStorage.setItem(`update_declined_${updateInfo.to}`, Date.now().toString());
-    }
-  }}
-  updateInfo={updateInfo}
-  onApplyUpdate={() => {
-    // 1. Очищаем флаг ожидающего обновления
-    if (waitingWorker) {
-      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
-    }
-    
-    // 2. Сохраняем версию, чтобы больше не показывать
-    if (updateInfo?.to) {
-      localStorage.setItem(`update_applied_${updateInfo.to}`, Date.now().toString());
-      localStorage.setItem('last_update_shown', updateInfo.to);
-    }
-    
-    // 3. Закрываем модалку
-    setShowUpdateModal(false);
-    setUpdateInfo(null);
-    
-    // 4. Очищаем кэш Service Worker
-    if ('caches' in window) {
-      caches.keys().then(keys => {
-        keys.forEach(key => caches.delete(key));
-      });
-    }
-    
-    // 5. Перезагружаем страницу принудительно
-    setTimeout(() => {
-      window.location.reload(true); // true = принудительная перезагрузка с сервера
-    }, 200);
-  }}
-/>
-<ChurnReasonModal
-  isOpen={showChurnModal}
-  onClose={() => setShowChurnModal(false)}
-  onSubmit={handleChurnSubmit}
-  isLoading={churnSubmitting}
-  companyName={userCompany} 
-  reasonOptions={REASON_OPTIONS}
-  t={t}
-/>
-{!isSuperAdmin(userRole, user?.user_metadata) && showOnboarding && (
-  <OnboardingTour
-    isOpen={showOnboarding}
-    onClose={() => setShowOnboarding(false)}
-    currentStep={onboardingStep}
-    totalSteps={currentOnboardingHighlights.length}
-    onNext={() => setOnboardingStep(prev => Math.min(prev + 1, currentOnboardingHighlights.length - 1))}
-    onPrev={() => setOnboardingStep(prev => Math.max(prev - 1, 0))}
-    onComplete={handleOnboardingComplete}
-    highlights={currentOnboardingHighlights}
-  />
-)}
-{/* 🆕 Модалка согласования */}
-{showApprovalModal && (
-  <ApprovalModal
-    isOpen={showApprovalModal}
-    onClose={() => {
-      setShowApprovalModal(false);
-      setSelectedForApproval(null);
-    }}
-    application={selectedForApproval}
-    onApprove={approveApplication}
-    onReject={rejectApplication}
-    onEscalate={escalateApplication}
-    language={language}
-    userRole={userRole}
-  />
-)}
- {/* ✅ ДОБАВИТЬ СЮДА - Модалка выбора тарифа */}
+      <NpsSurveyModal
+        isOpen={showNpsSurvey}
+        onClose={() => setShowNpsSurvey(false)}
+        onSubmit={handleNpsSubmit}
+        isLoading={npsSubmitting}
+      />
+      
+      {/* Version Update Modal */}
+      <VersionUpdateModal
+        isOpen={showUpdateModal}
+        onClose={() => {
+          setShowUpdateModal(false);
+          if (updateInfo?.to) {
+            localStorage.setItem(`update_declined_${updateInfo.to}`, Date.now().toString());
+          }
+        }}
+        updateInfo={updateInfo}
+        onApplyUpdate={() => {
+          if (waitingWorker) {
+            waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+          }
+          if (updateInfo?.to) {
+            localStorage.setItem(`update_applied_${updateInfo.to}`, Date.now().toString());
+            localStorage.setItem('last_update_shown', updateInfo.to);
+          }
+          setShowUpdateModal(false);
+          setUpdateInfo(null);
+          if ('caches' in window) {
+            caches.keys().then(keys => {
+              keys.forEach(key => caches.delete(key));
+            });
+          }
+          setTimeout(() => {
+            window.location.reload(true);
+          }, 200);
+        }}
+      />
+      
+      <ChurnReasonModal
+        isOpen={showChurnModal}
+        onClose={() => setShowChurnModal(false)}
+        onSubmit={handleChurnSubmit}
+        isLoading={churnSubmitting}
+        companyName={userCompany} 
+        reasonOptions={REASON_OPTIONS}
+        t={t}
+      />
+      
+      {!isSuperAdmin(userRole, user?.user_metadata) && showOnboarding && (
+        <OnboardingTour
+          isOpen={showOnboarding}
+          onClose={() => setShowOnboarding(false)}
+          currentStep={onboardingStep}
+          totalSteps={currentOnboardingHighlights.length}
+          onNext={() => setOnboardingStep(prev => Math.min(prev + 1, currentOnboardingHighlights.length - 1))}
+          onPrev={() => setOnboardingStep(prev => Math.max(prev - 1, 0))}
+          onComplete={handleOnboardingComplete}
+          highlights={currentOnboardingHighlights}
+        />
+      )}
+      
+      {/* Approval Modal */}
+      {showApprovalModal && (
+        <ApprovalModal
+          isOpen={showApprovalModal}
+          onClose={() => {
+            setShowApprovalModal(false);
+            setSelectedForApproval(null);
+          }}
+          application={selectedForApproval}
+          onApprove={approveApplication}
+          onReject={rejectApplication}
+          onEscalate={escalateApplication}
+          language={language}
+          userRole={userRole}
+        />
+      )}
+      
+      {/* Tariff Modal */}
       {_showTariffModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -6109,85 +6110,85 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           </div>
         </div>
       )}
-      {/* 📸 Photo Capture Modal */}
-{showPhotoCapture && (
-  <PhotoCapture
-    onCapture={(urls) => {
-      if (selectedApplication?.id && activeMaterialIndex !== null) {
-        const key = `${selectedApplication.id}-${activeMaterialIndex}`;
-        setCapturedPhotos(prev => ({
-          ...prev,
-          [key]: [...(prev[key] || []), ...urls]
-        }));
-      }
-      setShowPhotoCapture(false);
-      showNotification(`📸 Добавлено ${urls.length} фото`, 'success');
-    }}
-    onClose={() => setShowPhotoCapture(false)}
-    multiple={true}
-    maxPhotos={5}
-    applicationId={selectedApplication?.id}
-    materialIndex={activeMaterialIndex}
-    companyId={userCompanyId}
-    userId={user?.id}
-  />
-)}
-
-{/* 📷 QR Scanner Modal */}
-{showQRScanner && (
-  <QRScanner
-    onScan={(data) => {
-      try {
-        const parsed = JSON.parse(decodeURIComponent(atob(data)));
-        if (parsed.type === 'material') {
-          setFormData(prev => ({
-            ...prev,
-            materials: [
-              ...prev.materials,
-              {
-                description: parsed.name,
-                quantity: parsed.quantity,
-                unit: parsed.unit,
-                received: 0,
-                status: 'pending'
+      
+      {/* Photo Capture Modal */}
+      {showPhotoCapture && (
+        <PhotoCapture
+          onCapture={(urls) => {
+            if (selectedApplication?.id && activeMaterialIndex !== null) {
+              const key = `${selectedApplication.id}-${activeMaterialIndex}`;
+              setCapturedPhotos(prev => ({
+                ...prev,
+                [key]: [...(prev[key] || []), ...urls]
+              }));
+            }
+            setShowPhotoCapture(false);
+            showNotification(`📸 Добавлено ${urls.length} фото`, 'success');
+          }}
+          onClose={() => setShowPhotoCapture(false)}
+          multiple={true}
+          maxPhotos={5}
+          applicationId={selectedApplication?.id}
+          materialIndex={activeMaterialIndex}
+          companyId={userCompanyId}
+          userId={user?.id}
+        />
+      )}
+      
+      {/* QR Scanner Modal */}
+      {showQRScanner && (
+        <QRScanner
+          onScan={(data) => {
+            try {
+              const parsed = JSON.parse(decodeURIComponent(atob(data)));
+              if (parsed.type === 'material') {
+                setFormData(prev => ({
+                  ...prev,
+                  materials: [
+                    ...prev.materials,
+                    {
+                      description: parsed.name,
+                      quantity: parsed.quantity,
+                      unit: parsed.unit,
+                      received: 0,
+                      status: 'pending'
+                    }
+                  ]
+                }));
+                showNotification('✅ Материал добавлен из QR', 'success');
               }
-            ]
-          }));
-          showNotification('✅ Материал добавлен из QR', 'success');
-        }
-      } catch (e) {
-        console.error('QR scan error:', e); 
-        showNotification('❌ Ошибка чтения QR', 'error');
-      }
-      setShowQRScanner(false);
-    }}
-    onClose={() => setShowQRScanner(false)}  // ← Убедитесь, что здесь нет (e) =>
-  />
-)}
-{/* 🎁 Promo Modals */}
-{showPromoModal && (
-  <PromoModal
-    isOpen={showPromoModal}
-    onClose={() => setShowPromoModal(false)}
-    onActivate={handleActivatePromo}
-    isLoading={activatingPromo}
-    t={t}
-  />
-)}
-
-{showPromoManager && isSuperAdmin(userRole, user?.user_metadata) && (
-  <PromoManager
-    isOpen={showPromoManager}
-    onClose={() => setShowPromoManager(false)}
-    supabase={supabase}
-    showNotification={showNotification}
-    t={t}
-  />
-)}
-
-
-      {/* ✅ ОСТАВИТЬ ТОЛЬКО ЭТОТ БЛОК - с компонентом ClientInviteModal */}
-      {/* Модалка приглашения заказчика */}
+            } catch (e) {
+              console.error('QR scan error:', e); 
+              showNotification('❌ Ошибка чтения QR', 'error');
+            }
+            setShowQRScanner(false);
+          }}
+          onClose={() => setShowQRScanner(false)}
+        />
+      )}
+      
+      {/* Promo Modals */}
+      {showPromoModal && (
+        <PromoModal
+          isOpen={showPromoModal}
+          onClose={() => setShowPromoModal(false)}
+          onActivate={handleActivatePromo}
+          isLoading={activatingPromo}
+          t={t}
+        />
+      )}
+      
+      {showPromoManager && isSuperAdmin(userRole, user?.user_metadata) && (
+        <PromoManager
+          isOpen={showPromoManager}
+          onClose={() => setShowPromoManager(false)}
+          supabase={supabase}
+          showNotification={showNotification}
+          t={t}
+        />
+      )}
+      
+      {/* Client Invite Modal */}
       {showClientInviteModal && (
         <ClientInviteModal
           isOpen={showClientInviteModal}
@@ -6200,6 +6201,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         />
       )}
     </div>
-  );
+  </ErrorBoundary>
+);
 };
 export default memo(App);

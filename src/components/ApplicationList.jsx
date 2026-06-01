@@ -5,10 +5,13 @@ Package, Search, Shield, FileText, Download, Ban,
 CheckCircle, AlertCircle, AlertTriangle, Clock, Archive,
 X, ArrowLeft, Loader2, ShoppingCart, ChevronDown, ChevronUp,
 Sparkles, Undo2, Info, RefreshCw, Mail, XCircle, Warehouse,
-Send, CheckCircle2, Hourglass, Boxes
+Send, CheckCircle2, Hourglass, Boxes, Save
 } from 'lucide-react';
 import CommentsSection from './CommentsSection';
 import MobileMaterialCard from './MobileMaterialCard';
+// ✅ ИМПОРТ АВТОСОХРАНЕНИЯ КОММЕНТАРИЕВ
+import { saveCommentDraft, getCommentDraft, clearCommentDraft } from '../utils/autoSaveUtils';
+
 // ─────────────────────────────────────────────────────────────
 // 📦 ИМПОРТ СТАТУСОВ ИЗ ЦЕНТРАЛИЗОВАННОГО ФАЙЛА
 // ─────────────────────────────────────────────────────────────
@@ -23,6 +26,7 @@ isApplicationActive,
 isApplicationCompleted,
 requiresMasterConfirmation
 } from '../utils/applicationStatuses';
+
 // ─────────────────────────────────────────────────────────────
 // 📦 КОНФИГУРАЦИЯ СТАТУСОВ
 // ─────────────────────────────────────────────────────────────
@@ -81,7 +85,7 @@ icon: AlertTriangle,
 colorClass: 'text-red-800 bg-red-200 dark:bg-red-900/70 dark:text-red-200 border-2 border-red-500',
 isOverdue: true
 },
-// Позиции — ✅ с дефолтными значениями
+// Позиции
 [ITEM_STATUS.PENDING]: {
 labelKey: STATUS_I18N[ITEM_STATUS.PENDING]?.ru || 'itemStatusPending',
 icon: Hourglass,
@@ -108,16 +112,19 @@ icon: XCircle,
 colorClass: STATUS_COLORS[ITEM_STATUS.REJECTED] || 'text-red-700 bg-red-200 dark:bg-red-900/40 dark:text-red-300'
 }
 };
+
 const DEFAULT_STATUS = {
 labelKey: 'statusUnknown',
 icon: AlertCircle,
 colorClass: 'text-gray-800 bg-gray-200 dark:bg-gray-700/60 dark:text-gray-200'
 };
+
 // ─────────────────────────────────────────────────────────────
 // 🎨 СТИЛИ И АНИМАЦИИ
 // ─────────────────────────────────────────────────────────────
 const ANIMATION_DURATION = 200;
 const UNDO_TIMEOUT_MS = 3000;
+
 const styles = `
 @keyframes slideIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -135,6 +142,7 @@ const styles = `
 .quantity-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .quantity-stepper input[type=number] { -moz-appearance: textfield; }
 `;
+
 // ─────────────────────────────────────────────────────────────
 // 🔧 ХЕЛПЕРЫ
 // ─────────────────────────────────────────────────────────────
@@ -145,6 +153,7 @@ const created = new Date(dateString);
 const diffTime = Math.abs(now - created);
 return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
+
 const escapeHtml = (unsafe) => {
 if (typeof unsafe !== 'string') return '';
 return unsafe
@@ -154,6 +163,7 @@ return unsafe
 .replace(/"/g, '&quot;')
 .replace(/'/g, '&#039;');
 };
+
 const formatDate = (dateString, language) => {
 if (!dateString) return '';
 try {
@@ -164,7 +174,9 @@ day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-d
 return dateString;
 }
 };
+
 const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num);
+
 // ─────────────────────────────────────────────────────────────
 // 🎨 UI КОМПОНЕНТЫ
 // ─────────────────────────────────────────────────────────────
@@ -189,6 +201,7 @@ aria-label={`${displayText}${isOverdue ? ` • ${t('overdue')}` : ''}`}
 );
 });
 StatusBadge.displayName = 'StatusBadge';
+
 const ExportButton = memo(({ label, onClick, disabled, loading, ariaLabel, icon: IconComponent }) => {
 const Icon = IconComponent;
 return (
@@ -209,6 +222,7 @@ title={label}
 );
 });
 ExportButton.displayName = 'ExportButton';
+
 const ProgressBar = memo(({ onWarehouse, confirmed, total, t }) => {
 const warehouseProgress = total > 0 ? Math.round((onWarehouse / total) * 100) : 0;
 const confirmationProgress = total > 0 ? Math.round((confirmed / total) * 100) : 0;
@@ -254,6 +268,7 @@ title={t('confirmed')}
 );
 });
 ProgressBar.displayName = 'ProgressBar';
+
 const Toast = memo(({ message, type, onClose, onUndo, canUndo, t }) => {
 useEffect(() => {
 if (!canUndo) {
@@ -287,6 +302,7 @@ className="px-3 py-1 text-xs font-medium bg-white/50 dark:bg-gray-700/50 rounded
 );
 });
 Toast.displayName = 'Toast';
+
 const ApplicationCardSkeleton = memo(() => (
 <article className="app-card-enter bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 sm:p-5 rounded-2xl border border-gray-200/60 dark:border-gray-700/60 animate-pulse">
 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -312,6 +328,7 @@ const ApplicationCardSkeleton = memo(() => (
 </article>
 ));
 ApplicationCardSkeleton.displayName = 'ApplicationCardSkeleton';
+
 // ─────────────────────────────────────────────────────────────
 // 🧩 ОСНОВНОЙ КОМПОНЕНТ
 // ─────────────────────────────────────────────────────────────
@@ -358,12 +375,18 @@ isExportingXLSX = false
 }) => {
 const [toast, setToast] = useState(null);
 const toastTimerRef = useRef(null);
+
+// ✅ СОСТОЯНИЯ ДЛЯ АВТОСОХРАНЕНИЯ КОММЕНТАРИЕВ
+const [commentDrafts, setCommentDrafts] = useState({});
+const commentTimerRef = useRef({});
+
 useEffect(() => {
 const styleEl = document.createElement('style');
 styleEl.textContent = styles;
 document.head.appendChild(styleEl);
 return () => document.head.removeChild(styleEl);
 }, []);
+
 const showToast = useCallback((message, type = 'info', canUndo = false, undoFn = null) => {
 if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
 setToast({ message, type, canUndo, undoFn, id: Date.now() });
@@ -374,6 +397,45 @@ toastTimerRef.current = null;
 }, UNDO_TIMEOUT_MS);
 }
 }, []);
+
+// ✅ ЗАГРУЗКА ЧЕРНОВИКА ПРИ ОТКРЫТИИ КОММЕНТАРИЕВ
+const loadCommentDraft = useCallback((applicationId) => {
+const savedDraft = getCommentDraft(applicationId);
+if (savedDraft) {
+setCommentDrafts(prev => ({ ...prev, [applicationId]: savedDraft }));
+} else {
+setCommentDrafts(prev => ({ ...prev, [applicationId]: '' }));
+}
+return savedDraft || '';
+}, []);
+
+// ✅ АВТОСОХРАНЕНИЕ ПРИ ВВОДЕ ТЕКСТА
+const handleCommentChange = useCallback((applicationId, value) => {
+setCommentDrafts(prev => ({ ...prev, [applicationId]: value }));
+
+if (commentTimerRef.current[applicationId]) {
+clearTimeout(commentTimerRef.current[applicationId]);
+}
+
+commentTimerRef.current[applicationId] = setTimeout(() => {
+if (value && value.trim()) {
+saveCommentDraft(applicationId, value);
+} else {
+clearCommentDraft(applicationId);
+}
+}, 1000);
+}, []);
+
+// ✅ ОЧИСТКА ЧЕРНОВИКА ПОСЛЕ ОТПРАВКИ
+const clearCommentDraftHandler = useCallback((applicationId) => {
+clearCommentDraft(applicationId);
+setCommentDrafts(prev => ({ ...prev, [applicationId]: '' }));
+
+if (commentTimerRef.current[applicationId]) {
+clearTimeout(commentTimerRef.current[applicationId]);
+}
+}, []);
+
 useEffect(() => {
 const handleKeyDown = (e) => {
 if (e.key === 'Escape') {
@@ -389,11 +451,16 @@ showToast(t('exportStarted') || 'Экспорт начат', 'info');
 document.addEventListener('keydown', handleKeyDown);
 return () => document.removeEventListener('keydown', handleKeyDown);
 }, [searchTerm, statusFilter, applications.length, onSearchChange, onStatusFilterChange, t, toast, showToast]);
+
 useEffect(() => {
 return () => {
 if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+Object.values(commentTimerRef.current).forEach(timer => {
+if (timer) clearTimeout(timer);
+});
 };
 }, []);
+
 const getRoleLabel = useCallback((role) => {
 const ROLE_OPTIONS = [
 { value: 'foreman', label: t('foremanName') },
@@ -403,12 +470,13 @@ const ROLE_OPTIONS = [
 ];
 return ROLE_OPTIONS.find(r => r.value === role)?.label || role;
 }, [t]);
-// ✅ НОВЫЙ: Статус материала с учётом всех полей — ✅ с дефолтными значениями
+
 const getMaterialStatus = useCallback((material, translate) => {
 const requestedQty = Number(material.quantity) || 0;
 const onWarehouse = Number(material.supplier_received_quantity) || 0;
 const confirmed = Number(material.received) || 0;
 const itemStatus = material.status || ITEM_STATUS.PENDING;
+
 if (confirmed >= requestedQty && requestedQty > 0) {
 return {
 text: translate('statusReceived'),
@@ -436,10 +504,9 @@ class: STATUS_CONFIG[ITEM_STATUS.PENDING]?.colorClass || DEFAULT_STATUS.colorCla
 icon: STATUS_CONFIG[ITEM_STATUS.PENDING]?.icon || Hourglass
 };
 }, []);
-// ✅ ХЕЛПЕР: Можно ли показать кнопку «Приёмка на склад»
+
 const canShowReceiveButton = useCallback((app, role) => {
 if (role !== 'supply_admin' && role !== 'manager') return false;
-// ✅ Добавили PARTIAL_RECEIVED — можно принимать остатки
 const isActiveStatus = [
 APPLICATION_STATUS.PENDING,
 APPLICATION_STATUS.ADMIN_PROCESSING,
@@ -450,23 +517,20 @@ const hasUnreceivedMaterials = app.materials?.some(m =>
 );
 return isActiveStatus && hasUnreceivedMaterials;
 }, []);
-// ✅ ХЕЛПЕР: Можно ли показать кнопку «Отправить мастеру»
+
 const canShowSendToMasterButton = useCallback((app, role) => {
 if (role !== 'supply_admin' && role !== 'manager') return false;
-// ✅ Разрешаем отправку для ADMIN_PROCESSING, PARTIAL_RECEIVED и PENDING_MASTER_CONFIRMATION
 if (![APPLICATION_STATUS.ADMIN_PROCESSING, APPLICATION_STATUS.PARTIAL_RECEIVED, APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION].includes(app.status)) return false;
 const hasReceivedUnsentMaterials = app.materials?.some(m =>
 (Number(m.supplier_received_quantity) || 0) > 0 &&
 m.status !== ITEM_STATUS.SENT_TO_MASTER &&
-(Number(m.received) || 0) < (Number(m.quantity) || 0)  // ещё не подтверждено мастером
+(Number(m.received) || 0) < (Number(m.quantity) || 0)
 );
 return hasReceivedUnsentMaterials;
 }, []);
-// ✅ ФИЛЬТР: показывать только непринятые материалы для активных заявок
-// ✅ ИСПРАВЛЕННАЯ ФУНКЦИЯ
+
 const getVisibleMaterials = useCallback((materials, viewMode) => {
 if (!materials || !Array.isArray(materials)) return [];
-// ✅ Сначала фильтруем пустые
 const validMaterials = materials.filter(m =>
 m?.description?.trim() &&
 (Number(m.quantity) || 0) > 0
@@ -487,6 +551,7 @@ return confirmed < requested;
 }
 return validMaterials;
 }, []);
+
 const processedApplications = useMemo(() => {
 return applications.map(app => {
 const totalMaterials = app.materials?.reduce((sum, m) => sum + (Number(m.quantity) || 0), 0) || 0;
@@ -508,26 +573,30 @@ confirmationProgress: totalMaterials > 0 ? Math.round((confirmed / totalMaterial
 };
 });
 }, [applications]);
+
 const handleDownloadPDF = useCallback((app) => {
 if (!isExportingPDF) onDownloadPDF(app);
 }, [isExportingPDF, onDownloadPDF]);
+
 const handleDownloadXLSX = useCallback((app) => {
 if (!isExportingXLSX) onDownloadXLSX(app);
 }, [isExportingXLSX, onDownloadXLSX]);
+
 const handlePageChange = useCallback((newPage) => {
 if (newPage >= 1 && newPage <= totalPages) {
 onPageChange(newPage);
 }
 }, [totalPages, onPageChange]);
+
 const handleCancel = useCallback((app) => {
 if (window.confirm(t('confirmCancel') || 'Отменить заявку?')) {
 onCancelApplication(app.id);
-showToast(t('applicationCanceled') || 'Заявка отменена', 'success', true, () => {
-// Undo logic placeholder
-});
+showToast(t('applicationCanceled') || 'Заявка отменена', 'success', true, () => {});
 }
 }, [onCancelApplication, t, showToast]);
+
 const hasActiveFilters = searchTerm || statusFilter !== 'all' || dateFilter || viewedFilter !== 'all';
+
 return (
 <div className="max-w-7xl mx-auto p-4 app-card-enter">
 <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
@@ -555,10 +624,10 @@ aria-label={t('exitAdminMode')}
 </button>
 )}
 </div>
+
 {/* Filters */}
 <div className="mb-6">
 <div className="flex flex-wrap gap-3 items-end">
-{/* Search */}
 <div className="flex-1 min-w-[200px]">
 <label htmlFor="search-input" className="sr-only">{t('search')}</label>
 <div className="relative">
@@ -583,7 +652,7 @@ aria-label={t('clear')}
 )}
 </div>
 </div>
-{/* Status Filter - ✅ ВСЕ СТАТУСЫ через константы */}
+
 <div>
 <label htmlFor="status-filter" className="sr-only">{t('filterByStatus')}</label>
 <select
@@ -605,7 +674,7 @@ aria-label={t('filterByStatus')}
 <option value={APPLICATION_STATUS.CANCELED}>{t('statusCanceled')}</option>
 </select>
 </div>
-{/* Date Filter */}
+
 <div>
 <label htmlFor="date-filter" className="sr-only">{t('filterByDate')}</label>
 <select
@@ -621,7 +690,7 @@ aria-label={t('filterByDate')}
 ))}
 </select>
 </div>
-{/* Viewed Filter */}
+
 {permissions?.canViewAll && (
 <div>
 <label htmlFor="viewed-filter" className="sr-only">{t('filterByViewed')}</label>
@@ -637,7 +706,7 @@ aria-label={t('filterByViewed')}
 </select>
 </div>
 )}
-{/* Clear Filters */}
+
 {hasActiveFilters && (
 <button
 onClick={onClearFilters}
@@ -654,12 +723,14 @@ aria-label={t('clearFilters')}
 <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded">Ctrl+Enter — экспорт</span>
 </div>
 </div>
+
 {/* Loading / Empty States */}
 {isLoading && (
 <div className="space-y-4">
 {[...Array(3)].map((_, i) => <ApplicationCardSkeleton key={i} />)}
 </div>
 )}
+
 {!isLoading && applications.length === 0 && (
 <div className="text-center py-16" role="status" aria-live="polite">
 <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gray-100 dark:bg-gray-800 mb-4">
@@ -671,13 +742,13 @@ aria-label={t('clearFilters')}
 </p>
 </div>
 )}
+
 {/* Applications List */}
 {!isLoading && processedApplications.length > 0 && (
 <div className="space-y-4" role="list" aria-label={t('applicationsList')}>
 {processedApplications.map((application) => {
 const { _calculated: calc } = application;
 
-// ✅✅✅ КНОПКИ ЭКСПОРТА ВНУТРИ .map() — application теперь в области видимости ✅✅✅
 const exportButtons = [
 {
 key: 'html',
@@ -750,7 +821,7 @@ t={t}
 <dd className="inline ml-1">{formatDate(application.created_at, language)}</dd>
 </div>
 </dl>
-{/* ✅ Только один ProgressBar для активных */}
+
 {calc.isActive && calc.totalMaterials > 0 && (
 <ProgressBar
 onWarehouse={calc.onWarehouse}
@@ -759,12 +830,14 @@ total={calc.totalMaterials}
 t={t}
 />
 )}
+
 {calc.isCompleted && (
 <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
 <CheckCircle className="w-3 h-3" />
 {t('completed')}
 </div>
 )}
+
 {/* Materials */}
 {isMobile ? (
 <div className="space-y-2" role="list" aria-label={t('materialsList')}>
@@ -839,9 +912,9 @@ return (
 </div>
 )}
 </div>
-{/* Action Buttons - ✅ РАЗДЕЛЕНИЕ ПО РОЛЯМ И СТАТУСАМ С ХЕЛПЕРАМИ */}
+
+{/* Action Buttons */}
 <div className="flex flex-wrap sm:flex-col gap-2 sm:ml-6 sm:justify-start">
-{/* ✅ Кнопки экспорта с отфильтрованными материалами */}
 {exportButtons.map((btn) => (
 <ExportButton
 key={btn.key}
@@ -853,9 +926,9 @@ loading={btn.loading}
 ariaLabel={`${btn.label} — ${application.object_name}`}
 />
 ))}
+
 {application.status !== APPLICATION_STATUS.CANCELED && (
 <>
-{/* 🔸 АДМИН/МЕНЕДЖЕР: Приёмка на склад — ✅ с проверкой непринятых материалов */}
 {canShowReceiveButton(application, userRole) && (
 <button
 onClick={() => onOpenReceiveModal(application, 'admin_receive')}
@@ -866,7 +939,7 @@ aria-label={t('acceptToWarehouse')}
 {t('acceptToWarehouse') || 'Приёмка'}
 </button>
 )}
-{/* 🔸 АДМИН/МЕНЕДЖЕР: Отправка мастеру — ✅ с проверкой неотправленных материалов */}
+
 {canShowSendToMasterButton(application, userRole) && (
 <button
 onClick={() => onOpenReceiveModal(application, 'admin_send_to_master')}
@@ -877,7 +950,7 @@ aria-label={t('sendToMaster')}
 {t('sendToMaster') || 'Отправить'}
 </button>
 )}
-{/* 🔸 МАСТЕР: Подтверждение получения */}
+
 {userRole === 'foreman' &&
 requiresMasterConfirmation(application.status) &&
 application.user_id === user?.id && (
@@ -890,7 +963,7 @@ aria-label={t('confirmReceipt')}
 {t('confirmReceipt') || 'Подтвердить'}
 </button>
 )}
-{/* 🔸 МАСТЕР: Отмена своей заявки */}
+
 {userRole === 'foreman' &&
 isApplicationActive(application.status) &&
 application.status === APPLICATION_STATUS.PENDING &&
@@ -904,24 +977,25 @@ aria-label={t('cancelApplication')}
 {t('cancelApplication')}
 </button>
 )}
-{/* 🔸 МАСТЕР: Подтверждение получения - ДЛЯ РОЛИ 'master' */}
+
 {userRole === 'master' &&
- requiresMasterConfirmation(application.status) &&
- application.user_id === user?.id && (
-  <button
-    onClick={() => onOpenReceiveModal(application, 'master_confirm')}
-    className="px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all shadow-lg shadow-green-500/25"
-    aria-label={t('confirmReceipt')}
-  >
-    <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
-    {t('confirmReceipt') || 'Подтвердить'}
-  </button>
+requiresMasterConfirmation(application.status) &&
+application.user_id === user?.id && (
+<button
+onClick={() => onOpenReceiveModal(application, 'master_confirm')}
+className="px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all shadow-lg shadow-green-500/25"
+aria-label={t('confirmReceipt')}
+>
+<CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
+{t('confirmReceipt') || 'Подтвердить'}
+</button>
 )}
 </>
 )}
 </div>
 </div>
-{/* Comments Section */}
+
+{/* Comments Section with Auto-Save Props */}
 <CommentsSection
 application={application}
 comments={comments}
@@ -934,7 +1008,13 @@ getRoleLabel={getRoleLabel}
 escapeHtml={escapeHtml}
 isLoading={isLoading}
 user={user}
+// ✅ ПРОПСЫ ДЛЯ АВТОСОХРАНЕНИЯ
+draftValue={commentDrafts[application.id] || ''}
+onDraftChange={(value) => handleCommentChange(application.id, value)}
+onClearDraft={() => clearCommentDraftHandler(application.id)}
+onOpen={() => loadCommentDraft(application.id)}
 />
+
 {/* Change History */}
 {application.status_history?.length > 0 && (
 <details className="mt-4 pt-4 border-t border-gray-200/30 dark:border-gray-700/30 group">
@@ -965,6 +1045,7 @@ user={user}
 })}
 </div>
 )}
+
 {/* Pagination */}
 {totalPages > 1 && (
 <nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')} role="navigation">
@@ -992,6 +1073,7 @@ aria-label={t('nextPage')}
 </nav>
 )}
 </div>
+
 {/* Toast Notification */}
 {toast && (
 <Toast
@@ -1003,6 +1085,7 @@ onUndo={toast.undoFn}
 t={t}
 />
 )}
+
 <div className="sr-only" aria-live="polite" aria-atomic="true">
 {toast ? toast.message : ''}
 </div>
@@ -1010,4 +1093,5 @@ t={t}
 );
 });
 ApplicationList.displayName = 'ApplicationList';
+
 export default ApplicationList;
