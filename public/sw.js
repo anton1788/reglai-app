@@ -1,11 +1,43 @@
-// public/sw.js
+/* eslint-disable */
 // ✅ Service Worker для PWA приложения Reglai
 // Версия: 9
 
-const APP_VERSION = '4.9.9'; // ✅ Синхронизировано с index.html и manifest.json
+// ✅ Защита от циклических обновлений
+let isUpdating = false;
+let lastUpdateCheck = 0;
+const UPDATE_COOLDOWN = 60000; // 60 секунд
+
+const APP_VERSION = '5.9.9';
 const CACHE_NAME = `reglai-system-v${APP_VERSION}`;
 const DATA_CACHE_NAME = `reglai-data-v${APP_VERSION}`;
 const OFFLINE_CACHE_NAME = `reglai-offline-v${APP_VERSION}`;
+
+const checkAndUpdate = async () => {
+  const now = Date.now();
+  if (isUpdating || (now - lastUpdateCheck) < UPDATE_COOLDOWN) {
+    console.log('[SW] Update skipped (cooldown)');
+    return false;
+  }
+  
+  isUpdating = true;
+  lastUpdateCheck = now;
+  
+  try {
+    const response = await fetch('/version.json?v=' + now);
+    const data = await response.json();
+    
+    if (data.version && data.version !== APP_VERSION) {
+      console.log('[SW] New version detected:', data.version);
+      return true;
+    }
+  } catch (err) {
+    console.warn('[SW] Version check failed:', err);
+  } finally {
+    isUpdating = false;
+  }
+  
+  return false;
+};
 
 // ✅ Ресурсы для предзагрузки (App Shell)
 const urlsToCache = [
@@ -22,9 +54,7 @@ const urlsToCache = [
   '/icon-192.png',
   '/icon-256.png',
   '/icon-384.png',
-  '/icon-512.png',
-  '/static/js/main.js',
-  '/static/css/main.css'
+  '/icon-512.png'
 ];
 
 // ✅ Конфигурация кэширования
@@ -36,10 +66,9 @@ const CACHE_CONFIG = {
 };
 
 // ─────────────────────────────────────────────────────────
-// 🎯 Вспомогательные функции (ПЕРЕД install)
+// 🎯 Вспомогательные функции
 // ─────────────────────────────────────────────────────────
 
-// ✅ НОВАЯ: Проверка домена Supabase (вместо жёсткого списка)
 const isSupabaseUrl = (url) => {
   try {
     return new URL(url).hostname.endsWith('.supabase.co');
@@ -48,7 +77,6 @@ const isSupabaseUrl = (url) => {
   }
 };
 
-// ✅ ОБНОВЛЁННАЯ: Проверка API-запросов (динамическая)
 const isApiRequest = (url) => {
   return isSupabaseUrl(url) && (
     url.includes('/rest/v1/') || 
@@ -57,6 +85,7 @@ const isApiRequest = (url) => {
     url.includes('/storage/v1/')
   );
 };
+
 const isStaticResource = (url) => {
   const staticExtensions = ['.html', '.js', '.css', '.png', '.jpg', '.jpeg', '.svg', '.json', '.ico', '.woff', '.woff2'];
   try {
@@ -78,7 +107,7 @@ const notifyClients = (type, payload) => {
 };
 
 // ─────────────────────────────────────────────────────────
-// 📦 INSTALL: Предзагрузка критических ресурсов
+// 📦 INSTALL
 // ─────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing v' + APP_VERSION);
@@ -86,7 +115,6 @@ self.addEventListener('install', (event) => {
     Promise.all([
       caches.open(CACHE_NAME).then(async (cache) => {
         console.log('[SW] Caching app shell...');
-        // Кэшируем с обработкой ошибок для каждого ресурса
         const results = await Promise.allSettled(
           urlsToCache.map(url => 
             fetch(url, { cache: 'reload' })
@@ -109,7 +137,7 @@ self.addEventListener('install', (event) => {
 });
 
 // ─────────────────────────────────────────────────────────
-// 🔄 ACTIVATE: Очистка старых кэшей
+// 🔄 ACTIVATE
 // ─────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activating v' + APP_VERSION);
@@ -130,11 +158,10 @@ self.addEventListener('activate', (event) => {
 });
 
 // ─────────────────────────────────────────────────────────
-// 🔄 BACKGROUND SYNC: Синхронизация офлайн-очереди
+// 🔄 BACKGROUND SYNC
 // ─────────────────────────────────────────────────────────
 self.addEventListener('sync', (event) => {
   console.log('[SW] Sync event:', event.tag);
-  
   if (event.tag === 'sync-reglai-queue') {
     event.waitUntil(syncOfflineQueue());
   }
@@ -156,24 +183,16 @@ async function syncOfflineQueue() {
       try {
         const data = await response.json();
         const savedAtHeader = response.headers.get('x-offline-saved-at');
-        
-        // ✅ Безопасное получение даты
         const savedAt = savedAtHeader ? new Date(savedAtHeader).getTime() : now;
         
-        // Удаляем слишком старые запросы
         if (now - savedAt > maxAge) {
           await cache.delete(request);
-          console.log(`[SW] Deleted expired request: ${request.url}`);
           continue;
         }
         
-        // Повторная отправка
         const fetchResponse = await fetch(request.url, {
           method: data.method || 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...data.headers
-          },
+          headers: { 'Content-Type': 'application/json', ...data.headers },
           body: JSON.stringify(data.body),
           mode: 'cors',
           credentials: 'include'
@@ -182,9 +201,6 @@ async function syncOfflineQueue() {
         if (fetchResponse.ok) {
           await cache.delete(request);
           notifyClients('SYNC_SUCCESS', { url: request.url, timestamp: savedAt });
-          console.log(`[SW] Synced: ${request.url}`);
-        } else {
-          console.warn(`[SW] Sync failed HTTP ${fetchResponse.status}: ${request.url}`);
         }
       } catch (error) {
         console.warn(`[SW] Sync error for ${request.url}:`, error.message);
@@ -196,72 +212,20 @@ async function syncOfflineQueue() {
 }
 
 // ─────────────────────────────────────────────────────────
-// 🧹 Очистка кэша данных (по количеству и времени)
-// ─────────────────────────────────────────────────────────
-const pruneDataCache = async (cache) => {
-  try {
-    const keys = await cache.keys();
-    const now = Date.now();
-    const ttlMs = CACHE_CONFIG.DATA_CACHE_TTL_MINUTES * 60 * 1000;
-    
-    // Удаляем просроченные
-    for (const key of keys) {
-      const response = await cache.match(key);
-      if (!response) continue;
-      
-      const cachedTime = response.headers.get('x-cached-at') || response.headers.get('date');
-      if (cachedTime) {
-        const timestamp = new Date(cachedTime).getTime();
-        if (now - timestamp > ttlMs) {
-          await cache.delete(key);
-          console.log(`[SW] Pruned expired: ${key.url}`);
-        }
-      }
-    }
-    
-    // Удаляем лишние по количеству (самые старые)
-    const remaining = await cache.keys();
-    if (remaining.length > CACHE_CONFIG.MAX_DATA_CACHE_ENTRIES) {
-      const toDelete = remaining.slice(0, remaining.length - CACHE_CONFIG.MAX_DATA_CACHE_ENTRIES);
-      await Promise.all(toDelete.map(key => cache.delete(key)));
-      console.log(`[SW] Pruned ${toDelete.length} old entries (limit: ${CACHE_CONFIG.MAX_DATA_CACHE_ENTRIES})`);
-    }
-  } catch (error) {
-    console.warn('[SW] Prune data cache error:', error);
-  }
-};
-
-const pruneOfflineCache = async (cache) => {
-  try {
-    const keys = await cache.keys();
-    if (keys.length > CACHE_CONFIG.MAX_OFFLINE_CACHE_ENTRIES) {
-      const toDelete = keys.slice(0, keys.length - CACHE_CONFIG.MAX_OFFLINE_CACHE_ENTRIES);
-      await Promise.all(toDelete.map(key => cache.delete(key)));
-      console.log(`[SW] Pruned ${toDelete.length} offline entries`);
-    }
-  } catch (error) {
-    console.warn('[SW] Prune offline cache error:', error);
-  }
-};
-
-// ─────────────────────────────────────────────────────────
-// 🌐 FETCH: Умная стратегия кэширования
+// 🌐 FETCH
 // ─────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  
-  // Игнорируем не-GET запросы для статики и некорректные URL
   if (request.method !== 'GET') return;
   
   try {
     const url = new URL(request.url);
     
-    // 🔹 Статические ресурсы: Cache First + Background Update
+    // Статические ресурсы
     if (isStaticResource(url.href) && !isApiRequest(url.href)) {
       event.respondWith(
         caches.match(request).then(async (cached) => {
           if (cached) {
-            // Обновляем в фоне
             fetch(request).then(async (response) => {
               if (response.ok) {
                 const cache = await caches.open(CACHE_NAME);
@@ -270,7 +234,6 @@ self.addEventListener('fetch', (event) => {
             }).catch(() => {});
             return cached;
           }
-          
           return fetch(request).then(async (response) => {
             if (response.ok) {
               const cache = await caches.open(CACHE_NAME);
@@ -283,50 +246,32 @@ self.addEventListener('fetch', (event) => {
       return;
     }
     
-    // 🔹 API-запросы: Network First + Cache Fallback
+    // API-запросы
     if (isApiRequest(url.href)) {
       event.respondWith(
         (async () => {
           try {
             const networkResponse = await fetch(request);
-            
             if (networkResponse.ok) {
-              // Кэшируем успешные ответы с метаданными
               const clone = networkResponse.clone();
               const headers = new Headers(clone.headers);
               headers.set('x-cached-at', new Date().toUTCString());
-              headers.set('Cache-Control', 'public, max-age=300'); // 5 минут
-              
               const responseWithHeaders = new Response(clone.body, {
                 status: clone.status,
                 statusText: clone.statusText,
                 headers
               });
-              
               const cache = await caches.open(DATA_CACHE_NAME);
               await cache.put(request, responseWithHeaders);
-              await pruneDataCache(cache);
             }
             return networkResponse;
           } catch (error) {
-            console.warn(`[SW] Network failed for ${request.url}:`, error.message);
-            // Fallback на кэш при офлайне
             const cache = await caches.open(DATA_CACHE_NAME);
             const cached = await cache.match(request);
-            
-            if (cached) {
-              console.log(`[SW] Offline: serving cached API: ${request.url}`);
-              return cached;
-            }
-            
-            // Возвращаем понятную ошибку офлайна
-            return new Response(JSON.stringify({ 
-              error: 'offline', 
-              message: 'Нет соединения. Данные будут отправлены при восстановлении связи.'
-            }), {
+            if (cached) return cached;
+            return new Response(JSON.stringify({ error: 'offline', message: 'Нет соединения' }), {
               headers: { 'Content-Type': 'application/json' },
-              status: 503,
-              statusText: 'Service Unavailable'
+              status: 503
             });
           }
         })()
@@ -334,12 +279,11 @@ self.addEventListener('fetch', (event) => {
       return;
     }
     
-    // 🔹 HTML-навигация: Stale-While-Revalidate
+    // HTML-навигация
     if (request.mode === 'navigate') {
       event.respondWith(
         (async () => {
           const cached = await caches.match(request);
-          
           try {
             const networkResponse = await fetch(request);
             if (networkResponse.ok) {
@@ -354,27 +298,21 @@ self.addEventListener('fetch', (event) => {
       );
       return;
     }
-    
   } catch (error) {
     console.warn('[SW] Fetch handler error:', error);
   }
   
-  // 🔹 Default: Network with cache fallback
-  event.respondWith(
-    fetch(request).catch(() => caches.match(request))
-  );
+  event.respondWith(fetch(request).catch(() => caches.match(request)));
 });
 
 // ─────────────────────────────────────────────────────────
-// 💬 MESSAGE HANDLER: Управление из приложения
+// 💬 MESSAGE HANDLER (ЕДИНЫЙ)
 // ─────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
   const { type, payload } = event.data || {};
   if (!type) return;
 
   switch (type) {
-    
-    // 📤 Сохранение запроса в офлайн-очередь
     case 'SAVE_OFFLINE_DATA':
       event.waitUntil(
         (async () => {
@@ -383,53 +321,40 @@ self.addEventListener('message', (event) => {
             if (!url) throw new Error('URL required');
             
             const cache = await caches.open(OFFLINE_CACHE_NAME);
-            await pruneOfflineCache(cache);
-            
             const request = new Request(url, { method, headers: { 'Content-Type': 'application/json' } });
             const response = new Response(JSON.stringify({ method, headers, body }), {
-              headers: { 
-                'Content-Type': 'application/json',
-                'x-offline-saved-at': new Date().toUTCString()
-              }
+              headers: { 'Content-Type': 'application/json', 'x-offline-saved-at': new Date().toUTCString() }
             });
-            
             await cache.put(request, response);
-            console.log(`[SW] Queued offline: ${url}`);
             
             if (event.source) {
-              event.source.postMessage({
-                type: 'OFFLINE_DATA_SAVED',
-                url,
-                success: true,
-                timestamp: Date.now()
-              });
+              event.source.postMessage({ type: 'OFFLINE_DATA_SAVED', url, success: true });
             }
-            
-            // Запрашиваем фоновую синхронизацию
             if ('sync' in self.registration) {
               await self.registration.sync.register('sync-reglai-queue');
             }
           } catch (error) {
-            console.error('[SW] Failed to queue offline data:', error);
+            console.error('[SW] Failed to queue:', error);
             if (event.source) {
-              event.source.postMessage({
-                type: 'OFFLINE_DATA_SAVED',
-                url: payload?.url,
-                success: false,
-                error: error.message
-              });
+              event.source.postMessage({ type: 'OFFLINE_DATA_SAVED', url: payload?.url, success: false });
             }
           }
         })()
       );
       break;
 
-    // 🔄 Пропустить ожидание (для обновления SW)
     case 'SKIP_WAITING':
-      self.skipWaiting();
+      event.waitUntil(
+        (async () => {
+          const hasUpdate = await checkAndUpdate();
+          if (hasUpdate) {
+            self.skipWaiting();
+            notifyClients('UPDATE_APPLIED', { version: APP_VERSION });
+          }
+        })()
+      );
       break;
 
-    // 📥 Получение офлайн-очереди
     case 'GET_OFFLINE_DATA':
       event.waitUntil(
         (async () => {
@@ -437,160 +362,70 @@ self.addEventListener('message', (event) => {
             const cache = await caches.open(OFFLINE_CACHE_NAME);
             const keys = await cache.keys();
             const offlineData = [];
-            
             for (const key of keys) {
               const response = await cache.match(key);
               if (response) {
                 const data = await response.json();
-                offlineData.push({
-                  url: key.url,
-                  method: data.method,
-                  body: data.body,
-                  savedAt: response.headers.get('x-offline-saved-at'),
-                  attempts: data.attempts || 0
-                });
+                offlineData.push({ url: key.url, method: data.method, savedAt: response.headers.get('x-offline-saved-at') });
               }
             }
-            
             if (event.source) {
-              event.source.postMessage({
-                type: 'OFFLINE_DATA_RETRIEVED',
-                offlineData: offlineData.sort((a, b) => 
-                  new Date(a.savedAt || 0) - new Date(b.savedAt || 0)
-                ),
-                count: offlineData.length
-              });
+              event.source.postMessage({ type: 'OFFLINE_DATA_RETRIEVED', offlineData, count: offlineData.length });
             }
           } catch (error) {
-            console.error('[SW] Failed to retrieve offline data:', error);
-            if (event.source) {
-              event.source.postMessage({
-                type: 'OFFLINE_DATA_RETRIEVED',
-                offlineData: [],
-                error: error.message
-              });
-            }
+            event.source?.postMessage({ type: 'OFFLINE_DATA_RETRIEVED', offlineData: [] });
           }
         })()
       );
       break;
 
-    // 🗑️ Очистка кэша
     case 'CLEAR_CACHE':
       event.waitUntil(
         (async () => {
           const target = payload?.type || 'all';
-          console.log(`[SW] Clearing cache: ${target}`);
-          
-          if (target === 'all' || target === 'static') {
-            await caches.delete(CACHE_NAME);
-            await caches.open(CACHE_NAME); // Пересоздаём
-          }
-          if (target === 'all' || target === 'data') {
-            await caches.delete(DATA_CACHE_NAME);
-            await caches.open(DATA_CACHE_NAME);
-          }
-          if (target === 'all' || target === 'offline') {
-            await caches.delete(OFFLINE_CACHE_NAME);
-            await caches.open(OFFLINE_CACHE_NAME);
-          }
-          
-          if (event.source) {
-            event.source.postMessage({ type: 'CACHE_CLEARED', target });
-          }
+          if (target === 'all' || target === 'static') await caches.delete(CACHE_NAME);
+          if (target === 'all' || target === 'data') await caches.delete(DATA_CACHE_NAME);
+          if (target === 'all' || target === 'offline') await caches.delete(OFFLINE_CACHE_NAME);
+          event.source?.postMessage({ type: 'CACHE_CLEARED', target });
         })()
       );
       break;
 
-    // 🔄 Перезагрузка всех вкладок приложения
     case 'RELOAD_PAGE':
       event.waitUntil(
         (async () => {
-          const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-          const origin = self.location.origin;
-          
+          const clients = await self.clients.matchAll({ type: 'window' });
           for (const client of clients) {
-            // Перезагружаем только вкладки нашего приложения
-            if (client.url.startsWith(origin)) {
-              await client.navigate(client.url).catch(err => {
-                console.warn(`[SW] Failed to reload ${client.url}:`, err);
-              });
+            if (client.url.startsWith(self.location.origin)) {
+              await client.navigate(client.url).catch(() => {});
             }
           }
-          console.log(`[SW] Reloaded ${clients.length} client(s)`);
         })()
       );
       break;
 
-    // 📡 Health check от приложения
     case 'HEALTH_CHECK':
-      event.ports?.[0]?.postMessage({
-        status: 'ok',
-        version: APP_VERSION,
-        caches: [CACHE_NAME, DATA_CACHE_NAME, OFFLINE_CACHE_NAME],
-        timestamp: Date.now()
-      });
+      event.ports?.[0]?.postMessage({ status: 'ok', version: APP_VERSION, timestamp: Date.now() });
       break;
 
     default:
-      console.warn(`[SW] Unknown message type: ${type}`);
+      console.warn(`[SW] Unknown message: ${type}`);
   }
 });
 
-// ─────────────────────────────────────────────────────────
-// 🔔 Push Notifications (опционально)
-// ─────────────────────────────────────────────────────────
+// Push Notifications
 self.addEventListener('push', (event) => {
   if (!event.data) return;
-  
   try {
     const data = event.data.json();
-    const { title, body, icon, tag, url, actions = [] } = data;
-    
     event.waitUntil(
-      self.registration.showNotification(title, {
-        body: body || '',
-        icon: icon || '/icon-192.png',
-        badge: '/icon-48.png',
-        tag: tag || 'reglai-default',
-        renotify: true,
-        data: { url },
-        actions: actions.map(a => ({ 
-          action: a.action || 'open', 
-          title: a.title || 'Открыть' 
-        }))
+      self.registration.showNotification(data.title || 'Реглай', {
+        body: data.body || '',
+        icon: '/icon-192.png',
+        badge: '/icon-48.png'
       })
     );
   } catch (error) {
-    console.warn('[SW] Push parse error:', error);
+    console.warn('[SW] Push error:', error);
   }
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  
-  const targetUrl = event.notification.data?.url || '/';
-  
-  if (event.action === 'dismiss') return;
-  
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then(clients => {
-      // Фокусируем существующую вкладку или открываем новую
-      for (const client of clients) {
-        if (client.url.includes(targetUrl) && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      return self.clients.openWindow(targetUrl);
-    })
-  );
-});
-
-// ✅ Глобальный обработчик ошибок для отладки
-self.addEventListener('error', (event) => {
-  console.error('[SW] Unhandled error:', event.message, event.filename, event.lineno);
-});
-
-self.addEventListener('unhandledrejection', (event) => {
-  console.error('[SW] Unhandled promise rejection:', event.reason);
 });

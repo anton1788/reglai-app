@@ -8,7 +8,7 @@ import App from './App.jsx'
 import { initOfflineModule, checkOfflineSupport } from './utils/offlineStorage'
 
 // ✅ Версия приложения
-const APP_VERSION = '4.9.9';
+const APP_VERSION = '5.9.9';
 
 // ─────────────────────────────────────────────────────────
 // 🔹 Регистрация Service Worker
@@ -47,9 +47,24 @@ const registerServiceWorker = async () => {
 // ─────────────────────────────────────────────────────────
 // 🔹 Слушатель обновлений PWA
 // ─────────────────────────────────────────────────────────
+// src/main.jsx - исправленная версия
 const setupPWAUpdateListener = () => {
+  let updatePrompted = false;
+  const PROMPT_COOLDOWN = 24 * 60 * 60 * 1000; // 24 часа
+  
   const handleUpdate = (event) => {
+    // Проверяем, не показывали ли обновление недавно
+    const lastPrompt = localStorage.getItem('last_update_prompt');
+    const now = Date.now();
+    
+    if (updatePrompted || (lastPrompt && (now - parseInt(lastPrompt)) < PROMPT_COOLDOWN)) {
+      console.log('[PWA] Update prompt skipped (cooldown)');
+      return;
+    }
+    
     const { version, registration } = event.detail;
+    updatePrompted = true;
+    localStorage.setItem('last_update_prompt', now.toString());
     
     const shouldUpdate = confirm(
       `🔄 Доступна новая версия Реглай (${version}).\n\nОбновить сейчас?`
@@ -63,6 +78,9 @@ const setupPWAUpdateListener = () => {
         navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
       };
       navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    } else {
+      // Если пользователь отказался, сбрасываем флаг через 24 часа
+      setTimeout(() => { updatePrompted = false; }, PROMPT_COOLDOWN);
     }
   };
 
