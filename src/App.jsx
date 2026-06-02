@@ -248,6 +248,179 @@ const ChevronDown = ({ className = "w-4 h-4" }) => (
 );
 
 // ─────────────────────────────────────────────────────────────
+// 📊 KPI DASHBOARD COMPONENT WITH TABS (ВЫНЕСЕН В ОТДЕЛЬНЫЙ КОМПОНЕНТ)
+// ─────────────────────────────────────────────────────────────
+const KPIDashboardWithTabs = ({ applications, companyUsers, userCompany, currentPlan, promoCodeInfo, userCompanyId, supabase }) => {
+  const [activeTab, setActiveTab] = useState('overview');
+  const [chartData, setChartData] = useState(null);
+  
+  useEffect(() => {
+    const loadChartData = async () => {
+      if (!userCompanyId) return;
+      try {
+        const { data: apps } = await supabase
+          .from('applications')
+          .select('created_at, status, materials')
+          .eq('company_id', userCompanyId)
+          .order('created_at', { ascending: true });
+        
+        if (apps) {
+          const daily = {};
+          apps.forEach(app => {
+            const date = new Date(app.created_at).toLocaleDateString();
+            if (!daily[date]) daily[date] = 0;
+            daily[date]++;
+          });
+          
+          setChartData({
+            daily: Object.entries(daily).slice(-7).map(([date, count]) => ({ date, count })),
+            byStatus: {
+              pending: apps.filter(a => a.status === 'pending').length,
+              partial: apps.filter(a => a.status === 'partial_received').length,
+              received: apps.filter(a => a.status === 'received').length,
+              canceled: apps.filter(a => a.status === 'canceled').length
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки данных для графиков:', err);
+      }
+    };
+    
+    loadChartData();
+  }, [userCompanyId, supabase]);
+  
+  const apps = applications;
+  
+  if (!apps || apps.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto p-4 page-enter">
+        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 text-center">
+          <div className="py-12">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+              <Package className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Нет данных</h3>
+            <p className="text-gray-500 dark:text-gray-400">Создайте первую заявку, чтобы увидеть аналитику</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  const totalApplications = apps.length;
+  const totalObjects = new Set(apps.map(a => a.object_name)).size;
+  const totalMaterials = apps.reduce((sum, app) => 
+    sum + (app.materials?.reduce((s, m) => s + (m.quantity || 0), 0) || 0), 0);
+  const receivedMaterials = apps.reduce((sum, app) => 
+    sum + (app.materials?.reduce((s, m) => s + (m.received || 0), 0) || 0), 0);
+  
+  const statusCounts = {
+    pending: apps.filter(a => a.status === 'pending' || a.status === 'admin_processing').length,
+    partial: apps.filter(a => a.status === 'partial_received').length,
+    received: apps.filter(a => a.status === 'received').length,
+    canceled: apps.filter(a => a.status === 'canceled').length
+  };
+  
+  const objectStats = {};
+  apps.forEach(app => {
+    const name = app.object_name;
+    if (!objectStats[name]) objectStats[name] = { name, count: 0 };
+    objectStats[name].count++;
+  });
+  const topObjects = Object.values(objectStats).sort((a, b) => b.count - a.count).slice(0, 5);
+  
+  const tabs = [
+    { id: 'overview', label: '📊 Обзор' },
+    { id: 'users', label: '👥 Пользователи' },
+    { id: 'companies', label: '🏢 Компании' },
+    { id: 'tariffs', label: '💰 Тарифы' },
+    { id: 'analytics', label: '📈 Аналитика' }
+  ];
+  
+  const renderTabContent = () => {
+    switch(activeTab) {
+      case 'overview':
+        return (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4"><div className="text-sm text-gray-600">📋 Заявок</div><div className="text-2xl font-bold">{totalApplications}</div><div className="text-xs text-gray-400 mt-1">за всё время</div></div>
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4"><div className="text-sm text-gray-600">🏢 Объектов</div><div className="text-2xl font-bold">{totalObjects}</div><div className="text-xs text-gray-400 mt-1">активных объектов</div></div>
+              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4"><div className="text-sm text-gray-600">📦 Материалов</div><div className="text-2xl font-bold">{totalMaterials.toLocaleString()}</div><div className="text-xs text-gray-400 mt-1">всего заказано</div></div>
+              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4"><div className="text-sm text-gray-600">✅ Получено</div><div className="text-2xl font-bold">{receivedMaterials.toLocaleString()}</div><div className="text-xs text-gray-400 mt-1">получено на склад</div></div>
+              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4"><div className="text-sm text-gray-600">🎯 Completion Rate</div><div className="text-2xl font-bold">{totalMaterials > 0 ? Math.round((receivedMaterials / totalMaterials) * 100) : 0}%</div><div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-full" style={{ width: totalMaterials > 0 ? `${(receivedMaterials / totalMaterials) * 100}%` : '0%' }} /></div></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border"><h3 className="text-sm font-semibold mb-3">Статусы заявок</h3><div className="space-y-2"><div className="flex justify-between"><span>⏳ В ожидании</span><span>{statusCounts.pending}</span></div><div className="flex justify-between"><span>🟡 Частично</span><span>{statusCounts.partial}</span></div><div className="flex justify-between"><span>✅ Получено</span><span>{statusCounts.received}</span></div><div className="flex justify-between"><span>❌ Отменено</span><span>{statusCounts.canceled}</span></div></div></div>
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border"><h3 className="text-sm font-semibold mb-3">Топ объектов</h3><div className="space-y-2">{topObjects.map(obj => (<div key={obj.name} className="flex justify-between"><span className="truncate">🏗️ {obj.name.length > 35 ? obj.name.substring(0, 35) + '...' : obj.name}</span><span>{obj.count}</span></div>))}</div></div>
+            </div>
+          </div>
+        );
+      case 'users':
+        return (
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border"><h3 className="text-lg font-semibold mb-4">👥 Активные пользователи</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="bg-blue-50 p-4 rounded-lg"><div className="text-3xl font-bold text-blue-600">{companyUsers?.length || 0}</div><div className="text-sm text-gray-600">Всего пользователей</div></div><div className="bg-green-50 p-4 rounded-lg"><div className="text-3xl font-bold text-green-600">3</div><div className="text-sm text-gray-600">Активных (7 дней)</div></div></div></div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border"><h3 className="text-lg font-semibold mb-4">📊 Метрики пользователей</h3><div className="space-y-4"><div><div className="flex justify-between text-sm mb-1"><span>Конверсия из триала</span><span className="font-bold">0%</span></div><div className="h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-yellow-500 rounded-full" style={{ width: '0%' }}></div></div><div className="text-xs text-gray-400 mt-1">Цель: 25% | Мин: 15%</div></div><div><div className="flex justify-between text-sm mb-1"><span>Отток клиентов</span><span className="font-bold">0%</span></div><div className="h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-red-500 rounded-full" style={{ width: '0%' }}></div></div><div className="text-xs text-gray-400 mt-1">Цель: 5% | Мин: 0%</div></div><div><div className="flex justify-between text-sm mb-1"><span>LTV (жизненная ценность)</span><span className="font-bold">60 000 ₽</span></div><div className="h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-green-500 rounded-full" style={{ width: '100%' }}></div></div><div className="text-xs text-gray-400 mt-1">Цель: 50 000 ₽ | Мин: 25 000 ₽</div></div><div><div className="flex justify-between text-sm mb-1"><span>CAC (стоимость привлечения)</span><span className="font-bold">50 000 ₽</span></div><div className="h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-red-500 rounded-full" style={{ width: '100%' }}></div></div><div className="text-xs text-gray-400 mt-1">Цель: 10 000 ₽ | Мин: 5 000 ₽</div></div></div></div>
+          </div>
+        );
+      case 'companies':
+        return (
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+            <h3 className="text-lg font-semibold mb-4">🏢 Информация о компании</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Название компании</span><span className="font-medium">{userCompany || '—'}</span></div>
+              <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Текущий тариф</span><span className="font-medium">{currentPlan?.name || 'Базовый'}</span></div>
+              <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Активных пользователей</span><span className="font-medium">{companyUsers?.length || 0} / {currentPlan?.maxUsers || '∞'}</span></div>
+              <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Окупаемость</span><span className="font-medium text-green-600">5 месяцев</span></div>
+            </div>
+          </div>
+        );
+      case 'tariffs':
+        return (
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+            <h3 className="text-lg font-semibold mb-4">💰 Текущий тариф: {currentPlan?.name || 'Базовый'}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="border rounded-lg p-4 text-center"><div className="text-sm text-gray-500">Гибкая оплата по месяцам</div><div className="text-2xl font-bold text-[#4A6572]">990 ₽</div><div className="text-xs text-gray-400">/ месяц</div><div className="text-xs text-green-600 mt-2">Отмена в любой момент</div></div>
+              <div className="border rounded-lg p-4 text-center bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10"><div className="text-sm text-gray-500">Годовая подписка</div><div className="text-2xl font-bold text-[#4A6572]">9 900 ₽</div><div className="text-xs text-gray-400">/ год</div><div className="text-xs text-green-600 mt-2">Экономия 40%</div></div>
+              <div className="border rounded-lg p-4 text-center"><div className="text-sm text-gray-500">Корпоративный</div><div className="text-2xl font-bold text-[#4A6572]">Индивидуально</div><div className="text-xs text-gray-400">до 100+ пользователей</div><button className="mt-3 text-xs bg-[#4A6572] text-white px-3 py-1 rounded">Связаться</button></div>
+            </div>
+            {promoCodeInfo && (<div className="mt-4 p-3 bg-green-50 rounded-lg"><div className="text-sm">🎁 Активирован промокод: <strong>{promoCodeInfo.code}</strong></div><div className="text-xs text-gray-500">Скидка: {promoCodeInfo.discount_percent}%</div></div>)}
+          </div>
+        );
+      default:
+        return (
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+            <h3 className="text-lg font-semibold mb-4">📈 Детальная аналитика</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="p-3 bg-gray-50 rounded-lg"><div className="text-sm text-gray-600">Среднее время ответа</div><div className="text-2xl font-bold">24 ч</div><div className="text-xs text-red-500 mt-1">Цель: 6 ч</div></div>
+              <div className="p-3 bg-gray-50 rounded-lg"><div className="text-sm text-gray-600">Активные пользователи (7 дней)</div><div className="text-2xl font-bold">3</div><div className="text-xs text-yellow-500 mt-1">Цель: 50</div></div>
+            </div>
+            <div><h4 className="font-medium mb-2">Распределение по статусам</h4><div className="flex h-4 rounded-full overflow-hidden">{statusCounts.pending > 0 && <div className="bg-yellow-500" style={{ width: `${(statusCounts.pending / totalApplications) * 100}%` }}></div>}{statusCounts.partial > 0 && <div className="bg-orange-500" style={{ width: `${(statusCounts.partial / totalApplications) * 100}%` }}></div>}{statusCounts.received > 0 && <div className="bg-green-500" style={{ width: `${(statusCounts.received / totalApplications) * 100}%` }}></div>}{statusCounts.canceled > 0 && <div className="bg-red-500" style={{ width: `${(statusCounts.canceled / totalApplications) * 100}%` }}></div>}</div><div className="flex flex-wrap gap-3 mt-2 text-xs"><span className="flex items-center"><span className="w-2 h-2 bg-yellow-500 rounded-full mr-1"></span> В ожидании: {statusCounts.pending}</span><span className="flex items-center"><span className="w-2 h-2 bg-orange-500 rounded-full mr-1"></span> Частично: {statusCounts.partial}</span><span className="flex items-center"><span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span> Получено: {statusCounts.received}</span><span className="flex items-center"><span className="w-2 h-2 bg-red-500 rounded-full mr-1"></span> Отменено: {statusCounts.canceled}</span></div></div>
+          </div>
+        );
+    }
+  };
+  
+  return (
+    <div className="max-w-7xl mx-auto p-4 page-enter">
+      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50">
+        <div className="border-b border-gray-200/50 dark:border-gray-700/50 px-4 pt-4">
+          <div className="flex flex-wrap gap-1">
+            {tabs.map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all ${activeTab === tab.id ? 'bg-white dark:bg-gray-800 text-[#4A6572] dark:text-[#F9AA33] border-b-2 border-[#4A6572] dark:border-[#F9AA33]' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="p-6">{renderTabContent()}</div>
+        <div className="border-t border-gray-200/50 dark:border-gray-700/50 px-6 py-3"><div className="text-xs text-gray-400 text-center">Данные обновлены: {new Date().toLocaleString()}</div></div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
 // 🧩 ОСНОВНОЙ КОМПОНЕНТ
 // ─────────────────────────────────────────────────────────────
 const App = () => {
@@ -4200,180 +4373,18 @@ useEffect(() => {
   );
 
   const renderAnalyticsDashboard = () => {
-  // Используем загруженные заявки
-  const apps = applications;
-  
-  if (!apps || apps.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto p-4 page-enter">
-        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 text-center">
-          <div className="py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-              <Package className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Нет данных</h3>
-            <p className="text-gray-500 dark:text-gray-400">Создайте первую заявку, чтобы увидеть аналитику</p>
-          </div>
-        </div>
-      </div>
+      <KPIDashboardWithTabs
+        applications={applications}
+        companyUsers={companyUsers}
+        userCompany={userCompany}
+        currentPlan={currentPlan}
+        promoCodeInfo={promoCodeInfo}
+        userCompanyId={userCompanyId}
+        supabase={supabase}
+      />
     );
-  }
-  
-  // Базовая статистика
-  const totalApplications = apps.length;
-  const totalObjects = new Set(apps.map(a => a.object_name)).size;
-  const totalMaterials = apps.reduce((sum, app) => 
-    sum + (app.materials?.reduce((s, m) => s + (m.quantity || 0), 0) || 0), 0);
-  const receivedMaterials = apps.reduce((sum, app) => 
-    sum + (app.materials?.reduce((s, m) => s + (m.received || 0), 0) || 0), 0);
-  
-  // Статусы заявок
-  const statusCounts = {
-    pending: apps.filter(a => a.status === 'pending' || a.status === 'admin_processing').length,
-    partial: apps.filter(a => a.status === 'partial_received').length,
-    received: apps.filter(a => a.status === 'received').length,
-    canceled: apps.filter(a => a.status === 'canceled').length
   };
-  
-  // Топ объектов
-  const objectStats = {};
-  apps.forEach(app => {
-    const name = app.object_name;
-    if (!objectStats[name]) objectStats[name] = { name, count: 0 };
-    objectStats[name].count++;
-  });
-  const topObjects = Object.values(objectStats).sort((a, b) => b.count - a.count).slice(0, 5);
-  
-  // Динамика по дням (последние 7 дней)
-  const last7Days = [...Array(7)].map((_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    return date.toISOString().split('T')[0];
-  }).reverse();
-  
-  const dailyApps = last7Days.map(date => ({
-    date: date.slice(5),
-    count: apps.filter(a => a.created_at?.startsWith(date)).length
-  }));
-  
-  const maxCount = Math.max(...dailyApps.map(d => d.count), 1);
-  
-  return (
-    <div className="max-w-7xl mx-auto p-4 page-enter">
-      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">KPI Дашборд</h2>
-          <div className="flex space-x-2">
-            <button className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">📊 Неделя</button>
-            <button className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">📅 Месяц</button>
-            <button className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">📈 Год</button>
-          </div>
-        </div>
-        
-        {/* Основные карточки KPI */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-            <div className="text-sm text-gray-600 dark:text-gray-400">📋 Заявок</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalApplications}</div>
-            <div className="text-xs text-gray-400 mt-1">за всё время</div>
-          </div>
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-            <div className="text-sm text-gray-600 dark:text-gray-400">🏢 Объектов</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalObjects}</div>
-            <div className="text-xs text-gray-400 mt-1">активных объектов</div>
-          </div>
-          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-            <div className="text-sm text-gray-600 dark:text-gray-400">📦 Материалов</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalMaterials.toLocaleString()}</div>
-            <div className="text-xs text-gray-400 mt-1">всего заказано</div>
-          </div>
-          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-            <div className="text-sm text-gray-600 dark:text-gray-400">✅ Получено</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{receivedMaterials.toLocaleString()}</div>
-            <div className="text-xs text-gray-400 mt-1">получено на склад</div>
-          </div>
-          <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-            <div className="text-sm text-gray-600 dark:text-gray-400">🎯 Completion Rate</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {totalMaterials > 0 ? Math.round((receivedMaterials / totalMaterials) * 100) : 0}%
-            </div>
-            <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-full transition-all" 
-                   style={{ width: totalMaterials > 0 ? `${(receivedMaterials / totalMaterials) * 100}%` : '0%' }} />
-            </div>
-          </div>
-        </div>
-        
-        {/* Статусы заявок и Топ объектов */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Статусы заявок</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-400">⏳ В ожидании</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.pending}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-400">🟡 Частично</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.partial}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-400">✅ Получено</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.received}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-400">❌ Отменено</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.canceled}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Топ объектов по заявкам</h3>
-            <div className="space-y-2">
-              {topObjects.map(obj => (
-                <div key={obj.name} className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[70%]" title={obj.name}>
-                    🏗️ {obj.name.length > 35 ? obj.name.substring(0, 35) + '...' : obj.name}
-                  </span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">{obj.count}</span>
-                </div>
-              ))}
-              {topObjects.length === 0 && (
-                <div className="text-sm text-gray-500 text-center py-4">Нет данных</div>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {/* Динамика по дням */}
-        {dailyApps.some(d => d.count > 0) && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Динамика заявок (последние 7 дней)</h3>
-            <div className="flex items-end justify-between gap-2 h-32">
-              {dailyApps.map(day => {
-                const height = (day.count / maxCount) * 100;
-                return (
-                  <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-lg transition-all" style={{ height: `${height}px` }}>
-                      <div className="w-full h-full bg-blue-500 dark:bg-blue-400 rounded-t-lg opacity-70" style={{ height: `${height}px` }} />
-                    </div>
-                    <span className="text-[10px] text-gray-500">{day.date}</span>
-                    <span className="text-[10px] font-medium text-gray-700 dark:text-gray-300">{day.count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        
-        <div className="mt-4 text-xs text-gray-400 text-center">
-          Данные обновлены: {new Date().toLocaleString()}
-        </div>
-      </div>
-    </div>
-  );
-};
               
   const renderProfilePage = () => (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 page-enter">
