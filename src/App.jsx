@@ -248,62 +248,21 @@ const ChevronDown = ({ className = "w-4 h-4" }) => (
 );
 
 // ─────────────────────────────────────────────────────────────
-// 📊 KPI DASHBOARD COMPONENT WITH TABS (С ДЕТАЛЬНЫМИ МОДАЛКАМИ)
+// 📊 KPI DASHBOARD - РАБОЧАЯ ВЕРСИЯ С МОДАЛЬНЫМИ ОКНАМИ
 // ─────────────────────────────────────────────────────────────
 const KPIDashboardWithTabs = ({ applications, companyUsers, userCompany, currentPlan, promoCodeInfo, userCompanyId, supabase }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [chartData, setChartData] = useState(null);
-  const [detailModal, setDetailModal] = useState({ isOpen: false, type: null, data: null });
-  
-  useEffect(() => {
-    const loadChartData = async () => {
-      if (!userCompanyId) return;
-      try {
-        const { data: apps } = await supabase
-          .from('applications')
-          .select('created_at, status, materials')
-          .eq('company_id', userCompanyId)
-          .order('created_at', { ascending: true });
-        
-        if (apps) {
-          const daily = {};
-          apps.forEach(app => {
-            const date = new Date(app.created_at).toLocaleDateString();
-            if (!daily[date]) daily[date] = 0;
-            daily[date]++;
-          });
-          
-          setChartData({
-            daily: Object.entries(daily).slice(-7).map(([date, count]) => ({ date, count })),
-            byStatus: {
-              pending: apps.filter(a => a.status === 'pending').length,
-              partial: apps.filter(a => a.status === 'partial_received').length,
-              received: apps.filter(a => a.status === 'received').length,
-              canceled: apps.filter(a => a.status === 'canceled').length
-            }
-          });
-        }
-      } catch (err) {
-        console.error('Ошибка загрузки данных для графиков:', err);
-      }
-    };
-    
-    loadChartData();
-  }, [userCompanyId, supabase]);
+  const [modalType, setModalType] = useState(null);
   
   const apps = applications;
   
   if (!apps || apps.length === 0) {
     return (
       <div className="max-w-7xl mx-auto p-4 page-enter">
-        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 text-center">
-          <div className="py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-              <Package className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Нет данных</h3>
-            <p className="text-gray-500 dark:text-gray-400">Создайте первую заявку, чтобы увидеть аналитику</p>
-          </div>
+        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 text-center">
+          <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium">Нет данных</h3>
+          <p className="text-gray-500">Создайте первую заявку</p>
         </div>
       </div>
     );
@@ -311,10 +270,8 @@ const KPIDashboardWithTabs = ({ applications, companyUsers, userCompany, current
   
   const totalApplications = apps.length;
   const totalObjects = new Set(apps.map(a => a.object_name)).size;
-  const totalMaterials = apps.reduce((sum, app) => 
-    sum + (app.materials?.reduce((s, m) => s + (m.quantity || 0), 0) || 0), 0);
-  const receivedMaterials = apps.reduce((sum, app) => 
-    sum + (app.materials?.reduce((s, m) => s + (m.received || 0), 0) || 0), 0);
+  const totalMaterials = apps.reduce((sum, app) => sum + (app.materials?.reduce((s, m) => s + (m.quantity || 0), 0) || 0), 0);
+  const receivedMaterials = apps.reduce((sum, app) => sum + (app.materials?.reduce((s, m) => s + (m.received || 0), 0) || 0), 0);
   
   const statusCounts = {
     pending: apps.filter(a => a.status === 'pending' || a.status === 'admin_processing').length,
@@ -339,260 +296,38 @@ const KPIDashboardWithTabs = ({ applications, companyUsers, userCompany, current
     { id: 'analytics', label: '📈 Аналитика' }
   ];
   
-  // Функция открытия деталей
-  const openDetailModal = (type, data) => {
-    setDetailModal({ isOpen: true, type, data });
+  // Функция открытия модального окна
+  const openModal = (type) => {
+    console.log('🔍 Клик по карточке:', type);
+    setModalType(type);
   };
   
-  // Рендер модального окна с деталями
-  const renderDetailModal = () => {
-    if (!detailModal.isOpen) return null;
+  // Модальное окно
+  const Modal = () => {
+    if (!modalType) return null;
     
-    const { type, data } = detailModal;
+    const modalData = {
+      conversion: { title: '📊 Конверсия из триала', text: 'Текущая конверсия: 0%\nЦель: 25%\nМинимум: 15%\n\nРекомендации:\n• Улучшить онбординг\n• Добавить туториалы\n• Email-рассылки' },
+      churn: { title: '📉 Отток клиентов', text: 'Текущий отток: 0%\nЦель: 5%\n\nРекомендации:\n• Собирать обратную связь\n• Анализировать причины' },
+      ltv: { title: '💰 LTV (жизненная ценность)', text: 'Текущий LTV: 60 000 ₽\nЦель: 50 000 ₽\nМинимум: 25 000 ₽\n\nРасчет: 990 ₽ × 60 месяцев = 59 400 ₽' },
+      cac: { title: '📢 CAC (стоимость привлечения)', text: 'Текущий CAC: 50 000 ₽\nЦель: 10 000 ₽\nМинимум: 5 000 ₽\n\nРекомендации:\n• Реферальная программа\n• Оптимизация рекламы' },
+      payback: { title: '⏱️ Окупаемость', text: 'Текущая окупаемость: 5 месяцев\nЦель: 6 месяцев\nМинимум: 3 месяца\n\nРасчет: CAC ÷ (LTV/12) = 50 000 ÷ 10 000 = 5 мес' },
+      activeUsers: { title: '👥 Активные пользователи', text: 'Активных пользователей: 3\nЦель: 50\nМинимум: 10\n\nРаспределение:\n• Мастера: 1\n• Снабженцы: 1\n• Менеджеры: 1' }
+    };
     
-    let title = '';
-    let content = null;
-    
-    switch(type) {
-      case 'conversion':
-        title = '📊 Детализация: Конверсия из триала';
-        content = (
-          <div className="space-y-4">
-            <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-center text-yellow-600">0%</div>
-              <div className="text-center text-sm text-gray-500 mt-1">Текущая конверсия</div>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <span>✅ Целевое значение</span>
-                <span className="font-bold">25%</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <span>⚠️ Минимальный порог</span>
-                <span className="font-bold">15%</span>
-              </div>
-            </div>
-            <div className="border-t pt-3 mt-2">
-              <h4 className="font-semibold mb-2">📈 Рекомендации по улучшению:</h4>
-              <ul className="text-sm space-y-2 text-gray-600 dark:text-gray-400 list-disc pl-4">
-                <li>Улучшить онбординг новых пользователей</li>
-                <li>Добавить обучающие материалы (видео-туториалы)</li>
-                <li>Настроить email-рассылки с примерами использования</li>
-                <li>Предложить демо-звонок с менеджером</li>
-              </ul>
-            </div>
-          </div>
-        );
-        break;
-        
-      case 'churn':
-        title = '📉 Детализация: Отток клиентов';
-        content = (
-          <div className="space-y-4">
-            <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-center text-green-600">0%</div>
-              <div className="text-center text-sm text-gray-500 mt-1">Текущий отток</div>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <span>✅ Целевое значение</span>
-                <span className="font-bold">5%</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <span>⚠️ Максимальный порог</span>
-                <span className="font-bold">0%</span>
-              </div>
-            </div>
-            <div className="border-t pt-3 mt-2">
-              <h4 className="font-semibold mb-2">📊 Причины оттока (опросы):</h4>
-              <ul className="text-sm space-y-2 text-gray-600 dark:text-gray-400 list-disc pl-4">
-                <li>Нет данных об оттоке (0 клиентов ушло)</li>
-                <li>Регулярно собирайте обратную связь</li>
-                <li>Анализируйте причины ухода клиентов</li>
-              </ul>
-            </div>
-          </div>
-        );
-        break;
-        
-      case 'ltv':
-        title = '💰 Детализация: LTV (Life Time Value)';
-        content = (
-          <div className="space-y-4">
-            <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-center text-green-600">60 000 ₽</div>
-              <div className="text-center text-sm text-gray-500 mt-1">Текущий LTV</div>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <span>✅ Целевое значение</span>
-                <span className="font-bold">50 000 ₽</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <span>⚠️ Минимальный порог</span>
-                <span className="font-bold">25 000 ₽</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div className="bg-blue-50 p-3 rounded-lg text-center">
-                <div className="text-sm text-gray-600">Средний чек</div>
-                <div className="text-xl font-bold">990 ₽</div>
-              </div>
-              <div className="bg-purple-50 p-3 rounded-lg text-center">
-                <div className="text-sm text-gray-600">Средняя длительность</div>
-                <div className="text-xl font-bold">60 мес</div>
-              </div>
-            </div>
-            <div className="border-t pt-3 mt-2">
-              <p className="text-sm text-gray-600">Расчет: 990 ₽ × 60 месяцев = 59 400 ₽ ≈ 60 000 ₽</p>
-            </div>
-          </div>
-        );
-        break;
-        
-      case 'cac':
-        title = '📢 Детализация: CAC (Customer Acquisition Cost)';
-        content = (
-          <div className="space-y-4">
-            <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-center text-red-600">50 000 ₽</div>
-              <div className="text-center text-sm text-gray-500 mt-1">Текущий CAC</div>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <span>✅ Целевое значение</span>
-                <span className="font-bold">10 000 ₽</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <span>⚠️ Минимальный порог</span>
-                <span className="font-bold">5 000 ₽</span>
-              </div>
-            </div>
-            <div className="border-t pt-3 mt-2">
-              <h4 className="font-semibold mb-2">📉 Способы снижения CAC:</h4>
-              <ul className="text-sm space-y-2 text-gray-600 dark:text-gray-400 list-disc pl-4">
-                <li>Использовать сарафанное радио (реферальная программа)</li>
-                <li>Оптимизировать рекламные кампании</li>
-                <li>Развивать партнерскую программу</li>
-                <li>Улучшить SEO-продвижение</li>
-              </ul>
-            </div>
-          </div>
-        );
-        break;
-        
-      case 'payback':
-        title = '⏱️ Детализация: Окупаемость';
-        content = (
-          <div className="space-y-4">
-            <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-center text-green-600">5 мес</div>
-              <div className="text-center text-sm text-gray-500 mt-1">Текущая окупаемость</div>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <span>✅ Целевое значение</span>
-                <span className="font-bold">6 мес</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <span>⚠️ Минимальный порог</span>
-                <span className="font-bold">3 мес</span>
-              </div>
-            </div>
-            <div className="border-t pt-3 mt-2">
-              <p className="text-sm text-gray-600">Расчет: CAC (50 000 ₽) ÷ (LTV/12) = 50 000 ÷ 10 000 = 5 месяцев</p>
-            </div>
-          </div>
-        );
-        break;
-        
-      case 'activeUsers':
-        title = '👥 Детализация: Активные пользователи';
-        content = (
-          <div className="space-y-4">
-            <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-center text-blue-600">3</div>
-              <div className="text-center text-sm text-gray-500 mt-1">Активных пользователей (7 дней)</div>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <span>✅ Целевое значение</span>
-                <span className="font-bold">50</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <span>⚠️ Минимальный порог</span>
-                <span className="font-bold">10</span>
-              </div>
-            </div>
-            <div className="border-t pt-3 mt-2">
-              <div className="mb-3">
-                <h4 className="font-semibold mb-2">📊 Распределение по ролям:</h4>
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between"><span>👨‍🔧 Мастера</span><span>1</span></div>
-                  <div className="flex justify-between"><span>📦 Снабженцы</span><span>1</span></div>
-                  <div className="flex justify-between"><span>👔 Менеджеры</span><span>1</span></div>
-                </div>
-              </div>
-              <div>
-                <h4 className="font-semibold mb-2">📈 Рекомендации по росту:</h4>
-                <ul className="text-sm space-y-2 text-gray-600 dark:text-gray-400 list-disc pl-4">
-                  <li>Пригласите больше сотрудников (доступно {currentPlan?.maxUsers || 'безлимит'})</li>
-                  <li>Активируйте неактивных пользователей через email</li>
-                  <li>Проведите обучение для новых сотрудников</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        );
-        break;
-        
-      case 'responseTime':
-        title = '⏰ Детализация: Среднее время ответа';
-        content = (
-          <div className="space-y-4">
-            <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-center text-red-600">24 ч</div>
-              <div className="text-center text-sm text-gray-500 mt-1">Текущее время ответа</div>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <span>✅ Целевое значение</span>
-                <span className="font-bold">6 ч</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <span>⚠️ Максимальный порог</span>
-                <span className="font-bold">24 ч</span>
-              </div>
-            </div>
-            <div className="border-t pt-3 mt-2">
-              <h4 className="font-semibold mb-2">📊 Статистика ответов:</h4>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between"><span>⏱️ Самый быстрый ответ</span><span>2 ч</span></div>
-                <div className="flex justify-between"><span>🐌 Самый медленный ответ</span><span>72 ч</span></div>
-                <div className="flex justify-between"><span>📊 Медианное время</span><span>12 ч</span></div>
-              </div>
-            </div>
-          </div>
-        );
-        break;
-        
-      default:
-        title = 'Детализация';
-        content = <p>Информация отсутствует</p>;
-    }
+    const data = modalData[modalType];
+    if (!data) return null;
     
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[10000] fade-enter" onClick={() => setDetailModal({ isOpen: false, type: null, data: null })}>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-          <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
-            <button onClick={() => setDetailModal({ isOpen: false, type: null, data: null })} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-              <X className="w-5 h-5" />
-            </button>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100000]" onClick={() => setModalType(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+          <div className="flex justify-between items-center p-4 border-b">
+            <h3 className="text-lg font-bold">{data.title}</h3>
+            <button onClick={() => setModalType(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
           </div>
           <div className="p-4">
-            {content}
-            <button onClick={() => setDetailModal({ isOpen: false, type: null, data: null })} className="mt-4 w-full px-4 py-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-lg">
+            <div className="whitespace-pre-wrap text-gray-700 dark:text-gray-300">{data.text}</div>
+            <button onClick={() => setModalType(null)} className="mt-4 w-full px-4 py-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-lg">
               Закрыть
             </button>
           </div>
@@ -601,285 +336,174 @@ const KPIDashboardWithTabs = ({ applications, companyUsers, userCompany, current
     );
   };
   
-  const renderTabContent = () => {
-    switch(activeTab) {
-      case 'overview':
-        return (
-          <div className="space-y-6">
-            {/* Основные карточки KPI */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-                <div className="text-sm text-gray-600 dark:text-gray-400">📋 Заявок</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalApplications}</div>
-                <div className="text-xs text-gray-400 mt-1">за всё время</div>
-              </div>
-              <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-                <div className="text-sm text-gray-600 dark:text-gray-400">🏢 Объектов</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalObjects}</div>
-                <div className="text-xs text-gray-400 mt-1">активных объектов</div>
-              </div>
-              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-                <div className="text-sm text-gray-600 dark:text-gray-400">📦 Материалов</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalMaterials.toLocaleString()}</div>
-                <div className="text-xs text-gray-400 mt-1">всего заказано</div>
-              </div>
-              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-                <div className="text-sm text-gray-600 dark:text-gray-400">✅ Получено</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">{receivedMaterials.toLocaleString()}</div>
-                <div className="text-xs text-gray-400 mt-1">получено на склад</div>
-              </div>
-              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-                <div className="text-sm text-gray-600 dark:text-gray-400">🎯 Completion Rate</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {totalMaterials > 0 ? Math.round((receivedMaterials / totalMaterials) * 100) : 0}%
-                </div>
-                <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-full transition-all" 
-                       style={{ width: totalMaterials > 0 ? `${(receivedMaterials / totalMaterials) * 100}%` : '0%' }} />
-                </div>
-              </div>
-            </div>
-            
-            {/* Метрики с кликабельными карточками */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Конверсия из триала */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all" onClick={() => openDetailModal('conversion')}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Конверсия из триала</div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">0%</div>
-                  </div>
-                  <div className="text-yellow-500">📊</div>
-                </div>
-                <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-yellow-500 rounded-full" style={{ width: '0%' }}></div>
-                </div>
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>Цель: 25%</span>
-                  <span>Мин: 15%</span>
-                </div>
-                <div className="text-xs text-blue-500 mt-2 flex items-center gap-1">🔍 Нажмите для деталей</div>
-              </div>
-              
-              {/* Отток клиентов */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all" onClick={() => openDetailModal('churn')}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Отток клиентов</div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">0%</div>
-                  </div>
-                  <div className="text-red-500">📉</div>
-                </div>
-                <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-red-500 rounded-full" style={{ width: '0%' }}></div>
-                </div>
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>Цель: 5%</span>
-                  <span>Мин: 0%</span>
-                </div>
-                <div className="text-xs text-blue-500 mt-2 flex items-center gap-1">🔍 Нажмите для деталей</div>
-              </div>
-              
-              {/* LTV */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all" onClick={() => openDetailModal('ltv')}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">LTV (жизненная ценность)</div>
-                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">60 000 ₽</div>
-                  </div>
-                  <div className="text-green-500">💰</div>
-                </div>
-                <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-green-500 rounded-full" style={{ width: '100%' }}></div>
-                </div>
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>Цель: 50 000 ₽</span>
-                  <span>Мин: 25 000 ₽</span>
-                </div>
-                <div className="text-xs text-blue-500 mt-2 flex items-center gap-1">🔍 Нажмите для деталей</div>
-              </div>
-              
-              {/* CAC */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all" onClick={() => openDetailModal('cac')}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">CAC (стоимость привлечения)</div>
-                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">50 000 ₽</div>
-                  </div>
-                  <div className="text-red-500">📢</div>
-                </div>
-                <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-red-500 rounded-full" style={{ width: '100%' }}></div>
-                </div>
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>Цель: 10 000 ₽</span>
-                  <span>Мин: 5 000 ₽</span>
-                </div>
-                <div className="text-xs text-blue-500 mt-2 flex items-center gap-1">🔍 Нажмите для деталей</div>
-              </div>
-              
-              {/* Окупаемость */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all" onClick={() => openDetailModal('payback')}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Окупаемость</div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">5 мес</div>
-                  </div>
-                  <div className="text-blue-500">⏱️</div>
-                </div>
-                <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: '83%' }}></div>
-                </div>
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>Цель: 6 мес</span>
-                  <span>Мин: 3 мес</span>
-                </div>
-                <div className="text-xs text-blue-500 mt-2 flex items-center gap-1">🔍 Нажмите для деталей</div>
-              </div>
-              
-              {/* Активные пользователи */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all" onClick={() => openDetailModal('activeUsers')}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Активные пользователи</div>
-                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">3</div>
-                  </div>
-                  <div className="text-blue-500">👥</div>
-                </div>
-                <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: '6%' }}></div>
-                </div>
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>Цель: 50</span>
-                  <span>Мин: 10</span>
-                </div>
-                <div className="text-xs text-blue-500 mt-2 flex items-center gap-1">🔍 Нажмите для деталей</div>
-              </div>
-            </div>
-            
-            {/* Статусы и топ объектов */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Статусы заявок</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">⏳ В ожидании</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.pending}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">🟡 Частично</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.partial}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">✅ Получено</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.received}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">❌ Отменено</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.canceled}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Топ объектов по заявкам</h3>
-                <div className="space-y-2">
-                  {topObjects.map(obj => (
-                    <div key={obj.name} className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[70%]" title={obj.name}>
-                        🏗️ {obj.name.length > 35 ? obj.name.substring(0, 35) + '...' : obj.name}
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">{obj.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-        
-      // Остальные вкладки (users, companies, tariffs, analytics) остаются без изменений
-      case 'users':
-        return (
-          <div className="space-y-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border"><h3 className="text-lg font-semibold mb-4">👥 Активные пользователи</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="bg-blue-50 p-4 rounded-lg"><div className="text-3xl font-bold text-blue-600">{companyUsers?.length || 0}</div><div className="text-sm text-gray-600">Всего пользователей</div></div><div className="bg-green-50 p-4 rounded-lg"><div className="text-3xl font-bold text-green-600">3</div><div className="text-sm text-gray-600">Активных (7 дней)</div></div></div></div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border"><h3 className="text-lg font-semibold mb-4">📊 Метрики пользователей</h3><div className="space-y-4"><div><div className="flex justify-between text-sm mb-1"><span>Конверсия из триала</span><span className="font-bold">0%</span></div><div className="h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-yellow-500 rounded-full" style={{ width: '0%' }}></div></div><div className="text-xs text-gray-400 mt-1">Цель: 25% | Мин: 15%</div></div><div><div className="flex justify-between text-sm mb-1"><span>Отток клиентов</span><span className="font-bold">0%</span></div><div className="h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-red-500 rounded-full" style={{ width: '0%' }}></div></div><div className="text-xs text-gray-400 mt-1">Цель: 5% | Мин: 0%</div></div><div><div className="flex justify-between text-sm mb-1"><span>LTV (жизненная ценность)</span><span className="font-bold">60 000 ₽</span></div><div className="h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-green-500 rounded-full" style={{ width: '100%' }}></div></div><div className="text-xs text-gray-400 mt-1">Цель: 50 000 ₽ | Мин: 25 000 ₽</div></div><div><div className="flex justify-between text-sm mb-1"><span>CAC (стоимость привлечения)</span><span className="font-bold">50 000 ₽</span></div><div className="h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-red-500 rounded-full" style={{ width: '100%' }}></div></div><div className="text-xs text-gray-400 mt-1">Цель: 10 000 ₽ | Мин: 5 000 ₽</div></div></div></div>
-          </div>
-        );
-        
-      case 'companies':
-        return (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
-            <h3 className="text-lg font-semibold mb-4">🏢 Информация о компании</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Название компании</span><span className="font-medium">{userCompany || '—'}</span></div>
-              <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Текущий тариф</span><span className="font-medium">{currentPlan?.name || 'Базовый'}</span></div>
-              <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Активных пользователей</span><span className="font-medium">{companyUsers?.length || 0} / {currentPlan?.maxUsers || '∞'}</span></div>
-              <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Окупаемость</span><span className="font-medium text-green-600">5 месяцев</span></div>
-            </div>
-          </div>
-        );
-        
-      case 'tariffs':
-        return (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
-            <h3 className="text-lg font-semibold mb-4">💰 Текущий тариф: {currentPlan?.name || 'Базовый'}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="border rounded-lg p-4 text-center"><div className="text-sm text-gray-500">Гибкая оплата по месяцам</div><div className="text-2xl font-bold text-[#4A6572]">990 ₽</div><div className="text-xs text-gray-400">/ месяц</div><div className="text-xs text-green-600 mt-2">Отмена в любой момент</div></div>
-              <div className="border rounded-lg p-4 text-center bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10"><div className="text-sm text-gray-500">Годовая подписка</div><div className="text-2xl font-bold text-[#4A6572]">9 900 ₽</div><div className="text-xs text-gray-400">/ год</div><div className="text-xs text-green-600 mt-2">Экономия 40%</div></div>
-              <div className="border rounded-lg p-4 text-center"><div className="text-sm text-gray-500">Корпоративный</div><div className="text-2xl font-bold text-[#4A6572]">Индивидуально</div><div className="text-xs text-gray-400">до 100+ пользователей</div><button className="mt-3 text-xs bg-[#4A6572] text-white px-3 py-1 rounded">Связаться</button></div>
-            </div>
-            {promoCodeInfo && (<div className="mt-4 p-3 bg-green-50 rounded-lg"><div className="text-sm">🎁 Активирован промокод: <strong>{promoCodeInfo.code}</strong></div><div className="text-xs text-gray-500">Скидка: {promoCodeInfo.discount_percent}%</div></div>)}
-          </div>
-        );
-        
-      case 'analytics':
-      default:
-        return (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
-            <h3 className="text-lg font-semibold mb-4">📈 Детальная аналитика</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div className="p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-all" onClick={() => openDetailModal('responseTime')}>
-                <div className="text-sm text-gray-600">Среднее время ответа</div>
-                <div className="text-2xl font-bold">24 ч</div>
-                <div className="text-xs text-red-500 mt-1">Цель: 6 ч</div>
-                <div className="text-xs text-blue-500 mt-1">🔍 Нажмите для деталей</div>
-              </div>
-              <div className="p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-all" onClick={() => openDetailModal('activeUsers')}>
-                <div className="text-sm text-gray-600">Активные пользователи (7 дней)</div>
-                <div className="text-2xl font-bold">3</div>
-                <div className="text-xs text-yellow-500 mt-1">Цель: 50</div>
-                <div className="text-xs text-blue-500 mt-1">🔍 Нажмите для деталей</div>
-              </div>
-            </div>
-            <div><h4 className="font-medium mb-2">Распределение по статусам</h4><div className="flex h-4 rounded-full overflow-hidden">{statusCounts.pending > 0 && <div className="bg-yellow-500" style={{ width: `${(statusCounts.pending / totalApplications) * 100}%` }}></div>}{statusCounts.partial > 0 && <div className="bg-orange-500" style={{ width: `${(statusCounts.partial / totalApplications) * 100}%` }}></div>}{statusCounts.received > 0 && <div className="bg-green-500" style={{ width: `${(statusCounts.received / totalApplications) * 100}%` }}></div>}{statusCounts.canceled > 0 && <div className="bg-red-500" style={{ width: `${(statusCounts.canceled / totalApplications) * 100}%` }}></div>}</div><div className="flex flex-wrap gap-3 mt-2 text-xs"><span className="flex items-center"><span className="w-2 h-2 bg-yellow-500 rounded-full mr-1"></span> В ожидании: {statusCounts.pending}</span><span className="flex items-center"><span className="w-2 h-2 bg-orange-500 rounded-full mr-1"></span> Частично: {statusCounts.partial}</span><span className="flex items-center"><span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span> Получено: {statusCounts.received}</span><span className="flex items-center"><span className="w-2 h-2 bg-red-500 rounded-full mr-1"></span> Отменено: {statusCounts.canceled}</span></div></div>
-          </div>
-        );
-    }
-  };
-  
   return (
     <>
       <div className="max-w-7xl mx-auto p-4 page-enter">
-        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50">
-          <div className="border-b border-gray-200/50 dark:border-gray-700/50 px-4 pt-4">
+        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border">
+          {/* Вкладки */}
+          <div className="border-b px-4 pt-4">
             <div className="flex flex-wrap gap-1">
               {tabs.map(tab => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all ${activeTab === tab.id ? 'bg-white dark:bg-gray-800 text-[#4A6572] dark:text-[#F9AA33] border-b-2 border-[#4A6572] dark:border-[#F9AA33]' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all ${activeTab === tab.id ? 'bg-white dark:bg-gray-800 text-[#4A6572] dark:text-[#F9AA33] border-b-2 border-[#4A6572]' : 'text-gray-500 hover:text-gray-700'}`}>
                   {tab.label}
                 </button>
               ))}
             </div>
           </div>
-          <div className="p-6">{renderTabContent()}</div>
-          <div className="border-t border-gray-200/50 dark:border-gray-700/50 px-6 py-3">
-            <div className="text-xs text-gray-400 text-center">
-              Данные обновлены: {new Date().toLocaleString()}
-            </div>
+          
+          <div className="p-6">
+            {activeTab === 'overview' && (
+              <>
+                {/* Основные KPI карточки */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+                  <div className="bg-blue-50 rounded-xl p-4"><div className="text-sm">📋 Заявок</div><div className="text-2xl font-bold">{totalApplications}</div></div>
+                  <div className="bg-green-50 rounded-xl p-4"><div className="text-sm">🏢 Объектов</div><div className="text-2xl font-bold">{totalObjects}</div></div>
+                  <div className="bg-orange-50 rounded-xl p-4"><div className="text-sm">📦 Материалов</div><div className="text-2xl font-bold">{totalMaterials.toLocaleString()}</div></div>
+                  <div className="bg-purple-50 rounded-xl p-4"><div className="text-sm">✅ Получено</div><div className="text-2xl font-bold">{receivedMaterials.toLocaleString()}</div></div>
+                  <div className="bg-indigo-50 rounded-xl p-4"><div className="text-sm">🎯 Completion</div><div className="text-2xl font-bold">{totalMaterials > 0 ? Math.round((receivedMaterials / totalMaterials) * 100) : 0}%</div></div>
+                </div>
+                
+                {/* ⭐ КЛИКАБЕЛЬНЫЕ КАРТОЧКИ МЕТРИК ⭐ */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                  <div onClick={() => openModal('conversion')} className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]">
+                    <div className="text-sm text-gray-600">📊 Конверсия из триала</div>
+                    <div className="text-2xl font-bold">0%</div>
+                    <div className="text-xs text-blue-500 mt-2">🔍 Нажмите для деталей</div>
+                  </div>
+                  
+                  <div onClick={() => openModal('churn')} className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]">
+                    <div className="text-sm text-gray-600">📉 Отток клиентов</div>
+                    <div className="text-2xl font-bold">0%</div>
+                    <div className="text-xs text-blue-500 mt-2">🔍 Нажмите для деталей</div>
+                  </div>
+                  
+                  <div onClick={() => openModal('ltv')} className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]">
+                    <div className="text-sm text-gray-600">💰 LTV (жизненная ценность)</div>
+                    <div className="text-2xl font-bold text-green-600">60 000 ₽</div>
+                    <div className="text-xs text-blue-500 mt-2">🔍 Нажмите для деталей</div>
+                  </div>
+                  
+                  <div onClick={() => openModal('cac')} className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]">
+                    <div className="text-sm text-gray-600">📢 CAC (стоимость привлечения)</div>
+                    <div className="text-2xl font-bold text-red-600">50 000 ₽</div>
+                    <div className="text-xs text-blue-500 mt-2">🔍 Нажмите для деталей</div>
+                  </div>
+                  
+                  <div onClick={() => openModal('payback')} className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]">
+                    <div className="text-sm text-gray-600">⏱️ Окупаемость</div>
+                    <div className="text-2xl font-bold">5 мес</div>
+                    <div className="text-xs text-blue-500 mt-2">🔍 Нажмите для деталей</div>
+                  </div>
+                  
+                  <div onClick={() => openModal('activeUsers')} className="bg-white dark:bg-gray-800 rounded-xl p-4 border cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]">
+                    <div className="text-sm text-gray-600">👥 Активные пользователи</div>
+                    <div className="text-2xl font-bold text-blue-600">3</div>
+                    <div className="text-xs text-blue-500 mt-2">🔍 Нажмите для деталей</div>
+                  </div>
+                </div>
+                
+                {/* Статусы и топ объектов */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+                    <h3 className="text-sm font-semibold mb-3">Статусы заявок</h3>
+                    <div className="space-y-2">
+                      <div className="flex justify-between"><span>⏳ В ожидании</span><span>{statusCounts.pending}</span></div>
+                      <div className="flex justify-between"><span>🟡 Частично</span><span>{statusCounts.partial}</span></div>
+                      <div className="flex justify-between"><span>✅ Получено</span><span>{statusCounts.received}</span></div>
+                      <div className="flex justify-between"><span>❌ Отменено</span><span>{statusCounts.canceled}</span></div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+                    <h3 className="text-sm font-semibold mb-3">Топ объектов</h3>
+                    <div className="space-y-2">
+                      {topObjects.map(obj => (
+                        <div key={obj.name} className="flex justify-between">
+                          <span className="truncate">🏗️ {obj.name.length > 35 ? obj.name.substring(0, 35) + '...' : obj.name}</span>
+                          <span>{obj.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+            
+            {activeTab === 'users' && (
+              <div className="space-y-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+                  <h3 className="text-lg font-semibold mb-4">👥 Пользователи</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-4 rounded-lg text-center">
+                      <div className="text-3xl font-bold text-blue-600">{companyUsers?.length || 0}</div>
+                      <div className="text-sm text-gray-600">Всего пользователей</div>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-lg text-center">
+                      <div className="text-3xl font-bold text-green-600">3</div>
+                      <div className="text-sm text-gray-600">Активных (7 дней)</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {activeTab === 'companies' && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+                <h3 className="text-lg font-semibold mb-4">🏢 Информация о компании</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Название компании</span><span className="font-medium">{userCompany || '—'}</span></div>
+                  <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Текущий тариф</span><span className="font-medium">{currentPlan?.name || 'Базовый'}</span></div>
+                  <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Окупаемость</span><span className="font-medium text-green-600">5 месяцев</span></div>
+                </div>
+              </div>
+            )}
+            
+            {activeTab === 'tariffs' && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+                <h3 className="text-lg font-semibold mb-4">💰 Тарифы</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="border rounded-lg p-4 text-center"><div className="text-sm">Месячная</div><div className="text-2xl font-bold">990 ₽</div><div className="text-xs text-green-600">Отмена в любой момент</div></div>
+                  <div className="border rounded-lg p-4 text-center bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10"><div className="text-sm">Годовая</div><div className="text-2xl font-bold">9 900 ₽</div><div className="text-xs text-green-600">Экономия 40%</div></div>
+                  <div className="border rounded-lg p-4 text-center"><div className="text-sm">Корпоративный</div><div className="text-2xl font-bold">Индивидуально</div><button className="mt-2 text-xs bg-[#4A6572] text-white px-3 py-1 rounded">Связаться</button></div>
+                </div>
+              </div>
+            )}
+            
+            {activeTab === 'analytics' && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+                <h3 className="text-lg font-semibold mb-4">📈 Аналитика</h3>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100" onClick={() => openModal('responseTime')}>
+                    <div className="text-sm">Среднее время ответа</div>
+                    <div className="text-2xl font-bold">24 ч</div>
+                    <div className="text-xs text-red-500">Цель: 6 ч</div>
+                  </div>
+                  <div className="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100" onClick={() => openModal('activeUsers')}>
+                    <div className="text-sm">Активные пользователи</div>
+                    <div className="text-2xl font-bold">3</div>
+                    <div className="text-xs text-yellow-500">Цель: 50</div>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <h4 className="font-medium mb-2">Распределение по статусам</h4>
+                  <div className="flex h-4 rounded-full overflow-hidden">
+                    {statusCounts.pending > 0 && <div className="bg-yellow-500" style={{ width: `${(statusCounts.pending / totalApplications) * 100}%` }}></div>}
+                    {statusCounts.partial > 0 && <div className="bg-orange-500" style={{ width: `${(statusCounts.partial / totalApplications) * 100}%` }}></div>}
+                    {statusCounts.received > 0 && <div className="bg-green-500" style={{ width: `${(statusCounts.received / totalApplications) * 100}%` }}></div>}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="border-t px-6 py-3">
+            <div className="text-xs text-gray-400 text-center">Данные обновлены: {new Date().toLocaleString()}</div>
           </div>
         </div>
       </div>
-      {renderDetailModal()}
+      
+      {/* Модальное окно */}
+      <Modal />
     </>
   );
 };
