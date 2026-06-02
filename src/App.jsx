@@ -248,6 +248,323 @@ const ChevronDown = ({ className = "w-4 h-4" }) => (
 );
 
 // ─────────────────────────────────────────────────────────────
+// 🔧 ROBUST KPI DASHBOARD COMPONENT (ВСТАВИТЬ ПЕРЕД const App = () => {)
+// ─────────────────────────────────────────────────────────────
+const RobustKPIDashboard = ({ 
+  applications, 
+  supabase, 
+  userCompanyId,
+  user,
+  userRole,
+  t,
+  onError 
+}) => {
+  const [dashboardData, setDashboardData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+  
+  const loadDirectData = useCallback(async () => {
+    if (!userCompanyId) return;
+    
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Прямой запрос к Supabase
+      const { data: apps, error: appsError } = await supabase
+        .from('applications')
+        .select('*')
+        .eq('company_id', userCompanyId)
+        .order('created_at', { ascending: false });
+      
+      if (appsError) throw appsError;
+      
+      let filteredApps = apps || [];
+      if (user && userRole === 'master') {
+        filteredApps = filteredApps.filter(app => app.user_id === user.id);
+      }
+      
+      const totalApplications = filteredApps.length;
+      const totalObjects = new Set(filteredApps.map(a => a.object_name)).size;
+      const totalMaterials = filteredApps.reduce((sum, app) => 
+        sum + (app.materials?.reduce((s, m) => s + (m.quantity || 0), 0) || 0), 0);
+      const receivedMaterials = filteredApps.reduce((sum, app) => 
+        sum + (app.materials?.reduce((s, m) => s + (m.received || 0), 0) || 0), 0);
+      
+      const statusCounts = {
+        pending: filteredApps.filter(a => a.status === 'pending' || a.status === 'admin_processing').length,
+        partial: filteredApps.filter(a => a.status === 'partial_received').length,
+        received: filteredApps.filter(a => a.status === 'received').length,
+        canceled: filteredApps.filter(a => a.status === 'canceled').length
+      };
+      
+      const objectStats = {};
+      filteredApps.forEach(app => {
+        const name = app.object_name;
+        if (!objectStats[name]) objectStats[name] = { name, count: 0 };
+        objectStats[name].count++;
+      });
+      const topObjects = Object.values(objectStats).sort((a, b) => b.count - a.count).slice(0, 5);
+      
+      const last7Days = [...Array(7)].map((_, i) => {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        return date.toISOString().split('T')[0];
+      }).reverse();
+      
+      const dailyApps = last7Days.map(date => ({
+        date: date.slice(5),
+        count: filteredApps.filter(a => a.created_at?.startsWith(date)).length
+      }));
+      
+      setDashboardData({
+        totalApplications,
+        totalObjects,
+        totalMaterials,
+        receivedMaterials,
+        statusCounts,
+        topObjects,
+        dailyApps,
+        completionRate: totalMaterials > 0 ? Math.round((receivedMaterials / totalMaterials) * 100) : 0
+      });
+      setLastUpdate(new Date());
+      
+    } catch (err) {
+      console.error('[KPI Dashboard] Error:', err);
+      setError(err.message);
+      if (onError) onError(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userCompanyId, supabase, user, userRole, onError]);
+  
+  useEffect(() => {
+    if (!userCompanyId) return;
+    loadDirectData();
+    const interval = setInterval(loadDirectData, 30000);
+    return () => clearInterval(interval);
+  }, [userCompanyId, loadDirectData]);
+  
+  if (isLoading && !dashboardData) {
+    return (
+      <div className="max-w-7xl mx-auto p-4">
+        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-8">
+          <div className="flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
+            <span className="ml-3 text-gray-600">Загрузка KPI данных...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  if (error && !dashboardData) {
+    return (
+      <div className="max-w-7xl mx-auto p-4">
+        <div className="bg-red-50 dark:bg-red-900/20 rounded-2xl shadow-xl p-6 text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-red-700 dark:text-red-300 mb-2">
+            Ошибка загрузки данных
+          </h3>
+          <p className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>
+          <button 
+            onClick={loadDirectData}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            Повторить попытку
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!dashboardData || dashboardData.totalApplications === 0) {
+    return (
+      <div className="max-w-7xl mx-auto p-4">
+        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-12 text-center">
+          <div className="w-20 h-20 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+            <Package className="w-10 h-10 text-gray-400" />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Нет данных для отображения
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400">
+            Создайте первую заявку, чтобы увидеть KPI дашборд
+          </p>
+        </div>
+      </div>
+    );
+  }
+  
+  const maxCount = Math.max(...dashboardData.dailyApps.map(d => d.count), 1);
+  
+  return (
+    <div className="max-w-7xl mx-auto p-4 page-enter">
+      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <BarChart3 className="w-6 h-6 text-[#4A6572]" />
+            KPI Дашборд
+          </h2>
+          <div className="flex items-center gap-3">
+            {!isOnline && (
+              <span className="flex items-center text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
+                <WifiOff className="w-3 h-3 mr-1" />
+                Офлайн режим
+              </span>
+            )}
+            <button
+              onClick={loadDirectData}
+              disabled={isLoading}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              title="Обновить данные"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 hover:shadow-md transition-all">
+            <div className="text-sm text-gray-600 dark:text-gray-400">📋 Заявок</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {dashboardData.totalApplications.toLocaleString()}
+            </div>
+            <div className="text-xs text-gray-400 mt-1">за всё время</div>
+          </div>
+          
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 hover:shadow-md transition-all">
+            <div className="text-sm text-gray-600 dark:text-gray-400">🏢 Объектов</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {dashboardData.totalObjects}
+            </div>
+            <div className="text-xs text-gray-400 mt-1">активных объектов</div>
+          </div>
+          
+          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 hover:shadow-md transition-all">
+            <div className="text-sm text-gray-600 dark:text-gray-400">📦 Материалов</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {dashboardData.totalMaterials.toLocaleString()}
+            </div>
+            <div className="text-xs text-gray-400 mt-1">всего заказано</div>
+          </div>
+          
+          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 hover:shadow-md transition-all">
+            <div className="text-sm text-gray-600 dark:text-gray-400">✅ Получено</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {dashboardData.receivedMaterials.toLocaleString()}
+            </div>
+            <div className="text-xs text-gray-400 mt-1">получено на склад</div>
+          </div>
+          
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 hover:shadow-md transition-all">
+            <div className="text-sm text-gray-600 dark:text-gray-400">🎯 Completion Rate</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {dashboardData.completionRate}%
+            </div>
+            <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-full transition-all" 
+                style={{ width: `${dashboardData.completionRate}%` }} 
+              />
+            </div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              Статусы заявок
+            </h3>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">⏳ В ожидании</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {dashboardData.statusCounts.pending}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">🟡 Частично</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {dashboardData.statusCounts.partial}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">✅ Получено</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {dashboardData.statusCounts.received}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">❌ Отменено</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {dashboardData.statusCounts.canceled}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              Топ объектов по заявкам
+            </h3>
+            <div className="space-y-2">
+              {dashboardData.topObjects.map(obj => (
+                <div key={obj.name} className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[70%]" title={obj.name}>
+                    🏗️ {obj.name.length > 35 ? obj.name.substring(0, 35) + '...' : obj.name}
+                  </span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{obj.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        
+        {dashboardData.dailyApps.some(d => d.count > 0) && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              Динамика заявок (последние 7 дней)
+            </h3>
+            <div className="flex items-end justify-between gap-2 h-32">
+              {dashboardData.dailyApps.map(day => {
+                const height = (day.count / maxCount) * 100;
+                return (
+                  <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-lg transition-all" style={{ height: `${height}px` }}>
+                      <div className="w-full h-full bg-blue-500 dark:bg-blue-400 rounded-t-lg opacity-70" style={{ height: `${height}px` }} />
+                    </div>
+                    <span className="text-[10px] text-gray-500">{day.date}</span>
+                    <span className="text-[10px] font-medium text-gray-700 dark:text-gray-300">{day.count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        
+        <div className="mt-4 text-xs text-gray-400 text-center">
+          Данные обновлены: {lastUpdate?.toLocaleString() || new Date().toLocaleString()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
 // 🧩 ОСНОВНОЙ КОМПОНЕНТ
 // ─────────────────────────────────────────────────────────────
 const App = () => {
@@ -4200,178 +4517,16 @@ useEffect(() => {
   );
 
   const renderAnalyticsDashboard = () => {
-  // Используем загруженные заявки
-  const apps = applications;
-  
-  if (!apps || apps.length === 0) {
-    return (
-      <div className="max-w-7xl mx-auto p-4 page-enter">
-        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 text-center">
-          <div className="py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-              <Package className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Нет данных</h3>
-            <p className="text-gray-500 dark:text-gray-400">Создайте первую заявку, чтобы увидеть аналитику</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  // Базовая статистика
-  const totalApplications = apps.length;
-  const totalObjects = new Set(apps.map(a => a.object_name)).size;
-  const totalMaterials = apps.reduce((sum, app) => 
-    sum + (app.materials?.reduce((s, m) => s + (m.quantity || 0), 0) || 0), 0);
-  const receivedMaterials = apps.reduce((sum, app) => 
-    sum + (app.materials?.reduce((s, m) => s + (m.received || 0), 0) || 0), 0);
-  
-  // Статусы заявок
-  const statusCounts = {
-    pending: apps.filter(a => a.status === 'pending' || a.status === 'admin_processing').length,
-    partial: apps.filter(a => a.status === 'partial_received').length,
-    received: apps.filter(a => a.status === 'received').length,
-    canceled: apps.filter(a => a.status === 'canceled').length
-  };
-  
-  // Топ объектов
-  const objectStats = {};
-  apps.forEach(app => {
-    const name = app.object_name;
-    if (!objectStats[name]) objectStats[name] = { name, count: 0 };
-    objectStats[name].count++;
-  });
-  const topObjects = Object.values(objectStats).sort((a, b) => b.count - a.count).slice(0, 5);
-  
-  // Динамика по дням (последние 7 дней)
-  const last7Days = [...Array(7)].map((_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    return date.toISOString().split('T')[0];
-  }).reverse();
-  
-  const dailyApps = last7Days.map(date => ({
-    date: date.slice(5),
-    count: apps.filter(a => a.created_at?.startsWith(date)).length
-  }));
-  
-  const maxCount = Math.max(...dailyApps.map(d => d.count), 1);
-  
   return (
-    <div className="max-w-7xl mx-auto p-4 page-enter">
-      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">KPI Дашборд</h2>
-          <div className="flex space-x-2">
-            <button className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">📊 Неделя</button>
-            <button className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">📅 Месяц</button>
-            <button className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">📈 Год</button>
-          </div>
-        </div>
-        
-        {/* Основные карточки KPI */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-            <div className="text-sm text-gray-600 dark:text-gray-400">📋 Заявок</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalApplications}</div>
-            <div className="text-xs text-gray-400 mt-1">за всё время</div>
-          </div>
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-            <div className="text-sm text-gray-600 dark:text-gray-400">🏢 Объектов</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalObjects}</div>
-            <div className="text-xs text-gray-400 mt-1">активных объектов</div>
-          </div>
-          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-            <div className="text-sm text-gray-600 dark:text-gray-400">📦 Материалов</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalMaterials.toLocaleString()}</div>
-            <div className="text-xs text-gray-400 mt-1">всего заказано</div>
-          </div>
-          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-            <div className="text-sm text-gray-600 dark:text-gray-400">✅ Получено</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{receivedMaterials.toLocaleString()}</div>
-            <div className="text-xs text-gray-400 mt-1">получено на склад</div>
-          </div>
-          <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 hover:shadow-md transition-all">
-            <div className="text-sm text-gray-600 dark:text-gray-400">🎯 Completion Rate</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {totalMaterials > 0 ? Math.round((receivedMaterials / totalMaterials) * 100) : 0}%
-            </div>
-            <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-full transition-all" 
-                   style={{ width: totalMaterials > 0 ? `${(receivedMaterials / totalMaterials) * 100}%` : '0%' }} />
-            </div>
-          </div>
-        </div>
-        
-        {/* Статусы заявок и Топ объектов */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Статусы заявок</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-400">⏳ В ожидании</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.pending}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-400">🟡 Частично</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.partial}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-400">✅ Получено</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.received}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-400">❌ Отменено</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.canceled}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Топ объектов по заявкам</h3>
-            <div className="space-y-2">
-              {topObjects.map(obj => (
-                <div key={obj.name} className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[70%]" title={obj.name}>
-                    🏗️ {obj.name.length > 35 ? obj.name.substring(0, 35) + '...' : obj.name}
-                  </span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">{obj.count}</span>
-                </div>
-              ))}
-              {topObjects.length === 0 && (
-                <div className="text-sm text-gray-500 text-center py-4">Нет данных</div>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {/* Динамика по дням */}
-        {dailyApps.some(d => d.count > 0) && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Динамика заявок (последние 7 дней)</h3>
-            <div className="flex items-end justify-between gap-2 h-32">
-              {dailyApps.map(day => {
-                const height = (day.count / maxCount) * 100;
-                return (
-                  <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-lg transition-all" style={{ height: `${height}px` }}>
-                      <div className="w-full h-full bg-blue-500 dark:bg-blue-400 rounded-t-lg opacity-70" style={{ height: `${height}px` }} />
-                    </div>
-                    <span className="text-[10px] text-gray-500">{day.date}</span>
-                    <span className="text-[10px] font-medium text-gray-700 dark:text-gray-300">{day.count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        
-        <div className="mt-4 text-xs text-gray-400 text-center">
-          Данные обновлены: {new Date().toLocaleString()}
-        </div>
-      </div>
-    </div>
+    <RobustKPIDashboard
+      applications={applications}
+      supabase={supabase}
+      userCompanyId={userCompanyId}
+      user={user}
+      userRole={userRole}
+      t={t}
+      onError={(err) => console.error('[KPI] Dashboard error:', err)}
+    />
   );
 };
               
