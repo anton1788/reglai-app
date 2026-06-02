@@ -253,6 +253,116 @@ const ChevronDown = ({ className = "w-4 h-4" }) => (
 const KPIDashboardWithTabs = ({ applications, companyUsers, userCompany, currentPlan, promoCodeInfo, userCompanyId, supabase }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [modalType, setModalType] = useState(null);
+
+  // Добавьте этот useEffect после всех useState внутри компонента KPIDashboardWithTabs
+useEffect(() => {
+  // Функция для добавления кликабельности карточкам
+  const makeCardsClickable = () => {
+    const cards = document.querySelectorAll('.rounded-lg.p-4.transition-all');
+    
+    cards.forEach((card) => {
+      // Удаляем старый обработчик если есть
+      if (card._clickHandler) {
+        card.removeEventListener('click', card._clickHandler);
+      }
+      
+      // Создаем новый обработчик
+      card._clickHandler = () => {
+        const titleSpan = card.querySelector('.text-sm.font-medium');
+        const title = titleSpan ? titleSpan.innerText : 'Метрика';
+        
+        const valueElem = card.querySelector('.text-2xl, .text-xl');
+        let value = valueElem ? valueElem.innerText : '';
+        if (!value) {
+          const match = card.innerText.match(/\d+(?:\s*\d*)*(?:[.,]\d+)?\s*[%₽мес]?/);
+          value = match ? match[0] : '—';
+        }
+        
+        let target = '25%';
+        let recommendations = '• Улучшить онбординг\n• Добавить туториалы\n• Настроить email-рассылки';
+        
+        if (title.includes('LTV')) {
+          target = '50 000 ₽';
+          recommendations = '• Увеличить средний чек\n• Продлить срок подписки\n• Добавить дополнительные услуги';
+        } else if (title.includes('CAC')) {
+          target = '10 000 ₽';
+          recommendations = '• Реферальная программа\n• Оптимизация рекламы\n• Развивать партнерскую программу';
+        } else if (title.includes('Окупаемость')) {
+          target = '6 мес';
+          recommendations = '• Снизить CAC\n• Увеличить LTV\n• Оптимизировать воронку';
+        } else if (title.includes('Отток')) {
+          target = '5%';
+          recommendations = '• Собирать обратную связь\n• Улучшить поддержку\n• Анализировать причины ухода';
+        } else if (title.includes('пользователи')) {
+          target = '50';
+          recommendations = '• Пригласить сотрудников\n• Активировать неактивных\n• Провести обучение';
+        }
+        
+        const modalHtml = `
+          <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:999999;">
+            <div style="background:white;border-radius:24px;max-width:450px;width:90%;padding:24px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="font-size:22px;font-weight:bold;margin:0;color:#1f2937;">📊 ${title}</h3>
+                <button onclick="this.closest('div').parentElement.remove()" style="background:none;border:none;font-size:28px;cursor:pointer;color:#9ca3af;">&times;</button>
+              </div>
+              
+              <div style="background:#f3f4f6;padding:16px;border-radius:16px;margin-bottom:16px;">
+                <p style="margin:0 0 8px 0;font-size:14px;color:#6b7280;">📈 Текущее значение</p>
+                <p style="font-size:36px;font-weight:bold;margin:0;color:#4A6572;">${value}</p>
+              </div>
+              
+              <div style="background:#e8f5e9;padding:16px;border-radius:16px;margin-bottom:20px;">
+                <p style="margin:0 0 8px 0;font-size:14px;color:#6b7280;">🎯 Целевое значение</p>
+                <p style="font-size:28px;font-weight:bold;margin:0;color:#2e7d32;">${target}</p>
+              </div>
+              
+              <div style="border-top:1px solid #e5e7eb;padding-top:16px;">
+                <h4 style="font-weight:bold;margin:0 0 12px 0;color:#374151;">📝 Рекомендации:</h4>
+                <ul style="margin:0;padding-left:20px;color:#4b5563;line-height:1.6;">
+                  ${recommendations.split('\n').map(r => `<li>${r.trim()}</li>`).join('')}
+                </ul>
+              </div>
+              
+              <button onclick="this.closest('div').parentElement.remove()" style="margin-top:20px;width:100%;padding:14px;background:#4A6572;color:white;border:none;border-radius:16px;cursor:pointer;font-weight:bold;font-size:16px;">
+                Закрыть
+              </button>
+            </div>
+          </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+      };
+      
+      card.addEventListener('click', card._clickHandler);
+      card.style.cursor = 'pointer';
+      card.style.transition = 'all 0.2s ease';
+      
+      card.addEventListener('mouseenter', () => {
+        card.style.transform = 'translateY(-4px)';
+        card.style.boxShadow = '0 10px 25px -5px rgba(0,0,0,0.1)';
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.transform = '';
+        card.style.boxShadow = '';
+      });
+    });
+  };
+  
+  // Запускаем добавление кликов после загрузки DOM
+  const timeout = setTimeout(makeCardsClickable, 500);
+  
+  // Также запускаем при переключении вкладок
+  const observer = new MutationObserver(() => {
+    makeCardsClickable();
+  });
+  
+  observer.observe(document.body, { childList: true, subtree: true });
+  
+  return () => {
+    clearTimeout(timeout);
+    observer.disconnect();
+  };
+}, []);
   
   const apps = applications;
   
