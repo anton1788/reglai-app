@@ -4200,8 +4200,24 @@ useEffect(() => {
   );
 
   const renderAnalyticsDashboard = () => {
-  // Подсчитываем данные прямо здесь
-  const apps = isAdminMode ? allApplications : applications;
+  // Используем загруженные заявки
+  const apps = applications;
+  
+  if (!apps || apps.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto p-4 page-enter">
+        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 text-center">
+          <div className="py-12">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+              <Package className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Нет данных</h3>
+            <p className="text-gray-500 dark:text-gray-400">Создайте первую заявку, чтобы увидеть аналитику</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   // Базовая статистика
   const totalApplications = apps.length;
@@ -4219,26 +4235,16 @@ useEffect(() => {
     canceled: apps.filter(a => a.status === 'canceled').length
   };
   
-  // Данные для графиков
-  const statusData = [
-    { name: 'В ожидании', value: statusCounts.pending, color: '#fbbf24' },
-    { name: 'Частично', value: statusCounts.partial, color: '#f97316' },
-    { name: 'Получено', value: statusCounts.received, color: '#3b82f6' },
-    { name: 'Отменено', value: statusCounts.canceled, color: '#ef4444' }
-  ].filter(item => item.value > 0);
-  
-  // Объекты с количеством заявок
-  const objectStats = apps.reduce((acc, app) => {
+  // Топ объектов
+  const objectStats = {};
+  apps.forEach(app => {
     const name = app.object_name;
-    if (!acc[name]) acc[name] = { name, count: 0, materials: 0 };
-    acc[name].count++;
-    acc[name].materials += app.materials?.reduce((s, m) => s + (m.quantity || 0), 0) || 0;
-    return acc;
-  }, {});
+    if (!objectStats[name]) objectStats[name] = { name, count: 0 };
+    objectStats[name].count++;
+  });
+  const topObjects = Object.values(objectStats).sort((a, b) => b.count - a.count).slice(0, 5);
   
-  const objectData = Object.values(objectStats).sort((a, b) => b.count - a.count).slice(0, 10);
-  
-  // Данные для временного анализа
+  // Динамика по дням (последние 7 дней)
   const last7Days = [...Array(7)].map((_, i) => {
     const date = new Date();
     date.setDate(date.getDate() - i);
@@ -4250,11 +4256,13 @@ useEffect(() => {
     count: apps.filter(a => a.created_at?.startsWith(date)).length
   }));
   
+  const maxCount = Math.max(...dailyApps.map(d => d.count), 1);
+  
   return (
     <div className="max-w-7xl mx-auto p-4 page-enter">
       <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-0">KPI Дашборд</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">KPI Дашборд</h2>
           <div className="flex space-x-2">
             <button className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">📊 Неделя</button>
             <button className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">📅 Месяц</button>
@@ -4263,83 +4271,87 @@ useEffect(() => {
         </div>
         
         {/* Основные карточки KPI */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 hover:shadow-md transition-all">
             <div className="text-sm text-gray-600 dark:text-gray-400">📋 Заявок</div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalApplications}</div>
             <div className="text-xs text-gray-400 mt-1">за всё время</div>
           </div>
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4">
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 hover:shadow-md transition-all">
             <div className="text-sm text-gray-600 dark:text-gray-400">🏢 Объектов</div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalObjects}</div>
             <div className="text-xs text-gray-400 mt-1">активных объектов</div>
           </div>
-          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4">
+          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 hover:shadow-md transition-all">
             <div className="text-sm text-gray-600 dark:text-gray-400">📦 Материалов</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalMaterials}</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalMaterials.toLocaleString()}</div>
             <div className="text-xs text-gray-400 mt-1">всего заказано</div>
           </div>
-          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4">
+          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 hover:shadow-md transition-all">
             <div className="text-sm text-gray-600 dark:text-gray-400">✅ Получено</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{receivedMaterials}</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{receivedMaterials.toLocaleString()}</div>
             <div className="text-xs text-gray-400 mt-1">получено на склад</div>
           </div>
-          <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4">
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 hover:shadow-md transition-all">
             <div className="text-sm text-gray-600 dark:text-gray-400">🎯 Completion Rate</div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
               {totalMaterials > 0 ? Math.round((receivedMaterials / totalMaterials) * 100) : 0}%
             </div>
-            <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-full transition-all" 
                    style={{ width: totalMaterials > 0 ? `${(receivedMaterials / totalMaterials) * 100}%` : '0%' }} />
             </div>
           </div>
         </div>
         
-        {/* Статусы заявок */}
-        {statusData.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Статусы заявок</h3>
-              <div className="space-y-2">
-                {statusData.map(item => (
-                  <div key={item.name} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">{item.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">{item.value}</span>
-                      <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${(item.value / totalApplications) * 100}%`, backgroundColor: item.color }} />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+        {/* Статусы заявок и Топ объектов */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Статусы заявок</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">⏳ В ожидании</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.pending}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">🟡 Частично</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.partial}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">✅ Получено</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.received}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">❌ Отменено</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{statusCounts.canceled}</span>
               </div>
             </div>
-            
-            {/* Топ объектов */}
-            {objectData.length > 0 && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50">
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Топ объектов по заявкам</h3>
-                <div className="space-y-2">
-                  {objectData.slice(0, 5).map(obj => (
-                    <div key={obj.name} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[60%]" title={obj.name}>{obj.name}</span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">{obj.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
-        )}
+          
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Топ объектов по заявкам</h3>
+            <div className="space-y-2">
+              {topObjects.map(obj => (
+                <div key={obj.name} className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[70%]" title={obj.name}>
+                    🏗️ {obj.name.length > 35 ? obj.name.substring(0, 35) + '...' : obj.name}
+                  </span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{obj.count}</span>
+                </div>
+              ))}
+              {topObjects.length === 0 && (
+                <div className="text-sm text-gray-500 text-center py-4">Нет данных</div>
+              )}
+            </div>
+          </div>
+        </div>
         
         {/* Динамика по дням */}
         {dailyApps.some(d => d.count > 0) && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Динамика заявок (последние 7 дней)</h3>
             <div className="flex items-end justify-between gap-2 h-32">
               {dailyApps.map(day => {
-                const maxCount = Math.max(...dailyApps.map(d => d.count), 1);
                 const height = (day.count / maxCount) * 100;
                 return (
                   <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
