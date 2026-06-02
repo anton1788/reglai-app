@@ -4199,351 +4199,169 @@ useEffect(() => {
     </div>
   );
 
-  const renderAnalyticsDashboard = () => (
-  <div className="max-w-7xl mx-auto p-4 page-enter">
-    <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-0">{t('analytics')}</h2>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => downloadAnalyticsAsPDF(
-              getObjectAnalytics,
-              statusData,
-              processingTimeData,
-              t,
-              language,
-              userCompany,
-              showNotification,
-              setIsExportingAnalyticsPDF,
-              escapeHtml
-            )}
-            disabled={isExportingAnalyticsPDF}
-            className="px-4 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-300/50 dark:border-gray-600/50 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium flex items-center"
-          >
-            <Download className="w-4 h-4 mr-1" aria-hidden="true" />
-            PDF
-          </button>
-          <button
-            onClick={() => downloadAnalyticsAsHTML(
-              getObjectAnalytics,
-              statusData,
-              processingTimeData,
-              t,
-              language,
-              userCompany,
-              showNotification,
-              setIsExportingAnalyticsHTML,
-              escapeHtml
-            )}
-            disabled={isExportingAnalyticsHTML}
-            className="px-4 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-300/50 dark:border-gray-600/50 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium"
-          >
-            HTML
-          </button>
-          <button
-            onClick={() => downloadAnalyticsAsXLSX(
-              getObjectAnalytics,
-              t,
-              setIsExportingAnalyticsXLSX
-            )}
-            disabled={isExportingAnalyticsXLSX}
-            className="px-4 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-300/50 dark:border-gray-600/50 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium"
-          >
-            Excel
-          </button>
-          {isAdminMode && (
-            <button
-              onClick={handleAdminLogout}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium flex items-center space-x-1"
-            >
-              <Shield className="w-4 h-4" aria-hidden="true" />
-              <span>{t('adminMode')}</span>
-            </button>
-          )}
+  const renderAnalyticsDashboard = () => {
+  // Подсчитываем данные прямо здесь
+  const apps = isAdminMode ? allApplications : applications;
+  
+  // Базовая статистика
+  const totalApplications = apps.length;
+  const totalObjects = new Set(apps.map(a => a.object_name)).size;
+  const totalMaterials = apps.reduce((sum, app) => 
+    sum + (app.materials?.reduce((s, m) => s + (m.quantity || 0), 0) || 0), 0);
+  const receivedMaterials = apps.reduce((sum, app) => 
+    sum + (app.materials?.reduce((s, m) => s + (m.received || 0), 0) || 0), 0);
+  
+  // Статусы заявок
+  const statusCounts = {
+    pending: apps.filter(a => a.status === 'pending' || a.status === 'admin_processing').length,
+    partial: apps.filter(a => a.status === 'partial_received').length,
+    received: apps.filter(a => a.status === 'received').length,
+    canceled: apps.filter(a => a.status === 'canceled').length
+  };
+  
+  // Данные для графиков
+  const statusData = [
+    { name: 'В ожидании', value: statusCounts.pending, color: '#fbbf24' },
+    { name: 'Частично', value: statusCounts.partial, color: '#f97316' },
+    { name: 'Получено', value: statusCounts.received, color: '#3b82f6' },
+    { name: 'Отменено', value: statusCounts.canceled, color: '#ef4444' }
+  ].filter(item => item.value > 0);
+  
+  // Объекты с количеством заявок
+  const objectStats = apps.reduce((acc, app) => {
+    const name = app.object_name;
+    if (!acc[name]) acc[name] = { name, count: 0, materials: 0 };
+    acc[name].count++;
+    acc[name].materials += app.materials?.reduce((s, m) => s + (m.quantity || 0), 0) || 0;
+    return acc;
+  }, {});
+  
+  const objectData = Object.values(objectStats).sort((a, b) => b.count - a.count).slice(0, 10);
+  
+  // Данные для временного анализа
+  const last7Days = [...Array(7)].map((_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    return date.toISOString().split('T')[0];
+  }).reverse();
+  
+  const dailyApps = last7Days.map(date => ({
+    date: date.slice(5),
+    count: apps.filter(a => a.created_at?.startsWith(date)).length
+  }));
+  
+  return (
+    <div className="max-w-7xl mx-auto p-4 page-enter">
+      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-0">KPI Дашборд</h2>
+          <div className="flex space-x-2">
+            <button className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">📊 Неделя</button>
+            <button className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">📅 Месяц</button>
+            <button className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">📈 Год</button>
+          </div>
         </div>
-      </div>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 auto-rows-fr">
-        {/* 🔹 Карточка 1: Заявок */}
-        <button
-          onClick={() => setAnalyticsDetailType('applications')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('totalApplications')}</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">
-            {formatNumber(getObjectAnalytics.reduce((sum, obj) => sum + obj.totalApplications, 0))}
-          </div>
-          <div className="text-xs text-gray-400 mt-2">за всё время</div>
-        </button>
         
-        {/* 🔹 Карточка 2: Объекты */}
-        <button
-          onClick={() => setAnalyticsDetailType('objects')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('totalObjects')}</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">
-            {formatNumber(getObjectAnalytics.length)}
+        {/* Основные карточки KPI */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400">📋 Заявок</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalApplications}</div>
+            <div className="text-xs text-gray-400 mt-1">за всё время</div>
           </div>
-          <div className="text-xs text-gray-400 mt-2">объектов</div>
-        </button>
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400">🏢 Объектов</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalObjects}</div>
+            <div className="text-xs text-gray-400 mt-1">активных объектов</div>
+          </div>
+          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400">📦 Материалов</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{totalMaterials}</div>
+            <div className="text-xs text-gray-400 mt-1">всего заказано</div>
+          </div>
+          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400">✅ Получено</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{receivedMaterials}</div>
+            <div className="text-xs text-gray-400 mt-1">получено на склад</div>
+          </div>
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400">🎯 Completion Rate</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {totalMaterials > 0 ? Math.round((receivedMaterials / totalMaterials) * 100) : 0}%
+            </div>
+            <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-full transition-all" 
+                   style={{ width: totalMaterials > 0 ? `${(receivedMaterials / totalMaterials) * 100}%` : '0%' }} />
+            </div>
+          </div>
+        </div>
         
-        {/* 🔹 Карточка 3: Материалы */}
-        <button
-          onClick={() => setAnalyticsDetailType('materials')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('totalMaterials')}</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">
-            {formatNumber(getObjectAnalytics.reduce((sum, obj) => sum + obj.totalMaterials, 0))}
-          </div>
-          <div className="text-xs text-gray-400 mt-2">всего заказано</div>
-        </button>
-        
-        {/* 🔹 Карточка 4: Полученные материалы */}
-        <button
-          onClick={() => setAnalyticsDetailType('receivedMaterials')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('receivedMaterials')}</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">
-            {formatNumber(getObjectAnalytics.reduce((sum, obj) => sum + obj.receivedMaterials, 0))}
-          </div>
-          <div className="text-xs text-gray-400 mt-2">получено на склад</div>
-        </button>
-        
-        {/* 🔹 Карточка 5: Activation Rate */}
-        <button
-          onClick={() => setAnalyticsDetailType('activation')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-          title="Процент пользователей, создавших первую заявку в течение 24 часов"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Activation Rate (24ч)</div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform inline-block">
-              {activationMetrics.rate}%
-            </span>
-            <span className="text-xs text-gray-400">
-              {activationMetrics.activated}/{activationMetrics.total}
-            </span>
-          </div>
-          <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-[#4A6572] to-[#344955] transition-all duration-500"
-              style={{ width: `${activationMetrics.rate}%` }}
-            />
-          </div>
-        </button>
-        
-        {/* 🔹 Карточка 6: Time to First Value */}
-        <button
-          onClick={() => setAnalyticsDetailType('ttfv')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-          title="Среднее время от регистрации до первой заявки"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Time to First Value</div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">
-              {timeToFirstValue.averageDays !== null ? `${timeToFirstValue.averageDays} дн.` : '—'}
-            </span>
-            <span className="text-xs text-gray-400">(n={timeToFirstValue.sampleSize})</span>
-          </div>
-          {timeToFirstValue.distribution && (
-            <div className="mt-2 flex gap-1">
-              {['< 1 ч', '1 - 24 ч', '> 24 ч'].map((key) => {
-                const count = timeToFirstValue.distribution[key] || 0;
-                const pct = timeToFirstValue.sampleSize > 0 ? Math.round(count / timeToFirstValue.sampleSize * 100) : 0;
-                return (
-                  <div key={key} className="flex-1 text-center">
-                    <div className="h-1 bg-gray-200 dark:bg-gray-700 rounded">
-                      <div className="h-full bg-[#4A6572] rounded transition-all" style={{ width: `${pct}%` }} />
+        {/* Статусы заявок */}
+        {statusData.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Статусы заявок</h3>
+              <div className="space-y-2">
+                {statusData.map(item => (
+                  <div key={item.name} className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">{item.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">{item.value}</span>
+                      <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${(item.value / totalApplications) * 100}%`, backgroundColor: item.color }} />
+                      </div>
                     </div>
-                    <div className="text-[9px] text-gray-400 mt-0.5">{pct}%</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Топ объектов */}
+            {objectData.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50">
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Топ объектов по заявкам</h3>
+                <div className="space-y-2">
+                  {objectData.slice(0, 5).map(obj => (
+                    <div key={obj.name} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[60%]" title={obj.name}>{obj.name}</span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">{obj.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Динамика по дням */}
+        {dailyApps.some(d => d.count > 0) && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200/50">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Динамика заявок (последние 7 дней)</h3>
+            <div className="flex items-end justify-between gap-2 h-32">
+              {dailyApps.map(day => {
+                const maxCount = Math.max(...dailyApps.map(d => d.count), 1);
+                const height = (day.count / maxCount) * 100;
+                return (
+                  <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-lg transition-all" style={{ height: `${height}px` }}>
+                      <div className="w-full h-full bg-blue-500 dark:bg-blue-400 rounded-t-lg opacity-70" style={{ height: `${height}px` }} />
+                    </div>
+                    <span className="text-[10px] text-gray-500">{day.date}</span>
+                    <span className="text-[10px] font-medium text-gray-700 dark:text-gray-300">{day.count}</span>
                   </div>
                 );
               })}
             </div>
-          )}
-        </button>
-
-        {/* 🔹 Карточка 7: Feature Adoption */}
-        <button
-          onClick={() => setAnalyticsDetailType('adoption')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-          title="Использование функций по ролям"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Feature Adoption</div>
-          <div className="flex items-center justify-between gap-1 text-[10px]">
-            <span className="text-gray-500">📦 Склад</span>
-            <div className="flex-1 h-1 bg-gray-200 dark:bg-gray-700 rounded">
-              <div className="h-full bg-[#4A6572] rounded" style={{ width: `${featureAdoption.overall.warehouse}%` }} />
-            </div>
-            <span className="text-gray-500 w-8 text-right">{featureAdoption.overall.warehouse}%</span>
           </div>
-          <div className="flex items-center justify-between gap-1 text-[10px]">
-            <span className="text-gray-500">💬 Чат</span>
-            <div className="flex-1 h-1 bg-gray-200 dark:bg-gray-700 rounded">
-              <div className="h-full bg-[#F9AA33] rounded" style={{ width: `${featureAdoption.overall.chat}%` }} />
-            </div>
-            <span className="text-gray-500 w-8 text-right">{featureAdoption.overall.chat}%</span>
-          </div>
-          <div className="flex items-center justify-between gap-1 text-[10px]">
-            <span className="text-gray-500">📊 Аналитика</span>
-            <div className="flex-1 h-1 bg-gray-200 dark:bg-gray-700 rounded">
-              <div className="h-full bg-[#3b82f6] rounded" style={{ width: `${featureAdoption.overall.analytics}%` }} />
-            </div>
-            <span className="text-gray-500 w-8 text-right">{featureAdoption.overall.analytics}%</span>
-          </div>
-          <div className="mt-1 pt-1 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex justify-between text-[9px] text-gray-400">
-              <span>Среднее</span>
-              <span>{Math.round((featureAdoption.overall.warehouse + featureAdoption.overall.chat + featureAdoption.overall.analytics) / 3)}%</span>
-            </div>
-          </div>
-        </button>
-
-        {/* 🔹 Карточка 8: NPS Score */}
-        <button
-          onClick={() => setAnalyticsDetailType('nps')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-          title="Net Promoter Score"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">NPS Score</div>
-          <div className="flex items-baseline gap-2">
-            <span className={`text-2xl font-bold group-hover:scale-105 transition-transform ${
-              npsMetrics.score >= 50 ? 'text-green-600' :
-              npsMetrics.score >= 0 ? 'text-yellow-600' : 'text-red-600'
-            }`}>
-              {npsMetrics.score !== null ? npsMetrics.score : '—'}
-            </span>
-            <span className="text-xs text-gray-400">({npsMetrics.total} ответов)</span>
-          </div>
-          <div className="mt-2 flex gap-1 text-[10px]">
-            <span className="text-green-600">👍 {npsMetrics.promotersPercent}%</span>
-            <span className="text-gray-400">|</span>
-            <span className="text-yellow-600">😐 {npsMetrics.passivesPercent}%</span>
-            <span className="text-gray-400">|</span>
-            <span className="text-red-600">👎 {npsMetrics.detractorsPercent}%</span>
-          </div>
-        </button>
-
-        {/* 🔹 Карточка 9: Churn Reasons */}
-        <button
-          onClick={() => setAnalyticsDetailType('churn')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-          title="Причины оттока пользователей"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Churn Reasons</div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">
-              {churnMetrics.total}
-            </span>
-            <span className="text-xs text-gray-400">записей</span>
-          </div>
-          {churnMetrics.topReason && (
-            <div className="mt-2 text-xs text-gray-500 truncate">
-              Топ: {REASON_OPTIONS.find(r => r.value === churnMetrics.topReason)?.label || churnMetrics.topReason}
-            </div>
-          )}
-        </button>
-
-        {/* 🔹 Карточка 10: A/B Test Results */}
-        <button
-          onClick={() => setAnalyticsDetailType('ab_tests')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-          title="Результаты A/B-тестов"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">A/B Test Results</div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">
-              {Object.keys(AB_TEST_CONFIG).length}
-            </span>
-            <span className="text-xs text-gray-400">активных тестов</span>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1">
-            {Object.entries(abTestVariants).slice(0, 2).map(([testName, variant]) => (
-              <span key={testName} className={`text-[9px] px-1 py-0.5 rounded ${
-                variant === 'variant_a' || variant === 'monthly' || variant === 'icon_text'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                  : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
-              }`}>
-                {testName.split('_')[0]}: {variant}
-              </span>
-            ))}
-          </div>
-        </button>
-
-        {/* 🔹 Карточка 11: Использование квоты */}
-        <button
-          onClick={() => setAnalyticsDetailType('quota')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Использование API</div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">
-              {quotaStatus?.dailyUsage || 0} / {quotaStatus?.dailyLimit || 100}
-            </span>
-            <span className="text-xs text-gray-400">/день</span>
-          </div>
-          <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-[#4A6572] to-[#344955] transition-all"
-              style={{ width: `${quotaStatus ? (quotaStatus.dailyUsage / quotaStatus.dailyLimit) * 100 : 0}%` }}
-            />
-          </div>
-        </button>
-
-        {/* 🔹 Карточка 12: User Retention */}
-        <button
-          onClick={() => setAnalyticsDetailType('retention')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-          title="Удержание пользователей по месяцам"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">User Retention</div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">
-              {retentionMetrics.overallRetention}%
-            </span>
-            <span className="text-xs text-gray-400">через 1 месяц</span>
-          </div>
-          <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-[#4A6572] to-[#344955] transition-all"
-              style={{ width: `${retentionMetrics.overallRetention}%` }}
-            />
-          </div>
-          <div className="text-[10px] text-gray-400 mt-1">
-            {retentionMetrics.cohorts.length} когорт
-          </div>
-        </button>
-
-        {/* 🔹 Карточка 13: User Engagement */}
-        <button
-          onClick={() => setAnalyticsDetailType('engagement')}
-          className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left h-36 flex flex-col justify-between group"
-          title="Вовлеченность пользователей за 30 дней"
-        >
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">User Engagement</div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">
-              {engagementMetrics.activeUsers}
-            </span>
-            <span className="text-xs text-gray-400">активных</span>
-          </div>
-          <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-            <span>📋 {engagementMetrics.totalApplications} заявок</span>
-            <span>📊 {engagementMetrics.avgApplicationsPerUser} на пользователя</span>
-          </div>
-          {engagementMetrics.topUsers.length > 0 && (
-            <div className="text-[9px] text-gray-400 mt-1 truncate">
-              Топ: {engagementMetrics.topUsers[0]?.count} заявок
-            </div>
-          )}
-        </button>
+        )}
+        
+        <div className="mt-4 text-xs text-gray-400 text-center">
+          Данные обновлены: {new Date().toLocaleString()}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
               
   const renderProfilePage = () => (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 page-enter">
