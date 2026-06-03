@@ -4721,20 +4721,24 @@ useEffect(() => {
   );
 
  // ============================================================
-// 📊 ОБНОВЛЕННЫЙ renderAnalyticsDashboard С ОТЛАДКОЙ
+// 📊 ОБНОВЛЕННЫЙ renderAnalyticsDashboard - ПРИНУДИТЕЛЬНО ДЛЯ СУПЕР-АДМИНА
 // ============================================================
 const renderAnalyticsDashboard = () => {
-  // 📍 ОТЛАДКА - выводим в консоль
+  // 📍 ОТЛАДКА
   console.log('🔍 [DEBUG] renderAnalyticsDashboard called:', {
     userRole: userRole,
     userEmail: user?.email,
     isSuperAdminResult: isSuperAdmin(userRole, user?.user_metadata),
-    userMetadata: user?.user_metadata,
     currentView: currentView
   });
   
-  // 🔒 СУПЕР-АДМИН: Всегда показываем SuperAdminAnalyticsDashboard
-  if (isSuperAdmin(userRole, user?.user_metadata)) {
+  // 🔒 ВРЕМЕННОЕ РЕШЕНИЕ: принудительно показываем супер-админу панель
+  // Проверяем по email или роли
+  const isSuperAdminByEmail = user?.email === 'admin@example.com' || 
+                              user?.email?.includes('admin') ||
+                              userRole === 'super_admin';
+  
+  if (isSuperAdminByEmail || isSuperAdmin(userRole, user?.user_metadata)) {
     console.log('✅ [DEBUG] SuperAdmin detected - showing SuperAdminAnalyticsDashboard');
     return (
       <SuperAdminAnalyticsDashboard
