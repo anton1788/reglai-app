@@ -8,7 +8,7 @@ import UpdateModal from './components/UpdateModal.jsx'
 import { initOfflineModule, checkOfflineSupport } from './utils/offlineStorage'
 
 // ✅ Версия приложения
-const APP_VERSION = '9.9.17';
+const APP_VERSION = '9.9.18';
 
 // ─────────────────────────────────────────────────────────
 // 🔹 Глобальные переменные для модального окна обновлений
@@ -60,6 +60,7 @@ const showUpdateModal = (updateInfo) => {
 // ─────────────────────────────────────────────────────────
 // 🔹 Регистрация Service Worker
 // ─────────────────────────────────────────────────────────
+// Добавьте проверку после регистрации
 const registerServiceWorker = async () => {
   if ('serviceWorker' in navigator) {
     try {
@@ -70,11 +71,15 @@ const registerServiceWorker = async () => {
       
       console.log('[SW] Registered:', registration.scope);
       
+      // Сохраняем registration в window для доступа из App
+      window.swRegistration = registration;
+      
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('[SW] New version installed, showing update prompt');
               window.dispatchEvent(new CustomEvent('pwa-update-available', {
                 detail: { version: APP_VERSION, registration }
               }));
@@ -82,6 +87,9 @@ const registerServiceWorker = async () => {
           });
         }
       });
+      
+      // Проверяем обновления при регистрации
+      registration.update();
       
       return registration;
     } catch (error) {

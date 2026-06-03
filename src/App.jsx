@@ -1975,13 +1975,16 @@ const checkForUpdates = useCallback(async () => {
     const response = await fetch('/version.json?v=' + Date.now());
     const data = await response.json();
     
-    if (data.version !== APP_VERSION) {
+    console.log('[UpdateCheck] Текущая версия:', APP_VERSION);
+    console.log('[UpdateCheck] Новая версия:', data.version);
+    
+    if (data.version && data.version !== APP_VERSION) {
       // Проверяем, не отклоняли ли уже это обновление
       const declinedKey = `update_declined_${data.version}`;
       const declinedAt = localStorage.getItem(declinedKey);
       
       // Если отклонено менее чем 24 часа назад, не показываем
-      if (declinedAt && (Date.now() - parseInt(declinedAt) < 24 * 60 * 60 * 1000)) {
+      if (declinedAt && (Date.now() - parseInt(declinedAt)) < 24 * 60 * 60 * 1000) {
         console.log('[UpdateCheck] Обновление отклонено, не показываем');
         return;
       }
@@ -1996,18 +1999,38 @@ const checkForUpdates = useCallback(async () => {
       // Проверяем, не показывали ли уже это обновление в текущей сессии
       const lastShownVersion = localStorage.getItem('last_update_shown');
       if (lastShownVersion !== data.version) {
+        console.log('[UpdateCheck] Показываем модальное окно обновления');
+        
+        // Находим информацию о версии из списка
+        const versionInfo = data.versions?.find(v => v.version === data.version) || {
+          version: data.version,
+          changes: data.changes || ['Улучшена производительность и исправлены ошибки'],
+          date: data.date || new Date().toISOString(),
+          breaking: false
+        };
+        
         setUpdateInfo({
           from: APP_VERSION,
           to: data.version,
-          changes: data.changes,
-          date: data.date
+          changes: versionInfo.changes,
+          date: versionInfo.date,
+          breaking: versionInfo.breaking || false,
+          updateOptions: data.updateOptions || {
+            showStayOption: true,
+            remindLaterDays: 3,
+            message: 'После обновления может потребоваться перезагрузка'
+          }
         });
         setShowUpdateModal(true);
         localStorage.setItem('last_update_shown', data.version);
+      } else {
+        console.log('[UpdateCheck] Обновление уже показывали в этой сессии');
       }
+    } else {
+      console.log('[UpdateCheck] Нет новых версий');
     }
   } catch (err) {
-    console.warn('[UpdateCheck]', err);
+    console.warn('[UpdateCheck] Ошибка проверки обновлений:', err);
   }
 }, []);
 
@@ -4128,6 +4151,21 @@ useEffect(() => {
   loadAuditLogs();
 }, [userCompanyId, supabase]);
 
+useEffect(() => {
+  // Проверка обновлений при загрузке
+  const timer = setTimeout(() => {
+    checkForUpdates();
+  }, 3000); // через 3 секунды после загрузки
+  
+  // Проверка каждые 6 часов
+  const interval = setInterval(checkForUpdates, 6 * 60 * 60 * 1000);
+  
+  return () => {
+    clearTimeout(timer);
+    clearInterval(interval);
+  };
+}, [checkForUpdates]);
+
   // 🧭 VIEW ROUTING (ИСПРАВЛЕННЫЙ)
 useEffect(() => {
     if (!user) return;
@@ -6241,35 +6279,36 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       />
       
       {/* Version Update Modal */}
-      <VersionUpdateModal
-        isOpen={showUpdateModal}
-        onClose={() => {
-          setShowUpdateModal(false);
-          if (updateInfo?.to) {
-            localStorage.setItem(`update_declined_${updateInfo.to}`, Date.now().toString());
-          }
-        }}
-        updateInfo={updateInfo}
-        onApplyUpdate={() => {
-          if (waitingWorker) {
-            waitingWorker.postMessage({ type: 'SKIP_WAITING' });
-          }
-          if (updateInfo?.to) {
-            localStorage.setItem(`update_applied_${updateInfo.to}`, Date.now().toString());
-            localStorage.setItem('last_update_shown', updateInfo.to);
-          }
-          setShowUpdateModal(false);
-          setUpdateInfo(null);
-          if ('caches' in window) {
-            caches.keys().then(keys => {
-              keys.forEach(key => caches.delete(key));
-            });
-          }
-          setTimeout(() => {
-            window.location.reload(true);
-          }, 200);
-        }}
-      />
+<VersionUpdateModal
+  isOpen={showUpdateModal}
+  onClose={() => {
+    setShowUpdateModal(false);
+    if (updateInfo?.to) {
+      localStorage.setItem(`update_declined_${updateInfo.to}`, Date.now().toString());
+    }
+  }}
+  updateInfo={updateInfo}
+  onApplyUpdate={() => {
+    if (waitingWorker) {
+      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    }
+    if (updateInfo?.to) {
+      localStorage.setItem(`update_applied_${updateInfo.to}`, Date.now().toString());
+      localStorage.setItem('last_update_shown', updateInfo.to);
+    }
+    setShowUpdateModal(false);
+    setUpdateInfo(null);
+    // Очищаем кэш
+    if ('caches' in window) {
+      caches.keys().then(keys => {
+        keys.forEach(key => caches.delete(key));
+      });
+    }
+    setTimeout(() => {
+      window.location.reload(true);
+    }, 500);
+  }}
+/>
       
       <ChurnReasonModal
         isOpen={showChurnModal}
