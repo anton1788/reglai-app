@@ -4,7 +4,8 @@ import {
 Package, Download, Search, Filter, Truck, Loader2, CheckCircle, XCircle,
 Users, MapPin, AlertCircle, Plus, Minus, Edit2, ArrowRight, FileText,
 History, TrendingUp, Eye, Calendar, Info, ChevronDown, ChevronUp,
-Sparkles, Undo2, CheckCircle2, AlertTriangle, ArrowUpRight, ArrowDownLeft
+Sparkles, Undo2, CheckCircle2, AlertTriangle, ArrowUpRight, ArrowDownLeft,
+Trash2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -19,7 +20,7 @@ const MEDIUM_STOCK_THRESHOLD = 50;
 const SEARCH_DEBOUNCE_MS = 300;
 const ANIMATION_DURATION = 200;
 
-// ✅ ЛОКАЛЬНАЯ МАПА ТРАНЗАКЦИЙ
+// ЛОКАЛЬНАЯ МАПА ТРАНЗАКЦИЙ
 const TRANSACTION_TYPE_LABELS = {
 income: 'Приход',
 expense: 'Расход',
@@ -65,7 +66,6 @@ const styles = `
 .dark .mode-btn.active { background: #1f2937; color: #818cf8; }
 .mode-btn:hover:not(.active) { color: #374151; }
 .dark .mode-btn:hover:not(.active) { color: #f3f4f6; }
-/* Табличные стили */
 .warehouse-table { width: 100%; border-collapse: separate; border-spacing: 0; }
 .warehouse-table th { background: #f9fafb; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
 .dark .warehouse-table th { background: #1f2937; }
@@ -125,18 +125,17 @@ title={tooltip}
 ));
 StatCard.displayName = 'StatCard';
 
-// ✅ НОВЫЙ КОМПОНЕНТ: Таблица материалов
+// Компонент: Таблица материалов с кнопкой удаления
 const WarehouseTable = memo(({
 items,
 onAdjust,
 onTransfer,
+onDelete,
 onViewHistory,
 onEditUnit,
 isLoading,
 userRole,
 t,
-// eslint-disable-next-line no-unused-vars
-language,
 isFromApplications = false,
 }) => {
 if (!items || items.length === 0) {
@@ -149,6 +148,8 @@ return (
 </div>
 );
 }
+
+const canEdit = userRole === 'supply_admin' || userRole === 'manager';
 
 return (
 <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/60 dark:border-gray-700/60 overflow-hidden">
@@ -163,7 +164,7 @@ return (
 <th className="w-32 text-center">{t('income') || 'Приход'}</th>
 {isFromApplications && <th className="w-32 text-center">{t('requested') || 'Запрошено'}</th>}
 <th className="w-32 text-center">{t('status') || 'Статус'}</th>
-<th className="w-40 text-right">{t('actions') || 'Действия'}</th>
+<th className="w-48 text-right">{t('actions') || 'Действия'}</th>
 </tr>
 </thead>
 <tbody>
@@ -172,6 +173,7 @@ const balance = Number(item.balance) || 0;
 const requested = Number(item.requested) || 0;
 const isLow = balance < LOW_STOCK_THRESHOLD;
 const isMedium = balance < MEDIUM_STOCK_THRESHOLD && !isLow;
+const itemLoading = isLoading?.adjust === item.id || isLoading?.transfer === item.id || isLoading?.delete === item.id;
 
 const getStatusConfig = () => {
 if (isFromApplications) {
@@ -192,7 +194,6 @@ return isLow
 };
 
 const statusConfig = getStatusConfig();
-const itemLoading = isLoading?.adjust === item.id || isLoading?.transfer === item.id;
 
 return (
 <tr key={item.id || index} className="group">
@@ -204,7 +205,7 @@ return (
 <button
 onClick={() => !isFromApplications && onViewHistory?.(item)}
 disabled={itemLoading || isFromApplications}
-className={`font-semibold text-gray-900 dark:text-white text-left hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-50`}
+className="font-semibold text-gray-900 dark:text-white text-left hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-50"
 title={item.name}
 >
 {item.name || '—'}
@@ -253,7 +254,7 @@ isFromApplications
 </span>
 </td>
 <td className="text-right">
-<div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
 {!isFromApplications && onAdjust && (
 <button
 onClick={() => onAdjust(item)}
@@ -265,15 +266,26 @@ title={t('adjustBalance')}
 {t('adjust') || 'Корр.'}
 </button>
 )}
-{balance > 0 && (userRole === 'manager' || userRole === 'supply_admin') && (
+{balance > 0 && canEdit && !isFromApplications && onTransfer && (
 <button
-onClick={() => onTransfer?.(item)}
+onClick={() => onTransfer(item)}
 disabled={itemLoading}
 className="table-action-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
 title={t('transfer')}
 >
 <Truck className="w-3.5 h-3.5" />
 {t('transfer') || 'Выдать'}
+</button>
+)}
+{canEdit && !isFromApplications && onDelete && (
+<button
+onClick={() => onDelete(item)}
+disabled={itemLoading}
+className="table-action-btn text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
+title={t('delete') || 'Удалить'}
+>
+<Trash2 className="w-3.5 h-3.5" />
+{t('delete') || 'Удалить'}
 </button>
 )}
 {!isFromApplications && onViewHistory && (
@@ -301,9 +313,7 @@ WarehouseTable.displayName = 'WarehouseTable';
 
 const TransactionRow = memo(({
 trans,
-// eslint-disable-next-line no-unused-vars
-t,
-language
+// t - не используется
 }) => {
 const isIncome = trans.transaction_type === 'income';
 const typeConfig = isIncome
@@ -314,7 +324,7 @@ const typeConfig = isIncome
 
 return (
 <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-<td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{formatDate(trans.created_at, language)}</td>
+<td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{formatDate(trans.created_at, 'ru')}</td>
 <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white max-w-[150px] truncate">{trans.item_name || '—'}</td>
 <td className="px-4 py-3 text-sm">
 <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${typeConfig.bg} ${typeConfig.text}`}>
@@ -348,6 +358,7 @@ const ItemDetailsModal = memo(({ isOpen, onClose, item, history, isLoading, t, l
 if (!isOpen || !item) return null;
 const balance = Number(item.balance) || 0;
 const isLow = balance < LOW_STOCK_THRESHOLD;
+const canEdit = userRole === 'supply_admin' || userRole === 'manager';
 
 return (
 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-enter" role="dialog" aria-modal="true">
@@ -432,7 +443,7 @@ tx.transaction_type === 'expense' ? 'bg-orange-100 text-orange-700 dark:bg-orang
 <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
 {t('close')}
 </button>
-{(userRole === 'manager' || userRole === 'supply_admin') && balance > 0 && (
+{canEdit && balance > 0 && (
 <button
 onClick={() => { onClose(); onTransfer?.(item); }}
 className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg shadow-green-500/25"
@@ -489,17 +500,17 @@ return (
 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('employee')} *</label>
 <select
 value={formData.recipientId}
-  onChange={(e) => setFormData(prev => ({ ...prev, recipientId: e.target.value }))}
-  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl"
-  required
-  disabled={isLoading}
+onChange={(e) => setFormData(prev => ({ ...prev, recipientId: e.target.value }))}
+className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+required
+disabled={isLoading}
 >
-  <option value="">{t('selectEmployee')}</option>
-  {employees?.map(emp => (
-    <option key={emp.id} value={emp.id}>
-      {emp.full_name} {emp.phone && `(${emp.phone})`} - {emp.role === 'master' ? 'Мастер' : 'Прораб'}
-    </option>
-  ))}
+<option value="">{t('selectEmployee')}</option>
+{employees?.map(emp => (
+<option key={emp.id} value={emp.id}>
+{emp.full_name} {emp.phone && `(${emp.phone})`} - {emp.role === 'master' ? 'Мастер' : 'Прораб'}
+</option>
+))}
 </select>
 </div>
 <div>
@@ -508,7 +519,7 @@ value={formData.recipientId}
 type="text"
 value={formData.objectName}
 onChange={(e) => setFormData(prev => ({ ...prev, objectName: e.target.value }))}
-className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
 placeholder={t('objectPlaceholder')}
 required
 disabled={isLoading}
@@ -529,7 +540,7 @@ disabled={isLoading || formData.quantity <= 1}
 type="number"
 value={formData.quantity}
 onChange={(e) => setFormData(prev => ({ ...prev, quantity: Math.max(0, Math.min(Number(e.target.value) || 0, balance)) }))}
-className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center focus:ring-2 focus:ring-indigo-500"
 min="1"
 max={balance}
 required
@@ -550,7 +561,7 @@ disabled={isLoading || formData.quantity >= balance}
 <textarea
 value={formData.comment}
 onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
-className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all resize-none"
+className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 resize-none"
 rows="2"
 disabled={isLoading}
 />
@@ -580,13 +591,13 @@ className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hov
 });
 TransferModal.displayName = 'TransferModal';
 
-const StatsDetailsModal = memo(({ isOpen, onClose, type, data, isLoading, t, language }) => {
+const StatsDetailsModal = memo(({ isOpen, onClose, type, data, isLoading, language }) => {
 if (!isOpen) return null;
 const titles = {
-totalItems: t('allItems') || 'Все позиции',
-income: t('incomeHistory') || 'История приходов',
-lowStock: t('lowStockItems') || 'Заканчивается',
-totalBalance: t('totalBalance') || 'Общий остаток'
+totalItems: 'Все позиции',
+income: 'История приходов',
+lowStock: 'Заканчивается',
+totalBalance: 'Общий остаток'
 };
 
 return (
@@ -594,7 +605,7 @@ return (
 <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col border border-gray-200/50 dark:border-gray-700/50">
 <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
 <h3 className="text-lg font-bold text-gray-900 dark:text-white">{titles[type] || 'Детали'}</h3>
-<button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors" aria-label={t('close')}>
+<button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors" aria-label="Закрыть">
 <XCircle className="w-5 h-5" aria-hidden="true" />
 </button>
 </div>
@@ -602,16 +613,16 @@ return (
 {isLoading ? (
 <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
 ) : data?.length === 0 ? (
-<p className="text-gray-500 dark:text-gray-400 text-center py-12">{t('noData')}</p>
+<p className="text-gray-500 dark:text-gray-400 text-center py-12">Нет данных</p>
 ) : type === 'income' ? (
 <div className="overflow-x-auto -mx-4 sm:mx-0">
 <table className="min-w-full text-sm">
 <thead className="bg-gray-50 dark:bg-gray-800/50 sticky top-0">
 <tr>
-<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('date')}</th>
-<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('item')}</th>
-<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('quantity')}</th>
-<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('comment')}</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Дата</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Товар</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Кол-во</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Комментарий</th>
 </tr>
 </thead>
 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -631,11 +642,11 @@ return (
 <table className="min-w-full text-sm">
 <thead className="bg-gray-50 dark:bg-gray-800/50 sticky top-0">
 <tr>
-<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('name')}</th>
-<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('unit')}</th>
-<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('balance')}</th>
-<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('income')}</th>
-<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('status')}</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Название</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Ед.</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Остаток</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Приход</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Статус</th>
 </tr>
 </thead>
 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -660,7 +671,7 @@ isLow ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
 isMed ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' :
 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
 }`}>
-{isLow ? t('low') : isMed ? t('medium') : t('ok')}
+{isLow ? 'Мало' : isMed ? 'Средне' : 'Хорошо'}
 </span>
 </td>
 </tr>
@@ -673,7 +684,7 @@ isMed ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-30
 </div>
 <div className="p-4 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-3xl flex justify-end">
 <button onClick={onClose} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-{t('close')}
+Закрыть
 </button>
 </div>
 </div>
@@ -692,8 +703,7 @@ const WarehouseView = ({
   t,
   language,
   showNotification,
-  applications = [],  // ← ДОБАВИТЬ ЗАПЯТУЮ
-  // ✅ НОВЫЕ ПРОПСЫ:
+  applications = [],
   autoReorderEnabled = true,
   onToggleAutoReorder
 }) => {
@@ -710,8 +720,10 @@ const [transferModal, setTransferModal] = useState({ isOpen: false, item: null }
 const [itemDetailsModal, setItemDetailsModal] = useState({ isOpen: false, item: null });
 const [itemHistory, setItemHistory] = useState([]);
 const [employees, setEmployees] = useState([]);
-const [actionLoading, setActionLoading] = useState({ adjust: null, transfer: null, details: null });
+const [actionLoading, setActionLoading] = useState({ adjust: null, transfer: null, details: null, delete: null, add: false });
 const [statsModal, setStatsModal] = useState({ isOpen: false, type: null, data: [] });
+const [showAddItemModal, setShowAddItemModal] = useState(false);
+const [newItemForm, setNewItemForm] = useState({ name: '', quantity: 1, unit: 'шт' });
 const lastLoggedRef = useRef({});
 const searchTimerRef = useRef(null);
 
@@ -788,60 +800,60 @@ return Array.from(materialsMap.values());
 }, [applications, showAllMaterials]);
 
 const loadWarehouseData = useCallback(async () => {
-if (!userCompanyId) {
-console.error('❌ [WAREHOUSE] userCompanyId отсутствует!');
-return;
-}
-setIsLoading(true);
-try {
-const { data: items, error: itemsError } = await supabase
-.from('warehouse_balance')
-.select('id, company_id, item_name, quantity, unit, last_updated')
-.eq('company_id', userCompanyId)
-.order('item_name', { ascending: true });
-if (itemsError) throw itemsError;
+  if (!userCompanyId) {
+    console.error('❌ [WAREHOUSE] userCompanyId отсутствует!');
+    return;
+  }
+  setIsLoading(true);
+  try {
+    const { data: items, error: itemsError } = await supabase
+      .from('warehouse_balance')
+      .select('id, company_id, item_name, quantity, unit, last_updated')
+      .eq('company_id', userCompanyId)
+      .order('item_name', { ascending: true });
+    if (itemsError) throw itemsError;
 
-const { data: trans, error: transError } = await supabase
-.from('warehouse_transactions')
-.select('*, applications ( object_name )')
-.eq('company_id', userCompanyId)
-.order('created_at', { ascending: false });
-if (transError) console.warn('⚠️ Ошибка транзакций:', transError);
+    const { data: trans, error: transError } = await supabase
+      .from('warehouse_transactions')
+      .select('*, applications ( object_name )')
+      .eq('company_id', userCompanyId)
+      .order('created_at', { ascending: false });
+    if (transError) console.warn('⚠️ Ошибка транзакций:', transError);
 
-const incomeMap = {};
-(trans || []).forEach(tx => {
-if (tx.transaction_type === 'income' && tx.item_name) {
-const name = tx.item_name.trim();
-incomeMap[name] = (incomeMap[name] || 0) + (Number(tx.quantity) || 0);
-}
-});
+    const incomeMap = {};
+    (trans || []).forEach(tx => {
+      if (tx.transaction_type === 'income' && tx.item_name) {
+        const name = tx.item_name.trim();
+        incomeMap[name] = (incomeMap[name] || 0) + (Number(tx.quantity) || 0);
+      }
+    });
 
-const itemsWithIncome = (items || []).map(item => ({
-...item,
-name: item.item_name,
-balance: Number(item.quantity) || 0,
-totalIncome: incomeMap[item.item_name?.trim()] || 0
-}));
+    const itemsWithIncome = (items || []).map(item => ({
+      ...item,
+      name: item.item_name,
+      balance: Number(item.quantity) || 0,
+      totalIncome: incomeMap[item.item_name?.trim()] || 0
+    }));
 
-setWarehouseItems(itemsWithIncome);
-setTransactions(trans || []);
+    setWarehouseItems(itemsWithIncome);
+    setTransactions(trans || []);
 
-if (userRole === 'manager' || userRole === 'supply_admin') {
-const { data: staff } = await supabase
-  .from('company_users')
-  .select('id, full_name, phone, role')
-  .eq('company_id', userCompanyId)
-  .eq('is_active', true)
-  .in('role', ['master', 'foreman']);  // ✅ МАСТЕРА И ПРОРАБЫ
-setEmployees(staff || []);
-}
-} catch (error) {
-console.error('❌ [WAREHOUSE] Критическая ошибка:', error);
-showNotification(t('loadError') || 'Ошибка загрузки', 'error');
-} finally {
-setIsLoading(false);
-}
-}, [userCompanyId, userRole, supabase, t, showNotification]);
+    if (userRole === 'supply_admin' || userRole === 'manager') {
+      const { data: staff } = await supabase
+        .from('company_users')
+        .select('id, full_name, phone, role')
+        .eq('company_id', userCompanyId)
+        .eq('is_active', true)
+        .in('role', ['master', 'foreman']);
+      setEmployees(staff || []);
+    }
+  } catch (error) {
+    console.error('❌ [WAREHOUSE] Критическая ошибка:', error);
+    showNotification(t('loadError') || 'Ошибка загрузки', 'error');
+  } finally {
+    setIsLoading(false);
+  }
+}, [userRole, supabase, t, showNotification]); // 🔥 УДАЛИЛ userCompanyId из зависимостей
 
 useEffect(() => {
   if (userCompanyId && user?.id) {
@@ -953,20 +965,106 @@ setActionLoading(prev => ({ ...prev, adjust: null }));
 }
 }, [userCompanyId, user, supabase, t, showNotification, loadWarehouseData]);
 
+const deleteItem = useCallback(async (item) => {
+  if (!window.confirm(`Вы уверены, что хотите удалить товар "${item.name}" со склада?`)) {
+    return;
+  }
+  
+  setActionLoading(prev => ({ ...prev, delete: item.id }));
+  try {
+    if (item.balance > 0) {
+      showNotification(`Нельзя удалить товар с остатком ${item.balance} ${item.unit}. Сначала спишите остатки.`, 'error');
+      return;
+    }
+    
+    const { error } = await supabase
+      .from('warehouse_balance')
+      .delete()
+      .eq('id', item.id);
+    
+    if (error) throw error;
+    
+    showNotification(`✅ Товар "${item.name}" удалён со склада`, 'success');
+    await loadWarehouseData();
+    
+  } catch (err) {
+    console.error('Delete error:', err);
+    showNotification(t('error') || 'Ошибка удаления', 'error');
+  } finally {
+    setActionLoading(prev => ({ ...prev, delete: null }));
+  }
+}, [supabase, userCompanyId, t, showNotification, loadWarehouseData]);
+
+const addNewItem = useCallback(async () => {
+  if (!newItemForm.name.trim()) {
+    showNotification('Введите название товара', 'error');
+    return;
+  }
+  
+  if (newItemForm.quantity <= 0) {
+    showNotification('Количество должно быть больше 0', 'error');
+    return;
+  }
+  
+  setActionLoading(prev => ({ ...prev, add: true }));
+  try {
+    const { data: existing } = await supabase
+      .from('warehouse_balance')
+      .select('id, quantity')
+      .eq('company_id', userCompanyId)
+      .eq('item_name', newItemForm.name.trim())
+      .maybeSingle();
+    
+    if (existing) {
+      const { error } = await supabase
+        .from('warehouse_balance')
+        .update({
+          quantity: existing.quantity + newItemForm.quantity,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id);
+      
+      if (error) throw error;
+      showNotification(`✅ Товар "${newItemForm.name}" обновлён (+${newItemForm.quantity})`, 'success');
+    } else {
+      const { error } = await supabase
+        .from('warehouse_balance')
+        .insert([{
+          company_id: userCompanyId,
+          item_name: newItemForm.name.trim(),
+          quantity: newItemForm.quantity,
+          unit: newItemForm.unit,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }]);
+      
+      if (error) throw error;
+      showNotification(`✅ Товар "${newItemForm.name}" добавлен на склад`, 'success');
+    }
+    
+    setShowAddItemModal(false);
+    setNewItemForm({ name: '', quantity: 1, unit: 'шт' });
+    await loadWarehouseData();
+    
+  } catch (err) {
+    console.error('Add item error:', err);
+    showNotification(t('error') || 'Ошибка добавления', 'error');
+  } finally {
+    setActionLoading(prev => ({ ...prev, add: false }));
+  }
+}, [supabase, userCompanyId, newItemForm, t, showNotification, loadWarehouseData]);
+
 const createTransfer = useCallback(async (item, recipientId, objectName, quantity, comment) => {
   setActionLoading(prev => ({ ...prev, transfer: item.id }));
   try {
-    // Находим получателя
     const recipient = employees.find(e => e.id === recipientId);
     if (!recipient) throw new Error('Сотрудник не найден');
     
-    // ✅ 1. Проверяем остаток
     if (Number(item.balance) < Number(quantity)) {
       showNotification('Недостаточно материала на складе', 'error');
       throw new Error('Недостаточно материала');
     }
     
-    // ✅ 2. Списание со склада через update_warehouse_balance (одна операция)
     const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
       p_company_id: userCompanyId,
       p_item_name: item.name,
@@ -983,7 +1081,6 @@ const createTransfer = useCallback(async (item, recipientId, objectName, quantit
     
     if (rpcError) throw rpcError;
     
-    // ✅ 3. Логируем выдачу в отдельную таблицу (опционально)
     await supabase
       .from('material_issues')
       .insert([{
@@ -1043,12 +1140,15 @@ showNotification(t('error'), 'error');
 }
 }, [supabase, t, showNotification, loadWarehouseData]);
 
+const canEdit = userRole === 'supply_admin' || userRole === 'manager';
+
 useEffect(() => {
 const handler = (e) => {
 if (e.key === 'Escape') {
 setTransferModal({ isOpen: false, item: null });
 setItemDetailsModal({ isOpen: false, item: null });
 setStatsModal({ isOpen: false, type: null, data: [] });
+setShowAddItemModal(false);
 }
 };
 document.addEventListener('keydown', handler);
@@ -1118,6 +1218,16 @@ title={showAllMaterials ? 'Показывать только принятые' :
 </button>
 )}
 
+{canEdit && viewMode === 'warehouse' && (
+<button
+onClick={() => setShowAddItemModal(true)}
+className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 text-white rounded-xl hover:from-indigo-600 hover:to-blue-700 text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/25"
+>
+<Plus className="w-4 h-4" aria-hidden="true" />
+{t('addItem') || 'Добавить товар'}
+</button>
+)}
+
 <button
 onClick={() => setShowTransactions(!showTransactions)}
 className="px-4 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium flex items-center gap-2 transition-colors"
@@ -1136,8 +1246,7 @@ className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white r
 }
 />
 
-{/* Toggle Auto-Reorder */}
-{(userRole === 'manager' || userRole === 'supply_admin') && (
+{canEdit && (
   <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-200/60 dark:border-gray-700/60 mb-4">
     <div className="flex items-center gap-2">
       <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
@@ -1190,6 +1299,7 @@ aria-label={t('search')}
 items={displayItems}
 onAdjust={viewMode === 'warehouse' ? adjustBalance : undefined}
 onTransfer={(item) => setTransferModal({ isOpen: true, item })}
+onDelete={viewMode === 'warehouse' ? deleteItem : undefined}
 onViewHistory={viewMode === 'warehouse' ? loadItemHistory : undefined}
 onEditUnit={viewMode === 'warehouse' ? editUnit : undefined}
 isLoading={actionLoading}
@@ -1233,7 +1343,7 @@ isFromApplications={viewMode === 'fromApplications'}
             </td>
           </tr>
         ) : (
-          filteredTransactions.map(tx => <TransactionRow key={tx.id} trans={tx} t={t} language={language} />)
+          filteredTransactions.map(tx => <TransactionRow key={tx.id} trans={tx} t={t} />)
         )}
       </tbody>
     </table>
@@ -1270,206 +1380,126 @@ onClose={() => setStatsModal({ isOpen: false, type: null, data: [] })}
 type={statsModal.type}
 data={statsModal.data}
 isLoading={actionLoading.details === statsModal.type}
-t={t}
 language={language}
 />
+
+{showAddItemModal && (
+  <div 
+    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-enter"
+    role="dialog"
+    aria-modal="true"
+    onClick={(e) => e.target === e.currentTarget && setShowAddItemModal(false)}
+  >
+    <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full border border-gray-200/50 dark:border-gray-700/50">
+      <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl">
+            <Plus className="w-5 h-5 text-white" aria-hidden="true" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+            {t('addNewItem') || 'Добавить товар'}
+          </h3>
+        </div>
+        <button 
+          onClick={() => setShowAddItemModal(false)} 
+          className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+        >
+          <XCircle className="w-5 h-5" />
+        </button>
+      </div>
+      
+      <div className="p-4 sm:p-6 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('name') || 'Наименование товара'} *
+          </label>
+          <input
+            type="text"
+            value={newItemForm.name}
+            onChange={(e) => setNewItemForm(prev => ({ ...prev, name: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+            placeholder="Например: Цемент М500"
+            autoFocus
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('quantity') || 'Количество'} *
+          </label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setNewItemForm(prev => ({ ...prev, quantity: Math.max(1, prev.quantity - 1) }))}
+              className="p-2.5 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+            <input
+              type="number"
+              value={newItemForm.quantity}
+              onChange={(e) => setNewItemForm(prev => ({ ...prev, quantity: Math.max(1, Number(e.target.value) || 1) }))}
+              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center"
+              min="1"
+            />
+            <button
+              type="button"
+              onClick={() => setNewItemForm(prev => ({ ...prev, quantity: prev.quantity + 1 }))}
+              className="p-2.5 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('unit') || 'Единица измерения'}
+          </label>
+          <select
+            value={newItemForm.unit}
+            onChange={(e) => setNewItemForm(prev => ({ ...prev, unit: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            <option value="шт">шт</option>
+            <option value="кг">кг</option>
+            <option value="м">м</option>
+            <option value="л">л</option>
+            <option value="упак">упак</option>
+            <option value="комплект">комплект</option>
+          </select>
+        </div>
+      </div>
+      
+      <div className="p-4 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 rounded-b-3xl flex justify-end gap-3">
+        <button
+          onClick={() => setShowAddItemModal(false)}
+          className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+        >
+          {t('cancel') || 'Отмена'}
+        </button>
+        <button
+          onClick={addNewItem}
+          disabled={actionLoading.add || !newItemForm.name.trim() || newItemForm.quantity <= 0}
+          className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white rounded-xl font-medium flex items-center gap-2 disabled:opacity-50 transition-all"
+        >
+          {actionLoading.add ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <CheckCircle className="w-4 h-4" />
+          )}
+          {t('add') || 'Добавить'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 </div>
 );
 };
 
 // ============================================
-// 📦 КОМПОНЕНТ WAREHOUSE BALANCE (Остатки на складе)
-// ============================================
-export const WarehouseBalance = ({ 
-  supabase,
-  companyId, 
-  onItemClick, 
-  t,
-  showNotification 
-}) => {
-  const [balances, setBalances] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterLowStock, setFilterLowStock] = useState(false);
-
-  useEffect(() => {
-    const loadBalances = async () => {
-      if (!companyId) {
-        console.warn('[WarehouseBalance] companyId отсутствует');
-        return;
-      }
-      
-      setLoading(true);
-      try {
-        let query = supabase
-          .from('warehouse_balance')
-          .select('*')
-          .eq('company_id', companyId)
-          .order('item_name', { ascending: true });
-        
-        const { data, error } = await query;
-        
-        if (error) throw error;
-        setBalances(data || []);
-      } catch (err) {
-        console.error('[WarehouseBalance] Ошибка загрузки:', err);
-        showNotification?.(t('loadError') || 'Ошибка загрузки остатков', 'error');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadBalances();
-  }, [companyId, supabase, t, showNotification]);
-
-  // Фильтрация
-  const filteredBalances = useMemo(() => {
-    let result = balances;
-    
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(b => 
-        b.item_name?.toLowerCase().includes(term)
-      );
-    }
-    
-    if (filterLowStock) {
-      result = result.filter(b => (b.quantity || 0) < 10);
-    }
-    
-    return result;
-  }, [balances, searchTerm, filterLowStock]);
-
-  const lowStockCount = useMemo(() => 
-    balances.filter(b => (b.quantity || 0) < 10).length,
-  [balances]);
-
-  if (loading) {
-    return (
-      <div className="space-y-3">
-        {[1, 2, 3].map(i => (
-          <div key={i} className="animate-pulse">
-            <div className="h-16 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Заголовок и фильтры */}
-      <div className="flex flex-col sm:flex-row gap-3 justify-between">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={t('searchPlaceholder') || 'Поиск материалов...'}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-          />
-        </div>
-        
-        <button
-          onClick={() => setFilterLowStock(!filterLowStock)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${
-            filterLowStock
-              ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border-red-300 dark:border-red-700'
-              : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600'
-          } border`}
-        >
-          <AlertCircle className="w-4 h-4" />
-          {t('lowStockOnly') || 'Только остатки'} ({lowStockCount})
-        </button>
-      </div>
-      
-      {/* Список остатков */}
-      {filteredBalances.length === 0 ? (
-        <div className="text-center py-12 bg-white/80 dark:bg-gray-800/80 rounded-2xl border border-gray-200/60 dark:border-gray-700/60">
-          <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-gray-400">
-            {searchTerm || filterLowStock 
-              ? t('noMatchingItems') || 'Ничего не найдено'
-              : t('noItems') || 'Нет материалов на складе'}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredBalances.map((item) => {
-            const quantity = Number(item.quantity) || 0;
-            const isLowStock = quantity < 10;
-            const isMediumStock = quantity >= 10 && quantity < 50;
-            
-            return (
-              <div
-                key={item.id}
-                onClick={() => onItemClick?.(item)}
-                className={`warehouse-card bg-white dark:bg-gray-800 p-4 rounded-xl border cursor-pointer transition-all ${
-                  isLowStock 
-                    ? 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10' 
-                    : isMediumStock
-                      ? 'border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-900/10'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2 flex-1">
-                    {item.item_name || '—'}
-                  </h4>
-                  {isLowStock && (
-                    <span className="ml-2 px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-xs rounded-full flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {t('low') || 'Мало'}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="flex items-baseline justify-between mt-2">
-                  <div>
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatNumber(quantity)}
-                    </span>
-                    <span className="text-sm text-gray-500 ml-1">
-                      {item.unit || 'шт'}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {t('lastUpdated') || 'Обновлено'}: {formatDate(item.last_updated, 'ru')}
-                  </div>
-                </div>
-                
-                {/* Прогресс-бар для визуализации */}
-                <div className="mt-3 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-300 ${
-                      isLowStock ? 'bg-red-500' : isMediumStock ? 'bg-yellow-500' : 'bg-green-500'
-                    }`}
-                    style={{ width: `${Math.min(100, (quantity / 100) * 100)}%` }}
-                  />
-                </div>
-                
-                {/* Кнопка действия */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onItemClick?.(item);
-                  }}
-                  className="mt-3 w-full py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                >
-                  {t('details') || 'Подробнее'} →
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ============================================
-// 📦 ЭКСПОРТ (ТОЛЬКО В КОНЦЕ ФАЙЛА!)
+// ЭКСПОРТ
 // ============================================
 WarehouseView.displayName = 'WarehouseView';
 export default memo(WarehouseView);
