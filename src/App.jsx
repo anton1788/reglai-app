@@ -4722,47 +4722,52 @@ useEffect(() => {
 
  const renderAnalyticsDashboard = () => {
   // 👑 ПРЯМАЯ ПРОВЕРКА ДЛЯ СУПЕР-АДМИНА
-  const userEmail = user?.email || '';
-  const isSuper = userRole === 'super_admin' || userEmail.includes('admin') || userEmail === 'aksyanov.2014@yandex.ru';
+  const isSuper = userRole === 'super_admin' || 
+                  user?.email === 'aksyanov.2014@yandex.ru' ||
+                  user?.email?.includes('admin');
   
-  console.log('🔥🔥🔥 renderAnalyticsDashboard DEBUG:', {
-    userEmail: userEmail,
-    userRole: userRole,
-    isSuper: isSuper
+  console.log('🔥 renderAnalyticsDashboard:', { 
+    userRole, 
+    userEmail: user?.email,
+    isSuper 
   });
   
-  // 👑 ЕСЛИ СУПЕР-АДМИН - ПОКАЗЫВАЕМ НОВУЮ ПАНЕЛЬ
+  // 👑 СУПЕР-АДМИН - ПОКАЗЫВАЕМ РАСШИРЕННУЮ ПАНЕЛЬ
   if (isSuper) {
-    console.log('✅ ПОКАЗЫВАЕМ SuperAdminAnalyticsDashboard');
-    return React.createElement(SuperAdminAnalyticsDashboard, { supabase: supabase });
+    console.log('✅ Супер-админ, показываем SuperAdminAnalyticsDashboard');
+    return <SuperAdminAnalyticsDashboard supabase={supabase} />;
   }
   
-  // 👨‍💼 РУКОВОДИТЕЛЬ
+  // 👨‍💼 РУКОВОДИТЕЛЬ/МЕНЕДЖЕР
   if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-    console.log('✅ ПОКАЗЫВАЕМ ManagerAnalyticsDashboard');
-    return React.createElement(ManagerAnalyticsDashboard, {
-      applications: applications,
-      companyUsers: companyUsers,
-      userCompany: userCompany,
-      currentPlan: currentPlan
-    });
+    console.log('✅ Менеджер, показываем ManagerAnalyticsDashboard');
+    return (
+      <ManagerAnalyticsDashboard
+        applications={applications}
+        companyUsers={companyUsers}
+        userCompany={userCompany}
+        currentPlan={currentPlan}
+      />
+    );
   }
   
-  // 👷 ОСТАЛЬНЫЕ
-  console.log('✅ ПОКАЗЫВАЕМ старый KPIDashboardWithTabs');
-  return React.createElement(KPIDashboardWithTabs, {
-    applications: applications,
-    companyUsers: companyUsers,
-    userCompany: userCompany,
-    currentPlan: currentPlan,
-    promoCodeInfo: promoCodeInfo,
-    userCompanyId: userCompanyId,
-    supabase: supabase,
-    userRole: userRole,
-    isCompanyOwner: isCompanyOwner,
-    user: user,
-    pendingApprovals: pendingApprovals
-  });
+  // 👷 ОСТАЛЬНЫЕ (прорабы, мастера, снабженцы)
+  console.log('✅ Обычный пользователь, показываем KPIDashboardWithTabs');
+  return (
+    <KPIDashboardWithTabs
+      applications={applications}
+      companyUsers={companyUsers}
+      userCompany={userCompany}
+      currentPlan={currentPlan}
+      promoCodeInfo={promoCodeInfo}
+      userCompanyId={userCompanyId}
+      supabase={supabase}
+      userRole={userRole}
+      isCompanyOwner={isCompanyOwner}
+      user={user}
+      pendingApprovals={pendingApprovals}
+    />
+  );
 };
               
   const renderProfilePage = () => (
