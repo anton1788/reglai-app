@@ -4720,63 +4720,49 @@ useEffect(() => {
     </div>
   );
 
- // ============================================================
-// 📊 ОБНОВЛЕННЫЙ renderAnalyticsDashboard - ПРИНУДИТЕЛЬНО ДЛЯ СУПЕР-АДМИНА
-// ============================================================
-const renderAnalyticsDashboard = () => {
-  // 📍 ОТЛАДКА
-  console.log('🔍 [DEBUG] renderAnalyticsDashboard called:', {
+ const renderAnalyticsDashboard = () => {
+  // 👑 ПРЯМАЯ ПРОВЕРКА ДЛЯ СУПЕР-АДМИНА
+  const userEmail = user?.email || '';
+  const isSuper = userRole === 'super_admin' || userEmail.includes('admin') || userEmail === 'aksyanov.2014@yandex.ru';
+  
+  console.log('🔥🔥🔥 renderAnalyticsDashboard DEBUG:', {
+    userEmail: userEmail,
     userRole: userRole,
-    userEmail: user?.email,
-    isSuperAdminResult: isSuperAdmin(userRole, user?.user_metadata),
-    currentView: currentView
+    isSuper: isSuper
   });
   
-  // 🔒 ВРЕМЕННОЕ РЕШЕНИЕ: принудительно показываем супер-админу панель
-  // Проверяем по email или роли
-  const isSuperAdminByEmail = user?.email === 'admin@example.com' || 
-                              user?.email?.includes('admin') ||
-                              userRole === 'super_admin';
-  
-  if (isSuperAdminByEmail || isSuperAdmin(userRole, user?.user_metadata)) {
-    console.log('✅ [DEBUG] SuperAdmin detected - showing SuperAdminAnalyticsDashboard');
-    return (
-      <SuperAdminAnalyticsDashboard
-        supabase={supabase}
-      />
-    );
+  // 👑 ЕСЛИ СУПЕР-АДМИН - ПОКАЗЫВАЕМ НОВУЮ ПАНЕЛЬ
+  if (isSuper) {
+    console.log('✅ ПОКАЗЫВАЕМ SuperAdminAnalyticsDashboard');
+    return React.createElement(SuperAdminAnalyticsDashboard, { supabase: supabase });
   }
   
-  // 👨‍💼 РУКОВОДИТЕЛЬ/МЕНЕДЖЕР/ВЛАДЕЛЕЦ
+  // 👨‍💼 РУКОВОДИТЕЛЬ
   if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-    console.log('✅ [DEBUG] Manager detected - showing ManagerAnalyticsDashboard');
-    return (
-      <ManagerAnalyticsDashboard
-        applications={applications}
-        companyUsers={companyUsers}
-        userCompany={userCompany}
-        currentPlan={currentPlan}
-      />
-    );
+    console.log('✅ ПОКАЗЫВАЕМ ManagerAnalyticsDashboard');
+    return React.createElement(ManagerAnalyticsDashboard, {
+      applications: applications,
+      companyUsers: companyUsers,
+      userCompany: userCompany,
+      currentPlan: currentPlan
+    });
   }
   
-  // 👷 МАСТЕР/СНАБЖЕНЕЦ/БУХГАЛТЕР - упрощенная версия
-  console.log('✅ [DEBUG] Default role - showing KPIDashboardWithTabs');
-  return (
-    <KPIDashboardWithTabs
-      applications={applications}
-      companyUsers={companyUsers}
-      userCompany={userCompany}
-      currentPlan={currentPlan}
-      promoCodeInfo={promoCodeInfo}
-      userCompanyId={userCompanyId}
-      supabase={supabase}
-      userRole={userRole}
-      isCompanyOwner={isCompanyOwner}
-      user={user}
-      pendingApprovals={pendingApprovals}
-    />
-  );
+  // 👷 ОСТАЛЬНЫЕ
+  console.log('✅ ПОКАЗЫВАЕМ старый KPIDashboardWithTabs');
+  return React.createElement(KPIDashboardWithTabs, {
+    applications: applications,
+    companyUsers: companyUsers,
+    userCompany: userCompany,
+    currentPlan: currentPlan,
+    promoCodeInfo: promoCodeInfo,
+    userCompanyId: userCompanyId,
+    supabase: supabase,
+    userRole: userRole,
+    isCompanyOwner: isCompanyOwner,
+    user: user,
+    pendingApprovals: pendingApprovals
+  });
 };
               
   const renderProfilePage = () => (
