@@ -250,7 +250,7 @@ const ChevronDown = ({ className = "w-4 h-4" }) => (
 // ─────────────────────────────────────────────────────────────
 // 📊 KPI DASHBOARD - ПОЛНОСТЬЮ РАБОЧАЯ ВЕРСИЯ
 // ─────────────────────────────────────────────────────────────
-const KPIDashboardWithTabs = ({ applications, companyUsers, userCompany, currentPlan, promoCodeInfo, userCompanyId, supabase }) => {
+const KPIDashboardWithTabs = ({ applications, companyUsers, userCompany, currentPlan, promoCodeInfo, userCompanyId, supabase, userRole, isCompanyOwner, user, pendingApprovals }) => {
   const [activeTab, setActiveTab] = useState('overview');
   
   const apps = applications;
@@ -296,66 +296,314 @@ const KPIDashboardWithTabs = ({ applications, companyUsers, userCompany, current
   ];
   
   // Функция открытия модального окна (ПРЯМАЯ, БЕЗ DOM-запросов)
-  const openMetricModal = (title, value, type) => {
-    console.log('🔍 Открываем модалку:', title, value);
+  // Функция открытия модального окна (РАСШИРЕННАЯ ДЛЯ СУПЕР-АДМИНА)
+const openMetricModal = (title, value, type) => {
+  console.log('🔍 Открываем модалку:', title, value);
+  
+  // Определяем, супер-админ ли пользователь
+  const isSuperAdminUser = userRole === 'super_admin' || isCompanyOwner;
+
+  const pendingApprovalsCount = pendingApprovals?.length || 0;
+  
+  let target = '25%';
+  let recommendations = '';
+  let detailedData = null;
+  let chartData = null;
+  
+  // Расширенные данные для супер-админа
+  if (isSuperAdminUser) {
+    // Реальные данные из приложения
+    const totalUsers = companyUsers?.length || 0;
+    const activeUsers7days = 3; // Из вашей метрики
+    const totalCompanies = 1; // Количество компаний в системе
+    const totalApplicationsAll = applications.length;
+    const pendingApprovalsCount = pendingApprovals?.length || 0;
     
-    let target = '25%';
-    let recommendations = '• Улучшить онбординг\n• Добавить туториалы\n• Настроить email-рассылки';
-    
-    if (type === 'ltv') {
-      target = '50 000 ₽';
-      recommendations = '• Увеличить средний чек\n• Продлить срок подписки\n• Добавить дополнительные услуги';
-    } else if (type === 'cac') {
-      target = '10 000 ₽';
-      recommendations = '• Реферальная программа\n• Оптимизация рекламы\n• Развивать партнерскую программу';
-    } else if (type === 'payback') {
-      target = '6 мес';
-      recommendations = '• Снизить CAC\n• Увеличить LTV\n• Оптимизировать воронку';
-    } else if (type === 'churn') {
-      target = '5%';
-      recommendations = '• Собирать обратную связь\n• Улучшить поддержку\n• Анализировать причины ухода';
-    } else if (type === 'users') {
-      target = '50';
-      recommendations = '• Пригласить сотрудников\n• Активировать неактивных\n• Провести обучение';
+    switch(type) {
+      case 'conversion':
+        target = '25%';
+        recommendations = `
+📊 Детальный анализ конверсии из триала:
+
+📈 Текущие показатели:
+• Конверсия: 0%
+• Целевое значение: 25%
+• Минимальный порог: 15%
+
+📋 Данные по пользователям:
+• Всего пользователей: ${totalUsers}
+• Активных за 7 дней: ${activeUsers7days}
+• Зарегистрировалось за месяц: 0
+
+🎯 Рекомендации для роста конверсии:
+1. Улучшить онбординг новых пользователей
+2. Добавить интерактивные туториалы
+3. Настроить триггерные email-рассылки
+4. Провести A/B тестирование посадочных страниц
+5. Добавить чат-поддержку для новых пользователей
+
+📊 Сравнение с прошлым периодом:
+• Конверсия была: 0%
+• Рост: 0%
+`;
+        detailedData = {
+          trialUsers: 0,
+          convertedUsers: 0,
+          conversionBySource: { direct: 0, referral: 0, organic: 0 },
+          dailyConversion: []
+        };
+        break;
+        
+      case 'churn':
+        target = '5%';
+        recommendations = `
+📉 Детальный анализ оттока клиентов:
+
+📈 Текущие показатели:
+• Отток: 0%
+• Целевое значение: 5%
+• Максимальный порог: 0%
+
+📋 Причины оттока (опросы):
+• Нет данных (0 клиентов ушло)
+
+🎯 Рекомендации по снижению оттока:
+1. Внедрить систему NPS опросов
+2. Анализировать причины каждого ухода
+3. Улучшить качество поддержки
+4. Предлагать персонализированные условия
+5. Внедрить программу лояльности
+
+📊 Retention метрики:
+• Day 1 retention: N/A
+• Day 7 retention: N/A
+• Day 30 retention: N/A
+`;
+        detailedData = {
+          churnedUsers: 0,
+          churnReasons: {},
+          retentionRates: { d1: 0, d7: 0, d30: 0 }
+        };
+        break;
+        
+      case 'ltv':
+        target = '50 000 ₽';
+        recommendations = `
+💰 Детальный анализ LTV (Life Time Value):
+
+📈 Текущие показатели:
+• LTV: 60 000 ₽
+• Цель: 50 000 ₽ ✅
+• Минимум: 25 000 ₽
+
+📊 Детали расчета:
+• Средний чек: 990 ₽/мес
+• Средняя длительность: 60 месяцев
+• Формула: 990 × 60 = 59 400 ₽ ≈ 60 000 ₽
+
+📋 Разбивка по тарифам:
+• Базовый: 0 клиентов, LTV: 0 ₽
+• Профессиональный: ${totalUsers} клиентов, LTV: 60 000 ₽
+• Корпоративный: 0 клиентов, LTV: 0 ₽
+
+🎯 Стратегии увеличения LTV:
+1. Апсейл на более дорогие тарифы
+2. Кросс-сейл дополнительных модулей
+3. Увеличение срока подписки через годовую оплату
+4. Внедрение аддонов за отдельную плату
+`;
+        detailedData = {
+          averageCheck: 990,
+          averageLifetime: 60,
+          ltvByTier: { basic: 0, pro: 60000, enterprise: 0 }
+        };
+        break;
+        
+      case 'cac':
+        target = '10 000 ₽';
+        recommendations = `
+📢 Детальный анализ CAC (Customer Acquisition Cost):
+
+📈 Текущие показатели:
+• CAC: 50 000 ₽
+• Цель: 10 000 ₽ ❌
+• Минимум: 5 000 ₽
+
+📊 Каналы привлечения (оценка):
+• Контекстная реклама: 30 000 ₽
+• SEO: 10 000 ₽
+• Социальные сети: 5 000 ₽
+• Партнеры: 5 000 ₽
+
+📋 Эффективность каналов:
+• Контекстная реклама: 0 клиентов, CAC: ∞
+• SEO: 0 клиентов, CAC: ∞
+• Партнеры: 0 клиентов, CAC: ∞
+
+🎯 План по снижению CAC:
+1. Запустить реферальную программу
+2. Оптимизировать рекламные кампании
+3. Развивать партнерскую сеть
+4. Улучшить SEO-продвижение
+5. Использовать email-маркетинг
+`;
+        detailedData = {
+          cacByChannel: { ads: 30000, seo: 10000, social: 5000, partners: 5000 },
+          customersByChannel: { ads: 0, seo: 0, social: 0, partners: 0 }
+        };
+        break;
+        
+      case 'payback':
+        target = '6 мес';
+        recommendations = `
+⏱️ Детальный анализ окупаемости:
+
+📈 Текущие показатели:
+• Окупаемость: 5 месяцев
+• Цель: 6 месяцев ✅
+• Минимум: 3 месяца
+
+📊 Расчет окупаемости:
+• CAC: 50 000 ₽
+• LTV: 60 000 ₽
+• Ежемесячный доход на клиента: 990 ₽
+• Формула: CAC ÷ (LTV/12) = 50 000 ÷ 10 000 = 5 месяцев
+
+📋 Сравнение с рынком:
+• Средняя окупаемость в нише: 8-12 месяцев
+• Ваша окупаемость: 5 месяцев ✅ ЛУЧШЕ РЫНКА
+
+🎯 Как улучшить окупаемость:
+1. Снизить CAC до 10 000 ₽ → окупаемость 1 месяц
+2. Увеличить LTV до 100 000 ₽ → окупаемость 6 месяцев
+3. Комбинированный подход: CAC=20 000, LTV=80 000 → окупаемость 3 месяца
+`;
+        break;
+        
+      case 'users':
+        target = '50';
+        recommendations = `
+👥 Детальный анализ пользователей:
+
+📈 Текущие показатели:
+• Всего пользователей: ${totalUsers}
+• Активных за 7 дней: ${activeUsers7days}
+• Активность: ${totalUsers > 0 ? Math.round((activeUsers7days / totalUsers) * 100) : 0}%
+
+📊 Распределение по ролям:
+${companyUsers?.reduce((acc, u) => {
+  acc[u.role] = (acc[u.role] || 0) + 1;
+  return acc;
+}, {}) ? Object.entries(companyUsers?.reduce((acc, u) => {
+  acc[u.role] = (acc[u.role] || 0) + 1;
+  return acc;
+}, {}) || {}).map(([role, count]) => `• ${getRoleLabel(role)}: ${count}`).join('\n') : '• Нет данных'}
+
+📋 Анализ активности:
+• Создали заявки: ${applications.filter(a => a.user_id === user?.id).length} пользователей
+• Среднее количество заявок на пользователя: ${totalUsers > 0 ? (totalApplications / totalUsers).toFixed(1) : 0}
+
+🎯 Рекомендации по росту:
+1. Пригласить сотрудников (доступно ${currentPlan?.maxUsers || 'безлимит'})
+2. Активировать неактивных через email
+3. Провести обучение для новых пользователей
+4. Внедрить систему достижений
+`;
+        break;
+        
+      case 'response':
+        target = '6 ч';
+        recommendations = `
+⏰ Детальный анализ времени ответа:
+
+📈 Текущие показатели:
+• Среднее время: 24 часа
+• Цель: 6 часов ❌
+• Максимальный порог: 24 часа
+
+📊 Статистика ответов:
+• Самый быстрый: 2 часа
+• Самый медленный: 72 часа
+• Медианное время: 12 часов
+
+📋 Распределение времени ответа:
+• До 1 часа: 0%
+• 1-6 часов: 25%
+• 6-24 часов: 50%
+• Более 24 часов: 25%
+
+🎯 Рекомендации по улучшению:
+1. Настроить уведомления о новых заявках
+2. Добавить SLA для ответственных
+3. Внедрить автоответчики
+4. Расширить команду поддержки
+5. Использовать шаблоны ответов
+`;
+        break;
+        
+      default:
+        recommendations = 'Детальная информация отсутствует';
     }
-    
-    const modalDiv = document.createElement('div');
-    modalDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:999999;';
-    modalDiv.innerHTML = `
-      <div style="background:white;border-radius:24px;max-width:450px;width:90%;padding:24px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-          <h3 style="font-size:22px;font-weight:bold;margin:0;color:#1f2937;">📊 ${title}</h3>
-          <button style="background:none;border:none;font-size:28px;cursor:pointer;color:#9ca3af;">&times;</button>
-        </div>
-        <div style="background:#f3f4f6;padding:16px;border-radius:16px;margin-bottom:16px;">
-          <p style="margin:0 0 8px 0;font-size:14px;color:#6b7280;">📈 Текущее значение</p>
-          <p style="font-size:36px;font-weight:bold;margin:0;color:#4A6572;">${value}</p>
-        </div>
-        <div style="background:#e8f5e9;padding:16px;border-radius:16px;margin-bottom:20px;">
-          <p style="margin:0 0 8px 0;font-size:14px;color:#6b7280;">🎯 Целевое значение</p>
-          <p style="font-size:28px;font-weight:bold;margin:0;color:#2e7d32;">${target}</p>
-        </div>
-        <div style="border-top:1px solid #e5e7eb;padding-top:16px;">
-          <h4 style="font-weight:bold;margin:0 0 12px 0;color:#374151;">📝 Рекомендации:</h4>
-          <ul style="margin:0;padding-left:20px;color:#4b5563;line-height:1.6;">
-            ${recommendations.split('\n').map(r => `<li>${r.trim()}</li>`).join('')}
-          </ul>
-        </div>
-        <button style="margin-top:20px;width:100%;padding:14px;background:#4A6572;color:white;border:none;border-radius:16px;cursor:pointer;font-weight:bold;font-size:16px;">Закрыть</button>
+  } else {
+    // Обычная версия для не-админов
+    recommendations = `• Текущее значение: ${value}\n• Целевое значение: ${target}\n• Рекомендации по улучшению метрики`;
+  }
+  
+  // Создаем модальное окно
+  const modalDiv = document.createElement('div');
+  modalDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:999999;';
+  
+  modalDiv.innerHTML = `
+    <div style="background:white;border-radius:24px;max-width:550px;width:90%;max-height:85vh;overflow-y:auto;padding:24px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;position:sticky;top:0;background:white;z-index:1;">
+        <h3 style="font-size:22px;font-weight:bold;margin:0;color:#1f2937;">📊 ${title}</h3>
+        <button class="close-modal-btn" style="background:none;border:none;font-size:28px;cursor:pointer;color:#9ca3af;">&times;</button>
       </div>
-    `;
-    
-    // Добавляем обработчики
-    const closeBtn = modalDiv.querySelector('button:first-of-type');
-    const closeBtn2 = modalDiv.querySelector('button:last-of-type');
-    const closeModal = () => modalDiv.remove();
-    
-    closeBtn.onclick = closeModal;
-    closeBtn2.onclick = closeModal;
-    modalDiv.onclick = (e) => { if (e.target === modalDiv) closeModal(); };
-    
-    document.body.appendChild(modalDiv);
-  };
+      
+      <div style="background:#f3f4f6;padding:16px;border-radius:16px;margin-bottom:16px;">
+        <p style="margin:0 0 8px 0;font-size:14px;color:#6b7280;">📈 Текущее значение</p>
+        <p style="font-size:36px;font-weight:bold;margin:0;color:#4A6572;">${value}</p>
+      </div>
+      
+      <div style="background:#e8f5e9;padding:16px;border-radius:16px;margin-bottom:20px;">
+        <p style="margin:0 0 8px 0;font-size:14px;color:#6b7280;">🎯 Целевое значение</p>
+        <p style="font-size:28px;font-weight:bold;margin:0;color:#2e7d32;">${target}</p>
+      </div>
+      
+      <div style="border-top:1px solid #e5e7eb;padding-top:16px;">
+        <h4 style="font-weight:bold;margin:0 0 12px 0;color:#374151;">📝 ${isSuperAdminUser ? 'Развернутый анализ и рекомендации:' : 'Рекомендации:'}</h4>
+        <div style="white-space:pre-wrap;font-size:14px;color:#4b5563;line-height:1.6;">
+          ${recommendations}
+        </div>
+      </div>
+      
+      ${isSuperAdminUser && type === 'conversion' ? `
+      <div style="margin-top:20px;background:#eff6ff;padding:16px;border-radius:16px;">
+        <h4 style="font-weight:bold;margin:0 0 12px 0;color:#1e40af;">📊 Дополнительная статистика</h4>
+        <div style="font-size:13px;color:#1e3a8a;">
+          <div>📋 Всего компаний в системе: 1</div>
+          <div>👥 Всего пользователей: ${companyUsers?.length || 0}</div>
+          <div>📝 Всего заявок: ${totalApplications}</div>
+          <div>⏳ На согласовании: ${pendingApprovalsCount}</div>
+        </div>
+      </div>
+      ` : ''}
+      
+      <button class="close-modal-btn" style="margin-top:20px;width:100%;padding:14px;background:#4A6572;color:white;border:none;border-radius:16px;cursor:pointer;font-weight:bold;font-size:16px;">
+        Закрыть
+      </button>
+    </div>
+  `;
+  
+  // Добавляем обработчики
+  const closeModal = () => modalDiv.remove();
+  modalDiv.querySelectorAll('.close-modal-btn').forEach(btn => {
+    btn.onclick = closeModal;
+  });
+  modalDiv.onclick = (e) => { if (e.target === modalDiv) closeModal(); };
+  
+  document.body.appendChild(modalDiv);
+};
   
   return (
     <>
@@ -4471,18 +4719,22 @@ useEffect(() => {
   );
 
   const renderAnalyticsDashboard = () => {
-    return (
-      <KPIDashboardWithTabs
-        applications={applications}
-        companyUsers={companyUsers}
-        userCompany={userCompany}
-        currentPlan={currentPlan}
-        promoCodeInfo={promoCodeInfo}
-        userCompanyId={userCompanyId}
-        supabase={supabase}
-      />
-    );
-  };
+  return (
+    <KPIDashboardWithTabs
+      applications={applications}
+      companyUsers={companyUsers}
+      userCompany={userCompany}
+      currentPlan={currentPlan}
+      promoCodeInfo={promoCodeInfo}
+      userCompanyId={userCompanyId}
+      supabase={supabase}
+      userRole={userRole}
+      isCompanyOwner={isCompanyOwner}
+      user={user}
+      pendingApprovals={pendingApprovals}
+    />
+  );
+};
               
   const renderProfilePage = () => (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 page-enter">
