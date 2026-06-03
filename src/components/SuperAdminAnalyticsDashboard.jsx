@@ -4,6 +4,41 @@ import { Loader2, Eye, TrendingUp, Users, Building2, DollarSign } from 'lucide-r
 
 const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num || 0);
 
+// Функция для экранирования HTML (должна быть определена ДО использования)
+const escapeHtml = (str) => {
+  if (!str) return '—';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+// Вспомогательные функции (определены ДО использования)
+function calculateCompanyStats(applications) {
+  if (!applications || applications.length === 0) {
+    return { totalAmount: 0, conversionRate: 0 };
+  }
+  const totalAmount = applications.reduce((sum, app) => sum + (app.total_amount || 0), 0);
+  const completedApps = applications.filter(app => app.status === 'received').length;
+  const conversionRate = applications.length > 0 ? Math.round((completedApps / applications.length) * 100) : 0;
+  return { totalAmount, conversionRate };
+}
+
+function getRoleLabelLocal(role) {
+  const roles = {
+    'super_admin': 'Супер-админ',
+    'manager': 'Руководитель',
+    'master': 'Прораб',
+    'foreman': 'Мастер',
+    'supply_admin': 'Снабженец',
+    'client': 'Заказчик',
+    'accountant': 'Бухгалтер'
+  };
+  return roles[role] || role;
+}
+
 const SuperAdminAnalyticsDashboard = ({ supabase }) => {
   const [companiesData, setCompaniesData] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
@@ -20,7 +55,7 @@ const SuperAdminAnalyticsDashboard = ({ supabase }) => {
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (companies) {
+        if (companies && companies.length > 0) {
           const enriched = await Promise.all(companies.map(async (company) => {
             // Получаем пользователей компании
             const { data: users } = await supabase
@@ -103,7 +138,7 @@ const SuperAdminAnalyticsDashboard = ({ supabase }) => {
                    onclick="window.__viewCompanyDetails('${c.id}')">
                 <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:8px;">
                   <div style="flex:1;">
-                    <div style="font-weight:bold;font-size:16px;">${c.name || '—'}</div>
+                    <div style="font-weight:bold;font-size:16px;">${escapeHtml(c.name || '—')}</div>
                     <div style="font-size:13px;color:#6b7280;margin-top:4px;">
                       👥 ${c.usersCount} пользователей • 
                       📋 ${c.totalApps} заявок • 
@@ -189,17 +224,6 @@ const SuperAdminAnalyticsDashboard = ({ supabase }) => {
     };
     
     document.body.appendChild(modalDiv);
-  };
-
-  // Функция для экранирования HTML
-  const escapeHtml = (str) => {
-    if (!str) return '—';
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
   };
 
   if (isLoading) {
@@ -319,7 +343,7 @@ const SuperAdminAnalyticsDashboard = ({ supabase }) => {
                         <span className={company.stats?.conversionRate > 20 ? 'text-green-600' : 'text-yellow-600'}>
                           {company.stats?.conversionRate || 0}%
                         </span>
-                      </td>
+                       </td>
                       <td className="px-4 py-3">
                         <button 
                           onClick={() => openMetricModal(company.name, 'company_detail')}
@@ -327,7 +351,7 @@ const SuperAdminAnalyticsDashboard = ({ supabase }) => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                      </td>
+                       </td>
                     </tr>
                   ))}
                 </tbody>
@@ -339,29 +363,5 @@ const SuperAdminAnalyticsDashboard = ({ supabase }) => {
     </div>
   );
 };
-
-// Вспомогательные функции
-function calculateCompanyStats(applications) {
-  if (!applications || applications.length === 0) {
-    return { totalAmount: 0, conversionRate: 0 };
-  }
-  const totalAmount = applications.reduce((sum, app) => sum + (app.total_amount || 0), 0);
-  const completedApps = applications.filter(app => app.status === 'received').length;
-  const conversionRate = applications.length > 0 ? Math.round((completedApps / applications.length) * 100) : 0;
-  return { totalAmount, conversionRate };
-}
-
-function getRoleLabelLocal(role) {
-  const roles = {
-    'super_admin': 'Супер-админ',
-    'manager': 'Руководитель',
-    'master': 'Прораб',
-    'foreman': 'Мастер',
-    'supply_admin': 'Снабженец',
-    'client': 'Заказчик',
-    'accountant': 'Бухгалтер'
-  };
-  return roles[role] || role;
-}
 
 export default SuperAdminAnalyticsDashboard;
