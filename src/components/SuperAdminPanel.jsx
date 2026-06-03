@@ -15,6 +15,7 @@ import GlobalSearch from './GlobalSearch';
 import PromoModal from './PromoModal';
 import PromoManager from './PromoManager';
 import KPIDashboard from './KPIDashboard';
+import { runCleanup } from '../utils/autoCleanup';
 
 // ============================================================================
 // UTILS & CONSTANTS
@@ -638,7 +639,7 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
     setSearchTerm('');
   }, []);
 
-  // UPDATED: Navigation items with Tariffs and Promo Manager
+    // UPDATED: Navigation items with Tariffs and Promo Manager
   const renderNavigation = () => {
     const navItems = [
       { id: 'overview', label: t('overview'), icon: BarChart3 },
@@ -688,6 +689,21 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
         >
           <Gift className="w-4 h-4" />
           Управление промокодами
+        </button>
+
+        {/* 🔥 КНОПКА ОЧИСТКИ СТАРЫХ ДАННЫХ - ТЕПЕРЬ ЗДЕСЬ ПРАВИЛЬНО 🔥 */}
+        <button
+          onClick={async () => {
+            if (window.confirm('Вы уверены, что хотите очистить старые данные? Это действие необратимо.')) {
+              await runCleanup(showNotification);
+              loadData(); // Перезагружаем данные после очистки
+            }
+          }}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                   text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+        >
+          <Trash2 className="w-4 h-4" />
+          Очистить старые данные
         </button>
       </div>
     );

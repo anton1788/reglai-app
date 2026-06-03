@@ -143,6 +143,7 @@ import PromoManager from './components/PromoManager';
 import { activatePromoPlan, 
   // eslint-disable-next-line no-unused-vars
   getAllPromoCodes } from './utils/promoManager';
+  import { initAutoCleanup } from './utils/autoCleanup';
 import {
   Plus, ArrowLeft, History, Minus, Send, Package, Building, User, Calendar,
   AlertCircle, Download, FileText, Search, Check, X, Edit3,
@@ -2774,60 +2775,35 @@ const totalAmount = validMaterials.reduce((sum, m) =>
   // ❌ CANCEL APPLICATION
   // ─────────────────────────────────────────────────────────
   const cancelApplication = async (id) => {
-    if (!user) return;
-    if (!window.confirm(t('confirmCancel'))) return;
-    const appToCancel = applications.find(a => a.id === id);
-    if (!appToCancel || appToCancel.user_id !== user?.id) {
-      showNotification('Вы не можете отменить чужую заявку', 'error');
-      return;
-    }
-    await logAuditAction(supabase, {
-      actionType: 'application_canceled',
-      entityType: 'application',
-      entityId: id,
-      oldValue: { status: appToCancel.status },
-      newValue: { status: 'canceled' },
-      companyId: userCompanyId,
-      userId: user?.id,
-      userEmail: user?.email,
-      userRole: userRole,
-      userFullName: profileDataForHeader.fullName,
-      userPhone: profileDataForHeader.phone
-    });
-    const newHistoryEntry = {
-      user_id: user?.id,
-      user_email: user?.email,
-      old_status: appToCancel.status,
-      new_status: APPLICATION_STATUS.CANCELED,
-      action: 'canceled',
-      timestamp: new Date().toISOString()
-    };
-    const updatedHistory = [...(appToCancel.status_history || []), newHistoryEntry];
-    const { error } = await supabase
-      .from('applications')
-      .update({
-        status: APPLICATION_STATUS.CANCELED,
-        status_history: updatedHistory
-      })
-      .eq('id', id)
-      .eq('user_id', user?.id);
-    if (error) {
-      console.error('Ошибка при отмене заявки:', error);
-      showNotification('Ошибка при отмене заявки', 'error');
-      return;
-    }
-    const updatedApps = applications.map(app =>
-      app.id === id ? { ...app, status: APPLICATION_STATUS.CANCELED, status_history: updatedHistory } : app
-    );
-    setApplications(updatedApps);
-    if (isAdminMode) {
-      const updatedAll = allApplications.map(app =>
-        app.id === id ? { ...app, status: APPLICATION_STATUS.CANCELED, status_history: updatedHistory } : app
-      );
-      setAllApplications(updatedAll);
-    }
-    showNotification(t('applicationCanceled') || 'Заявка отменена', 'success');
-  };
+  if (!user) return;
+  if (!window.confirm(t('confirmCancel'))) return;
+  
+  const appToCancel = applications.find(a => a.id === id);
+  if (!appToCancel || appToCancel.user_id !== user?.id) {
+    showNotification('Вы не можете отменить чужую заявку', 'error');
+    return;
+  }
+  
+  // ✅ ПРОСТОЕ РЕШЕНИЕ: помечаем как удалённую, а не удаляем
+  const { error } = await supabase
+    .from('applications')
+    .update({
+      status: 'canceled',
+      updated_at: new Date().toISOString(),
+      deleted_at: new Date().toISOString(),  // запоминаем когда удалили
+      is_deleted: true                        // флаг удаления
+    })
+    .eq('id', id);
+  
+  if (error) {
+    showNotification('Ошибка при отмене заявки', 'error');
+    return;
+  }
+  
+  // Обновляем UI - скрываем заявку
+  setApplications(prev => prev.filter(app => app.id !== id));
+  showNotification('Заявка отменена', 'success');
+};
 
   // ─────────────────────────────────────────────────────────
   // 💬 ADD COMMENT
@@ -4165,6 +4141,17 @@ useEffect(() => {
     clearInterval(interval);
   };
 }, [checkForUpdates]);
+
+// 🔥 ДОБАВЬТЕ ЭТОТ useEffect ПРЯМО СЮДА (ПОСЛЕ ПРОВЕРКИ ОБНОВЛЕНИЙ)
+useEffect(() => {
+  const initCleanup = async () => {
+    if (user) {
+      const { initAutoCleanup } = await import('./utils/autoCleanup');
+      initAutoCleanup(); // Запускаем автоочистку при входе пользователя
+    }
+  };
+  initCleanup();
+}, [user]);
 
   // 🧭 VIEW ROUTING (ИСПРАВЛЕННЫЙ)
 useEffect(() => {
