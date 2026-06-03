@@ -60,6 +60,8 @@ import NpsSurveyModal from './components/NpsSurveyModal';
 import ChurnReasonModal from './components/ChurnReasonModal'; // ← ДОБАВИТЬ
 import APIDocumentation from './components/APIDocumentation';
 import AB_TEST_CONFIG from './utils/abTesting';
+import ManagerAnalyticsDashboard from './components/ManagerAnalyticsDashboard';
+import SuperAdminAnalyticsDashboard from './components/SuperAdminAnalyticsDashboard';
 import {
   getABTestVariant,
   saveABTestResult,
@@ -4718,7 +4720,32 @@ useEffect(() => {
     </div>
   );
 
-  const renderAnalyticsDashboard = () => {
+ // ============================================================
+// 📊 ОБНОВЛЕННЫЙ renderAnalyticsDashboard
+// ============================================================
+const renderAnalyticsDashboard = () => {
+  // 🔒 Супер-админ - ПОЛНАЯ аналитика по всем компаниям
+  if (isSuperAdmin(userRole, user?.user_metadata)) {
+    return (
+      <SuperAdminAnalyticsDashboard
+        supabase={supabase}
+      />
+    );
+  }
+  
+  // 👨‍💼 Руководитель/менеджер/владелец - ТОЛЬКО его компания
+  if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+    return (
+      <ManagerAnalyticsDashboard
+        applications={applications}
+        companyUsers={companyUsers}
+        userCompany={userCompany}
+        currentPlan={currentPlan}
+      />
+    );
+  }
+  
+  // 👷 Мастер/снабженец/бухгалтер - упрощенная версия
   return (
     <KPIDashboardWithTabs
       applications={applications}
