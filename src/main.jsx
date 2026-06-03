@@ -1,14 +1,61 @@
-// src/main.jsx
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import UpdateModal from './components/UpdateModal.jsx'
 
 // ✅ Офлайн-модуль
 import { initOfflineModule, checkOfflineSupport } from './utils/offlineStorage'
 
 // ✅ Версия приложения
-const APP_VERSION = '9.9.14';
+const APP_VERSION = '9.9.15';
+
+// ─────────────────────────────────────────────────────────
+// 🔹 Глобальные переменные для модального окна обновлений
+// ─────────────────────────────────────────────────────────
+let updateModalRoot = null;
+
+const showUpdateModal = (updateInfo) => {
+  const handleApplyUpdate = () => {
+    if (window.waitingWorker) {
+      window.waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    }
+    if (updateInfo?.to) {
+      localStorage.setItem(`update_applied_${updateInfo.to}`, Date.now().toString());
+      localStorage.setItem('last_update_shown', updateInfo.to);
+    }
+    if (window.appToast) {
+      window.appToast.success('🔄 Обновление установлено, страница будет перезагружена...');
+    }
+    setTimeout(() => {
+      window.location.reload(true);
+    }, 1500);
+  };
+
+  const handleClose = () => {
+    if (updateModalRoot) {
+      updateModalRoot.render(null);
+    }
+  };
+
+  if (updateModalRoot) {
+    updateModalRoot.render(
+      <UpdateModal
+        isOpen={true}
+        updateInfo={updateInfo}
+        onClose={handleClose}
+        onApplyUpdate={handleApplyUpdate}
+        isLoading={false}
+      />
+    );
+  } else {
+    const modalDiv = document.createElement('div');
+    modalDiv.id = 'update-modal-root';
+    document.body.appendChild(modalDiv);
+    updateModalRoot = createRoot(modalDiv);
+    showUpdateModal(updateInfo);
+  }
+};
 
 // ─────────────────────────────────────────────────────────
 // 🔹 Регистрация Service Worker
@@ -45,47 +92,85 @@ const registerServiceWorker = async () => {
 };
 
 // ─────────────────────────────────────────────────────────
-// 🔹 Слушатель обновлений PWA
+// 🔹 Слушатель обновлений PWA (ЕДИНАЯ ВЕРСИЯ)
 // ─────────────────────────────────────────────────────────
-// src/main.jsx - исправленная версия
 const setupPWAUpdateListener = () => {
   let updatePrompted = false;
   const PROMPT_COOLDOWN = 24 * 60 * 60 * 1000; // 24 часа
   
-  const handleUpdate = (event) => {
-    // Проверяем, не показывали ли обновление недавно
-    const lastPrompt = localStorage.getItem('last_update_prompt');
-    const now = Date.now();
-    
-    if (updatePrompted || (lastPrompt && (now - parseInt(lastPrompt)) < PROMPT_COOLDOWN)) {
-      console.log('[PWA] Update prompt skipped (cooldown)');
-      return;
-    }
-    
-    const { version, registration } = event.detail;
-    updatePrompted = true;
-    localStorage.setItem('last_update_prompt', now.toString());
-    
-    const shouldUpdate = confirm(
-      `🔄 Доступна новая версия Реглай (${version}).\n\nОбновить сейчас?`
-    );
-    
-    if (shouldUpdate && registration?.waiting) {
-      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+  // Загружаем информацию о версиях
+  const checkVersionManifest = async () => {
+    try {
+      const response = await fetch('/version.json?v=' + Date.now());
+      const data = await response.json();
       
-      const onControllerChange = () => {
-        window.location.reload();
-        navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
-      };
-      navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
-    } else {
-      // Если пользователь отказался, сбрасываем флаг через 24 часа
-      setTimeout(() => { updatePrompted = false; }, PROMPT_COOLDOWN);
+      if (data.version && data.version !== APP_VERSION) {
+        const lastShown = localStorage.getItem('last_update_shown');
+        const lastDeclined = localStorage.getItem(`update_declined_${data.version}`);
+        
+        if (lastDeclined && (Date.now() - parseInt(lastDeclined)) < PROMPT_COOLDOWN) {
+          console.log('[PWA] Update declined, not showing');
+          return;
+        }
+        
+        if (lastShown !== data.version && !updatePrompted) {
+          updatePrompted = true;
+          localStorage.setItem('last_update_shown', data.version);
+          
+          const versionInfo = data.versions?.find(v => v.version === data.version) || {
+            version: data.version,
+            changes: data.changes || ['Улучшена производительность'],
+            date: data.date,
+            breaking: false
+          };
+          
+          showUpdateModal({
+            from: APP_VERSION,
+            to: data.version,
+            changes: versionInfo.changes,
+            date: versionInfo.date,
+            breaking: versionInfo.breaking || false,
+            updateOptions: data.updateOptions || {
+              showStayOption: true,
+              remindLaterDays: 3,
+              message: 'После обновления может потребоваться перезагрузка'
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[PWA] Version check failed:', err);
+    }
+  };
+  
+  // Проверяем при загрузке
+  checkVersionManifest();
+  
+  // Проверяем каждые 6 часов
+  const interval = setInterval(checkVersionManifest, 6 * 60 * 60 * 1000);
+  
+  // Слушаем обновления от Service Worker (исправлено: убрана неиспользуемая registration)
+  const handleUpdate = (event) => {
+    const { version } = event.detail;
+    if (version && version !== APP_VERSION && !updatePrompted) {
+      updatePrompted = true;
+      showUpdateModal({
+        from: APP_VERSION,
+        to: version,
+        changes: ['Новая версия приложения готова к установке'],
+        date: new Date().toISOString(),
+        breaking: false,
+        updateOptions: { showStayOption: true, remindLaterDays: 3 }
+      });
     }
   };
 
   window.addEventListener('pwa-update-available', handleUpdate);
-  return () => window.removeEventListener('pwa-update-available', handleUpdate);
+  
+  return () => {
+    clearInterval(interval);
+    window.removeEventListener('pwa-update-available', handleUpdate);
+  };
 };
 
 // ─────────────────────────────────────────────────────────
