@@ -4734,9 +4734,8 @@ useEffect(() => {
   
   // 👑 СУПЕР-АДМИН - ПОКАЗЫВАЕМ РАСШИРЕННУЮ ПАНЕЛЬ
   if (isSuper) {
-    console.log('✅ Супер-админ, показываем SuperAdminAnalyticsDashboard');
-    return <SuperAdminAnalyticsDashboard supabase={supabase} />;
-  }
+  return <SuperAdminAnalyticsDashboard supabase={supabase} showNotification={showNotification} />;
+}
   
   // 👨‍💼 РУКОВОДИТЕЛЬ/МЕНЕДЖЕР
   if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
