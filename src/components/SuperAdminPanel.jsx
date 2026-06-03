@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import SuperAdminKPIDashboard from './SuperAdminKPIDashboard';
+import SuperAdminAnalyticsDashboard from './SuperAdminAnalyticsDashboard';
 import { 
   Shield, Users, Ban, CheckCircle, BarChart3, Search, ChevronDown, 
   Filter, RefreshCw, Edit3, Trash2, AlertTriangle, X, ArrowLeft, Building2,
@@ -1127,92 +1129,74 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
     );
   }
 
-    // ============================================================================
-  // RENDER: KPI DASHBOARD VIEW
-  // ============================================================================
-
-  if (activeView === 'kpi') {
-    return (
-      <>
-        <div ref={mainRef} className="max-w-7xl mx-auto p-4" aria-live="polite">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
-            {/* Header with Back Button and Global Search */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={goToOverview}
-                  className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 
-                           hover:text-amber-600 dark:hover:text-amber-400 transition-colors 
-                           focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg px-2 py-1"
-                  aria-label={t('backToOverview')}
-                >
-                  <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-                  {t('back')}
-                </button>
-                
-                <div className="p-2.5 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
-                  <Target className="w-5 h-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-                </div>
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">{viewTitle}</h1>
+    if (activeView === 'kpi') {
+  return (
+    <>
+      <div ref={mainRef} className="max-w-7xl mx-auto p-4" aria-live="polite">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
+          {/* Header with Back Button */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={goToOverview}
+                className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 
+                         hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                {t('back')}
+              </button>
+              <div className="p-2.5 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
+                <Target className="w-5 h-5 text-amber-600 dark:text-amber-400" />
               </div>
-              
-              {/* Global Search in KPI View Header */}
-              <div className="w-64 lg:w-96">
-                <GlobalSearch
-                  supabase={supabase}
-                  userCompanyId={userCompanyId}
-                  onResultSelect={(result) => {
-                    if (result.type === 'user') {
-                      navigateTo('all-users', t('allUsers'));
-                    } else if (result.type === 'company') {
-                      navigateTo('companies', t('companies'));
-                    }
-                    if (result.type === 'application') {
-                      navigateTo('overview', t('overview'));
-                    }
-                  }}
-                  t={t}
-                  showNotification={showNotification}
-                />
-              </div>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">KPI Дашборд</h1>
             </div>
-
-            {/* Navigation */}
-            {renderNavigation()}
             
-            {/* KPI Dashboard Component */}
-            <KPIDashboard 
-              supabase={supabase} 
-              companyId={userCompanyId}
-              onRefresh={() => {
-                console.log('KPI refreshed');
-                loadData();
-              }}
-            />
+            {/* Global Search */}
+            <div className="w-64 lg:w-96">
+              <GlobalSearch
+                supabase={supabase}
+                userCompanyId={userCompanyId}
+                onResultSelect={(result) => {
+                  if (result.type === 'user') {
+                    navigateTo('all-users', t('allUsers'));
+                  } else if (result.type === 'company') {
+                    navigateTo('companies', t('companies'));
+                  }
+                }}
+                t={t}
+                showNotification={showNotification}
+              />
+            </div>
           </div>
+
+          {/* Navigation */}
+          {renderNavigation()}
+          
+          {/* 🔥 ИСПОЛЬЗУЕМ ГОТОВЫЙ КОМПОНЕНТ ДЛЯ СУПЕР-АДМИНА */}
+          <SuperAdminAnalyticsDashboard supabase={supabase} />
         </div>
-        
-        {/* Модалка ввода промокода */}
-        <PromoModal
-          isOpen={showPromoModal}
-          onClose={() => setShowPromoModal(false)}
-          onActivate={handleActivatePromo}
-          isLoading={activatingPromo}
-          t={t}
+      </div>
+      
+      {/* Promo Modals */}
+      <PromoModal
+        isOpen={showPromoModal}
+        onClose={() => setShowPromoModal(false)}
+        onActivate={handleActivatePromo}
+        isLoading={activatingPromo}
+        t={t}
+      />
+      
+      {showPromoManager && (
+        <PromoManager
+          isOpen={showPromoManager}
+          onClose={() => setShowPromoManager(false)}
+          supabase={supabase}
+          showNotification={showNotification}
         />
-        
-        {/* Панель управления промокодами */}
-        {showPromoManager && (
-          <PromoManager
-            isOpen={showPromoManager}
-            onClose={() => setShowPromoManager(false)}
-            supabase={supabase}
-            showNotification={showNotification}
-          />
-        )}
-      </>
-    );
-  }
+      )}
+    </>
+  );
+}
 
   // ============================================================================
   // RENDER: DETAILED VIEWS (Users & Companies)
