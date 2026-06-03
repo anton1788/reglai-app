@@ -4721,11 +4721,21 @@ useEffect(() => {
   );
 
  // ============================================================
-// 📊 ОБНОВЛЕННЫЙ renderAnalyticsDashboard
+// 📊 ОБНОВЛЕННЫЙ renderAnalyticsDashboard С ОТЛАДКОЙ
 // ============================================================
 const renderAnalyticsDashboard = () => {
-  // 🔒 Супер-админ - ПОЛНАЯ аналитика по всем компаниям
+  // 📍 ОТЛАДКА - выводим в консоль
+  console.log('🔍 [DEBUG] renderAnalyticsDashboard called:', {
+    userRole: userRole,
+    userEmail: user?.email,
+    isSuperAdminResult: isSuperAdmin(userRole, user?.user_metadata),
+    userMetadata: user?.user_metadata,
+    currentView: currentView
+  });
+  
+  // 🔒 СУПЕР-АДМИН: Всегда показываем SuperAdminAnalyticsDashboard
   if (isSuperAdmin(userRole, user?.user_metadata)) {
+    console.log('✅ [DEBUG] SuperAdmin detected - showing SuperAdminAnalyticsDashboard');
     return (
       <SuperAdminAnalyticsDashboard
         supabase={supabase}
@@ -4733,8 +4743,9 @@ const renderAnalyticsDashboard = () => {
     );
   }
   
-  // 👨‍💼 Руководитель/менеджер/владелец - ТОЛЬКО его компания
+  // 👨‍💼 РУКОВОДИТЕЛЬ/МЕНЕДЖЕР/ВЛАДЕЛЕЦ
   if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+    console.log('✅ [DEBUG] Manager detected - showing ManagerAnalyticsDashboard');
     return (
       <ManagerAnalyticsDashboard
         applications={applications}
@@ -4745,7 +4756,8 @@ const renderAnalyticsDashboard = () => {
     );
   }
   
-  // 👷 Мастер/снабженец/бухгалтер - упрощенная версия
+  // 👷 МАСТЕР/СНАБЖЕНЕЦ/БУХГАЛТЕР - упрощенная версия
+  console.log('✅ [DEBUG] Default role - showing KPIDashboardWithTabs');
   return (
     <KPIDashboardWithTabs
       applications={applications}
