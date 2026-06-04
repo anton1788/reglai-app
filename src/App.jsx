@@ -5690,9 +5690,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     supabase={supabase}
     companyId={userCompanyId}
     showNotification={showNotification}
-    t={t}
     onMoveToClients={() => {
-      // Опционально: перейти на страницу клиентов
       setCurrentView('clients');
     }}
   />
