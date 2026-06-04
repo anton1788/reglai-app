@@ -131,10 +131,6 @@ const Navbar = ({
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
 
-    // ✅ CRM - добавлено для manager и supply_admin
-    if (userRole === 'manager' || userRole === 'supply_admin') {
-      items.push({ id: 'crm', label: 'CRM', icon: Users, path: '/crm' });
-    }
 
     // ✅ CRM Sales - Лиды (для manager и supply_admin)
     if (userRole === 'manager' || userRole === 'supply_admin') {
