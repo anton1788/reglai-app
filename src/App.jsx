@@ -21,6 +21,7 @@ import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingOverlay from './components/LoadingOverlay';
 import CRMSalesManager from './components/CRMSales/CRMSalesManager';
+import CRMManager from './components/CRM/CRMManager';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -5588,6 +5589,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           else if (path === '/applications/new') setCurrentView('create');
           else if (path === '/warehouse') setCurrentView('warehouse');
           else if (path === '/clients') setCurrentView('clients');
+          else if (path === '/crm') setCurrentView('crm');
           else if (path === '/analytics') setCurrentView('analytics');
           else if (path === '/profile') setCurrentView('profile');
           else if (path === '/documents') setCurrentView('documents');
@@ -5693,6 +5695,14 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     onMoveToClients={() => {
       setCurrentView('clients');
     }}
+  />
+)}
+
+{currentView === 'crm' && (
+  <CRMManager
+    supabase={supabase}
+    companyId={userCompanyId}
+    showNotification={showNotification}
   />
 )}
         
