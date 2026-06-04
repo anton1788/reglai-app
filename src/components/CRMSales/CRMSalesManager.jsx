@@ -4,7 +4,8 @@ import {
   Users, Phone, Calendar, MessageSquare, Star, Archive, 
   Plus, Search, Filter, Clock, CheckCircle, XCircle,
   AlertCircle, ChevronDown, Edit2, Trash2, Eye,
-  PhoneCall, Mail, UserPlus, RefreshCw, Download
+  PhoneCall, Mail, UserPlus, RefreshCw, Download,
+  LayoutGrid, List, BarChart3, PieChart, TrendingUp
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import SalesClientCard from './SalesClientCard';
@@ -35,6 +36,7 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
   const [editingClient, setEditingClient] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
+  const [activeTab, setActiveTab] = useState('kanban'); // kanban, list, analytics
   
   // Форма нового клиента
   const [clientForm, setClientForm] = useState({
@@ -145,7 +147,6 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
     
     setIsLoading(true);
     try {
-      // 1. Создаём пользователя-клиента в company_users
       const tempEmail = lead.email || `${lead.phone?.replace(/\D/g, '') || Date.now()}@temp.reglai.ru`;
       const tempPassword = Math.random().toString(36).slice(-8);
       
@@ -165,7 +166,6 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
       
       if (userError) throw userError;
       
-      // 2. Добавляем в company_users
       await supabase
         .from('company_users')
         .insert([{
@@ -177,7 +177,6 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
           is_active: true
         }]);
       
-      // 3. Обновляем статус лида
       await supabase
         .from('crm_sales_leads')
         .update({ status: 'client', converted_at: new Date().toISOString() })
@@ -295,6 +294,35 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
     };
   }, [clients]);
 
+  // Группировка по статусам для канбана
+  const kanbanColumns = useMemo(() => {
+    const columns = {};
+    Object.keys(SALES_STATUSES).forEach(status => {
+      columns[status] = filteredClients.filter(c => c.status === status);
+    });
+    return columns;
+  }, [filteredClients]);
+
+  // Аналитика по источникам
+  const sourceAnalytics = useMemo(() => {
+    const sources = {};
+    clients.forEach(c => {
+      const source = c.source || 'manual';
+      sources[source] = (sources[source] || 0) + 1;
+    });
+    return Object.entries(sources).map(([name, value]) => ({ name, value }));
+  }, [clients]);
+
+  // Динамика по месяцам
+  const monthlyDynamics = useMemo(() => {
+    const months = {};
+    clients.forEach(c => {
+      const month = new Date(c.created_at).toLocaleString('ru-RU', { month: 'short', year: 'numeric' });
+      months[month] = (months[month] || 0) + 1;
+    });
+    return Object.entries(months).map(([name, value]) => ({ name, value }));
+  }, [clients]);
+
   // Экспорт в Excel
   const exportToExcel = () => {
     const exportData = clients.map(c => ({
@@ -316,6 +344,205 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
     XLSX.writeFile(wb, `CRM_Лиды_${new Date().toISOString().split('T')[0]}.xlsx`);
     showNotification('Экспорт завершён', 'success');
   };
+
+  // Рендер канбан-доски
+  const renderKanban = () => (
+    <div className="overflow-x-auto pb-4">
+      <div className="flex gap-4 min-w-max">
+        {Object.entries(SALES_STATUSES).map(([statusKey, statusConfig]) => {
+          const columnClients = kanbanColumns[statusKey] || [];
+          return (
+            <div key={statusKey} className="w-80 flex-shrink-0">
+              <div className={`rounded-t-lg p-2 ${statusConfig.color.replace('text-', 'bg-').replace('dark:bg-', 'dark:bg-')}`}>
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-sm">{statusConfig.label}</span>
+                  <span className="text-xs bg-white/50 rounded-full px-2 py-0.5">{columnClients.length}</span>
+                </div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700/30 rounded-b-lg p-2 min-h-[400px] space-y-2">
+                {columnClients.map(client => (
+                  <SalesClientCard
+                    key={client.id}
+                    client={client}
+                    statuses={SALES_STATUSES}
+                    onEdit={(c) => {
+                      setEditingClient(c);
+                      setClientForm({
+                        name: c.name,
+                        phone: c.phone || '',
+                        email: c.email || '',
+                        company: c.company || '',
+                        position: c.position || '',
+                        status: c.status,
+                        notes: c.notes || '',
+                        next_call_date: c.next_call_date || '',
+                        next_call_time: c.next_call_time || '',
+                        source: c.source || 'manual'
+                      });
+                      setShowAddModal(true);
+                    }}
+                    onDelete={deleteClient}
+                    onStatusChange={updateStatus}
+                    onConvert={convertToClient}
+                    onView={(c) => {
+                      setSelectedClient(c);
+                      setShowDetailsModal(true);
+                    }}
+                  />
+                ))}
+                {columnClients.length === 0 && (
+                  <div className="text-center py-8 text-gray-400 text-sm">
+                    Нет лидов
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // Рендер списка
+  const renderList = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {filteredClients.map(client => (
+        <SalesClientCard
+          key={client.id}
+          client={client}
+          statuses={SALES_STATUSES}
+          onEdit={(c) => {
+            setEditingClient(c);
+            setClientForm({
+              name: c.name,
+              phone: c.phone || '',
+              email: c.email || '',
+              company: c.company || '',
+              position: c.position || '',
+              status: c.status,
+              notes: c.notes || '',
+              next_call_date: c.next_call_date || '',
+              next_call_time: c.next_call_time || '',
+              source: c.source || 'manual'
+            });
+            setShowAddModal(true);
+          }}
+          onDelete={deleteClient}
+          onStatusChange={updateStatus}
+          onConvert={convertToClient}
+          onView={(c) => {
+            setSelectedClient(c);
+            setShowDetailsModal(true);
+          }}
+        />
+      ))}
+    </div>
+  );
+
+  // Рендер аналитики
+  const renderAnalytics = () => (
+    <div className="space-y-6">
+      {/* Статистика по статусам */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <PieChart className="w-5 h-5" />
+          Распределение по статусам
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+          {Object.entries(stats).map(([key, value]) => {
+            const config = SALES_STATUSES[key];
+            if (!config && key === 'total') return null;
+            return (
+              <div key={key} className={`p-3 rounded-xl text-center ${config?.color || 'bg-gray-100'}`}>
+                <div className="text-2xl font-bold">{value}</div>
+                <div className="text-xs">{config?.label || key}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Аналитика по источникам */}
+      {sourceAnalytics.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Источники привлечения
+          </h3>
+          <div className="space-y-3">
+            {sourceAnalytics.map(source => (
+              <div key={source.name}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span>{source.name === 'manual' ? 'Ручное добавление' : source.name}</span>
+                  <span>{source.value} ({Math.round(source.value / clients.length * 100)}%)</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-indigo-600 h-2 rounded-full" 
+                    style={{ width: `${source.value / clients.length * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Динамика по месяцам */}
+      {monthlyDynamics.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5" />
+            Динамика добавления лидов
+          </h3>
+          <div className="space-y-3">
+            {monthlyDynamics.map(month => (
+              <div key={month.name}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span>{month.name}</span>
+                  <span>{month.value}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-green-600 h-2 rounded-full" 
+                    style={{ width: `${Math.min(100, month.value / Math.max(...monthlyDynamics.map(m => m.value)) * 100)}%` }}
+                  ></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Конверсия */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border">
+        <h3 className="text-lg font-semibold mb-4">📊 Воронка продаж</h3>
+        <div className="flex items-center justify-between">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-600">{stats.new + stats.callScheduled}</div>
+            <div className="text-xs text-gray-500">Активные лиды</div>
+          </div>
+          <ArrowRight className="w-6 h-6 text-gray-400" />
+          <div className="text-center">
+            <div className="text-2xl font-bold text-purple-600">{stats.negotiation}</div>
+            <div className="text-xs text-gray-500">Договорённость</div>
+          </div>
+          <ArrowRight className="w-6 h-6 text-gray-400" />
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-600">{stats.clients}</div>
+            <div className="text-xs text-gray-500">Стали клиентами</div>
+          </div>
+        </div>
+        <div className="mt-4 pt-3 border-t text-center">
+          <div className="text-sm text-gray-600">
+            Конверсия: {stats.new + stats.callScheduled + stats.negotiation > 0 
+              ? Math.round(stats.clients / (stats.new + stats.callScheduled + stats.negotiation) * 100) 
+              : 0}%
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6">
@@ -359,7 +586,44 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
           </div>
         </div>
         
-        {/* Статистика */}
+        {/* Вкладки */}
+        <div className="flex gap-2 mb-4 border-b pb-2">
+          <button
+            onClick={() => setActiveTab('kanban')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+              activeTab === 'kanban' 
+                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' 
+                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            Канбан
+          </button>
+          <button
+            onClick={() => setActiveTab('list')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+              activeTab === 'list' 
+                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' 
+                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
+            }`}
+          >
+            <List className="w-4 h-4" />
+            Список
+          </button>
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+              activeTab === 'analytics' 
+                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' 
+                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            Аналитика
+          </button>
+        </div>
+        
+        {/* Статистика (краткая) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-6">
           <div className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-xl text-center">
             <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
@@ -432,7 +696,7 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
         </div>
       </div>
       
-      {/* Список лидов */}
+      {/* Контент в зависимости от вкладки */}
       {isLoading ? (
         <div className="flex justify-center py-12">
           <LoaderIcon />
@@ -453,38 +717,11 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filteredClients.map(client => (
-            <SalesClientCard
-              key={client.id}
-              client={client}
-              statuses={SALES_STATUSES}
-              onEdit={(c) => {
-                setEditingClient(c);
-                setClientForm({
-                  name: c.name,
-                  phone: c.phone || '',
-                  email: c.email || '',
-                  company: c.company || '',
-                  position: c.position || '',
-                  status: c.status,
-                  notes: c.notes || '',
-                  next_call_date: c.next_call_date || '',
-                  next_call_time: c.next_call_time || '',
-                  source: c.source || 'manual'
-                });
-                setShowAddModal(true);
-              }}
-              onDelete={deleteClient}
-              onStatusChange={updateStatus}
-              onConvert={convertToClient}
-              onView={(c) => {
-                setSelectedClient(c);
-                setShowDetailsModal(true);
-              }}
-            />
-          ))}
-        </div>
+        <>
+          {activeTab === 'kanban' && renderKanban()}
+          {activeTab === 'list' && renderList()}
+          {activeTab === 'analytics' && renderAnalytics()}
+        </>
       )}
       
       {/* Модальные окна */}
