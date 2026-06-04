@@ -131,6 +131,16 @@ const Navbar = ({
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
 
+    // ✅ CRM - добавлено для manager и supply_admin
+    if (userRole === 'manager' || userRole === 'supply_admin') {
+      items.push({ id: 'crm', label: 'CRM', icon: Users, path: '/crm' });
+    }
+
+    // ✅ CRM Sales - Лиды (для manager и supply_admin)
+    if (userRole === 'manager' || userRole === 'supply_admin') {
+      items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
+    }
+
     if (userRole === 'master' || userRole === 'foreman') {
       items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
       items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
@@ -204,13 +214,13 @@ const Navbar = ({
               className="flex items-center gap-2 group cursor-pointer"
             >
               <div className="w-9 h-9 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-all">
-  <img 
-    src="/icon-512.png" 
-    alt="Reglai logo" 
-    className="w-6 h-6"
-    style={{ objectFit: 'contain' }}
-  />
-</div>
+                <img 
+                  src="/icon-512.png" 
+                  alt="Reglai logo" 
+                  className="w-6 h-6"
+                  style={{ objectFit: 'contain' }}
+                />
+              </div>
               <div className="hidden sm:block">
                 <span className="font-bold text-gray-800 dark:text-white text-lg">Реглай</span>
                 {companyName && (
@@ -490,7 +500,9 @@ const Navbar = ({
               const Icon = item.icon;
               const isActive = currentPage === item.id || 
                 (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
-                (item.id === 'clients' && currentPage === 'clientDashboard');
+                (item.id === 'clients' && currentPage === 'clientDashboard') ||
+                (item.id === 'crm' && currentPage === 'crm') ||
+                (item.id === 'crm-sales' && currentPage === 'crm-sales');
               
               return (
                 <button
@@ -554,7 +566,9 @@ const Navbar = ({
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id ||
-                (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history'));
+                (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
+                (item.id === 'crm' && currentPage === 'crm') ||
+                (item.id === 'crm-sales' && currentPage === 'crm-sales');
               
               return (
                 <button

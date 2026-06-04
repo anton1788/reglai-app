@@ -20,6 +20,7 @@ import { CompanyProfileForm } from './components/CompanyProfileForm';
 import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingOverlay from './components/LoadingOverlay';
+import CRMSalesManager from './components/CRMSales/CRMSalesManager';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -5604,6 +5605,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           else if (path === '/tasks') setCurrentView('tasks');
           else if (path === '/help') setCurrentView('help');
           else if (path === '/superAdmin') setCurrentView('superAdmin');
+          else if (path === '/crm-sales') setCurrentView('crm-sales');
           else if (path === '/search') {
             const params = new URLSearchParams(path.split('?')[1]);
             const query = params.get('q');
@@ -5682,6 +5684,19 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             capturedPhotos={capturedPhotos}
           />
         )}
+
+        {currentView === 'crm-sales' && (
+  <CRMSalesManager
+    supabase={supabase}
+    companyId={userCompanyId}
+    showNotification={showNotification}
+    t={t}
+    onMoveToClients={() => {
+      // Опционально: перейти на страницу клиентов
+      setCurrentView('clients');
+    }}
+  />
+)}
         
         {currentView === 'received' && (
           <ApplicationList
