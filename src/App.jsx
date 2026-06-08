@@ -5024,13 +5024,13 @@ useEffect(() => {
         className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col"
         style={{ 
           width: 'min(calc(100% - 1rem), 420px)',
-          maxHeight: 'min(calc(100% - 1rem), 90vh)',
+          maxHeight: 'min(calc(100% - 2rem), 85vh)',
           margin: 'auto'
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Заголовок - фиксированный */}
-        <div className="sticky top-0 bg-white dark:bg-gray-800 px-4 pt-4 pb-3 border-b border-gray-200 dark:border-gray-700 z-10 rounded-t-2xl">
+        <div className="flex-shrink-0 bg-white dark:bg-gray-800 px-4 pt-4 pb-3 border-b border-gray-200 dark:border-gray-700 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <h3 id="signup-modal-title" className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-[#4A6572]" />
@@ -5050,8 +5050,8 @@ useEffect(() => {
         </div>
 
         {/* Форма с прокруткой */}
-        <div className="overflow-y-auto flex-1" style={{ maxHeight: 'calc(min(90vh, 600px) - 100px)' }}>
-          <form onSubmit={handleSignup} className="p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          <form onSubmit={handleSignup} className="space-y-3">
             {/* Email */}
             <div>
               <label htmlFor="signup-email" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
