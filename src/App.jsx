@@ -5154,31 +5154,34 @@ useEffect(() => {
   </div>
   
   <div className="flex items-start">
-    <input
-      id="signup-consent"
-      type="checkbox"
-      checked={consent}
-      onChange={(e) => setConsent(e.target.checked)}
-      className="mt-0.5 w-4 h-4 text-[#4A6572] border-gray-300 rounded focus:ring-[#4A6572]"
-      required
-    />
-    <label htmlFor="signup-consent" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-      Я принимаю условия{' '}
-      <button
-        type="button"
-        onClick={() => setShowPrivacyPolicyModal(true)}
-        className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium"
-      >
-        Политики конфиденциальности
-      </button>
-      {' '}и даю согласие на обработку персональных данных
-    </label>
-  </div>
-  
-  <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-    📄 Нажимая «Зарегистрироваться», вы подтверждаете, что ознакомились с полным текстом 
-    Политики конфиденциальности (откроется в новом окне).
-  </p>
+  <input
+    id="signup-consent"
+    type="checkbox"
+    checked={consent}
+    onChange={(e) => setConsent(e.target.checked)}
+    className="mt-0.5 w-4 h-4 text-[#4A6572] border-gray-300 rounded focus:ring-[#4A6572]"
+    required
+  />
+  <label htmlFor="signup-consent" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+    Я принимаю условия{' '}
+    <button
+      type="button"
+      onClick={() => {
+        console.log('Opening privacy policy modal');
+        setShowPrivacyPolicyModal(true);
+      }}
+      className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium inline-flex items-center gap-1"
+    >
+      Политики конфиденциальности
+    </button>
+    {' '}и даю согласие на обработку персональных данных
+  </label>
+</div>
+
+<p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+  📄 Нажимая «Зарегистрироваться», вы подтверждаете, что ознакомились с полным текстом 
+  Политики конфиденциальности.
+</p>
 </div>
 
           {/* Кнопка регистрации */}
