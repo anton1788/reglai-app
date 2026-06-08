@@ -21,6 +21,7 @@ import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingOverlay from './components/LoadingOverlay';
 import CRMSalesManager from './components/CRMSales/CRMSalesManager';
+import ObjectMaterialsMerger from './components/ObjectMaterialsMerger';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -5606,6 +5607,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           else if (path === '/help') setCurrentView('help');
           else if (path === '/superAdmin') setCurrentView('superAdmin');
           else if (path === '/crm-sales') setCurrentView('crm-sales');
+          else if (path === '/merge') setCurrentView('merge');
           else if (path === '/search') {
             const params = new URLSearchParams(path.split('?')[1]);
             const query = params.get('q');
@@ -6168,6 +6170,16 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             }}
           />
         )}
+
+        {currentView === 'merge' && (
+  <ObjectMaterialsMerger
+    supabase={supabase}
+    companyId={userCompanyId}
+    applications={applications}
+    showNotification={showNotification}
+    userRole={userRole}
+  />
+)}
       </main>
       
       {/* Все модальные окна остаются без изменений */}

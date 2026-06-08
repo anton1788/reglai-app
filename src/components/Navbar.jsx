@@ -8,7 +8,7 @@ import {
   Plus, UserPlus, Briefcase,
   CheckCircle, ShoppingCart, Code, Shield, Sparkles,
   Globe, WifiOff, History, Eye, Clock,
-  Target, ChevronLeft, ChevronRight
+  Target, ChevronLeft, ChevronRight, Merge
 } from 'lucide-react';
 
 const Navbar = ({ 
@@ -136,6 +136,10 @@ const Navbar = ({
     if (userRole === 'manager' || userRole === 'supply_admin') {
       items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
     }
+
+    if (userRole === 'manager' || userRole === 'supply_admin') {
+  items.push({ id: 'merge', label: 'Объединение заявок', icon: Merge, path: '/merge' });
+}
 
     if (userRole === 'master' || userRole === 'foreman') {
       items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
