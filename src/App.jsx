@@ -4998,7 +4998,7 @@ useEffect(() => {
   
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] fade-enter overflow-y-auto"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] fade-enter"
       role="dialog"
       aria-modal="true"
       aria-labelledby="signup-modal-title"
@@ -5021,13 +5021,19 @@ useEffect(() => {
       }}
     >
       <div 
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl dark:bg-gray-800"
-        style={{ maxHeight: '90vh', overflowY: 'auto', margin: 'auto' }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md dark:bg-gray-800 relative flex flex-col"
+        style={{ 
+          maxHeight: '90vh', 
+          margin: 'auto',
+          width: 'calc(100% - 2rem)',
+          maxWidth: '28rem'
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white dark:bg-gray-800 px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-700 z-10">
+        {/* Заголовок - фиксированный */}
+        <div className="sticky top-0 bg-white dark:bg-gray-800 px-5 pt-5 pb-3 border-b border-gray-200 dark:border-gray-700 z-10 rounded-t-2xl">
           <div className="flex items-center justify-between">
-            <h3 id="signup-modal-title" className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <h3 id="signup-modal-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <UserPlus className="w-5 h-5 text-[#4A6572]" />
               Регистрация в Реглай PRO
             </h3>
@@ -5036,18 +5042,19 @@ useEffect(() => {
               className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
               aria-label="Закрыть"
             >
-              <X className="w-6 h-6" aria-hidden="true" />
+              <X className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             Заполните форму, чтобы создать аккаунт
           </p>
         </div>
 
-        <form onSubmit={handleSignup} className="p-6 space-y-4">
+        {/* Форма с прокруткой */}
+        <form onSubmit={handleSignup} className="px-5 py-3 space-y-3 overflow-y-auto flex-1" style={{ maxHeight: 'calc(90vh - 100px)' }}>
           {/* Email */}
           <div>
-            <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="signup-email" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
               Ваш email *
             </label>
             <input
@@ -5055,7 +5062,7 @@ useEffect(() => {
               type="email"
               value={signupEmail}
               onChange={(e) => setSignupEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="you@example.com"
               required
             />
@@ -5063,7 +5070,7 @@ useEffect(() => {
 
           {/* ФИО */}
           <div>
-            <label htmlFor="signup-fullname" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="signup-fullname" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
               ФИО *
             </label>
             <input
@@ -5071,7 +5078,7 @@ useEffect(() => {
               type="text"
               value={signupFullName}
               onChange={(e) => setSignupFullName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="Иванов Иван Иванович"
               required
             />
@@ -5079,7 +5086,7 @@ useEffect(() => {
 
           {/* Телефон */}
           <div>
-            <label htmlFor="signup-phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="signup-phone" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
               Номер телефона *
             </label>
             <input
@@ -5087,7 +5094,7 @@ useEffect(() => {
               type="tel"
               value={signupPhone}
               onChange={(e) => setSignupPhone(formatPhone(e.target.value))}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="+7 (___) ___-__-__"
               required
             />
@@ -5096,7 +5103,7 @@ useEffect(() => {
           {/* Компания */}
           {!invitedCompany && (
             <div>
-              <label htmlFor="signup-company" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="signup-company" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Название компании *
               </label>
               <input
@@ -5104,7 +5111,7 @@ useEffect(() => {
                 type="text"
                 value={signupCompanyName}
                 onChange={(e) => setSignupCompanyName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder="ООО СтройГрупп"
                 required={!invitedCompany}
               />
@@ -5113,7 +5120,7 @@ useEffect(() => {
 
           {/* Пароль */}
           <div>
-            <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="signup-password" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
               Ваш пароль *
             </label>
             <input
@@ -5121,7 +5128,7 @@ useEffect(() => {
               type="password"
               value={signupPassword}
               onChange={(e) => setSignupPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="••••••••"
               required
               minLength={6}
@@ -5130,7 +5137,7 @@ useEffect(() => {
 
           {/* Подтверждение пароля */}
           <div>
-            <label htmlFor="signup-confirm-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="signup-confirm-password" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
               Подтвердите пароль *
             </label>
             <input
@@ -5138,63 +5145,63 @@ useEffect(() => {
               type="password"
               value={signupConfirmPassword}
               onChange={(e) => setSignupConfirmPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="••••••••"
               required
             />
           </div>
 
           {/* ========== СОГЛАСИЕ С ПОЛИТИКОЙ КОНФИДЕНЦИАЛЬНОСТИ ========== */}
-<div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/30 p-4">
-  <div className="flex items-center gap-2 mb-3">
-    <Shield className="w-4 h-4 text-[#4A6572]" />
-    <h4 className="font-semibold text-gray-900 dark:text-white text-sm">
-      Согласие на обработку персональных данных
-    </h4>
-  </div>
-  
-  <div className="flex items-start">
-  <input
-    id="signup-consent"
-    type="checkbox"
-    checked={consent}
-    onChange={(e) => setConsent(e.target.checked)}
-    className="mt-0.5 w-4 h-4 text-[#4A6572] border-gray-300 rounded focus:ring-[#4A6572]"
-    required
-  />
-  <label htmlFor="signup-consent" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-    Я принимаю условия{' '}
-    <button
-      type="button"
-      onClick={() => {
-        console.log('Opening privacy policy modal');
-        setShowPrivacyPolicyModal(true);
-      }}
-      className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium inline-flex items-center gap-1"
-    >
-      Политики конфиденциальности
-    </button>
-    {' '}и даю согласие на обработку персональных данных
-  </label>
-</div>
-
-<p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-  📄 Нажимая «Зарегистрироваться», вы подтверждаете, что ознакомились с полным текстом 
-  Политики конфиденциальности.
-</p>
-</div>
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/30 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Shield className="w-3.5 h-3.5 text-[#4A6572]" />
+              <h4 className="font-semibold text-gray-900 dark:text-white text-xs">
+                Согласие на обработку персональных данных
+              </h4>
+            </div>
+            
+            <div className="flex items-start">
+              <input
+                id="signup-consent"
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                className="mt-0.5 w-3.5 h-3.5 text-[#4A6572] border-gray-300 rounded focus:ring-[#4A6572]"
+                required
+              />
+              <label htmlFor="signup-consent" className="ml-2 text-xs text-gray-700 dark:text-gray-300 leading-tight">
+                Я принимаю условия{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    console.log('Opening privacy policy modal');
+                    setShowPrivacyPolicyModal(true);
+                  }}
+                  className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium inline-flex items-center gap-0.5"
+                >
+                  Политики конфиденциальности
+                </button>
+                {' '}и даю согласие на обработку персональных данных
+              </label>
+            </div>
+            
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 leading-tight">
+              📄 Нажимая «Зарегистрироваться», вы подтверждаете, что ознакомились с полным текстом 
+              Политики конфиденциальности.
+            </p>
+          </div>
 
           {/* Кнопка регистрации */}
           <button
             type="submit"
-            className="w-full py-3 px-4 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2"
+            className="w-full py-2.5 px-4 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
           >
             <UserPlus className="w-4 h-4" />
             Зарегистрироваться
           </button>
 
           {/* Ссылка на вход */}
-          <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-center text-xs text-gray-600 dark:text-gray-400">
             Уже есть аккаунт?{' '}
             <button
               type="button"
@@ -5207,11 +5214,19 @@ useEffect(() => {
               Войти
             </button>
           </p>
+          
+          {/* Подсказка по клавишам */}
+          <div className="text-center text-[10px] text-gray-400 dark:text-gray-500 pb-2">
+            <span>Ctrl+Enter — отправить</span>
+            <span className="mx-2">•</span>
+            <span>Esc — закрыть</span>
+          </div>
         </form>
       </div>
     </div>
   );
 };
+  
 
   // ✅ ИСПРАВЛЕНО: Модальное окно приглашения с увеличенным z-index
   const renderInviteModal = () => {
