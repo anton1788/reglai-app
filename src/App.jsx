@@ -22,6 +22,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import LoadingOverlay from './components/LoadingOverlay';
 import CRMSalesManager from './components/CRMSales/CRMSalesManager';
 import ObjectMaterialsMerger from './components/ObjectMaterialsMerger';
+import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -801,6 +802,7 @@ const App = () => {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
   const isMobile = useIsMobile();
   const [settings, setSettings] = useState({
     sendMethod: 'email',
@@ -5206,188 +5208,42 @@ useEffect(() => {
             />
           </div>
 
-          {/* ========== РАСШИРЕННАЯ ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ ========== */}
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/30 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Shield className="w-4 h-4 text-[#4A6572]" />
-              <h4 className="font-semibold text-gray-900 dark:text-white text-sm">
-                Политика конфиденциальности Реглай PRO
-              </h4>
-              <span className="ml-auto text-xs text-gray-400">Версия 2.0 от 01.01.2025</span>
-            </div>
-            
-            <div className="text-xs text-gray-600 dark:text-gray-400 space-y-3 max-h-96 overflow-y-auto pr-2">
-              {/* 1. Общие положения */}
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-200">1. Общие положения</p>
-                <p className="mt-1">
-                  Настоящая Политика конфиденциальности регулирует порядок обработки и использования 
-                  персональных данных пользователей в сервисе управления строительными материалами 
-                  <span className="font-medium text-[#4A6572]"> «Реглай PRO»</span> (далее — Сервис).
-                </p>
-                <p className="mt-1 text-gray-500">
-                  Регистрируясь в Сервисе, вы принимаете условия настоящей Политики и даёте согласие 
-                  на обработку своих персональных данных в соответствии с Федеральным законом № 152-ФЗ 
-                  «О персональных данных».
-                </p>
-              </div>
-
-              {/* 2. Какие данные мы собираем */}
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-200">2. Какие данные мы собираем</p>
-                <div className="mt-1 space-y-1">
-                  <p><span className="font-medium">2.1. При регистрации:</span></p>
-                  <ul className="list-disc pl-4 space-y-1">
-                    <li>Email адрес (логин для входа)</li>
-                    <li>ФИО пользователя</li>
-                    <li>Номер телефона</li>
-                    <li>Название компании</li>
-                    <li>Роль в компании (прораб, менеджер, снабженец, заказчик)</li>
-                  </ul>
-                  
-                  <p className="mt-2"><span className="font-medium">2.2. В процессе работы:</span></p>
-                  <ul className="list-disc pl-4 space-y-1">
-                    <li>Данные о заявках на материалы (наименования, количество, единицы измерения)</li>
-                    <li>История статусов заявок (создана, в работе, частично получена, завершена)</li>
-                    <li>Фотоматериалы объектов и поставок (с вашего устройства)</li>
-                    <li>Комментарии и переписка в чатах компании</li>
-                    <li>Данные о движении материалов на складе</li>
-                    <li>IP-адреса, тип устройства, браузер, время доступа</li>
-                    <li>Данные об использовании функций (аналитика использования)</li>
-                  </ul>
-                  
-                  <p className="mt-2"><span className="font-medium">2.3. Технические данные:</span></p>
-                  <ul className="list-disc pl-4 space-y-1">
-                    <li>Журналы аудита действий пользователей</li>
-                    <li>Данные офлайн-черновиков (при отсутствии интернета)</li>
-                    <li>Cookie и localStorage для работы интерфейса</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* 3. Как мы используем ваши данные */}
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-200">3. Как мы используем ваши данные</p>
-                <ul className="list-disc pl-4 mt-1 space-y-1">
-                  <li><span className="font-medium">Идентификация пользователя</span> — доступ к заявкам и объектам вашей компании</li>
-                  <li><span className="font-medium">Управление заявками</span> — создание, отслеживание, приёмка материалов</li>
-                  <li><span className="font-medium">Уведомления</span> — оповещения о статусе заявок через email/Telegram (по вашему выбору)</li>
-                  <li><span className="font-medium">Аналитика</span> — формирование отчётов по расходам, эффективности объектов</li>
-                  <li><span className="font-medium">Улучшение сервиса</span> — анализ использования функций для оптимизации</li>
-                  <li><span className="font-medium">Техническая поддержка</span> — решение проблем на основе логов и обращений</li>
-                </ul>
-              </div>
-
-              {/* 4. Хранение и защита данных */}
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-200">4. Хранение и защита данных</p>
-                <ul className="list-disc pl-4 mt-1 space-y-1">
-                  <li>Данные хранятся на защищённых серверах <span className="font-medium">Supabase (AWS, регион Frankfurt)</span></li>
-                  <li>Используется шифрование данных при передаче (TLS 1.3) и хранении (AES-256)</li>
-                  <li>Доступ к данным строго по ролям (прораб видит только свои заявки, менеджер — все)</li>
-                  <li>Срок хранения — пока вы являетесь активным пользователем компании</li>
-                  <li>После удаления аккаунта данные хранятся 30 дней, затем полностью удаляются</li>
-                  <li>Регулярное резервное копирование (ежедневно)</li>
-                </ul>
-              </div>
-
-              {/* 5. Передача данных третьим лицам */}
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-200">5. Передача данных третьим лицам</p>
-                <p className="mt-1">Мы НЕ передаём ваши данные третьим лицам, за исключением случаев:</p>
-                <ul className="list-disc pl-4 mt-1 space-y-1">
-                  <li>По требованию правоохранительных органов (в рамках законодательства РФ)</li>
-                  <li>Для обеспечения работы сервиса (хостинг-провайдеры, CDN)</li>
-                  <li>С вашего явного согласия (например, для интеграции с вашими сервисами)</li>
-                </ul>
-                <p className="mt-1 text-amber-600 dark:text-amber-400">
-                  ⚠️ Данные вашей компании не используются для рекламы или продажи третьим лицам.
-                </p>
-              </div>
-
-              {/* 6. Права пользователя */}
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-200">6. Ваши права</p>
-                <ul className="list-disc pl-4 mt-1 space-y-1">
-                  <li><span className="font-medium">Право на доступ</span> — вы можете запросить все данные о себе в любое время</li>
-                  <li><span className="font-medium">Право на исправление</span> — вы можете изменить свои данные в профиле</li>
-                  <li><span className="font-medium">Право на удаление</span> — вы можете удалить свой аккаунт (данные будут стёрты)</li>
-                  <li><span className="font-medium">Право на экспорт</span> — вы можете выгрузить свои данные в PDF/HTML/XLSX</li>
-                  <li><span className="font-medium">Право на ограничение обработки</span> — при спорных ситуациях</li>
-                  <li><span className="font-medium">Право на отзыв согласия</span> — в любой момент через администратора компании</li>
-                </ul>
-              </div>
-
-              {/* 7. Особенности работы в офлайн-режиме */}
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-200">7. Офлайн-режим и локальное хранение</p>
-                <p className="mt-1">
-                  Сервис поддерживает работу без интернета. Ваши черновики и заявки временно сохраняются 
-                  в локальном хранилище вашего устройства (IndexedDB). При восстановлении соединения 
-                  данные автоматически синхронизируются с сервером.
-                </p>
-                <p className="mt-1 text-amber-600 dark:text-amber-400">
-                  🔒 Локальные данные защищены политиками безопасности вашего браузера и не доступны 
-                  другим сайтам или приложениям.
-                </p>
-              </div>
-
-              {/* 8. Cookies и аналитика */}
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-200">8. Cookies и аналитика</p>
-                <ul className="list-disc pl-4 mt-1 space-y-1">
-                  <li>Используются <span className="font-medium">технические cookie</span> для авторизации и работы интерфейса</li>
-                  <li>Мы не используем сторонние аналитические системы (Google Analytics и т.п.)</li>
-                  <li>Вся аналитика использования анонимна и служит только для улучшения сервиса</li>
-                  <li>Вы можете отключить cookie в настройках браузера, но часть функций может работать некорректно</li>
-                </ul>
-              </div>
-
-              {/* 9. Контакты */}
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-200">9. Контакты</p>
-                <p className="mt-1">
-                  По всем вопросам обработки персональных данных вы можете обратиться:
-                </p>
-                <ul className="list-disc pl-4 mt-1 space-y-1">
-                  <li>📧 Email: <span className="font-mono">privacy@reglai.ru</span></li>
-                  <li>📞 Телефон: <span className="font-mono">+7 (XXX) XXX-XX-XX</span></li>
-                  <li>📍 Юридический адрес: г. Москва, ул. Строителей, д. 10</li>
-                </ul>
-                <p className="mt-2 text-gray-500">
-                  Мы обязуемся ответить на ваш запрос в течение 30 дней.
-                </p>
-              </div>
-
-              {/* 10. Изменение политики */}
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-200">10. Изменение политики</p>
-                <p className="mt-1">
-                  Мы оставляем право обновлять Политику конфиденциальности. О существенных изменениях 
-                  мы уведомим вас через email или в интерфейсе сервиса. Актуальная версия всегда доступна 
-                  по ссылке «Политика конфиденциальности» в форме регистрации.
-                </p>
-                <p className="mt-1 text-gray-400">
-                  Дата последнего обновления: <span className="font-mono">01 января 2025 года</span>
-                </p>
-              </div>
-            </div>
-            
-            {/* Чекбокс согласия */}
-            <div className="flex items-start mt-4 pt-3 border-t border-gray-200 dark:border-gray-600">
-              <input
-                id="signup-consent"
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                className="mt-0.5 w-4 h-4 text-[#4A6572] border-gray-300 rounded focus:ring-[#4A6572]"
-                required
-              />
-              <label htmlFor="signup-consent" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                Я ознакомлен(а) с Политикой конфиденциальности и даю согласие на обработку персональных данных
-              </label>
-            </div>
-          </div>
+          {/* ========== СОГЛАСИЕ С ПОЛИТИКОЙ КОНФИДЕНЦИАЛЬНОСТИ ========== */}
+<div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/30 p-4">
+  <div className="flex items-center gap-2 mb-3">
+    <Shield className="w-4 h-4 text-[#4A6572]" />
+    <h4 className="font-semibold text-gray-900 dark:text-white text-sm">
+      Согласие на обработку персональных данных
+    </h4>
+  </div>
+  
+  <div className="flex items-start">
+    <input
+      id="signup-consent"
+      type="checkbox"
+      checked={consent}
+      onChange={(e) => setConsent(e.target.checked)}
+      className="mt-0.5 w-4 h-4 text-[#4A6572] border-gray-300 rounded focus:ring-[#4A6572]"
+      required
+    />
+    <label htmlFor="signup-consent" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+      Я принимаю условия{' '}
+      <button
+        type="button"
+        onClick={() => setShowPrivacyPolicyModal(true)}
+        className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium"
+      >
+        Политики конфиденциальности
+      </button>
+      {' '}и даю согласие на обработку персональных данных
+    </label>
+  </div>
+  
+  <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+    📄 Нажимая «Зарегистрироваться», вы подтверждаете, что ознакомились с полным текстом 
+    Политики конфиденциальности (откроется в новом окне).
+  </p>
+</div>
 
           {/* Кнопка регистрации */}
           <button
@@ -6663,6 +6519,12 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         />
       )}
     </div>
+
+    {/* Privacy Policy Modal */}
+<PrivacyPolicyModal
+  isOpen={showPrivacyPolicyModal}
+  onClose={() => setShowPrivacyPolicyModal(false)}
+/>
   </ErrorBoundary>
 );
 };
