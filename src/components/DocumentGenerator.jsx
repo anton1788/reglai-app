@@ -5,18 +5,65 @@ import {
   Loader2, AlertCircle, FileCheck, Ruler, Receipt, Check, X, Upload, Paperclip
 } from 'lucide-react';
 
-const DOCS = [
-  { id: 'work_act', label: 'Акт выполненных работ', icon: ClipboardList },
-  { id: 'material_act', label: 'Акт приемки (М-7)', icon: Package },
-  { id: 'work_log', label: 'Журнал работ', icon: Calendar },
-  { id: 'invoice', label: 'Накладная', icon: Truck },
-  { id: 'ks2', label: 'КС-2', icon: FileCheck },
-  { id: 'ks3', label: 'КС-3', icon: Receipt },
-  { id: 'hidden_works', label: 'Акт скрытых работ', icon: FileText },
-  { id: 'executive_diagram', label: 'Исполнительная схема', icon: Ruler },
-  { id: 'invoice_bill', label: 'Счёт', icon: Receipt },
-  { id: 'invoice_vat', label: 'Счёт-фактура', icon: FileText }
-];
+// ✅ ДОСТУПНЫЕ ДОКУМЕНТЫ В ЗАВИСИМОСТИ ОТ РОЛИ
+const getAvailableDocsByRole = (userRole) => {
+  // Для мастера и прораба - только Журнал работ и Исполнительная схема
+  if (userRole === 'master' || userRole === 'foreman') {
+    return [
+      { id: 'work_log', label: 'Журнал работ', icon: Calendar },
+      { id: 'executive_diagram', label: 'Исполнительная схема', icon: Ruler }
+    ];
+  }
+  
+  // Для снабженца
+  if (userRole === 'supply_admin') {
+    return [
+      { id: 'work_log', label: 'Журнал работ', icon: Calendar },
+      { id: 'material_act', label: 'Акт приемки (М-7)', icon: Package },
+      { id: 'invoice', label: 'Накладная', icon: Truck }
+    ];
+  }
+  
+  // Для руководителя - полный доступ
+  if (userRole === 'manager' || userRole === 'director') {
+    return [
+      { id: 'work_act', label: 'Акт выполненных работ', icon: ClipboardList },
+      { id: 'material_act', label: 'Акт приемки (М-7)', icon: Package },
+      { id: 'work_log', label: 'Журнал работ', icon: Calendar },
+      { id: 'invoice', label: 'Накладная', icon: Truck },
+      { id: 'ks2', label: 'КС-2', icon: FileCheck },
+      { id: 'ks3', label: 'КС-3', icon: Receipt },
+      { id: 'hidden_works', label: 'Акт скрытых работ', icon: FileText },
+      { id: 'executive_diagram', label: 'Исполнительная схема', icon: Ruler },
+      { id: 'invoice_bill', label: 'Счёт', icon: Receipt },
+      { id: 'invoice_vat', label: 'Счёт-фактура', icon: FileText }
+    ];
+  }
+  
+  // Для бухгалтера
+  if (userRole === 'accountant') {
+    return [
+      { id: 'invoice', label: 'Накладная', icon: Truck },
+      { id: 'invoice_bill', label: 'Счёт', icon: Receipt },
+      { id: 'invoice_vat', label: 'Счёт-фактура', icon: FileText }
+    ];
+  }
+  
+  // Для заказчика
+  if (userRole === 'client') {
+    return [
+      { id: 'work_log', label: 'Журнал работ', icon: Calendar },
+      { id: 'executive_diagram', label: 'Исполнительная схема', icon: Ruler },
+      { id: 'invoice_bill', label: 'Счёт', icon: Receipt }
+    ];
+  }
+  
+  // По умолчанию
+  return [
+    { id: 'work_log', label: 'Журнал работ', icon: Calendar },
+    { id: 'executive_diagram', label: 'Исполнительная схема', icon: Ruler }
+  ];
+};
 
 const PRINT_STYLES = `
 @media print {
@@ -33,7 +80,7 @@ const PRINT_STYLES = `
 const DocumentGenerator = ({
   applications = [],
   user,
-  userRole,
+  userRole, // ✅ userRole теперь передаётся как проп
   showNotification,
   companyName,
   userCompanyId,
@@ -51,6 +98,9 @@ const DocumentGenerator = ({
   const printRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // ✅ Хук useMemo теперь внутри компонента
+  const DOCS = useMemo(() => getAvailableDocsByRole(userRole), [userRole]);
+
   // Загрузка реквизитов компании
   useEffect(() => {
     const fetchCompanyDetails = async () => {
@@ -58,10 +108,10 @@ const DocumentGenerator = ({
       setLoadingCompanyDetails(true);
       try {
         const { data, error } = await supabase
-  .from('companies')
-  .select('*')
-  .eq('id', userCompanyId)
-  .single();
+          .from('companies')
+          .select('*')
+          .eq('id', userCompanyId)
+          .single();
         if (!error && data) {
           setCompanyDetails(data);
         }
@@ -81,6 +131,13 @@ const DocumentGenerator = ({
     return () => document.head.removeChild(style);
   }, []);
 
+  useEffect(() => {
+  if (activeTab === 'executive_diagram' && selectedApp && previewHtml) {
+    const updatedHtml = generateTemplate(activeTab, selectedApp);
+    setPreviewHtml(updatedHtml);
+  }
+}, [uploadedFileUrl]); // Сработает после обновления uploadedFileUrl
+
   const selectedApp = useMemo(() =>
     applications.find(a => a.id === selectedAppId),
     [applications, selectedAppId]
@@ -95,9 +152,7 @@ const DocumentGenerator = ({
   );
 
   const formatRub = (num) => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(num || 0);
-
-  // ✅ ИСПРАВЛЕНО: Добавлен eslint-disable для функции, используемой в шаблонной строке
-  // eslint-disable-next-line no-unused-vars
+// eslint-disable-next-line no-unused-vars
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !userCompanyId || !supabase) return;
@@ -118,6 +173,7 @@ const DocumentGenerator = ({
         .getPublicUrl(fileName);
       
       setUploadedFileUrl(publicUrl);
+
       showNotification('📎 Файл загружен', 'success');
     } catch (err) {
       console.error('Ошибка загрузки файла:', err);
@@ -1640,58 +1696,45 @@ const DocumentGenerator = ({
 }
 
       case 'executive_diagram': {
-        return `
-          <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-4xl mx-auto">
-            <h1 class="text-xl font-bold text-center mb-4">ИСПОЛНИТЕЛЬНАЯ СХЕМА</h1>
-            <div class="grid grid-cols-2 gap-4 text-sm mb-6">
-              <p><strong>Объект:</strong> ${app.object_name}</p>
-              <p><strong>Дата:</strong> ${date}</p>
-              <p><strong>Прораб:</strong> ${app.foreman_name}</p>
-              <p><strong>№ заявки:</strong> ${docNumber}</p>
-            </div>
-            ${uploadedFileUrl ? `
-              <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <p class="font-medium flex items-center gap-2">
-                  <Paperclip class="w-4 h-4" /> Прикреплённый файл:
-                </p>
-                <a href="${uploadedFileUrl}" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline break-all">
-                  ${uploadedFileUrl.split('/').pop()}
-                </a>
-              </div>
-            ` : `
-              <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 mb-6 text-center bg-gray-50 dark:bg-gray-700/30">
-                <p class="text-gray-500 dark:text-gray-400 mb-2">📐 Место для схемы / чертежа</p>
-                <p class="text-xs text-gray-400">Прикрепите исполнительную схему в формате PDF, DWG или изображение</p>
-                <div class="mt-4 flex justify-center gap-2 no-print">
-                  <label class="px-3 py-1.5 text-xs bg-[#4A6572] text-white rounded hover:bg-[#344955] cursor-pointer flex items-center gap-1">
-                    <Upload class="w-3 h-3" />
-                    ${uploadingFile ? 'Загрузка...' : 'Загрузить файл'}
-                    <input 
-                      type="file" 
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      accept=".pdf,.dwg,.png,.jpg,.jpeg"
-                      class="hidden"
-                    />
-                  </label>
-                  <button class="px-3 py-1.5 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500">Сделать фото</button>
-                </div>
-              </div>
-            `}
-            <div class="mb-6">
-              <p class="font-medium mb-2">Перечень выполненных работ:</p>
-              <ul class="space-y-1 text-sm">
-                ${app.materials.map(m => `
-                  <li class="flex justify-between border-b border-gray-100 dark:border-gray-700 pb-1">
-                    <span>${m.description}</span>
-                    <span class="text-gray-500">${m.quantity} ${m.unit}</span>
-                  </li>
-                `).join('')}
-              </ul>
-            </div>
-            ${signatures}
-          </div>`;
-      }
+  return `
+    <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-4xl mx-auto">
+      <h1 class="text-xl font-bold text-center mb-4">ИСПОЛНИТЕЛЬНАЯ СХЕМА</h1>
+      <div class="grid grid-cols-2 gap-4 text-sm mb-6">
+        <p><strong>Объект:</strong> ${app.object_name}</p>
+        <p><strong>Дата:</strong> ${date}</p>
+        <p><strong>Прораб:</strong> ${app.foreman_name}</p>
+        <p><strong>№ заявки:</strong> ${docNumber}</p>
+      </div>
+      ${uploadedFileUrl ? `
+        <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <p class="font-medium flex items-center gap-2">
+            📎 Прикреплённый файл:
+          </p>
+          <a href="${uploadedFileUrl}" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline break-all">
+            ${uploadedFileUrl.split('/').pop()}
+          </a>
+        </div>
+      ` : `
+        <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 mb-6 text-center bg-gray-50 dark:bg-gray-700/30">
+          <p class="text-gray-500 dark:text-gray-400 mb-2">📐 Место для схемы / чертежа</p>
+          <p class="text-xs text-gray-400">Исполнительная схема не загружена</p>
+        </div>
+      `}
+      <div class="mb-6">
+        <p class="font-medium mb-2">Перечень выполненных работ:</p>
+        <ul class="space-y-1 text-sm">
+          ${app.materials.map(m => `
+            <li class="flex justify-between border-b border-gray-100 dark:border-gray-700 pb-1">
+              <span>${m.description}</span>
+              <span class="text-gray-500">${m.quantity} ${m.unit}</span>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+      ${signatures}
+    </div>
+  `;
+}
 
       case 'invoice_bill': {
   const totalAmount = app.materials.reduce((sum, m) => 
@@ -2000,6 +2043,11 @@ const DocumentGenerator = ({
     <div className="max-w-7xl mx-auto p-4 space-y-6 page-enter">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Документооборот</h2>
+        {(userRole === 'master' || userRole === 'foreman') && (
+  <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+    📋 Вам доступны: Журнал работ и Исполнительная схема
+  </p>
+)}
         <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 no-scrollbar">
           {DOCS.map(doc => (
             <button
@@ -2100,6 +2148,29 @@ const DocumentGenerator = ({
             Загрузка реквизитов компании...
           </div>
         )}
+
+        {activeTab === 'executive_diagram' && previewHtml && (
+  <div className="mb-4 no-print">
+    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+      <label className="px-3 py-1.5 text-xs bg-[#4A6572] text-white rounded hover:bg-[#344955] cursor-pointer inline-flex items-center gap-1">
+        <Upload className="w-3 h-3" />
+        {uploadingFile ? 'Загрузка...' : 'Загрузить схему'}
+        <input 
+          type="file" 
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept=".pdf,.dwg,.png,.jpg,.jpeg"
+          className="hidden"
+        />
+      </label>
+      {uploadedFileUrl && (
+        <p className="mt-2 text-xs text-green-600">
+          ✓ Файл загружен: {uploadedFileUrl.split('/').pop()}
+        </p>
+      )}
+    </div>
+  </div>
+)}
 
         {previewHtml ? (
           <div className="space-y-4">
