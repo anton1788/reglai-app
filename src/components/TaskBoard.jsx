@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
-// ✅ ИСПРАВЛЕНИЕ: убраны пробелы в URL
 const SUPABASE_URL = 'https://lcfooydickfghjlqpivw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjZm9veWRpY2tmZ2hqbHFwaXZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNjIwMjcsImV4cCI6MjA5MTkzODAyN30.f6TqW2G_nbUeD_wmUc0wJLRiSIw9m95Iwv-BR-FbSb4';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -16,8 +15,12 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ─────────────────────────────────────────────────────────────
 // 🎨 КОМПОНЕНТ КАРТОЧКИ ЗАДАЧИ
 // ─────────────────────────────────────────────────────────────
-const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNotification, language }) => {
+const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNotification, language, userRole }) => {
   const [showMenu, setShowMenu] = useState(false);
+  
+  // ✅ Проверка прав на редактирование/удаление
+  const canEdit = userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
+  const canDelete = userRole === 'manager' || userRole === 'director';
   
   const priorityConfig = {
     low: { color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300', label: 'Низкий', icon: '🟢' },
@@ -26,54 +29,62 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
   };
   
   const statusConfig = {
-  pending: { border: 'border-l-4 border-gray-400', icon: '📋' },
-  in_progress: { border: 'border-l-4 border-blue-500', icon: '⏳' },
-  received: { border: 'border-l-4 border-green-500', icon: '✅' },
-  canceled: { border: 'border-l-4 border-red-500', icon: '❌' }
-};
+    pending: { border: 'border-l-4 border-gray-400', icon: '📋' },
+    in_progress: { border: 'border-l-4 border-blue-500', icon: '⏳' },
+    received: { border: 'border-l-4 border-green-500', icon: '✅' },
+    canceled: { border: 'border-l-4 border-red-500', icon: '❌' }
+  };
   
-  const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done';
+  const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'received';
   const daysUntilDue = task.due_date ? Math.ceil((new Date(task.due_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
   
   return (
     <div
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData('taskId', task.id)}
-      className={`bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md mb-3 cursor-move hover:shadow-lg transition-all ${statusConfig[task.status]?.border} ${isOverdue ? 'ring-2 ring-red-400' : ''}`}
+      draggable={canEdit}
+      onDragStart={(e) => canEdit && e.dataTransfer.setData('taskId', task.id)}
+      className={`bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md mb-3 ${canEdit ? 'cursor-move' : 'cursor-default'} hover:shadow-lg transition-all ${statusConfig[task.status]?.border} ${isOverdue ? 'ring-2 ring-red-400' : ''}`}
     >
       <div className="flex justify-between items-start mb-2">
         <h4 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2">{task.title}</h4>
-        <div className="relative">
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            aria-label="Меню задачи"
-          >
-            <MoreVertical className="w-4 h-4 text-gray-500" />
-          </button>
-          {showMenu && (
-            <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-20">
-              <button
-                onClick={() => { onEdit(task); setShowMenu(false); }}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-              >
-                <Edit3 className="w-3 h-3" /> Редактировать
-              </button>
-              <button
-                onClick={() => { onOpenComments(task); setShowMenu(false); }}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-              >
-                <MessageSquare className="w-3 h-3" /> Комментарии ({task.comments_count || 0})
-              </button>
-              <button
-                onClick={() => { onDelete(task.id); setShowMenu(false); }}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 flex items-center gap-2"
-              >
-                <Trash2 className="w-3 h-3" /> Удалить
-              </button>
-            </div>
-          )}
-        </div>
+        
+        {/* ✅ Меню показываем только если есть права */}
+        {(canEdit || canDelete) && (
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              aria-label="Меню задачи"
+            >
+              <MoreVertical className="w-4 h-4 text-gray-500" />
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-20">
+                {canEdit && (
+                  <button
+                    onClick={() => { onEdit(task); setShowMenu(false); }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                  >
+                    <Edit3 className="w-3 h-3" /> Редактировать
+                  </button>
+                )}
+                <button
+                  onClick={() => { onOpenComments(task); setShowMenu(false); }}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                >
+                  <MessageSquare className="w-3 h-3" /> Комментарии ({task.comments_count || 0})
+                </button>
+                {canDelete && (
+                  <button
+                    onClick={() => { onDelete(task.id); setShowMenu(false); }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 flex items-center gap-2"
+                  >
+                    <Trash2 className="w-3 h-3" /> Удалить
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       
       {task.description && (
@@ -93,7 +104,6 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
               const app = applications?.find(a => a.id === task.application_id);
               if (app) {
                 showNotification?.(`📋 Заявка: ${app.object_name}`, 'info');
-                // Адаптируйте путь под ваш роутинг
                 window.open(`/applications/${app.id}`, '_blank');
               }
             }}
@@ -142,38 +152,37 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications }) => {
   const [selectedApplication, setSelectedApplication] = useState(null);
   
   useEffect(() => {
-  // Маппинг старых статусов на новые
-  const mapStatus = (s) => {
-    if (s === 'new') return 'pending';
-    if (s === 'done') return 'received';
-    return s;
-  };
-  
-  if (task) {
-    setFormData({
-      title: task.title || '',
-      description: task.description || '',
-      priority: task.priority || 'medium',
-      due_date: task.due_date ? task.due_date.split('T')[0] : '',
-      application_id: task.application_id || '',
-      status: mapStatus(task.status) || 'pending'  // ← ИСПРАВЛЕНО
-    });
-    if (task.application_id && applications) {
-      const app = applications.find(a => a.id === task.application_id);
-      setSelectedApplication(app);
+    const mapStatus = (s) => {
+      if (s === 'new') return 'pending';
+      if (s === 'done') return 'received';
+      return s;
+    };
+    
+    if (task) {
+      setFormData({
+        title: task.title || '',
+        description: task.description || '',
+        priority: task.priority || 'medium',
+        due_date: task.due_date ? task.due_date.split('T')[0] : '',
+        application_id: task.application_id || '',
+        status: mapStatus(task.status) || 'pending'
+      });
+      if (task.application_id && applications) {
+        const app = applications.find(a => a.id === task.application_id);
+        setSelectedApplication(app);
+      }
+    } else {
+      setFormData({
+        title: '',
+        description: '',
+        priority: 'medium',
+        due_date: '',
+        application_id: '',
+        status: 'pending'
+      });
+      setSelectedApplication(null);
     }
-  } else {
-    setFormData({
-      title: '',
-      description: '',
-      priority: 'medium',
-      due_date: '',
-      application_id: '',
-      status: 'pending'  // ← ИСПРАВЛЕНО
-    });
-    setSelectedApplication(null);
-  }
-}, [task, applications]);
+  }, [task, applications]);
   
   if (!isOpen) return null;
   
@@ -230,14 +239,15 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications }) => {
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Статус</label>
               <select
-  value={formData.status}
-  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
->
-  <option value="pending">📋 Новые</option>
-  <option value="in_progress">⏳ В работе</option>
-  <option value="received">✅ Выполнено</option>
-  <option value="canceled">❌ Отменено</option>
-</select>
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="pending">📋 Новые</option>
+                <option value="in_progress">⏳ В работе</option>
+                <option value="received">✅ Выполнено</option>
+                <option value="canceled">❌ Отменено</option>
+              </select>
             </div>
           </div>
           
@@ -394,8 +404,8 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
             comments.map(comment => (
               <div key={comment.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
-  {comment.user_email?.split('@')[0] || 'Пользователь'}
-</p>
+                  {comment.user_email?.split('@')[0] || 'Пользователь'}
+                </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                   {new Date(comment.created_at).toLocaleString('ru-RU')}
                 </p>
@@ -435,33 +445,33 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
 // ─────────────────────────────────────────────────────────────
 const TaskAnalytics = ({ tasks, onClose }) => {
   const stats = useMemo(() => {
-  const total = tasks.length;
-  const byStatus = {
-    pending: tasks.filter(t => t.status === 'pending').length,
-    in_progress: tasks.filter(t => t.status === 'in_progress').length,
-    received: tasks.filter(t => t.status === 'received').length,  // ← received вместо done
-    canceled: tasks.filter(t => t.status === 'canceled').length
-  };
-  const byPriority = {
-    low: tasks.filter(t => t.priority === 'low').length,
-    medium: tasks.filter(t => t.priority === 'medium').length,
-    high: tasks.filter(t => t.priority === 'high').length
-  };
-  const overdue = tasks.filter(t => 
-    t.due_date && new Date(t.due_date) < new Date() && t.status !== 'received' // ← received вместо done
-  ).length;
-  const withApplications = tasks.filter(t => t.application_id).length;
-  const completionRate = total > 0 ? Math.round((byStatus.received / total) * 100) : 0; // ← received
-  
-  return { total, byStatus, byPriority, overdue, withApplications, completionRate };
-}, [tasks]);
+    const total = tasks.length;
+    const byStatus = {
+      pending: tasks.filter(t => t.status === 'pending').length,
+      in_progress: tasks.filter(t => t.status === 'in_progress').length,
+      received: tasks.filter(t => t.status === 'received').length,
+      canceled: tasks.filter(t => t.status === 'canceled').length
+    };
+    const byPriority = {
+      low: tasks.filter(t => t.priority === 'low').length,
+      medium: tasks.filter(t => t.priority === 'medium').length,
+      high: tasks.filter(t => t.priority === 'high').length
+    };
+    const overdue = tasks.filter(t => 
+      t.due_date && new Date(t.due_date) < new Date() && t.status !== 'received'
+    ).length;
+    const withApplications = tasks.filter(t => t.application_id).length;
+    const completionRate = total > 0 ? Math.round((byStatus.received / total) * 100) : 0;
+    
+    return { total, byStatus, byPriority, overdue, withApplications, completionRate };
+  }, [tasks]);
 
-const statusColors = {
-  pending: 'bg-gray-500',      // ← исправлено
-  in_progress: 'bg-blue-500',
-  received: 'bg-green-500',    // ← исправлено
-  canceled: 'bg-red-500'
-};
+  const statusColors = {
+    pending: 'bg-gray-500',
+    in_progress: 'bg-blue-500',
+    received: 'bg-green-500',
+    canceled: 'bg-red-500'
+  };
   
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -483,7 +493,7 @@ const statusColors = {
           </div>
           <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-4 rounded-xl">
             <p className="text-sm opacity-80">Выполнено</p>
-            <p className="text-3xl font-bold">{stats.byStatus.done}</p>
+            <p className="text-3xl font-bold">{stats.byStatus.received}</p>
           </div>
           <div className="bg-gradient-to-br from-red-500 to-red-600 text-white p-4 rounded-xl">
             <p className="text-sm opacity-80">Просрочено</p>
@@ -506,8 +516,8 @@ const statusColors = {
                 <div key={status} className="flex items-center gap-3">
                   <div className={`w-3 h-3 rounded-full ${statusColors[status]}`}></div>
                   <span className="text-sm text-gray-600 dark:text-gray-400 flex-1">
-  {status === 'pending' ? 'Новые' : status === 'in_progress' ? 'В работе' : status === 'received' ? 'Выполнено' : 'Отменено'}
-</span>
+                    {status === 'pending' ? 'Новые' : status === 'in_progress' ? 'В работе' : status === 'received' ? 'Выполнено' : 'Отменено'}
+                  </span>
                   <span className="text-sm font-bold text-gray-900 dark:text-white">{count}</span>
                   <div className="w-24 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                     <div 
@@ -564,15 +574,20 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, langua
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
-  const [applicationFilter, setApplicationFilter] = useState('all'); // 'all' | 'linked' | 'unlinked'
+  const [applicationFilter, setApplicationFilter] = useState('all');
   const notificationIntervalRef = useRef(null);
   
+  // ✅ ПРОВЕРКА ПРАВ ДОСТУПА
+  const canCreateTasks = userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'admin';
+  const canEditTasks = userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
+  const canDeleteTasks = userRole === 'manager' || userRole === 'director';
+  
   const columns = [
-  { id: 'pending', title: language === 'ru' ? 'Новые' : 'New', color: 'gray', icon: '📋' },
-  { id: 'in_progress', title: language === 'ru' ? 'В работе' : 'In Progress', color: 'blue', icon: '⏳' },
-  { id: 'received', title: language === 'ru' ? 'Выполнено' : 'Done', color: 'green', icon: '✅' },
-  { id: 'canceled', title: language === 'ru' ? 'Отменено' : 'Canceled', color: 'red', icon: '❌' }
-];
+    { id: 'pending', title: language === 'ru' ? 'Новые' : 'New', color: 'gray', icon: '📋' },
+    { id: 'in_progress', title: language === 'ru' ? 'В работе' : 'In Progress', color: 'blue', icon: '⏳' },
+    { id: 'received', title: language === 'ru' ? 'Выполнено' : 'Done', color: 'green', icon: '✅' },
+    { id: 'canceled', title: language === 'ru' ? 'Отменено' : 'Canceled', color: 'red', icon: '❌' }
+  ];
   
   const checkDeadlines = useCallback(() => {
     const now = new Date();
@@ -597,47 +612,44 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, langua
     
     setIsLoading(true);
     try {
-      // ✅ ДЛЯ supply_admin: показываем ВСЕ задачи компании
-      // ✅ ДЛЯ foreman: показываем только свои задачи (если нужно)
       let query = supabase
         .from('tasks')
         .select('*')
         .eq('company_id', userCompanyId)
         .order('created_at', { ascending: false });
       
-      // ✅ Опционально: foreman видит только свои задачи
-      // if (userRole === 'foreman') {
-      //   query = query.eq('created_by', user?.id);
-      // }
+      // ✅ Мастер видит ТОЛЬКО задачи, где он назначен или создал
+      if (userRole === 'master' || userRole === 'foreman') {
+        query = query.or(`assigned_to.eq.${user?.id},created_by.eq.${user?.id}`);
+      }
       
       const { data: tasksData, error: tasksError } = await query;
       
       if (tasksError) throw tasksError;
       
       // Загружаем количество комментариев для каждой задачи + маппинг статусов
-const tasksWithCounts = await Promise.all(
-  (tasksData || []).map(async (task) => {
-    // 🔹 Маппинг старых статусов на новые (для совместимости)
-    const mapStatus = (s) => {
-      if (s === 'new') return 'pending';
-      if (s === 'done') return 'received';
-      return s;
-    };
-    
-    const { count, error } = await supabase
-      .from('task_comments')
-      .select('*', { count: 'exact', head: true })
-      .eq('task_id', task.id);
-    
-    return {
-      ...task,
-      status: mapStatus(task.status),  // ← применяем маппинг
-      comments_count: error ? 0 : count
-    };
-  })
-);
-
-setTasks(tasksWithCounts);
+      const tasksWithCounts = await Promise.all(
+        (tasksData || []).map(async (task) => {
+          const mapStatus = (s) => {
+            if (s === 'new') return 'pending';
+            if (s === 'done') return 'received';
+            return s;
+          };
+          
+          const { count, error } = await supabase
+            .from('task_comments')
+            .select('*', { count: 'exact', head: true })
+            .eq('task_id', task.id);
+          
+          return {
+            ...task,
+            status: mapStatus(task.status),
+            comments_count: error ? 0 : count
+          };
+        })
+      );
+      
+      setTasks(tasksWithCounts);
     } catch (err) {
       console.error('Ошибка загрузки задач:', err);
       showNotification('Ошибка загрузки задач', 'error');
@@ -667,6 +679,9 @@ setTasks(tasksWithCounts);
   };
   
   const handleDrop = async (e, newStatus) => {
+    // ✅ Только пользователи с правами могут перемещать задачи
+    if (!canEditTasks) return;
+    
     e.preventDefault();
     const taskId = e.dataTransfer.getData('taskId');
     
@@ -699,6 +714,12 @@ setTasks(tasksWithCounts);
   };
   
   const handleCreateTask = async (formData) => {
+    // ✅ Проверка прав перед созданием
+    if (!canCreateTasks) {
+      showNotification('У вас нет прав на создание задач', 'error');
+      return;
+    }
+    
     try {
       const { data, error } = await supabase
         .from('tasks')
@@ -731,6 +752,12 @@ setTasks(tasksWithCounts);
   };
   
   const handleUpdateTask = async (formData) => {
+    // ✅ Проверка прав перед обновлением
+    if (!canEditTasks) {
+      showNotification('У вас нет прав на редактирование задач', 'error');
+      return;
+    }
+    
     try {
       const { error } = await supabase
         .from('tasks')
@@ -761,6 +788,12 @@ setTasks(tasksWithCounts);
   };
   
   const handleDeleteTask = async (taskId) => {
+    // ✅ Проверка прав перед удалением
+    if (!canDeleteTasks) {
+      showNotification('У вас нет прав на удаление задач', 'error');
+      return;
+    }
+    
     if (!window.confirm('Вы уверены, что хотите удалить эту задачу?')) return;
     
     try {
@@ -784,8 +817,6 @@ setTasks(tasksWithCounts);
       const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            task.description?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
-      
-      // ✅ ФИЛЬТР ПО ПРИВЯЗКЕ К ЗАЯВКАМ
       const matchesApplication = applicationFilter === 'all' 
         ? true 
         : applicationFilter === 'linked' 
@@ -806,9 +837,14 @@ setTasks(tasksWithCounts);
   return (
     <div className="max-w-7xl mx-auto p-4 page-enter">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {language === 'ru' ? 'Управление задачами' : 'Task Management'}
-        </h2>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {language === 'ru' ? 'Управление задачами' : 'Task Management'}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {canCreateTasks ? 'Создавайте и отслеживайте задачи' : 'Отслеживание задач, назначенных на вас'}
+          </p>
+        </div>
         
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
@@ -833,7 +869,6 @@ setTasks(tasksWithCounts);
             <option value="low">🟢 Низкий</option>
           </select>
           
-          {/* ✅ ФИЛЬТР ПО ЗАЯВКАМ */}
           <select
             value={applicationFilter}
             onChange={(e) => setApplicationFilter(e.target.value)}
@@ -852,13 +887,16 @@ setTasks(tasksWithCounts);
             {language === 'ru' ? 'Аналитика' : 'Analytics'}
           </button>
           
-          <button
-            onClick={() => { setEditingTask(null); setShowModal(true); }}
-            className="px-4 py-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-lg hover:shadow-md flex items-center gap-2 text-sm"
-          >
-            <Plus className="w-4 h-4" />
-            {language === 'ru' ? 'Новая задача' : 'New Task'}
-          </button>
+          {/* ✅ Кнопка создания задачи - только для пользователей с правами */}
+          {canCreateTasks && (
+            <button
+              onClick={() => { setEditingTask(null); setShowModal(true); }}
+              className="px-4 py-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-lg hover:shadow-md flex items-center gap-2 text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              {language === 'ru' ? 'Новая задача' : 'New Task'}
+            </button>
+          )}
         </div>
       </div>
       
@@ -898,6 +936,7 @@ setTasks(tasksWithCounts);
                       applications={applications}
                       showNotification={showNotification}
                       language={language}
+                      userRole={userRole}
                     />
                   ))}
               </div>
