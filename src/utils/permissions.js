@@ -1,123 +1,168 @@
 // src/utils/permissions.js
 
+export const ROLE_PERMISSIONS = {
+  // Супер-админ - всё может
+  super_admin: {
+    canCreate: true,
+    canEdit: true,
+    canDelete: true,
+    canViewAll: true,
+    canInvite: true,
+    canManageTariffs: true,
+    canViewAnalytics: true,
+    canManageEmployees: true,
+    canManageWarehouse: true,
+    canViewAudit: true,
+  },
+  
+  // Руководитель (менеджер) - полный доступ к управлению компанией
+  manager: {
+    canCreate: true,
+    canEdit: true,
+    canDelete: true,
+    canViewAll: true,
+    canInvite: true,        // ✅ Может приглашать
+    canManageTariffs: true,  // ✅ Может управлять тарифами
+    canViewAnalytics: true,
+    canManageEmployees: true,
+    canManageWarehouse: true,
+    canViewAudit: true,
+  },
+  
+  // Администратор снабжения
+  supply_admin: {
+    canCreate: true,         // ✅ Может создавать заявки
+    canEdit: true,           // ✅ Может редактировать
+    canDelete: false,        // ❌ Не может удалять
+    canViewAll: true,        // ✅ Видит все заявки
+    canInvite: true,         // ✅ МОЖЕТ ПРИГЛАШАТЬ сотрудников!
+    canManageTariffs: false, // ❌ Не может управлять тарифами
+    canViewAnalytics: true,  // ✅ Видит аналитику
+    canManageEmployees: false, // ❌ Не может блокировать сотрудников
+    canManageWarehouse: true,   // ✅ Управляет складом
+    canViewAudit: false,
+  },
+  
+  // Прораб (мастер)
+  master: {
+    canCreate: true,
+    canEdit: true,
+    canDelete: false,
+    canViewAll: false,       // Видит только свои заявки
+    canInvite: false,
+    canManageTariffs: false,
+    canViewAnalytics: false,
+    canManageEmployees: false,
+    canManageWarehouse: false,
+    canViewAudit: false,
+  },
+  
+  // Бухгалтер
+  accountant: {
+    canCreate: false,
+    canEdit: false,
+    canDelete: false,
+    canViewAll: true,
+    canInvite: false,
+    canManageTariffs: false,
+    canViewAnalytics: true,
+    canManageEmployees: false,
+    canManageWarehouse: false,
+    canViewAudit: false,
+  },
+  
+  // Заказчик
+  client: {
+    canCreate: false,
+    canEdit: false,
+    canDelete: false,
+    canViewAll: false,
+    canInvite: false,
+    canManageTariffs: false,
+    canViewAnalytics: false,
+    canManageEmployees: false,
+    canManageWarehouse: false,
+    canViewAudit: false,
+  },
+  
+  // Менеджер по работе с клиентами
+  client_manager: {
+    canCreate: true,
+    canEdit: true,
+    canDelete: false,
+    canViewAll: true,
+    canInvite: true,         // ✅ Может приглашать клиентов
+    canManageTariffs: false,
+    canViewAnalytics: true,
+    canManageEmployees: false,
+    canManageWarehouse: false,
+    canViewAudit: false,
+  },
+};
+
+// Функция проверки, может ли пользователь приглашать определённую роль
+export const canInviteRole = (inviterRole, targetRole, isCompanyOwner = false) => {
+  // Владелец (manager) может приглашать любые роли
+  if (inviterRole === 'manager' || isCompanyOwner) {
+    return targetRole !== 'super_admin'; // Супер-админа нельзя пригласить
+  }
+  
+  // Администратор снабжения может приглашать только мастеров и бухгалтеров
+  if (inviterRole === 'supply_admin') {
+    return targetRole === 'master' || targetRole === 'accountant' || targetRole === 'foreman';
+  }
+  
+  // Менеджер по клиентам может приглашать только клиентов
+  if (inviterRole === 'client_manager') {
+    return targetRole === 'client';
+  }
+  
+  return false;
+};
+
+// Получить доступные роли для приглашения
+export const getAvailableRolesForInvite = (inviterRole, isCompanyOwner = false) => {
+  const allRoles = [
+    { value: 'manager', label: 'Руководитель' },
+    { value: 'supply_admin', label: 'Администратор снабжения' },
+    { value: 'master', label: 'Прораб' },
+    { value: 'foreman', label: 'Мастер' },
+    { value: 'accountant', label: 'Бухгалтер' },
+    { value: 'client', label: 'Заказчик' },
+    { value: 'client_manager', label: 'Менеджер по работе с клиентами' },
+  ];
+  
+  // Владелец может приглашать все роли
+  if (inviterRole === 'manager' || isCompanyOwner) {
+    return allRoles.filter(role => role.value !== 'super_admin');
+  }
+  
+  // Администратор снабжения может приглашать только мастеров и бухгалтеров
+  if (inviterRole === 'supply_admin') {
+    return allRoles.filter(role => 
+      role.value === 'master' || role.value === 'foreman' || role.value === 'accountant'
+    );
+  }
+  
+  // Менеджер по клиентам может приглашать только клиентов
+  if (inviterRole === 'client_manager') {
+    return allRoles.filter(role => role.value === 'client');
+  }
+  
+  return [];
+};
+
 // === Конфигурация ролей ===
 export const ROLE_OPTIONS = [
   { value: 'super_admin', label: 'Супер-администратор' },
   { value: 'manager', label: 'Руководитель' },
-  { value: 'client_manager', label: 'Менеджер по работе с клиентами' }, // 👈 ДОБАВЛЕНО
+  { value: 'client_manager', label: 'Менеджер по работе с клиентами' },
   { value: 'supply_admin', label: 'Снабженец' },
   { value: 'master', label: 'Мастер (Исполнитель)' },
   { value: 'foreman', label: 'Прораб' },
   { value: 'accountant', label: 'Бухгалтер' },
   { value: 'client', label: 'Заказчик' }
 ];
-
-// === Права доступа для каждой роли ===
-export const ROLE_PERMISSIONS = {
-  super_admin: {
-    // ✅ ТОЛЬКО админские права
-    canViewAllCompanies: true,    // Просмотр всех компаний
-    canManageAllUsers: true,       // Управление пользователями всех компаний
-    canManageTariffs: true,        // Управление тарифами
-    canViewSystemSettings: true,   // Просмотр системных настроек
-    
-    // ❌ НЕТ прав обычных пользователей
-    canCreate: false,              // Не создаёт заявки как прораб
-    canEditStatus: false,          // Не меняет статусы заявок
-    canViewAnalytics: false,       // Не смотрит аналитику конкретной компании
-    canViewAll: false,             // Не видит все заявки своей компании
-    canViewOnlyCompleted: false,   // Не видит только завершённые
-    canViewAudit: false,           // Аудит — в админке отдельно
-    canManageClients: false,       // Не управляет клиентами напрямую
-  },
-  manager: {
-    canCreate: false,              // ❌ Руководитель не создает заявки
-    canViewAnalytics: true,
-    canViewAudit: true,
-    canManageUsers: true,          // Может управлять пользователями
-    canManageTariffs: true,        // Может управлять тарифами
-    canManageCompany: false,
-    canReceiveMaterials: true,
-    canManageWarehouse: true,
-    canManageClients: true,        // 👈 Может управлять клиентами
-  },
-  client_manager: {                // 👈 НОВАЯ РОЛЬ
-    canCreate: false,              // Не создаёт заявки
-    canViewAnalytics: true,        // Может смотреть аналитику по клиентам
-    canViewAudit: false,           // Не видит аудит
-    canManageUsers: false,         // Не управляет пользователями компании
-    canManageTariffs: false,       // Не управляет тарифами
-    canManageCompany: false,       // Не управляет компанией
-    canReceiveMaterials: false,    // Не принимает материалы
-    canManageWarehouse: false,     // Не управляет складом
-    canManageClients: true,        // ✅ Может управлять клиентами
-    canInviteClients: true,        // ✅ Может приглашать клиентов
-    canViewClientStats: true,      // ✅ Может смотреть статистику клиентов
-    canCommunicateWithClients: true, // ✅ Может общаться с клиентами
-    canViewClientApplications: true,  // ✅ Может смотреть заявки клиентов
-  },
-  master: {
-    canCreate: true,               // ✅ Прораб создает заявки
-    canViewAnalytics: false,
-    canViewAudit: false,
-    canManageUsers: false,
-    canManageTariffs: false,       // ❌ Не видит тарифы
-    canManageCompany: false,
-    canReceiveMaterials: false,
-    canManageWarehouse: false,
-    canManageClients: false,       // Не управляет клиентами
-  },
-  foreman: {
-    canCreate: true,
-    canViewAnalytics: true,
-    canManageUsers: false,
-    canReceiveMaterials: true,
-    canManageWarehouse: true,
-    canViewAudit: false,
-    canManageTariffs: false,
-    canManageCompany: false,
-    canManageClients: false,       // Не управляет клиентами
-  },
-  supply_admin: {
-    canCreate: true,               // ✅ Снабженец создает заявки
-    canViewAnalytics: false,
-    canViewAudit: false,
-    canManageUsers: false,
-    canManageTariffs: false,       // ❌ Не видит тарифы
-    canManageCompany: false,
-    canReceiveMaterials: true,
-    canManageWarehouse: true,
-    canManageClients: false,       // Не управляет клиентами
-  },
-  accountant: {
-    canCreate: false,              // ❌ Бухгалтер не создает заявки
-    canViewAnalytics: true,
-    canViewAudit: true,
-    canManageUsers: false,
-    canManageTariffs: false,
-    canManageCompany: false,
-    canReceiveMaterials: false,
-    canManageWarehouse: false,
-    canManageClients: false,       // Не управляет клиентами
-  },
-  client: {
-    canViewOwnObjects: true,        // Только свои объекты
-    canViewApplications: true,      // Просмотр заявок
-    canConfirmWork: true,           // Подтверждение работ
-    canViewActs: true,              // Просмотр актов
-    canChat: true,                  // Чат с прорабом/менеджером
-    canViewPhotos: true,            // Просмотр фото
-    canCreate: false,               // Не создаёт заявки
-    canEditStatus: false,           // Не меняет статусы
-    canViewAnalytics: false,        // Не видит аналитику компании
-    canViewAll: false,              // Только свои объекты
-    canViewAudit: false,            // Не видит аудит
-    canManageUsers: false,
-    canManageTariffs: false,
-    canManageCompany: false,
-    canManageClients: false,
-  }
-};
 
 // === Получение метки роли ===
 export const getRoleLabel = (role) => {
@@ -162,62 +207,6 @@ export const canManageClients = (userRole) => {
 // === Проверка, может ли пользователь приглашать клиентов ===
 export const canInviteClients = (userRole) => {
   return hasPermission(userRole, 'canInviteClients');
-};
-
-// === Проверка, может ли пользователь приглашать другие роли ===
-export const canInviteRole = (inviterRole, targetRole, isCompanyOwner) => {
-  if (inviterRole === 'super_admin') return false;
-  
-  // 👈 НОВЫЕ ПРАВИЛА ДЛЯ CLIENT_MANAGER
-  if (inviterRole === 'client_manager') {
-    // Менеджер по работе с клиентами может приглашать только клиентов
-    return targetRole === 'client';
-  }
-  
-  if (inviterRole === 'manager' && targetRole === 'client') {
-    return true;
-  }
-  
-  if (targetRole === 'super_admin') return false;
-  if (targetRole === 'manager' && !isCompanyOwner) return false;
-  
-  // 👈 Client manager может приглашать только клиентов
-  if (targetRole === 'client_manager' && inviterRole !== 'manager' && !isCompanyOwner) {
-    return false;
-  }
-  
-  if (targetRole === 'foreman') {
-    return inviterRole === 'manager' || inviterRole === 'supply_admin' || isCompanyOwner;
-  }
-  
-  if (targetRole === 'master') {
-    return inviterRole === 'manager' || inviterRole === 'foreman' || isCompanyOwner;
-  }
-  
-  const allowedInviters = ['manager'];
-  if (targetRole === 'supply_admin' || targetRole === 'accountant') {
-    return allowedInviters.includes(inviterRole) || isCompanyOwner;
-  }
-  
-  return allowedInviters.includes(inviterRole) || isCompanyOwner;
-};
-
-// === Фильтрация ролей для приглашения ===
-export const getAvailableRolesForInvite = (userRole, isCompanyOwner) => {
-  if (isSuperAdmin(userRole, { role: userRole })) {
-    return [];
-  }
-  
-  // 👈 Client manager может приглашать только клиентов
-  if (userRole === 'client_manager') {
-    return ROLE_OPTIONS.filter(role => 
-      role.value === 'client' && canInviteRole(userRole, role.value, isCompanyOwner)
-    );
-  }
-  
-  return ROLE_OPTIONS.filter(role => 
-    canInviteRole(userRole, role.value, isCompanyOwner)
-  );
 };
 
 // === Дополнительная проверка для супер-админа ===

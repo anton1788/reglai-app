@@ -803,6 +803,7 @@ const App = () => {
   const [adminPassword, setAdminPassword] = useState('');
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
+  const [companyOwnerId, setCompanyOwnerId] = useState(null);
   const isMobile = useIsMobile();
   const [settings, setSettings] = useState({
     sendMethod: 'email',
@@ -2247,71 +2248,135 @@ const checkForUpdates = useCallback(async () => {
     }
   };
 
-  // ─────────────────────────────────────────────────────────
-  // 👥 INVITE USER - ✅ ИСПРАВЛЕНО С ОТЛАДКОЙ
-  // ─────────────────────────────────────────────────────────
-  const handleInviteUser = async () => {
-    if (!inviteEmail || !inviteRole) {
-      showNotification(t('enterValidEmail'), 'error');
-      return;
+  // 👥 INVITE USER - с учётом прав supply_admin
+const handleInviteUser = async () => {
+  if (!inviteEmail || !inviteRole) {
+    showNotification(t('enterValidEmail'), 'error');
+    return;
+  }
+
+  console.log('[INVITE DEBUG]', {
+    userRole,
+    isCompanyOwner,
+    inviteRole,
+    userCompanyId,
+    userId: user?.id
+  });
+
+  // Проверяем права на приглашение
+  if (!canInviteRole(userRole, inviteRole, isCompanyOwner)) {
+    showNotification(`Вы не можете приглашать пользователей с ролью "${inviteRole}"`, 'error');
+    return;
+  }
+
+  if (inviteRole === 'super_admin') {
+    showNotification('Роль супер-админа не может быть назначена через интерфейс', 'error');
+    return;
+  }
+
+  // Только владелец может приглашать менеджеров
+  if (inviteRole === 'manager' && !isCompanyOwner && userRole !== 'super_admin') {
+    showNotification('Только владелец компании может приглашать руководителей', 'error');
+    return;
+  }
+
+  // supply_admin может приглашать, но не менеджеров
+  if (userRole === 'supply_admin' && (inviteRole === 'manager' || inviteRole === 'supply_admin')) {
+    showNotification('Администратор снабжения может приглашать только прорабов, мастеров и бухгалтеров', 'error');
+    return;
+  }
+
+  if (!userCompanyId) {
+    showNotification('Ошибка: компания не указана', 'error');
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from('invitations')
+      .insert([{
+        email: inviteEmail.trim().toLowerCase(),
+        role: inviteRole,
+        company_id: userCompanyId,
+        invited_by: user?.id,
+        accepted: false,
+        created_at: new Date().toISOString()
+      }]);
+
+    if (error) {
+      console.error('[INVITE ERROR]', error);
+      throw error;
     }
 
-    // ✅ ДОБАВИТЬ отладку
-    console.log('[INVITE DEBUG]', {
-      userRole,
-      isCompanyOwner,
-      inviteRole,
-      userCompanyId,
-      userId: user?.id
+    await logUserInvited(supabase, inviteEmail.trim().toLowerCase(), inviteRole, user?.email, userContext);
+    showNotification(`✅ Приглашение отправлено! ${inviteRole === 'manager' ? 'Новый руководитель' : 'Сотрудник'} получит ссылку на почту`, 'success');
+    setInviteEmail('');
+    setInviteRole('master');
+    setShowInviteModal(false);
+  } catch (err) {
+    console.error('Ошибка отправки приглашения:', err);
+    showNotification(t('inviteFailed') + ': ' + err.message, 'error');
+  }
+};
+
+// 👑 Назначение нового руководителя компании
+const handleAssignOwner = async (newOwnerId, newOwnerName) => {
+  if (!window.confirm(`⚠️ ПЕРЕДАЧА ПРАВ РУКОВОДИТЕЛЯ\n\nВы уверены, что хотите назначить "${newOwnerName}" руководителем компании?\n\nПосле передачи:\n• Вы станете администратором снабжения (supply_admin)\n• Новый руководитель получит права управления компанией\n• Вы больше не сможете управлять тарифами и приглашать сотрудников`)) {
+    return;
+  }
+  
+  try {
+    // 1. Назначаем нового владельца
+    const { error: companyError } = await supabase
+      .from('companies')
+      .update({ is_company_owner: newOwnerId })
+      .eq('id', userCompanyId);
+    
+    if (companyError) throw companyError;
+    
+    // 2. Новый владелец → manager
+    await supabase
+      .from('company_users')
+      .update({ role: 'manager' })
+      .eq('user_id', newOwnerId)
+      .eq('company_id', userCompanyId);
+    
+    // 3. Старый владелец → supply_admin
+    if (companyOwnerId) {
+      await supabase
+        .from('company_users')
+        .update({ role: 'supply_admin' })
+        .eq('user_id', companyOwnerId)
+        .eq('company_id', userCompanyId);
+    }
+    
+    showNotification(`✅ Руководителем назначен ${newOwnerName}\n📦 Вы стали администратором снабжения`, 'success');
+    
+    // Обновляем локальное состояние
+    setCompanyOwnerId(newOwnerId);
+    setIsCompanyOwner(false);
+    setUserRole('supply_admin');
+    
+    // Обновляем метаданные пользователя
+    await supabase.auth.updateUser({
+      data: { role: 'supply_admin' }
     });
-
-    if (!canInviteRole(userRole, inviteRole, isCompanyOwner)) {
-      showNotification(t('cantInviteRole'), 'error');
-      return;
+    
+    // Перезагружаем данные
+    await loadEmployees();
+    await loadApplications(page);
+    
+    // Обновляем текущую вьюху, чтобы применить новые права
+    if (currentView === 'employees') {
+      setCurrentView('inwork');
+      setTimeout(() => setCurrentView('employees'), 100);
     }
-
-    if (inviteRole === 'super_admin') {
-      showNotification('Роль супер-админа не может быть назначена через интерфейс', 'error');
-      return;
-    }
-
-    if (inviteRole === 'manager' && !isCompanyOwner) {
-      showNotification('Только владелец компании может приглашать менеджеров', 'error');
-      return;
-    }
-
-    if (!userCompanyId) {
-      showNotification('Ошибка: компания не указана', 'error');
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('invitations')
-        .insert([{
-          email: inviteEmail.trim().toLowerCase(),
-          role: inviteRole,
-          company_id: userCompanyId,
-          invited_by: user?.id,
-          accepted: false,
-          created_at: new Date().toISOString()
-        }]);
-
-      if (error) {
-        console.error('[INVITE ERROR]', error);
-        throw error;
-      }
-
-      await logUserInvited(supabase, inviteEmail.trim().toLowerCase(), inviteRole, user?.email, userContext);
-      showNotification(t('inviteSent'), 'success');
-      setInviteEmail('');
-      setInviteRole('foreman');
-      setShowInviteModal(false);
-    } catch (err) {
-      console.error('Ошибка отправки приглашения:', err);
-      showNotification(t('inviteFailed') + ': ' + err.message, 'error');
-    }
-  };
+    
+  } catch (err) {
+    console.error('Ошибка:', err);
+    showNotification('❌ Ошибка при назначении руководителя: ' + err.message, 'error');
+  }
+};
 
   // ─────────────────────────────────────────────────────────
   // 🛒 CART MANAGEMENT
@@ -3911,6 +3976,20 @@ const handleNpsSubmit = async ({ score, comment }) => {
     }
   }, [currentView, loadEmployees]);
 
+  // Загрузка владельца компании для отображения в списке сотрудников
+useEffect(() => {
+  const loadCompanyOwner = async () => {
+    if (!userCompanyId) return;
+    const { data } = await supabase
+      .from('companies')
+      .select('is_company_owner')
+      .eq('id', userCompanyId)
+      .single();
+    if (data) setCompanyOwnerId(data.is_company_owner);
+  };
+  loadCompanyOwner();
+}, [userCompanyId, employees]);
+
   const toggleEmployeeStatus = async (employeeId, currentStatus) => {
     const newStatus = !currentStatus;
     const { error } = await supabase
@@ -5277,6 +5356,12 @@ useEffect(() => {
                 ))}
               </select>
             </div>
+
+             {userRole === 'supply_admin' && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg">
+              ℹ️ Администратор снабжения может приглашать только прорабов, мастеров и бухгалтеров
+            </p>
+          )}
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowInviteModal(false)}
@@ -5297,9 +5382,16 @@ useEffect(() => {
     );
   };
 
-  const renderEmployeesList = () => (
+  const renderEmployeesList = () => {
+  return (
     <div className="max-w-7xl mx-auto p-4 space-y-4 page-enter">
-      <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('employees')}</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('employees')}</h2>
+        <p className="text-xs text-gray-500">
+          👑 Руководитель может назначать нового руководителя
+        </p>
+      </div>
+
       {loadingEmployees ? (
         <div className="text-center py-8">
           <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto" />
@@ -5310,19 +5402,40 @@ useEffect(() => {
             <div key={emp.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white">{emp.full_name}</h3>
-                  <p className="text-sm text-gray-500">{getRoleLabel(emp.role)}</p>
-                  <p className="text-xs">{emp.phone}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">{emp.full_name}</h3>
+                    {emp.user_id === companyOwnerId && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full">
+                        👑 Руководитель
+                      </span>
+                    )}
+                    <span className="text-xs text-gray-400 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+                      {getRoleLabel(emp.role)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">{emp.phone || emp.user_email || '—'}</p>
                 </div>
-                <button
-                  onClick={() => toggleEmployeeStatus(emp.id, emp.is_active)}
-                  className={`px-3 py-1 rounded text-xs font-medium ${emp.is_active
-                    ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                    : 'bg-green-100 text-green-700 hover:bg-green-200'
+                <div className="flex gap-2">
+                  {/* Кнопка "Назначить руководителем" - только для текущего владельца */}
+                  {isCompanyOwner && emp.user_id !== companyOwnerId && (
+                    <button
+                      onClick={() => handleAssignOwner(emp.user_id, emp.full_name)}
+                      className="px-3 py-1 rounded text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors flex items-center gap-1"
+                      title="Назначить руководителем (вы станете администратором снабжения)"
+                    >
+                      👑 Назначить руководителем
+                    </button>
+                  )}
+                  <button
+                    onClick={() => toggleEmployeeStatus(emp.id, emp.is_active)}
+                    className={`px-3 py-1 rounded text-xs font-medium ${emp.is_active
+                      ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                      : 'bg-green-100 text-green-700 hover:bg-green-200'
                     }`}
-                >
-                  {emp.is_active ? t('blockEmployee') : t('unblockEmployee')}
-                </button>
+                  >
+                    {emp.is_active ? '🔒 Заблокировать' : '🔓 Разблокировать'}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -5335,6 +5448,7 @@ useEffect(() => {
       )}
     </div>
   );
+};
 
   // ─────────────────────────────────────────────────────────
 // 🆕 ОЧЕРЕДЬ СОГЛАСОВАНИЯ ДЛЯ РУКОВОДИТЕЛЕЙ
