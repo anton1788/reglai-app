@@ -47,3 +47,56 @@
     max-width: 100px;
   }
 }
+
+/* ========== СТИЛИ ДЛЯ ЧАТА ========== */
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #e4e6eb;
+  border-radius: 18px;
+  width: fit-content;
+}
+
+.dark .typing-indicator {
+  background: #3a3b3c;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  background: #65676b;
+  border-radius: 50%;
+  animation: typing 1.4s infinite;
+}
+
+.dark .typing-indicator span {
+  background: #b0b3b8;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+.message-bubble {
+  transition: transform 0.1s ease;
+}
+
+.message-bubble:active {
+  transform: scale(0.98);
+}

@@ -5,9 +5,11 @@ import React, {
 import { 
   Send, Smile, Paperclip, Edit2, Trash2, X, Check, 
   AtSign, Loader2, MessageCircle, Shield, User, AlertCircle,
-  Plus, Users, Settings, Search
+  Plus, Users, Settings, Search, CornerUpLeft, Bookmark, BookmarkCheck
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import MessageItem from './MessageItem';        // ← ДОЛЖНО БЫТЬ
+import ChatSidebar from './ChatSidebar'; 
 import { 
   logChatAccess, 
   getUserContext, 
@@ -81,19 +83,10 @@ const canEditMessage = (msg, userId, userRole) => {
   return false;
 };
 
-const canDeleteMessage = (msg, userId, userRole) => {
-  if (!userId) return false;
-  if (msg.user_id === userId) return true;
-  if (userRole === ROLES.SUPER_ADMIN) return true;
-  if ([ROLES.MANAGER, ROLES.SUPPLY_ADMIN].includes(userRole)) return true;
-  return false;
-};
 
 // ─────────────────────────────────────────────────────────────
 // 🧩 CreateChannelModal Component
 // ─────────────────────────────────────────────────────────────
-// Замените компонент CreateChannelModal на этот исправленный:
-
 const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUser, t }) => {
   const [channelName, setChannelName] = useState('');
   const [description, setDescription] = useState('');
@@ -159,7 +152,6 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
       <div className="w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col my-8">
-        {/* Header - фиксированный */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0 bg-white dark:bg-gray-800">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Plus className="w-5 h-5 text-[#4A6572]" />
@@ -174,7 +166,6 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
           </button>
         </div>
 
-        {/* Form - прокручиваемый */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
@@ -325,7 +316,6 @@ const CreateChannelModal = ({ isOpen, onClose, onCreate, companyUsers, currentUs
           )}
         </form>
 
-        {/* Footer - фиксированный */}
         <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3 bg-gray-50/50 dark:bg-gray-900/30 flex-shrink-0">
           <button
             type="button"
@@ -478,101 +468,7 @@ const ChannelSettingsModal = ({ isOpen, onClose, channel, companyUsers, currentU
   );
 };
 
-// ─────────────────────────────────────────────────────────────
-// 🧩 MessageItem Component
-// ─────────────────────────────────────────────────────────────
-const MessageItem = memo(function MessageItem({ 
-  msg, user, userRole, isOwn, isEditing, editText, onStartEdit, onSaveEdit, 
-  onCancelEdit, onDelete, onToggleReaction, showReactionsPicker, setShowReactionsPicker, 
-  formatMessage, formatTime, t, language, textareaRef 
-}) {
-  const isDeleted = msg.deleted_at;
-  const isEdited = msg.edited_at;
-  
-  const canEdit = canEditMessage(msg, user?.id, userRole);
-  const canDelete = canDeleteMessage(msg, user?.id, userRole);
 
-  const reactionCounts = useMemo(() => {
-    if (!msg.reactions?.length) return {};
-    return msg.reactions.reduce((acc, r) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {});
-  }, [msg.reactions]);
-
-  return (
-    <article className={`group flex gap-3 ${isOwn ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-      <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0 shadow-sm ${isOwn ? 'order-2' : ''}`}>
-        <span className="text-white text-xs font-medium">{msg.user?.user_metadata?.full_name?.[0]?.toUpperCase() || '?'}</span>
-      </div>
-      <div className={`max-w-[85%] md:max-w-[75%] ${isOwn ? 'order-1' : ''}`}>
-        {!isOwn && !isDeleted && (
-          <div className="flex items-center gap-2 mb-1 pl-1">
-            <span className="text-xs font-bold text-[#4A6572] dark:text-[#F9AA33]">{msg.user?.user_metadata?.full_name || (t?.('chat.user') || 'Пользователь')}</span>
-            {msg.user?.user_metadata?.role && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600">
-                {msg.user.user_metadata.role === 'super_admin' ? 'Admin' : msg.user.user_metadata.role}
-              </span>
-            )}
-          </div>
-        )}
-        <div className={`relative rounded-2xl px-4 py-2.5 shadow-sm transition-all ${
-          isOwn ? 'bg-[#4A6572] text-white rounded-br-md' : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md border border-gray-100 dark:border-gray-600'
-        }`}>
-          {isDeleted ? (
-            <span className="text-gray-400 dark:text-gray-500 italic text-sm flex items-center gap-1"><Trash2 className="w-3 h-3" /> [Удалено]</span>
-          ) : isEditing ? (
-            <div className="flex gap-2 items-start">
-              <textarea ref={textareaRef} value={editText} onChange={(e) => onStartEdit({ ...msg, message: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSaveEdit(msg.id); } if (e.key === 'Escape') onCancelEdit(); }} className="flex-1 bg-black/10 dark:bg-white/10 rounded-lg px-2 py-1 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#F9AA33] min-h-[60px]" rows={2} autoFocus />
-              <div className="flex flex-col gap-1">
-                <button onClick={() => onSaveEdit(msg.id)} className="p-1 hover:bg-green-500/20 text-green-600 rounded-lg"><Check className="w-4 h-4" /></button>
-                <button onClick={onCancelEdit} className="p-1 hover:bg-red-500/20 text-red-600 rounded-lg"><X className="w-4 h-4" /></button>
-              </div>
-            </div>
-          ) : (
-            <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">{formatMessage?.(msg.content, msg.id)}</div>
-          )}
-        </div>
-        <div className={`flex items-center gap-2 mt-1 text-xs ${isOwn ? 'justify-end' : ''}`}>
-          <time className="text-gray-400 dark:text-gray-500 select-none" dateTime={msg.created_at} title={new Date(msg.created_at).toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US')}>
-            {formatTime?.(msg.created_at, language)}
-            {isEdited && !isDeleted && <span className="ml-1 opacity-70">{t?.('chat.edited') || '(изм.)'}</span>}
-          </time>
-          {!isDeleted && !isEditing && (
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="relative">
-                <button onClick={() => setShowReactionsPicker?.(showReactionsPicker === msg.id ? null : msg.id)} className="p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded-full"><Smile className="w-3.5 h-3.5 text-gray-500" /></button>
-                {showReactionsPicker === msg.id && (
-                  <div className="absolute bottom-full left-0 mb-2 p-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 flex flex-wrap gap-1 z-50">
-                    {REACTION_EMOJIS.map(emoji => {
-                      const hasReacted = msg.reactions?.some(r => r.emoji === emoji && r.user_id === user?.id);
-                      return (
-                        <button key={emoji} onClick={() => onToggleReaction?.(msg.id, emoji)} className={`p-2 rounded-lg transition-all text-lg ${hasReacted ? 'bg-[#4A6572]/10 scale-110' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>{emoji}</button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              {(canEdit || canDelete) && (
-                <div className="flex items-center pl-1 border-l border-gray-300 dark:border-gray-600 ml-1">
-                  {canEdit && <button onClick={() => onStartEdit?.(msg)} className="p-1 hover:bg-blue-100/50 rounded text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>}
-                  {canDelete && <button onClick={() => onDelete?.(msg.id)} className="p-1 hover:bg-red-100/50 rounded text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        {Object.keys(reactionCounts).length > 0 && !isEditing && !isDeleted && (
-          <div className={`flex flex-wrap gap-1.5 mt-2 ${isOwn ? 'justify-end' : ''}`}>
-            {Object.entries(reactionCounts).map(([emoji, count]) => {
-              const hasReacted = msg.reactions?.some(r => r.emoji === emoji && r.user_id === user?.id);
-              return (
-                <button key={`${msg.id}-${emoji}`} onClick={() => onToggleReaction?.(msg.id, emoji)} className={`px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 transition-all ${hasReacted ? 'bg-[#4A6572]/10 text-[#4A6572] dark:text-[#F9AA33]' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200'}`}>{emoji} <span className="opacity-80">{count}</span></button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </article>
-  );
-});
 
 // ─────────────────────────────────────────────────────────────
 // 🧩 MAIN COMPONENT
@@ -591,7 +487,15 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [connectionStatus, setConnectionStatus] = useState('connected');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [activeCustomChannel, setActiveCustomChannel] = useState(null);
+  // eslint-disable-next-line no-unused-vars
+const [activeCustomChannel, setActiveCustomChannel] = useState(null); // используется в ChannelSettingsModal
+  
+  // НОВЫЕ СОСТОЯНИЯ
+  const [replyTo, setReplyTo] = useState(null);
+  const [savedMessages, setSavedMessages] = useState(new Set());
+  const [typingUsers, setTypingUsers] = useState(new Set());
+  const [showSidebar, setShowSidebar] = useState(true);
+  
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -640,6 +544,87 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
   useEffect(() => { channelRef.current = activeChannel; }, [activeChannel]);
 
+  // ЗАГРУЗКА СОХРАНЁННЫХ СООБЩЕНИЙ
+  useEffect(() => {
+    const loadSavedMessages = async () => {
+      if (!user?.id) return;
+      const { data } = await supabase
+        .from('saved_messages')
+        .select('message_id')
+        .eq('user_id', user.id);
+      if (data) {
+        setSavedMessages(new Set(data.map(s => s.message_id)));
+      }
+    };
+    loadSavedMessages();
+  }, [user?.id]);
+
+  // СОХРАНЕНИЕ/УДАЛЕНИЕ СООБЩЕНИЯ
+  const toggleSaveMessage = async (messageId) => {
+    if (!user?.id) return;
+    
+    if (savedMessages.has(messageId)) {
+      await supabase.from('saved_messages').delete().eq('message_id', messageId).eq('user_id', user.id);
+      setSavedMessages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(messageId);
+        return newSet;
+      });
+      showNotification?.('Сообщение удалено из сохранённых', 'info');
+    } else {
+      await supabase.from('saved_messages').insert({ message_id: messageId, user_id: user.id, saved_at: new Date() });
+      setSavedMessages(prev => new Set([...prev, messageId]));
+      showNotification?.('Сообщение сохранено', 'success');
+    }
+  };
+
+  // ОТВЕТ НА СООБЩЕНИЕ
+  const handleReply = (message) => {
+    setReplyTo(message);
+    textareaRef.current?.focus();
+  };
+
+  // ИНДИКАТОР НАБОРА ТЕКСТА
+  const handleTyping = useCallback(async () => {
+    if (!user?.id || !activeChannel) return;
+    
+    const typingChannel = supabase.channel(`typing:${activeChannel}`);
+    await typingChannel.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { 
+        user_id: user.id, 
+        user_name: user.user_metadata?.full_name,
+        timestamp: Date.now()
+      }
+    });
+  }, [activeChannel, user]);
+
+  // ОТСЛЕЖИВАНИЕ НАБОРА ТЕКСТА
+  useEffect(() => {
+    if (!activeChannel) return;
+    
+    const typingChannel = supabase.channel(`typing:${activeChannel}`);
+    typingChannel
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload.user_id !== user?.id) {
+          setTypingUsers(prev => new Set([...prev, payload.user_id]));
+          setTimeout(() => {
+            setTypingUsers(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(payload.user_id);
+              return newSet;
+            });
+          }, 3000);
+        }
+      })
+      .subscribe();
+      
+    return () => {
+      typingChannel.unsubscribe();
+    };
+  }, [activeChannel, user?.id]);
+
   useEffect(() => {
     if (!userCompanyId) return;
     let mounted = true;
@@ -673,31 +658,85 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   useEffect(() => { loadCustomChannels(); }, [loadCustomChannels]);
 
   const loadMessages = useCallback(async () => {
-    if (!userCompanyId) return;
-    setLoading(true);
-    try {
-      const isCustomChannel = channels.find(c => c.id === activeChannel);
-      let query = supabase.from('company_messages').select('*');
-      if (isCustomChannel) query = query.eq('channel_id', activeChannel);
-      else query = query.eq('channel', activeChannel).eq('channel_type', CHANNEL_TYPES.SYSTEM);
-      const { data: messagesData, error: msgError } = await query.eq('company_id', userCompanyId).is('deleted_at', null).order('created_at', { ascending: true }).limit(100);
-      if (msgError) throw msgError;
-      const messageIds = messagesData?.map(m => m.id) || [];
-      let reactionsMap = {};
-      if (messageIds.length > 0) {
-        const { data: reactionsData } = await supabase.from('message_reactions').select('message_id, emoji, user_id').in('message_id', messageIds);
-        if (reactionsData) reactionsMap = reactionsData.reduce((acc, r) => { if (!acc[r.message_id]) acc[r.message_id] = []; acc[r.message_id].push({ emoji: r.emoji, user_id: r.user_id }); return acc; }, {});
+  if (!userCompanyId) return;
+  setLoading(true);
+  try {
+    const isCustomChannel = channels.find(c => c.id === activeChannel);
+    let query = supabase.from('company_messages').select('*');
+    if (isCustomChannel) query = query.eq('channel_id', activeChannel);
+    else query = query.eq('channel', activeChannel).eq('channel_type', CHANNEL_TYPES.SYSTEM);
+    const { data: messagesData, error: msgError } = await query.eq('company_id', userCompanyId).is('deleted_at', null).order('created_at', { ascending: true }).limit(100);
+    if (msgError) throw msgError;
+    
+    const messageIds = messagesData?.map(m => m.id) || [];
+    let reactionsMap = {};
+    
+    if (messageIds.length > 0) {
+      const { data: reactionsData } = await supabase.from('message_reactions').select('message_id, emoji, user_id').in('message_id', messageIds);
+      if (reactionsData) reactionsMap = reactionsData.reduce((acc, r) => { if (!acc[r.message_id]) acc[r.message_id] = []; acc[r.message_id].push({ emoji: r.emoji, user_id: r.user_id }); return acc; }, {});
+    }
+    
+    // ✅ НОВЫЙ КОД: Загрузка replied_message для ответов
+    let replyMap = {};
+    const messagesWithReply = messagesData?.filter(m => m.reply_to_message_id) || [];
+    if (messagesWithReply.length > 0) {
+      const replyIds = messagesWithReply.map(m => m.reply_to_message_id);
+      const { data: replyMessages } = await supabase
+        .from('company_messages')
+        .select('id, content, user_id')
+        .in('id', replyIds);
+      
+      if (replyMessages) {
+        // Загружаем пользователей для ответов
+        const replyUserIds = [...new Set(replyMessages.map(r => r.user_id).filter(Boolean))];
+        let replyUsersMap = {};
+        if (replyUserIds.length > 0) {
+          const { data: replyUsers } = await supabase
+            .from('company_users')
+            .select('user_id, full_name, role, phone')
+            .in('user_id', replyUserIds)
+            .eq('company_id', userCompanyId);
+          if (replyUsers) {
+            replyUsersMap = replyUsers.reduce((acc, u) => { 
+              acc[u.user_id] = { email: null, user_metadata: { full_name: u.full_name, role: u.role, phone: u.phone } }; 
+              return acc; 
+            }, {});
+          }
+        }
+        
+        // Создаём мапу ответов с данными пользователей
+        replyMessages.forEach(reply => {
+          replyMap[reply.id] = {
+            ...reply,
+            user: replyUsersMap[reply.user_id] || { email: null, user_metadata: { full_name: 'Пользователь', role: 'unknown' } }
+          };
+        });
       }
-      const userIds = [...new Set(messagesData?.map(m => m.user_id).filter(Boolean))];
-      let usersMap = {};
-      if (userIds.length > 0) {
-        const { data: usersData } = await supabase.from('company_users').select('user_id, full_name, role, phone').in('user_id', userIds).eq('company_id', userCompanyId);
-        usersMap = (usersData || []).reduce((acc, u) => { acc[u.user_id] = { email: null, user_metadata: { full_name: u.full_name, role: u.role, phone: u.phone } }; return acc; }, {});
-      }
-      const enrichedMessages = (messagesData || []).map(msg => ({ ...msg, user: usersMap[msg.user_id] || { email: null, user_metadata: { full_name: 'Пользователь', role: 'unknown' } }, reactions: reactionsMap[msg.id] || [] }));
-      setMessages(enrichedMessages);
-    } catch (err) { console.error('Ошибка загрузки сообщений:', err); showNotification?.(t?.('chat.sendMessageError') || 'Ошибка загрузки чата', 'error'); } finally { setLoading(false); }
-  }, [userCompanyId, activeChannel, channels, showNotification, t]);
+    }
+    
+    const userIds = [...new Set(messagesData?.map(m => m.user_id).filter(Boolean))];
+    let usersMap = {};
+    if (userIds.length > 0) {
+      const { data: usersData } = await supabase.from('company_users').select('user_id, full_name, role, phone').in('user_id', userIds).eq('company_id', userCompanyId);
+      usersMap = (usersData || []).reduce((acc, u) => { acc[u.user_id] = { email: null, user_metadata: { full_name: u.full_name, role: u.role, phone: u.phone } }; return acc; }, {});
+    }
+    
+    // Обогащаем сообщения: добавляем user, reactions и replied_message
+    const enrichedMessages = (messagesData || []).map(msg => ({ 
+      ...msg, 
+      user: usersMap[msg.user_id] || { email: null, user_metadata: { full_name: 'Пользователь', role: 'unknown' } }, 
+      reactions: reactionsMap[msg.id] || [],
+      replied_message: replyMap[msg.reply_to_message_id] || null  // ✅ ДОБАВЛЕНО
+    }));
+    
+    setMessages(enrichedMessages);
+  } catch (err) { 
+    console.error('Ошибка загрузки сообщений:', err); 
+    showNotification?.(t?.('chat.sendMessageError') || 'Ошибка загрузки чата', 'error'); 
+  } finally { 
+    setLoading(false); 
+  }
+}, [userCompanyId, activeChannel, channels, showNotification, t]);
 
   useEffect(() => { loadMessages(); }, [activeChannel, loadMessages]);
 
@@ -742,16 +781,25 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       const mentionRegex = /@([^\s,;!?.]+)/g;
       const mentions = [...content.matchAll(mentionRegex)].map(m => m[1].toLowerCase());
       const mentionedUsers = companyUsers.filter(u => mentions.includes(u.full_name?.toLowerCase().replace(/\s+/g, '')));
-      const messageData = { company_id: safeCompanyId, user_id: user.id, content: content, attachments: [], created_at: new Date().toISOString() };
+      const messageData = { 
+        company_id: safeCompanyId, 
+        user_id: user.id, 
+        content: content, 
+        attachments: [], 
+        created_at: new Date().toISOString(),
+        reply_to_message_id: replyTo?.id || null
+      };
       if (isCustomChannel) { messageData.channel_id = activeChannel; messageData.channel_type = CHANNEL_TYPES.CUSTOM; }
       else { messageData.channel = activeChannel; messageData.channel_type = CHANNEL_TYPES.SYSTEM; }
       const { data, error } = await supabase.from('company_messages').insert([messageData]).select().single();
       if (error) throw error;
       if (mentionedUsers.length > 0 && data?.id) await supabase.from('message_mentions').insert(mentionedUsers.map(u => ({ message_id: data.id, mentioned_user_id: u.user_id, created_at: new Date().toISOString() })));
       try { const userCtx = getUserContext(user, null, userRole, safeCompanyId); await logChatAccess(supabase, userCtx, 'send_message'); } catch (auditErr) { console.warn('[CHAT] Аудит не записан:', auditErr); }
-      setNewMessage(''); textareaRef.current?.focus();
+      setNewMessage('');
+      setReplyTo(null);
+      textareaRef.current?.focus();
     } catch (err) { console.error('❌ Send error:', err); showNotification?.(t?.('chat.sendError') || 'Не удалось отправить', 'error'); } finally { setSending(false); }
-  }, [newMessage, user, userCompanyId, activeChannel, companyUsers, sending, showNotification, t, userRole, channels]);
+  }, [newMessage, user, userCompanyId, activeChannel, companyUsers, sending, showNotification, t, userRole, channels, replyTo]);
 
   const handleCreateChannel = async (channelData) => {
     try {
@@ -771,9 +819,18 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const handleRemoveMember = async (channelId, userId) => { await supabase.from('channel_members').delete().eq('channel_id', channelId).eq('user_id', userId); showNotification?.(t?.('chat.memberRemoved') || 'Участник удалён', 'info'); };
 
   const handleTextareaChange = useCallback((e) => {
-    const value = e.target.value; setNewMessage(value);
-    e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-  }, []);
+    const value = e.target.value; 
+    setNewMessage(value);
+    e.target.style.height = 'auto'; 
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+    
+    if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
+    mentionTimerRef.current = setTimeout(() => {
+      if (value.trim()) {
+        handleTyping();
+      }
+    }, 500);
+  }, [handleTyping]);
 
   const cancelEdit = useCallback(() => { setEditingMessageId(null); setEditText(''); }, []);
   const saveEdit = useCallback(async (messageId) => { const content = editText.trim(); if (!content) return; try { await supabase.from('company_messages').update({ content, edited_at: new Date().toISOString() }).eq('id', messageId).eq('user_id', user?.id); setEditingMessageId(null); setEditText(''); showNotification?.(t?.('chat.messageUpdated') || 'Сообщение обновлено', 'success'); } catch (err) { console.error('❌ Edit error:', err); showNotification?.(t?.('chat.editError') || 'Ошибка', 'error'); } }, [editText, user?.id, showNotification, t]);
@@ -819,63 +876,24 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   }, []);
 
   const currentChannel = [...SYSTEM_CHANNELS, ...channels].find(c => c.id === activeChannel);
-  const isCustomChannel = currentChannel?.type === CHANNEL_TYPES.CUSTOM;
-  const canManageCurrentChannel = currentChannel && canManageChannel(currentChannel, user?.id, userRole);
+  
+ 
 
   return (
     <div className="flex flex-col w-full h-full bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Sidebar Desktop */}
-        <aside className="w-64 border-r border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30 p-4 hidden md:flex flex-col overflow-y-auto">
-          <div className="flex items-center justify-between mb-4 px-2 flex-shrink-0">
-            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
-              <MessageCircle className="w-4 h-4" /> {t?.('chat.channels') || 'Каналы'}
-            </h3>
-            {canCreateChannel(userRole) && (
-              <button onClick={() => setShowCreateModal(true)} className="p-1.5 hover:bg-[#4A6572]/10 rounded-lg text-[#4A6572] transition-colors">
-                <Plus className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          
-          <nav className="space-y-1 flex-1 overflow-y-auto">
-            {allChannels.map(channel => {
-              const isActive = activeChannel === channel.id;
-              return (
-                <button
-                  key={channel.id}
-                  onClick={() => setActiveChannel(channel.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${
-                    isActive 
-                      ? 'bg-[#4A6572] text-white shadow-md' 
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
-                  }`}
-                >
-                  <span className="text-lg">{channel.icon}</span>
-                  <span className="truncate flex-1">{channel.label || channel.name}</span>
-                  {(!isCustomChannel && channel.adminOnly || (channel.type === CHANNEL_TYPES.CUSTOM && channel.is_private)) && (
-                    <Shield className={`w-3 h-3 ${isActive ? 'text-white/80' : 'text-gray-400'}`} />
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-          
-          {isCustomChannel && canManageCurrentChannel && (
-            <button onClick={() => { setActiveCustomChannel(currentChannel); setShowSettingsModal(true); }} className="mt-3 px-3 py-2 text-xs text-gray-500 dark:text-gray-400 hover:text-[#4A6572] dark:hover:text-[#F9AA33] flex items-center gap-2 transition-colors">
-              <Settings className="w-3.5 h-3.5" />{t?.('chat.channelSettings') || 'Настройки'}
-            </button>
-          )}
-          
-          <div className="flex-shrink-0 mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50 px-2">
-            <div className="flex items-center gap-2 text-xs">
-              <span className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span className="text-gray-500 dark:text-gray-400">
-                {connectionStatus === 'connected' ? 'Онлайн' : 'Оффлайн'}
-              </span>
-            </div>
-          </div>
-        </aside>
+        <ChatSidebar
+  channels={allChannels}
+  activeChannel={activeChannel}
+  onChannelSelect={setActiveChannel}
+  canCreateChannel={canCreateChannel(userRole)}
+  onCreateChannel={() => setShowCreateModal(true)}
+  connectionStatus={connectionStatus}
+  isMobile={window.innerWidth < 768}
+showSidebar={showSidebar}
+onCloseSidebar={() => setShowSidebar(false)}
+  t={t}
+/>
 
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -929,35 +947,81 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                 <p className="text-sm mt-1 opacity-70">{t?.('chat.startDiscussion') || 'Начните обсуждение!'}</p>
               </div>
             ) : (
-              messages.map(msg => (
-                <MessageItem
-                  key={msg.id}
-                  msg={msg}
-                  user={user}
-                  userRole={userRole}
-                  isOwn={msg.user_id === user?.id}
-                  isEditing={editingMessageId === msg.id}
-                  editText={editText}
-                  onStartEdit={startEdit}
-                  onSaveEdit={saveEdit}
-                  onCancelEdit={cancelEdit}
-                  onDelete={deleteMessage}
-                  onToggleReaction={toggleReaction}
-                  showReactionsPicker={showReactionsPicker}
-                  setShowReactionsPicker={setShowReactionsPicker}
-                  formatMessage={formatMessage}
-                  formatTime={formatTime}
-                  t={t}
-                  language={language}
-                  textareaRef={textareaRef}
-                />
-              ))
+              <>
+                {messages.map(msg => (
+                  <MessageItem
+                    key={msg.id}
+                    msg={msg}
+                    user={user}
+                    userRole={userRole}
+                    isOwn={msg.user_id === user?.id}
+                    isEditing={editingMessageId === msg.id}
+                    editText={editText}
+                    onStartEdit={startEdit}
+                    onSaveEdit={saveEdit}
+                    onCancelEdit={cancelEdit}
+                    onDelete={deleteMessage}
+                    onToggleReaction={toggleReaction}
+                    onReply={handleReply}
+                    onToggleSave={toggleSaveMessage}
+                    isSaved={savedMessages.has(msg.id)}
+                    showReactionsPicker={showReactionsPicker}
+                    setShowReactionsPicker={setShowReactionsPicker}
+                    formatMessage={formatMessage}
+                    formatTime={formatTime}
+                    t={t}
+                    language={language}
+                    textareaRef={textareaRef}
+                    companyUsers={companyUsers}
+                  />
+                ))}
+                <div ref={messagesEndRef} />
+              </>
             )}
-            <div ref={messagesEndRef} />
           </div>
 
           {/* Input Area - fixed */}
           <div className="flex-shrink-0 p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-white/50 dark:bg-gray-800/50">
+            {/* Индикатор набора текста */}
+            {typingUsers.size > 0 && (
+              <div className="mb-2 flex items-center gap-2">
+                <div className="typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <span className="text-xs text-gray-500 animate-pulse">
+                  {Array.from(typingUsers).map(id => {
+                    const user = companyUsers.find(u => u.user_id === id);
+                    return user?.full_name?.split(' ')[0];
+                  }).join(', ')} печатает...
+                </span>
+              </div>
+            )}
+            
+            {/* Блок ответа на сообщение */}
+            {replyTo && (
+              <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex justify-between items-start border-l-4 border-[#4A6572]">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 text-xs">
+                    <CornerUpLeft className="w-3 h-3 text-[#4A6572]" />
+                    <span className="font-bold text-[#4A6572] dark:text-[#F9AA33]">
+                      Ответ {replyTo.user?.user_metadata?.full_name || 'пользователю'}:
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 truncate mt-1">
+                    {replyTo.content?.slice(0, 80)}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setReplyTo(null)}
+                  className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg ml-2 flex-shrink-0"
+                >
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+            )}
+            
             <div className="flex items-end gap-2">
               <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300">
                 <Paperclip className="w-5 h-5" />
@@ -970,7 +1034,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                   value={newMessage}
                   onChange={handleTextareaChange}
                   onKeyDown={handleKeyDown}
-                  placeholder={t?.('chat.placeholder') || 'Введите сообщение...'}
+                  placeholder={replyTo ? `${t?.('chat.replyTo') || 'Ответ'}: ${replyTo.user?.user_metadata?.full_name || '...'}` : (t?.('chat.placeholder') || 'Введите сообщение...')}
                   className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700/50 border border-gray-200/50 dark:border-gray-600/50 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent resize-none text-sm transition-all placeholder-gray-400 dark:placeholder-gray-500"
                   rows={1}
                   style={{ minHeight: '44px', maxHeight: '120px' }}
