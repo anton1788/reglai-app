@@ -5,7 +5,7 @@ import {
   CheckCircle, XCircle, AlertCircle, Link as LinkIcon, MessageSquare,
   BarChart3, Search, TrendingUp, ArrowUpRight, Filter, X, Send,
   Flag, Paperclip, LayoutGrid, List, Eye, EyeOff, Settings,
-  RefreshCw, Zap, Award, Target, Briefcase, Users, Loader2
+  RefreshCw, Zap, Award, Target, Briefcase, Users, Loader2, Activity
 } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 
