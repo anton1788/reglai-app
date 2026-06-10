@@ -8,12 +8,40 @@ import { supabase } from '../utils/supabaseClient';
 import MessageItem from './MessageItem';
 import ChatSidebar from './ChatSidebar';
 
-// Константы
+// ========== КОНСТАНТЫ (только ОДИН раз) ==========
 const SYSTEM_CHANNELS = [
-  { id: 'general', label: '# Общий', icon: '💬', description: 'Общие вопросы', adminOnly: false, type: 'system' },
-  { id: 'supply', label: '📦 Снабжение', icon: '📦', description: 'Закупки и материалы', adminOnly: false, type: 'system' },
-  { id: 'foremen', label: '👷 Прорабы', icon: '👷', description: 'Для прорабов', adminOnly: false, type: 'system' },
-  { id: 'announcements', label: '📢 Объявления', icon: '📢', description: 'Важные объявления', adminOnly: true, type: 'system' }
+  { 
+    id: 'general', 
+    label: '# Общий', 
+    icon: '💬', 
+    description: 'Общие вопросы',
+    canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
+    canWrite: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client']
+  },
+  { 
+    id: 'supply', 
+    label: '📦 Снабжение', 
+    icon: '📦', 
+    description: 'Закупки и материалы',
+    canView: ['manager', 'supply_admin'],
+    canWrite: ['manager', 'supply_admin']
+  },
+  { 
+    id: 'foremen', 
+    label: '👷 Прорабы', 
+    icon: '👷', 
+    description: 'Для прорабов',
+    canView: ['manager', 'master', 'foreman'],
+    canWrite: ['manager', 'master', 'foreman']
+  },
+  { 
+    id: 'announcements', 
+    label: '📢 Объявления', 
+    icon: '📢', 
+    description: 'Важные объявления',
+    canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
+    canWrite: ['manager', 'supply_admin']
+  }
 ];
 
 const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotification }) => {
@@ -35,11 +63,43 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [channelMembers, setChannelMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   
-  // Новые функции
   const [replyTo, setReplyTo] = useState(null);
   const [savedMessages, setSavedMessages] = useState(new Set());
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [showSidebar, setShowSidebar] = useState(true);
+
+  // ========== ЛИЧНЫЕ СООБЩЕНИЯ ==========
+const startDirectChat = (targetUser) => {
+  if (!targetUser || !user?.id) return;
+  
+  // Создаём уникальный ID для диалога
+  const dmId = `dm_${[user.id, targetUser.user_id].sort().join('_')}`;
+  
+  // Проверяем, есть ли уже такой канал в customChannels
+  const existingDM = customChannels.find(c => c.id === dmId);
+  
+  if (!existingDM) {
+    // Создаём виртуальный канал для личных сообщений
+    const newDM = {
+      id: dmId,
+      name: targetUser.full_name,
+      label: targetUser.full_name,
+      icon: '💬',
+      description: `Личный чат с ${targetUser.full_name}`,
+      type: 'direct',
+      is_private: true,
+      participants: [user.id, targetUser.user_id],
+      created_by: user.id,
+      created_at: new Date().toISOString()
+    };
+    setCustomChannels(prev => [...prev, newDM]);
+  }
+  
+  setActiveChannel(dmId);
+  if (window.innerWidth < 768) {
+    setShowSidebar(false);
+  }
+};
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -69,21 +129,37 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     });
   };
 
-  // Все каналы (системные + пользовательские)
-  const allChannels = useMemo(() => {
-    const system = SYSTEM_CHANNELS.filter(ch => {
-      if (ch.adminOnly && userRole !== 'manager' && userRole !== 'supply_admin') return false;
-      return true;
-    });
-    const custom = customChannels.map(ch => ({ ...ch, type: 'custom' }));
-    return [...system, ...custom];
-  }, [customChannels, userRole]);
+  // Все каналы (системные + пользовательские + личные)
+const allChannels = useMemo(() => {
+  // Системные каналы с проверкой прав
+  const system = SYSTEM_CHANNELS.filter(ch => {
+    if (!ch.canView) return true;
+    return ch.canView.includes(userRole);
+  }).map(ch => ({ ...ch, type: 'system' }));
+  
+  // Пользовательские каналы + личные сообщения
+  const custom = customChannels.filter(ch => {
+    // Для личных сообщений - показываем только если пользователь участник
+    if (ch.type === 'direct') {
+      return ch.participants?.includes(user?.id);
+    }
+    return true;
+  }).map(ch => ({ ...ch, type: ch.type || 'custom' }));
+  
+  return [...system, ...custom];
+}, [customChannels, userRole, user?.id]);
+
+  // Проверка прав на отправку
+  const canWriteToChannel = (channelId) => {
+    const channel = SYSTEM_CHANNELS.find(c => c.id === channelId);
+    if (!channel) return true;
+    return channel.canWrite?.includes(userRole) || false;
+  };
 
   // Текущий канал
   const currentChannel = allChannels.find(c => c.id === activeChannel);
 
   // ========== ЗАГРУЗКА ДАННЫХ ==========
-  // Загрузка пользователей компании
   useEffect(() => {
     const loadUsers = async () => {
       if (!userCompanyId) return;
@@ -103,7 +179,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     loadUsers();
   }, [userCompanyId]);
 
-  // Загрузка пользовательских каналов
   useEffect(() => {
     const loadCustomChannels = async () => {
       if (!userCompanyId) return;
@@ -123,7 +198,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     loadCustomChannels();
   }, [userCompanyId]);
 
-  // Загрузка сообщений
   const loadMessages = useCallback(async () => {
     if (!userCompanyId || !activeChannel) return;
     
@@ -147,7 +221,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       const { data: messagesData, error } = await query;
       if (error) throw error;
       
-      // Загружаем реакции
       const messageIds = messagesData?.map(m => m.id) || [];
       let reactionsMap = {};
       if (messageIds.length > 0) {
@@ -164,7 +237,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         }
       }
       
-      // Загружаем информацию о пользователях
       const userIds = [...new Set(messagesData?.map(m => m.user_id).filter(Boolean))];
       let usersMap = {};
       if (userIds.length > 0) {
@@ -178,7 +250,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         }, {});
       }
       
-      // Загружаем ответы на сообщения
       let replyMap = {};
       const messagesWithReply = messagesData?.filter(m => m.reply_to_message_id) || [];
       if (messagesWithReply.length > 0) {
@@ -211,7 +282,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         }
       }
       
-      // Формируем сообщения
       const enrichedMessages = (messagesData || []).map(msg => ({
         ...msg,
         user: { user_metadata: usersMap[msg.user_id] || { full_name: 'Пользователь', role: 'user' } },
@@ -318,13 +388,11 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   };
 
-  // ========== ОТВЕТЫ НА СООБЩЕНИЯ ==========
   const handleReply = (message) => {
     setReplyTo(message);
     textareaRef.current?.focus();
   };
 
-  // ========== ИНДИКАТОР НАБОРА ТЕКСТА ==========
   const handleTyping = useCallback(() => {
     if (!user?.id || !activeChannel) return;
     
@@ -367,10 +435,16 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     return () => { typingChannel.unsubscribe(); };
   }, [activeChannel, user?.id]);
 
-  // ========== ОТПРАВКА СООБЩЕНИЯ ==========
+  // ========== ОТПРАВКА СООБЩЕНИЯ (с проверкой прав) ==========
   const sendMessage = async () => {
     const content = newMessage.trim();
     if (!content || !user?.id || sending) return;
+    
+    // Проверка прав на отправку
+    if (!canWriteToChannel(activeChannel)) {
+      showNotification?.('У вас нет прав на отправку сообщений в этот канал', 'error');
+      return;
+    }
     
     const safeCompanyId = userCompanyId;
     if (!safeCompanyId) {
@@ -487,7 +561,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   };
 
-  // ========== УДАЛЕНИЕ КАНАЛА ==========
   const deleteChannel = async (channelId) => {
     if (!channelId) return;
     
@@ -514,7 +587,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   };
 
-  // ========== СОЗДАНИЕ КАНАЛА ==========
   const handleCreateChannel = async (channelData) => {
     if (!userCompanyId || !user?.id) return;
     
@@ -535,7 +607,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       
       if (error) throw error;
       
-      // Добавляем создателя как участника
       await supabase.from('channel_members').insert({
         channel_id: data.id,
         user_id: user.id,
@@ -562,7 +633,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   };
 
-  // ========== РЕДАКТИРОВАНИЕ/УДАЛЕНИЕ ==========
   const startEdit = (message) => {
     setEditingMessageId(message.id);
     setEditText(message.content);
@@ -615,7 +685,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   };
 
-  // ========== РЕАКЦИИ ==========
   const toggleReaction = async (messageId, emoji) => {
     if (!user?.id) return;
     
@@ -653,7 +722,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   };
 
-  // ========== ЗАГРУЗКА ФАЙЛОВ ==========
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !userCompanyId) return;
@@ -679,7 +747,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     e.target.value = '';
   };
 
-  // ========== ОБРАБОТКА ВВОДА ==========
   const handleTextareaChange = (e) => {
     const value = e.target.value;
     setNewMessage(value);
@@ -728,6 +795,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           }}
           onDeleteChannel={deleteChannel}
           currentUserRole={userRole}
+          companyUsers={companyUsers}
+          currentUser={user}
+          onStartDirectChat={startDirectChat}
         />
 
         {/* Main Chat Area */}
