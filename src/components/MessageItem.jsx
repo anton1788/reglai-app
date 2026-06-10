@@ -55,14 +55,12 @@ const MessageItem = memo(({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      {/* Аватар */}
       <div className={`flex-shrink-0 ${isOwn ? 'order-2' : ''}`}>
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center shadow-md">
           <span className="text-white text-sm font-medium">{getUserAvatar()}</span>
         </div>
       </div>
       
-      {/* Контент */}
       <div className={`max-w-[85%] md:max-w-[75%] ${isOwn ? 'order-1' : ''}`}>
         {!isOwn && !isDeleted && (
           <div className="flex items-center gap-2 mb-1 ml-1">
@@ -74,7 +72,6 @@ const MessageItem = memo(({
           </div>
         )}
         
-        {/* Пузырь */}
         <div className={`relative rounded-2xl px-4 py-2.5 shadow-sm ${
           isOwn 
             ? 'bg-[#4A6572] text-white rounded-br-sm' 
@@ -116,7 +113,6 @@ const MessageItem = memo(({
           )}
         </div>
         
-        {/* Действия */}
         <div className={`flex items-center gap-1 mt-1 transition-opacity ${showActions && !isDeleted && !isEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
           <div className="relative">
             <button onClick={() => setShowReactionsPicker(showReactionsPicker === msg.id ? null : msg.id)} className="p-1.5 hover:bg-gray-100 rounded-full">
@@ -152,7 +148,6 @@ const MessageItem = memo(({
           )}
         </div>
         
-        {/* Реакции под сообщением */}
         {Object.keys(reactionCounts).length > 0 && !isEditing && !isDeleted && (
           <div className={`flex flex-wrap gap-1.5 mt-1 ${isOwn ? 'justify-end' : ''}`}>
             {Object.entries(reactionCounts).map(([emoji, count]) => (

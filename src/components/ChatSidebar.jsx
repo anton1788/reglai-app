@@ -1,12 +1,18 @@
 import React from 'react';
-import { MessageCircle, Plus, Shield, X } from 'lucide-react';
+import { MessageCircle, Plus, Shield, X, Settings, Trash2 } from 'lucide-react';
 
 const ChatSidebar = ({ 
   channels, activeChannel, onChannelSelect, 
   canCreateChannel, onCreateChannel, connectionStatus,
-  isMobile, showSidebar, onCloseSidebar, 
+  isMobile, showSidebar, onCloseSidebar,
+  onChannelSettings, onDeleteChannel, currentUserRole
 }) => {
   if (isMobile && !showSidebar) return null;
+  
+  const canDeleteChannel = (channel) => {
+    if (channel.type === 'system') return false;
+    return currentUserRole === 'manager' || currentUserRole === 'supply_admin';
+  };
   
   return (
     <aside className={`${isMobile ? 'fixed inset-0 z-50 bg-white dark:bg-gray-800 w-64' : 'w-64'} border-r border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30 p-4 flex flex-col overflow-y-auto`}>
@@ -32,21 +38,49 @@ const ChatSidebar = ({
       <nav className="space-y-1 flex-1 overflow-y-auto">
         {channels.map(channel => {
           const isActive = activeChannel === channel.id;
+          const isSystem = channel.type === 'system';
+          const canDelete = !isSystem && canDeleteChannel(channel);
+          
           return (
-            <button
-              key={channel.id}
-              onClick={() => {
-                onChannelSelect(channel.id);
-                if (isMobile) onCloseSidebar();
-              }}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${
-                isActive ? 'bg-[#4A6572] text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <span className="text-lg">{channel.icon}</span>
-              <span className="truncate flex-1">{channel.label || channel.name}</span>
-              {channel.adminOnly && <Shield className={`w-3 h-3 ${isActive ? 'text-white/80' : 'text-gray-400'}`} />}
-            </button>
+            <div key={channel.id} className="relative group">
+              <button
+                onClick={() => onChannelSelect(channel.id)}
+                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${
+                  isActive ? 'bg-[#4A6572] text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <span className="text-lg">{channel.icon}</span>
+                <span className="truncate flex-1">{channel.label || channel.name}</span>
+                {channel.adminOnly && <Shield className={`w-3 h-3 ${isActive ? 'text-white/80' : 'text-gray-400'}`} />}
+              </button>
+              
+              {!isSystem && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onChannelSettings(channel);
+                    }}
+                    className="p-1 rounded hover:bg-gray-200"
+                    title="Управление каналом"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                  {canDelete && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteChannel(channel.id);
+                      }}
+                      className="p-1 rounded hover:bg-red-100"
+                      title="Удалить канал"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           );
         })}
       </nav>

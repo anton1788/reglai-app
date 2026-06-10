@@ -9,22 +9,12 @@ import MessageItem from './MessageItem';
 import ChatSidebar from './ChatSidebar';
 
 // Константы
-const ROLES = {
-  SUPER_ADMIN: 'super_admin',
-  MANAGER: 'manager',
-  SUPPLY_ADMIN: 'supply_admin',
-  MASTER: 'master',
-  USER: 'user'
-};
-
 const SYSTEM_CHANNELS = [
-  { id: 'general', label: '# Общий', icon: '💬', description: 'Общие вопросы', adminOnly: false },
-  { id: 'supply', label: '📦 Снабжение', icon: '📦', description: 'Закупки и материалы', adminOnly: false },
-  { id: 'foremen', label: '👷 Прорабы', icon: '👷', description: 'Для прорабов', adminOnly: false },
-  { id: 'announcements', label: '📢 Объявления', icon: '📢', description: 'Важные объявления', adminOnly: true }
+  { id: 'general', label: '# Общий', icon: '💬', description: 'Общие вопросы', adminOnly: false, type: 'system' },
+  { id: 'supply', label: '📦 Снабжение', icon: '📦', description: 'Закупки и материалы', adminOnly: false, type: 'system' },
+  { id: 'foremen', label: '👷 Прорабы', icon: '👷', description: 'Для прорабов', adminOnly: false, type: 'system' },
+  { id: 'announcements', label: '📢 Объявления', icon: '📢', description: 'Важные объявления', adminOnly: true, type: 'system' }
 ];
-
-const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '🤔'];
 
 const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotification }) => {
   // ========== СОСТОЯНИЯ ==========
@@ -38,9 +28,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [editText, setEditText] = useState('');
   const [showReactionsPicker, setShowReactionsPicker] = useState(null);
   const [companyUsers, setCompanyUsers] = useState([]);
-  const [connectionStatus] = useState('connected');  // убрали setConnectionStatus
-const [showCreateModal, setShowCreateModal] = useState(false);
-// showSettingsModal и selectedCustomChannel удалены (не используются);
+  const [connectionStatus] = useState('connected');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showChannelSettings, setShowChannelSettings] = useState(false);
+  const [selectedChannel, setSelectedChannel] = useState(null);
+  const [channelMembers, setChannelMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
   
   // Новые функции
   const [replyTo, setReplyTo] = useState(null);
@@ -82,7 +75,8 @@ const [showCreateModal, setShowCreateModal] = useState(false);
       if (ch.adminOnly && userRole !== 'manager' && userRole !== 'supply_admin') return false;
       return true;
     });
-    return [...system, ...customChannels];
+    const custom = customChannels.map(ch => ({ ...ch, type: 'custom' }));
+    return [...system, ...custom];
   }, [customChannels, userRole]);
 
   // Текущий канал
@@ -261,14 +255,12 @@ const [showCreateModal, setShowCreateModal] = useState(false);
         const newMsg = payload.new;
         if (newMsg.deleted_at) return;
         
-        // Загружаем данные пользователя
         const { data: userData } = await supabase
           .from('company_users')
           .select('full_name, role')
           .eq('user_id', newMsg.user_id)
           .single();
         
-        // Загружаем реакции
         const { data: reactionsData } = await supabase
           .from('message_reactions')
           .select('emoji, user_id')
@@ -334,24 +326,24 @@ const [showCreateModal, setShowCreateModal] = useState(false);
 
   // ========== ИНДИКАТОР НАБОРА ТЕКСТА ==========
   const handleTyping = useCallback(() => {
-  if (!user?.id || !activeChannel) return;
-  
-  const typingChannel = supabase.channel(`typing:${activeChannel}`);
-  typingChannel.send({
-    type: 'broadcast',
-    event: 'typing',
-    payload: { user_id: user.id, user_name: user.user_metadata?.full_name || 'Пользователь' }
-  });
-  
-  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-  typingTimeoutRef.current = setTimeout(() => {
+    if (!user?.id || !activeChannel) return;
+    
+    const typingChannel = supabase.channel(`typing:${activeChannel}`);
     typingChannel.send({
       type: 'broadcast',
-      event: 'typing_stop',
-      payload: { user_id: user.id }
+      event: 'typing',
+      payload: { user_id: user.id, user_name: user.user_metadata?.full_name || 'Пользователь' }
     });
-  }, 1000);
-}, [user?.id, activeChannel, user?.user_metadata?.full_name]); // ← добавлена зависимость
+    
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      typingChannel.send({
+        type: 'broadcast',
+        event: 'typing_stop',
+        payload: { user_id: user.id }
+      });
+    }, 1000);
+  }, [user?.id, activeChannel, user?.user_metadata?.full_name]);
 
   useEffect(() => {
     if (!activeChannel) return;
@@ -418,6 +410,110 @@ const [showCreateModal, setShowCreateModal] = useState(false);
     }
   };
 
+  // ========== УПРАВЛЕНИЕ УЧАСТНИКАМИ ==========
+  const loadChannelMembers = async (channelId) => {
+    if (!channelId) return;
+    setLoadingMembers(true);
+    try {
+      const { data, error } = await supabase
+        .from('channel_members')
+        .select('user_id, role, joined_at')
+        .eq('channel_id', channelId);
+      
+      if (error) throw error;
+      
+      const userIds = data?.map(m => m.user_id) || [];
+      let usersMap = {};
+      if (userIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from('company_users')
+          .select('user_id, full_name, role')
+          .in('user_id', userIds);
+        usersMap = (usersData || []).reduce((acc, u) => {
+          acc[u.user_id] = { full_name: u.full_name, role: u.role };
+          return acc;
+        }, {});
+      }
+      
+      const membersWithUsers = (data || []).map(m => ({
+        ...m,
+        user: usersMap[m.user_id] || { full_name: 'Пользователь', role: 'user' }
+      }));
+      
+      setChannelMembers(membersWithUsers);
+    } catch (err) {
+      console.error('Ошибка загрузки участников:', err);
+      showNotification?.('Не удалось загрузить участников', 'error');
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  const addChannelMember = async (channelId, userId) => {
+    if (!channelId || !userId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('channel_members')
+        .insert({ channel_id: channelId, user_id: userId, role: 'member' });
+      
+      if (error) throw error;
+      
+      await loadChannelMembers(channelId);
+      showNotification?.('Участник добавлен', 'success');
+    } catch (err) {
+      console.error('Ошибка добавления участника:', err);
+      showNotification?.('Не удалось добавить участника', 'error');
+    }
+  };
+
+  const removeChannelMember = async (channelId, userId) => {
+    if (!channelId || !userId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('channel_members')
+        .delete()
+        .eq('channel_id', channelId)
+        .eq('user_id', userId);
+      
+      if (error) throw error;
+      
+      await loadChannelMembers(channelId);
+      showNotification?.('Участник удалён', 'info');
+    } catch (err) {
+      console.error('Ошибка удаления участника:', err);
+      showNotification?.('Не удалось удалить участника', 'error');
+    }
+  };
+
+  // ========== УДАЛЕНИЕ КАНАЛА ==========
+  const deleteChannel = async (channelId) => {
+    if (!channelId) return;
+    
+    const channel = customChannels.find(c => c.id === channelId);
+    if (!channel) return;
+    
+    if (!window.confirm(`Удалить канал "${channel.name}"? Все сообщения в канале будут удалены.`)) return;
+    
+    try {
+      await supabase.from('company_messages').delete().eq('channel_id', channelId);
+      await supabase.from('channel_members').delete().eq('channel_id', channelId);
+      
+      const { error } = await supabase.from('company_channels').delete().eq('id', channelId);
+      if (error) throw error;
+      
+      setCustomChannels(prev => prev.filter(c => c.id !== channelId));
+      if (activeChannel === channelId) {
+        setActiveChannel('general');
+      }
+      showNotification?.('Канал удалён', 'success');
+    } catch (err) {
+      console.error('Ошибка удаления канала:', err);
+      showNotification?.('Не удалось удалить канал', 'error');
+    }
+  };
+
   // ========== СОЗДАНИЕ КАНАЛА ==========
   const handleCreateChannel = async (channelData) => {
     if (!userCompanyId || !user?.id) return;
@@ -438,6 +534,13 @@ const [showCreateModal, setShowCreateModal] = useState(false);
         .single();
       
       if (error) throw error;
+      
+      // Добавляем создателя как участника
+      await supabase.from('channel_members').insert({
+        channel_id: data.id,
+        user_id: user.id,
+        role: 'admin'
+      });
       
       if (channelData.is_private && channelData.memberIds?.length) {
         await supabase.from('channel_members').insert(
@@ -608,7 +711,6 @@ const [showCreateModal, setShowCreateModal] = useState(false);
   return (
     <div className="flex flex-col w-full h-full bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Sidebar */}
         <ChatSidebar
           channels={allChannels}
           activeChannel={activeChannel}
@@ -619,7 +721,13 @@ const [showCreateModal, setShowCreateModal] = useState(false);
           isMobile={window.innerWidth < 768}
           showSidebar={showSidebar}
           onCloseSidebar={() => setShowSidebar(false)}
-          t={t}
+          onChannelSettings={(channel) => {
+            setSelectedChannel(channel);
+            setShowChannelSettings(true);
+            loadChannelMembers(channel.id);
+          }}
+          onDeleteChannel={deleteChannel}
+          currentUserRole={userRole}
         />
 
         {/* Main Chat Area */}
@@ -703,7 +811,6 @@ const [showCreateModal, setShowCreateModal] = useState(false);
 
           {/* Input Area */}
           <div className="flex-shrink-0 p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-white/50 dark:bg-gray-800/50">
-            {/* Индикатор набора текста */}
             {typingUsers.size > 0 && (
               <div className="mb-2 flex items-center gap-2">
                 <div className="typing-indicator">
@@ -720,7 +827,6 @@ const [showCreateModal, setShowCreateModal] = useState(false);
               </div>
             )}
             
-            {/* Блок ответа */}
             {replyTo && (
               <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex justify-between items-start border-l-4 border-[#4A6572]">
                 <div className="flex-1 min-w-0">
@@ -780,7 +886,7 @@ const [showCreateModal, setShowCreateModal] = useState(false);
         </div>
       </div>
 
-      {/* Modals (упрощённые для краткости) */}
+      {/* Create Channel Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
@@ -790,13 +896,99 @@ const [showCreateModal, setShowCreateModal] = useState(false);
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-gray-600">Отмена</button>
               <button onClick={() => {
-                const name = document.getElementById('channelName').value;
-                const description = document.getElementById('channelDesc').value;
+                const name = document.getElementById('channelName')?.value;
+                const description = document.getElementById('channelDesc')?.value;
                 if (name) {
                   handleCreateChannel({ name, description, icon: '💬', is_private: false });
                   setShowCreateModal(false);
                 }
               }} className="px-4 py-2 bg-[#4A6572] text-white rounded-lg">Создать</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Channel Settings Modal */}
+      {showChannelSettings && selectedChannel && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">Управление каналом: {selectedChannel.name}</h3>
+              <button onClick={() => setShowChannelSettings(false)} className="p-1 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <h4 className="font-medium mb-2">Участники ({channelMembers.length})</h4>
+              {loadingMembers ? (
+                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin" /></div>
+              ) : channelMembers.length === 0 ? (
+                <p className="text-sm text-gray-500">Нет участников</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {channelMembers.map(member => {
+                    const isCreator = selectedChannel.created_by === member.user_id;
+                    const canRemove = !isCreator && (userRole === 'manager' || userRole === 'supply_admin');
+                    return (
+                      <div key={member.user_id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="font-medium">{member.user?.full_name || 'Пользователь'}</p>
+                          <p className="text-xs text-gray-500">{member.role}{isCreator && ' (создатель)'}</p>
+                        </div>
+                        {canRemove && (
+                          <button
+                            onClick={() => removeChannelMember(selectedChannel.id, member.user_id)}
+                            className="p-1 text-red-500 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            
+            <div>
+              <h4 className="font-medium mb-2">Добавить участника</h4>
+              <select className="w-full p-2 border rounded-lg mb-3" id="newMemberSelect">
+                <option value="">-- Выберите пользователя --</option>
+                {companyUsers
+                  .filter(u => !channelMembers.some(m => m.user_id === u.user_id))
+                  .map(u => (
+                    <option key={u.user_id} value={u.user_id}>{u.full_name} ({u.role})</option>
+                  ))
+                }
+              </select>
+              <button
+                onClick={() => {
+                  const select = document.getElementById('newMemberSelect');
+                  const userId = select?.value;
+                  if (userId) {
+                    addChannelMember(selectedChannel.id, userId);
+                    select.value = '';
+                  }
+                }}
+                className="w-full py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955]"
+              >
+                Добавить
+              </button>
+            </div>
+            
+            <div className="mt-6 pt-4 border-t">
+              <button
+                onClick={() => {
+                  if (confirm(`Удалить канал "${selectedChannel.name}"?`)) {
+                    deleteChannel(selectedChannel.id);
+                    setShowChannelSettings(false);
+                  }
+                }}
+                className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Удалить канал
+              </button>
             </div>
           </div>
         </div>
