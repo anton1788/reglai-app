@@ -190,10 +190,10 @@ const GLOBAL_STYLES = `
     display: flex;
     flex-direction: column;
   }
-  /* Safe area для iOS устройств */
-  .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
+    /* Safe area для iOS устройств */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
   .chat-messages {
     flex: 1;
     overflow-y: auto;
