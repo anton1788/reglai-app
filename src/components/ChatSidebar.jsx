@@ -6,7 +6,8 @@ const ChatSidebar = ({
   canCreateChannel, onCreateChannel, connectionStatus,
   isMobile, showSidebar, onCloseSidebar,
   onChannelSettings, onDeleteChannel, currentUserRole,
-  companyUsers, currentUser, onStartDirectChat
+  companyUsers, currentUser, onStartDirectChat,
+  unreadCounts = {} // ← ДОБАВЬТЕ ЭТУ СТРОКУ в пропсы
 }) => {
   const [showContacts, setShowContacts] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,6 +80,7 @@ const ChatSidebar = ({
                 {companyUsers?.filter(u => u.user_id !== currentUser?.id).slice(0, 5).map(user => {
                   const dmChannelId = `dm_${[currentUser?.id, user.user_id].sort().join('_')}`;
                   const isActive = activeChannel === dmChannelId;
+                  const unreadCount = unreadCounts?.[dmChannelId] || 0;
                   return (
                     <button
                       key={user.user_id}
@@ -96,6 +98,11 @@ const ChatSidebar = ({
                         <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full border-2 border-white"></span>
                       </div>
                       <span className="truncate flex-1">{user.full_name}</span>
+                      {unreadCount > 0 && (
+                        <span className="ml-1 px-1.5 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full min-w-[20px] text-center">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
                       <Mail className="w-3 h-3 opacity-50" />
                     </button>
                   );
@@ -109,6 +116,7 @@ const ChatSidebar = ({
                   const isActive = activeChannel === channel.id;
                   const isSystem = channel.type === 'system';
                   const canDelete = !isSystem && canDeleteChannel(channel);
+                  const unreadCount = unreadCounts?.[channel.id] || 0;
                   
                   return (
                     <div key={channel.id} className="relative group">
@@ -120,6 +128,11 @@ const ChatSidebar = ({
                       >
                         <span className="text-lg">{channel.icon}</span>
                         <span className="truncate flex-1">{channel.label || channel.name}</span>
+                        {unreadCount > 0 && (
+                          <span className="ml-1 px-1.5 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full min-w-[20px] text-center">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
+                        )}
                         {channel.adminOnly && <Shield className={`w-3 h-3 ${isActive ? 'text-white/80' : 'text-gray-400'}`} />}
                       </button>
                       
@@ -156,7 +169,7 @@ const ChatSidebar = ({
             </nav>
           </>
         ) : (
-          // Контакты
+          // Контакты (остается без изменений)
           <>
             <div className="mb-3">
               <div className="relative">

@@ -67,15 +67,19 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [savedMessages, setSavedMessages] = useState(new Set());
   const [typingUsers, setTypingUsers] = useState(new Set());
   
+  // 📊 Непрочитанные сообщения
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const [_lastReadTimes, setLastReadTimes] = useState({});
+  
   // Мобильная адаптация
   const [isMobile, setIsMobile] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true); // На мобильных показываем либо сайдбар, либо чат
+  const [showSidebar, setShowSidebar] = useState(true);
 
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      setShowSidebar(true); // Просто всегда true при загрузке
+      setShowSidebar(true);
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
@@ -106,8 +110,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
     
     setActiveChannel(dmId);
+    markChannelAsRead(dmId);
     if (isMobile) {
-      setShowSidebar(false); // На мобильных после выбора чата показываем сообщения
+      setShowSidebar(false);
     }
   };
 
@@ -166,6 +171,84 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   // Текущий канал
   const currentChannel = allChannels.find(c => c.id === activeChannel);
 
+  // ========== ЗАГРУЗКА НЕПРОЧИТАННЫХ СООБЩЕНИЙ ==========
+  const loadUnreadCounts = useCallback(async () => {
+    if (!user?.id || !userCompanyId) return;
+    
+    try {
+      const { data: readData } = await supabase
+        .from('channel_read_status')
+        .select('channel_id, last_read_at')
+        .eq('user_id', user.id);
+      
+      const readMap = {};
+      readData?.forEach(item => {
+        readMap[item.channel_id] = new Date(item.last_read_at);
+      });
+      setLastReadTimes(readMap);
+      
+      const channels = allChannels.map(ch => ch.id);
+      const counts = {};
+      
+      for (const channelId of channels) {
+        const lastRead = readMap[channelId] || new Date(0);
+        
+        let query = supabase
+          .from('company_messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('company_id', userCompanyId)
+          .is('deleted_at', null)
+          .gt('created_at', lastRead.toISOString())
+          .neq('user_id', user.id);
+        
+        const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === channelId);
+        const isDirectChat = channelId?.startsWith('dm_');
+        
+        if (isSystemChannel) {
+          query = query.eq('channel', channelId).eq('channel_type', 'system');
+        } else if (isDirectChat) {
+          query = query.eq('channel_id', channelId).eq('channel_type', 'direct');
+        } else {
+          query = query.eq('channel_id', channelId).eq('channel_type', 'custom');
+        }
+        
+        const { count, error } = await query;
+        if (!error && count > 0) {
+          counts[channelId] = count;
+        }
+      }
+      
+      setUnreadCounts(counts);
+    } catch (err) {
+      console.error('Ошибка загрузки непрочитанных:', err);
+    }
+  }, [user?.id, userCompanyId, allChannels]);
+
+  // ========== ОТМЕТКА ПРОЧИТАННЫХ СООБЩЕНИЙ ==========
+  const markChannelAsRead = useCallback(async (channelId) => {
+    if (!user?.id || !channelId) return;
+    
+    try {
+      const now = new Date().toISOString();
+      
+      const { error } = await supabase
+        .from('channel_read_status')
+        .upsert({
+          user_id: user.id,
+          channel_id: channelId,
+          last_read_at: now,
+          updated_at: now
+        }, { onConflict: 'user_id,channel_id' });
+      
+      if (!error) {
+        setUnreadCounts(prev => ({ ...prev, [channelId]: 0 }));
+        setLastReadTimes(prev => ({ ...prev, [channelId]: new Date(now) }));
+      }
+    } catch (err) {
+      console.error('Ошибка отметки прочитанного:', err);
+    }
+  }, [user?.id]);
+
   // ========== ЗАГРУЗКА ДАННЫХ ==========
   useEffect(() => {
     const loadUsers = async () => {
@@ -198,42 +281,43 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         
         if (error) throw error;
         setCustomChannels(data || []);
+        loadUnreadCounts();
       } catch (err) {
         console.error('Ошибка загрузки каналов:', err);
       }
     };
     loadCustomChannels();
-  }, [userCompanyId]);
+  }, [userCompanyId, loadUnreadCounts]);
 
   const loadMessages = useCallback(async () => {
-  if (!userCompanyId || !activeChannel) return;
-  
-  setLoading(true);
-  try {
-    const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
-    const isDirectChat = activeChannel?.startsWith('dm_');
+    if (!userCompanyId || !activeChannel) return;
     
-    let query = supabase
-      .from('company_messages')
-      .select('*')
-      .eq('company_id', userCompanyId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: true })
-      .limit(100);
-    
-    if (isSystemChannel) {
-      query = query.eq('channel', activeChannel).eq('channel_type', 'system');
-    } else if (isDirectChat) {
-      query = query.eq('channel_id', activeChannel).eq('channel_type', 'direct');
-    } else {
-      query = query.eq('channel_id', activeChannel).eq('channel_type', 'custom');
-    }
-    
-    const { data: messagesData, error } = await query;
-    if (error) {
-      console.error('❌ Ошибка загрузки:', error);
-      throw error;
-    }
+    setLoading(true);
+    try {
+      const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+      const isDirectChat = activeChannel?.startsWith('dm_');
+      
+      let query = supabase
+        .from('company_messages')
+        .select('*')
+        .eq('company_id', userCompanyId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true })
+        .limit(100);
+      
+      if (isSystemChannel) {
+        query = query.eq('channel', activeChannel).eq('channel_type', 'system');
+      } else if (isDirectChat) {
+        query = query.eq('channel_id', activeChannel).eq('channel_type', 'direct');
+      } else {
+        query = query.eq('channel_id', activeChannel).eq('channel_type', 'custom');
+      }
+      
+      const { data: messagesData, error } = await query;
+      if (error) {
+        console.error('❌ Ошибка загрузки:', error);
+        throw error;
+      }
       
       const messageIds = messagesData?.map(m => m.id) || [];
       let reactionsMap = {};
@@ -305,13 +389,16 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       
       setMessages(enrichedMessages);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      
+      // Отмечаем канал как прочитанный после загрузки сообщений
+      markChannelAsRead(activeChannel);
     } catch (err) {
       console.error('Ошибка загрузки сообщений:', err);
       showNotification?.('Ошибка загрузки чата', 'error');
     } finally {
       setLoading(false);
     }
-  }, [userCompanyId, activeChannel, showNotification]);
+  }, [userCompanyId, activeChannel, showNotification, markChannelAsRead]);
 
   useEffect(() => { loadMessages(); }, [loadMessages]);
 
@@ -338,6 +425,15 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       }, async (payload) => {
         const newMsg = payload.new;
         if (newMsg.deleted_at) return;
+        
+        // Обновляем счетчик непрочитанных для других каналов
+        const msgChannelId = newMsg.channel_id || newMsg.channel;
+        if (activeChannel !== msgChannelId && newMsg.user_id !== user?.id) {
+          setUnreadCounts(prev => ({
+            ...prev,
+            [msgChannelId]: (prev[msgChannelId] || 0) + 1
+          }));
+        }
         
         const { data: userData } = await supabase
           .from('company_users')
@@ -367,7 +463,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         subscriptionRef.current.unsubscribe();
       }
     };
-  }, [userCompanyId, activeChannel]);
+  }, [userCompanyId, activeChannel, user?.id]);
 
   // ========== СОХРАНЁННЫЕ СООБЩЕНИЯ ==========
   useEffect(() => {
@@ -450,70 +546,65 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   }, [activeChannel, user?.id]);
 
   // ========== ОТПРАВКА СООБЩЕНИЯ ==========
-const sendMessage = async () => {
-  const content = newMessage.trim();
-  if (!content || !user?.id || sending) return;
-  
-  if (!canWriteToChannel(activeChannel)) {
-    showNotification?.('У вас нет прав на отправку сообщений в этот канал', 'error');
-    return;
-  }
-  
-  const safeCompanyId = userCompanyId;
-  if (!safeCompanyId) {
-    showNotification?.('Ошибка: компания не указана', 'error');
-    return;
-  }
-  
-  setSending(true);
-  try {
-    const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
-    const isDirectChat = activeChannel?.startsWith('dm_');
+  const sendMessage = async () => {
+    const content = newMessage.trim();
+    if (!content || !user?.id || sending) return;
     
-    // Базовые поля, общие для всех типов сообщений
-    const messageData = {
-      company_id: safeCompanyId,
-      user_id: user.id,
-      content: content,
-      created_at: new Date().toISOString(),
-      reply_to_message_id: replyTo?.id || null
-    };
-    
-    if (isSystemChannel) {
-      // Для системных каналов
-      messageData.channel = activeChannel;
-      messageData.channel_type = 'system';
-      // Не отправляем channel_id для системных каналов
-    } else if (isDirectChat) {
-      // Для личных сообщений
-      messageData.channel_id = activeChannel;
-      messageData.channel_type = 'direct';
-      messageData.channel = null; // Явно устанавливаем null
-    } else {
-      // Для пользовательских каналов
-      messageData.channel_id = activeChannel;
-      messageData.channel_type = 'custom';
-      messageData.channel = null;
+    if (!canWriteToChannel(activeChannel)) {
+      showNotification?.('У вас нет прав на отправку сообщений в этот канал', 'error');
+      return;
     }
     
-    console.log('📤 Отправка сообщения:', messageData);
-    
-    const { error } = await supabase.from('company_messages').insert([messageData]);
-    if (error) {
-      console.error('❌ Ошибка Supabase:', error);
-      throw error;
+    const safeCompanyId = userCompanyId;
+    if (!safeCompanyId) {
+      showNotification?.('Ошибка: компания не указана', 'error');
+      return;
     }
     
-    setNewMessage('');
-    setReplyTo(null);
-    textareaRef.current?.focus();
-  } catch (err) {
-    console.error('Ошибка отправки:', err);
-    showNotification?.('Не удалось отправить сообщение: ' + (err.message || 'неизвестная ошибка'), 'error');
-  } finally {
-    setSending(false);
-  }
-};
+    setSending(true);
+    try {
+      const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+      const isDirectChat = activeChannel?.startsWith('dm_');
+      
+      const messageData = {
+        company_id: safeCompanyId,
+        user_id: user.id,
+        content: content,
+        created_at: new Date().toISOString(),
+        reply_to_message_id: replyTo?.id || null
+      };
+      
+      if (isSystemChannel) {
+        messageData.channel = activeChannel;
+        messageData.channel_type = 'system';
+      } else if (isDirectChat) {
+        messageData.channel_id = activeChannel;
+        messageData.channel_type = 'direct';
+        messageData.channel = null;
+      } else {
+        messageData.channel_id = activeChannel;
+        messageData.channel_type = 'custom';
+        messageData.channel = null;
+      }
+      
+      console.log('📤 Отправка сообщения:', messageData);
+      
+      const { error } = await supabase.from('company_messages').insert([messageData]);
+      if (error) {
+        console.error('❌ Ошибка Supabase:', error);
+        throw error;
+      }
+      
+      setNewMessage('');
+      setReplyTo(null);
+      textareaRef.current?.focus();
+    } catch (err) {
+      console.error('Ошибка отправки:', err);
+      showNotification?.('Не удалось отправить сообщение: ' + (err.message || 'неизвестная ошибка'), 'error');
+    } finally {
+      setSending(false);
+    }
+  };
 
   // ========== УПРАВЛЕНИЕ УЧАСТНИКАМИ ==========
   const loadChannelMembers = async (channelId) => {
@@ -813,6 +904,7 @@ const sendMessage = async () => {
   // Функция для выбора канала на мобильных
   const handleChannelSelect = (channelId) => {
     setActiveChannel(channelId);
+    markChannelAsRead(channelId);
     if (isMobile) {
       setShowSidebar(false);
     }
@@ -854,6 +946,7 @@ const sendMessage = async () => {
             companyUsers={companyUsers}
             currentUser={user}
             onStartDirectChat={startDirectChat}
+            unreadCounts={unreadCounts}
           />
         )}
 
