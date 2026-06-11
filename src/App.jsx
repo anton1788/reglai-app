@@ -183,8 +183,7 @@ const GLOBAL_STYLES = `
   from { opacity: 0; transform: translateY(20px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-
-/* Мобильные улучшения для чата */
+  /* Мобильные улучшения для чата */
 @media (max-width: 768px) {
   .chat-container {
     height: calc(100vh - 120px);
@@ -263,7 +262,6 @@ const GLOBAL_STYLES = `
     gap: 8px;
   }
 }
-
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -291,13 +289,13 @@ const GLOBAL_STYLES = `
 /* Вставьте это внутрь строковой константы GLOBAL_STYLES, вместо старого .onboarding-highlight */
 .onboarding-highlight {
   position: relative !important;
-  z-index: 100000 !important;
+  z-index: 100000 !important; /* Выше шапки (10000) и размытия */
   box-shadow: 0 0 0 4px #F9AA33, 0 0 24px rgba(249, 170, 51, 0.6) !important;
   border-radius: 8px;
   background-color: var(--color-surface, #fff);
   transition: all 0.3s ease;
   animation: pulse-highlight 2s infinite;
-  transform: translateZ(0);
+  transform: translateZ(0); /* Форсируем отрисовку на переднем плане */
 }
 
 /* Мобильные устройства для TaskBoard */
@@ -337,6 +335,7 @@ const GLOBAL_STYLES = `
     padding: 8px 12px;
     font-size: 12px;
   }
+  /* Скрываем текст, оставляем иконки */
   nav button span:not(.icon-only) {
     display: none;
   }
