@@ -207,16 +207,16 @@ const GLOBAL_STYLES = `
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
-/* Вставьте это внутрь строковой константы GLOBAL_STYLES, вместо старого .onboarding-highlight */
+
 .onboarding-highlight {
   position: relative !important;
-  z-index: 100000 !important; /* Выше шапки (10000) и размытия */
+  z-index: 100000 !important;
   box-shadow: 0 0 0 4px #F9AA33, 0 0 24px rgba(249, 170, 51, 0.6) !important;
   border-radius: 8px;
   background-color: var(--color-surface, #fff);
   transition: all 0.3s ease;
   animation: pulse-highlight 2s infinite;
-  transform: translateZ(0); /* Форсируем отрисовку на переднем плане */
+  transform: translateZ(0);
 }
 
 /* Мобильные устройства для TaskBoard */
@@ -244,21 +244,33 @@ const GLOBAL_STYLES = `
   }
 }
 
+/* Навигация на мобильных — адаптивная, текст всегда виден */
 @media (max-width: 768px) {
   nav {
     flex-wrap: wrap;
     justify-content: center;
-    gap: 8px;
-    padding: 8px;
+    gap: 6px;
+    padding: 6px;
   }
   nav button, 
   nav a {
     padding: 8px 12px;
     font-size: 12px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
-  /* Скрываем текст, оставляем иконки */
-  nav button span:not(.icon-only) {
-    display: none;
+  /* Текст всегда виден — НЕ скрываем */
+  nav button span {
+    display: inline-block !important;
+    font-size: 12px;
+  }
+  /* Иконки остаются видимыми */
+  nav button svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
   }
 }
 
