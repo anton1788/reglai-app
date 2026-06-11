@@ -183,85 +183,6 @@ const GLOBAL_STYLES = `
   from { opacity: 0; transform: translateY(20px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-  /* Мобильные улучшения для чата */
-@media (max-width: 768px) {
-  .chat-container {
-    height: calc(100vh - 120px);
-    display: flex;
-    flex-direction: column;
-  }
-    /* Safe area для iOS устройств */
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-  .chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px;
-  }
-  .chat-input-container {
-    position: sticky;
-    bottom: 0;
-    background: white;
-    padding: 12px;
-    border-top: 1px solid #e5e7eb;
-  }
-  .chat-message {
-    max-width: 85%;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    border-radius: 18px;
-  }
-  .chat-message-own {
-    background: #4A6572;
-    color: white;
-    align-self: flex-end;
-    border-bottom-right-radius: 4px;
-  }
-  .chat-message-other {
-    background: #f3f4f6;
-    color: #1f2937;
-    align-self: flex-start;
-    border-bottom-left-radius: 4px;
-  }
-}
-
-/* Улучшенные карточки аналитики на мобильных */
-@media (max-width: 640px) {
-  .analytics-card {
-    padding: 12px;
-    margin-bottom: 8px;
-  }
-  .analytics-card h3 {
-    font-size: 14px;
-  }
-  .analytics-card .value {
-    font-size: 20px;
-    font-weight: bold;
-  }
-  .stat-badge {
-    padding: 4px 8px;
-    font-size: 11px;
-    border-radius: 12px;
-  }
-}
-
-/* Увеличенные кнопки для пальцев */
-@media (max-width: 768px) {
-  button, 
-  [role="button"],
-  .touch-target {
-    min-height: 44px;
-    min-width: 44px;
-  }
-  input, select, textarea {
-    font-size: 16px !important;
-  }
-  .mobile-stack {
-    flex-direction: column;
-    gap: 8px;
-  }
-}
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -5883,7 +5804,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         isAdminMode={isAdminMode}
         onToggleAdminMode={() => setIsAdminMode(false)}
       />
-      <main className={`py-6 ${isMobile ? 'pb-20' : ''}`}>
+      <main className="py-6">
         {/* Весь существующий контент main остается без изменений */}
         {currentView === 'create' && (
           <CreateApplicationForm
@@ -6729,46 +6650,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   isOpen={showPrivacyPolicyModal}
   onClose={() => setShowPrivacyPolicyModal(false)}
 />
-{/* Мобильная нижняя навигация */}
-{isMobile && user && (
-  <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-around items-center p-1 z-50 safe-bottom">
-    <button 
-      onClick={() => setCurrentView('create')} 
-      className={`flex flex-col items-center p-2 rounded-lg transition-colors ${currentView === 'create' ? 'text-[#4A6572] dark:text-[#F9AA33]' : 'text-gray-500'}`}
-    >
-      <Plus className="w-5 h-5" />
-      <span className="text-[10px] mt-0.5">Заявка</span>
-    </button>
-    <button 
-      onClick={() => setCurrentView('inwork')} 
-      className={`flex flex-col items-center p-2 rounded-lg transition-colors ${currentView === 'inwork' ? 'text-[#4A6572] dark:text-[#F9AA33]' : 'text-gray-500'}`}
-    >
-      <ClipboardList className="w-5 h-5" />
-      <span className="text-[10px] mt-0.5">Заявки</span>
-    </button>
-    <button 
-      onClick={() => setCurrentView('warehouse')} 
-      className={`flex flex-col items-center p-2 rounded-lg transition-colors ${currentView === 'warehouse' ? 'text-[#4A6572] dark:text-[#F9AA33]' : 'text-gray-500'}`}
-    >
-      <Package className="w-5 h-5" />
-      <span className="text-[10px] mt-0.5">Склад</span>
-    </button>
-    <button 
-      onClick={() => setCurrentView('chat')} 
-      className={`flex flex-col items-center p-2 rounded-lg transition-colors relative ${currentView === 'chat' ? 'text-[#4A6572] dark:text-[#F9AA33]' : 'text-gray-500'}`}
-    >
-      <MessageCircle className="w-5 h-5" />
-      <span className="text-[10px] mt-0.5">Чат</span>
-    </button>
-    <button 
-      onClick={() => setCurrentView('profile')} 
-      className={`flex flex-col items-center p-2 rounded-lg transition-colors ${currentView === 'profile' ? 'text-[#4A6572] dark:text-[#F9AA33]' : 'text-gray-500'}`}
-    >
-      <User className="w-5 h-5" />
-      <span className="text-[10px] mt-0.5">Профиль</span>
-    </button>
-  </div>
-)}
   </ErrorBoundary>
 );
 };

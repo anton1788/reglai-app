@@ -8,7 +8,7 @@ import { supabase } from '../utils/supabaseClient';
 import MessageItem from './MessageItem';
 import ChatSidebar from './ChatSidebar';
 
-// ========== КОНСТАНТЫ ==========
+// ========== КОНСТАНТЫ (только ОДИН раз) ==========
 const SYSTEM_CHANNELS = [
   { 
     id: 'general', 
@@ -68,51 +68,38 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [showSidebar, setShowSidebar] = useState(true);
 
-  // ========== МОБИЛЬНАЯ АДАПТАЦИЯ ==========
-  const [isMobileChat, setIsMobileChat] = useState(false);
-  const [showMobileSidebar, setShowMobileSidebar] = useState(true);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobileChat(mobile);
-      if (!mobile) {
-        setShowMobileSidebar(true);
-      }
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
   // ========== ЛИЧНЫЕ СООБЩЕНИЯ ==========
-  const startDirectChat = (targetUser) => {
-    if (!targetUser || !user?.id) return;
-    
-    const dmId = `dm_${[user.id, targetUser.user_id].sort().join('_')}`;
-    const existingDM = customChannels.find(c => c.id === dmId);
-    
-    if (!existingDM) {
-      const newDM = {
-        id: dmId,
-        name: targetUser.full_name,
-        label: targetUser.full_name,
-        icon: '💬',
-        description: `Личный чат с ${targetUser.full_name}`,
-        type: 'direct',
-        is_private: true,
-        participants: [user.id, targetUser.user_id],
-        created_by: user.id,
-        created_at: new Date().toISOString()
-      };
-      setCustomChannels(prev => [...prev, newDM]);
-    }
-    
-    setActiveChannel(dmId);
-    if (window.innerWidth < 768) {
-      setShowSidebar(false);
-    }
-  };
+const startDirectChat = (targetUser) => {
+  if (!targetUser || !user?.id) return;
+  
+  // Создаём уникальный ID для диалога
+  const dmId = `dm_${[user.id, targetUser.user_id].sort().join('_')}`;
+  
+  // Проверяем, есть ли уже такой канал в customChannels
+  const existingDM = customChannels.find(c => c.id === dmId);
+  
+  if (!existingDM) {
+    // Создаём виртуальный канал для личных сообщений
+    const newDM = {
+      id: dmId,
+      name: targetUser.full_name,
+      label: targetUser.full_name,
+      icon: '💬',
+      description: `Личный чат с ${targetUser.full_name}`,
+      type: 'direct',
+      is_private: true,
+      participants: [user.id, targetUser.user_id],
+      created_by: user.id,
+      created_at: new Date().toISOString()
+    };
+    setCustomChannels(prev => [...prev, newDM]);
+  }
+  
+  setActiveChannel(dmId);
+  if (window.innerWidth < 768) {
+    setShowSidebar(false);
+  }
+};
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -143,21 +130,24 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   };
 
   // Все каналы (системные + пользовательские + личные)
-  const allChannels = useMemo(() => {
-    const system = SYSTEM_CHANNELS.filter(ch => {
-      if (!ch.canView) return true;
-      return ch.canView.includes(userRole);
-    }).map(ch => ({ ...ch, type: 'system' }));
-    
-    const custom = customChannels.filter(ch => {
-      if (ch.type === 'direct') {
-        return ch.participants?.includes(user?.id);
-      }
-      return true;
-    }).map(ch => ({ ...ch, type: ch.type || 'custom' }));
-    
-    return [...system, ...custom];
-  }, [customChannels, userRole, user?.id]);
+const allChannels = useMemo(() => {
+  // Системные каналы с проверкой прав
+  const system = SYSTEM_CHANNELS.filter(ch => {
+    if (!ch.canView) return true;
+    return ch.canView.includes(userRole);
+  }).map(ch => ({ ...ch, type: 'system' }));
+  
+  // Пользовательские каналы + личные сообщения
+  const custom = customChannels.filter(ch => {
+    // Для личных сообщений - показываем только если пользователь участник
+    if (ch.type === 'direct') {
+      return ch.participants?.includes(user?.id);
+    }
+    return true;
+  }).map(ch => ({ ...ch, type: ch.type || 'custom' }));
+  
+  return [...system, ...custom];
+}, [customChannels, userRole, user?.id]);
 
   // Проверка прав на отправку
   const canWriteToChannel = (channelId) => {
@@ -445,11 +435,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     return () => { typingChannel.unsubscribe(); };
   }, [activeChannel, user?.id]);
 
-  // ========== ОТПРАВКА СООБЩЕНИЯ ==========
+  // ========== ОТПРАВКА СООБЩЕНИЯ (с проверкой прав) ==========
   const sendMessage = async () => {
     const content = newMessage.trim();
     if (!content || !user?.id || sending) return;
     
+    // Проверка прав на отправку
     if (!canWriteToChannel(activeChannel)) {
       showNotification?.('У вас нет прав на отправку сообщений в этот канал', 'error');
       return;
@@ -811,26 +802,22 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Header - адаптивный */}
-          <header className="flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
-            <div className="flex items-center gap-2 sm:gap-3">
-              {isMobileChat && !showMobileSidebar && (
-                <button 
-                  onClick={() => setShowMobileSidebar(true)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <MessageCircle className="w-5 h-5" />
-                </button>
-              )}
+          {/* Header */}
+          <header className="flex-shrink-0 px-4 py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setShowSidebar(true)}
+                className="md:hidden p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <MessageCircle className="w-5 h-5" />
+              </button>
               
-              <div className="flex items-center gap-2 sm:gap-3">
-                <span className="text-xl sm:text-2xl bg-gray-100 dark:bg-gray-700 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl bg-gray-100 dark:bg-gray-700 w-10 h-10 rounded-full flex items-center justify-center">
                   {currentChannel?.icon || '💬'}
                 </span>
                 <div>
-                  <h2 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
-                    {currentChannel?.label || currentChannel?.name}
-                  </h2>
+                  <h2 className="font-bold text-gray-900 dark:text-white">{currentChannel?.label || currentChannel?.name}</h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
                     {currentChannel?.description}
                   </p>
@@ -838,14 +825,14 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
               </div>
             </div>
             
-            <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
-              <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
+              <MessageCircle className="w-3.5 h-3.5" />
               <span>{messages.length}</span>
             </div>
           </header>
 
-          {/* Messages List - адаптивный */}
-          <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 min-h-0">
+          {/* Messages List */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-40 gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
@@ -856,8 +843,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                 <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
                   <MessageCircle className="w-8 h-8 opacity-50" />
                 </div>
-                <p className="font-medium text-base sm:text-lg">Нет сообщений</p>
-                <p className="text-xs sm:text-sm mt-1 opacity-70">Начните обсуждение!</p>
+                <p className="font-medium text-lg">Нет сообщений</p>
+                <p className="text-sm mt-1 opacity-70">Начните обсуждение!</p>
               </div>
             ) : (
               <>
