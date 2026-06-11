@@ -218,10 +218,73 @@ const GLOBAL_STYLES = `
   animation: pulse-highlight 2s infinite;
   transform: translateZ(0); /* Форсируем отрисовку на переднем плане */
 }
-  /* ✅ ВСТАВИТЬ ВОТ СЮДА (скроллбар) */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Мобильные устройства для TaskBoard */
+@media (max-width: 640px) {
+  .task-card {
+    margin-bottom: 12px;
+  }
+  .task-title {
+    font-size: 14px;
+  }
+  .filter-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filter-bar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Планшеты */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .kanban-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  nav {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+  }
+  nav button, 
+  nav a {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  /* Скрываем текст, оставляем иконки */
+  nav button span:not(.icon-only) {
+    display: none;
+  }
+}
+
+/* Отключение зума на инпутах для iOS */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Плавная прокрутка для модальных окон */
+.modal-content {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Увеличенные touch-цели для мобильных */
+@media (max-width: 768px) {
+  button, 
+  [role="button"],
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
 `;
+
 
 // ─────────────────────────────────────────────────────────────
 // 🔧 ХЕЛПЕРЫ

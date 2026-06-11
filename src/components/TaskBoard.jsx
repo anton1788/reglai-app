@@ -5,12 +5,13 @@ import {
   CheckCircle, XCircle, AlertCircle, Link as LinkIcon, MessageSquare,
   BarChart3, Search, TrendingUp, ArrowUpRight, Filter, X, Send,
   Flag, Paperclip, LayoutGrid, List, Eye, EyeOff, Settings,
-  RefreshCw, Zap, Award, Target, Briefcase, Users, Loader2, Activity
+  RefreshCw, Zap, Award, Target, Briefcase, Users, Loader2, Activity,
+  Menu, Home, ChevronDown
 } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 
 // ─────────────────────────────────────────────────────────────
-// 🎨 КОМПОНЕНТ КАРТОЧКИ ЗАДАЧИ
+// 🎨 КОМПОНЕНТ КАРТОЧКИ ЗАДАЧИ (МОБИЛЬНАЯ ВЕРСИЯ)
 // ─────────────────────────────────────────────────────────────
 const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNotification, userRole }) => {
   const [showMenu, setShowMenu] = useState(false);
@@ -47,17 +48,17 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
     <div
       draggable={canEdit}
       onDragStart={(e) => canEdit && e.dataTransfer.setData('taskId', task.id)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm mb-3 transition-all duration-200 overflow-hidden
+      onTouchStart={() => setIsHovered(true)}
+      onTouchEnd={() => setTimeout(() => setIsHovered(false), 300)}
+      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm mb-3 transition-all duration-200 overflow-hidden touch-manipulation
         ${canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
-        ${isHovered ? 'shadow-md -translate-y-0.5' : 'shadow-sm'}
+        ${isHovered ? 'shadow-md' : 'shadow-sm'}
         ${statusConfig[task.status]?.border}
       `}
     >
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         <div className="flex justify-between items-start gap-2 mb-2">
-          <h4 className="font-semibold text-gray-900 dark:text-white text-sm leading-tight line-clamp-2 flex-1">
+          <h4 className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base leading-tight line-clamp-2 flex-1">
             {task.title}
           </h4>
           
@@ -65,30 +66,30 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
             <div className="relative flex-shrink-0">
               <button
                 onClick={() => setShowMenu(!showMenu)}
-                className={`p-1.5 rounded-lg transition-all ${isHovered ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} hover:bg-gray-100 dark:hover:bg-gray-700`}
+                className="p-2 min-w-[44px] min-h-[44px] rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
               >
-                <MoreVertical className="w-4 h-4 text-gray-500" />
+                <MoreVertical className="w-5 h-5 text-gray-500" />
               </button>
               {showMenu && (
-                <div className="absolute right-0 mt-1 w-44 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-20 overflow-hidden animate-in fade-in zoom-in duration-200">
+                <div className="absolute right-0 mt-1 w-44 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-20 overflow-hidden">
                   {canEdit && (
                     <button
                       onClick={() => { onEdit(task); setShowMenu(false); }}
-                      className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                      className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                     >
                       <Edit3 className="w-4 h-4" /> Редактировать
                     </button>
                   )}
                   <button
                     onClick={() => { onOpenComments(task); setShowMenu(false); }}
-                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                    className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                   >
                     <MessageSquare className="w-4 h-4" /> Комментарии ({task.comments_count || 0})
                   </button>
                   {canDelete && (
                     <button
                       onClick={() => { onDelete(task.id); setShowMenu(false); }}
-                      className="w-full text-left px-3 py-2.5 text-sm hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 flex items-center gap-2 transition-colors"
+                      className="w-full text-left px-4 py-3 text-sm hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 flex items-center gap-2"
                     >
                       <Trash2 className="w-4 h-4" /> Удалить
                     </button>
@@ -104,13 +105,13 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
         )}
         
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${priorityConfig[task.priority]?.color}`}>
+          <span className={`text-xs px-2.5 py-1.5 rounded-full font-medium ${priorityConfig[task.priority]?.color}`}>
             {priorityConfig[task.priority]?.icon} {priorityConfig[task.priority]?.label}
           </span>
           
           {task.application_id && (
             <button 
-              className="text-xs px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 flex items-center gap-1.5 hover:bg-indigo-200 dark:hover:bg-indigo-800/50 transition-colors"
+              className="text-xs px-2.5 py-1.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 flex items-center gap-1.5 min-h-[36px]"
               onClick={(e) => {
                 e.stopPropagation();
                 const app = applications?.find(a => a.id === task.application_id);
@@ -125,7 +126,7 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
           )}
           
           {task.assigned_to && (
-            <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <span className="text-xs px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 flex items-center gap-1.5">
               <User className="w-3 h-3" />
               {task.assigned_name || 'Назначен'}
             </span>
@@ -153,7 +154,7 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🎨 МОДАЛЬНОЕ ОКНО СОЗДАНИЯ/РЕДАКТИРОВАНИЯ
+// 🎨 МОДАЛЬНОЕ ОКНО (АДАПТИВНОЕ)
 // ─────────────────────────────────────────────────────────────
 const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }) => {
   const [formData, setFormData] = useState({
@@ -166,6 +167,14 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
     assigned_to: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMobileModal, setIsMobileModal] = useState(false);
+  
+  useEffect(() => {
+    setIsMobileModal(window.innerWidth < 640);
+    const handleResize = () => setIsMobileModal(window.innerWidth < 640);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   useEffect(() => {
     if (task) {
@@ -201,21 +210,21 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
   if (!isOpen) return null;
   
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-10 duration-300">
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 rounded-t-2xl">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4 rounded-t-2xl">
           <div className="flex justify-between items-center">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               {task ? <Edit3 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
               {task ? 'Редактировать задачу' : 'Новая задача'}
             </h3>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">
+            <button onClick={onClose} className="p-2 min-w-[44px] min-h-[44px] hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
         
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Название <span className="text-rose-500">*</span>
@@ -224,7 +233,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-shadow"
+              className="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="Введите название задачи"
               autoFocus
             />
@@ -235,19 +244,19 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-shadow"
-              rows="3"
+              className="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              rows={isMobileModal ? 4 : 3}
               placeholder="Подробное описание задачи"
             />
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Приоритет</label>
               <select
                 value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="low">🟢 Низкий</option>
                 <option value="medium">🟡 Средний</option>
@@ -260,7 +269,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="pending">📋 Новая</option>
                 <option value="in_progress">⏳ В работе</option>
@@ -270,14 +279,14 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Срок выполнения</label>
               <input
                 type="date"
                 value={formData.due_date}
                 onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
             </div>
             
@@ -286,7 +295,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
               <select
                 value={formData.assigned_to}
                 onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="">-- Не назначен --</option>
                 {companyUsers?.map(user => (
@@ -304,7 +313,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
             <select
               value={formData.application_id}
               onChange={(e) => setFormData({ ...formData, application_id: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               <option value="">-- Не привязано --</option>
               {applications?.map(app => (
@@ -316,19 +325,19 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
           </div>
         </div>
         
-        <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-4 rounded-b-2xl flex justify-end gap-3">
+        <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4 rounded-b-2xl flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl font-medium transition-colors"
+            className="px-5 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl font-medium min-w-[80px]"
           >
             Отмена
           </button>
           <button
             onClick={handleSubmit}
             disabled={!formData.title.trim() || isSubmitting}
-            className="px-6 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl font-medium hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+            className="px-6 py-3 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl font-medium disabled:opacity-50 flex items-center gap-2 min-w-[100px] justify-center"
           >
-            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
             {task ? 'Сохранить' : 'Создать'}
           </button>
         </div>
@@ -338,7 +347,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
 };
 
 // ─────────────────────────────────────────────────────────────
-// 💬 КОММЕНТАРИИ
+// 💬 КОММЕНТАРИИ (АДАПТИВНЫЕ)
 // ─────────────────────────────────────────────────────────────
 const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) => {
   const [comments, setComments] = useState([]);
@@ -397,22 +406,22 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
   if (!isOpen || !task) return null;
   
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-10 duration-300">
-        <div className="flex justify-between items-center p-5 border-b border-gray-200 dark:border-gray-700">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+        <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
               Комментарии
             </h3>
-            <p className="text-sm text-gray-500 mt-0.5">{task.title}</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5 line-clamp-1">{task.title}</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 min-w-[44px] min-h-[44px] hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl">
             <X className="w-5 h-5" />
           </button>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
           {isLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
@@ -426,8 +435,8 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
           ) : (
             comments.map(comment => (
               <div key={comment.id} className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-xs font-medium">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-xs sm:text-sm font-medium">
                     {comment.user_email?.[0]?.toUpperCase() || '?'}
                   </span>
                 </div>
@@ -436,7 +445,7 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
                       {comment.user_email?.split('@')[0] || 'Пользователь'}
                     </p>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{comment.content}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 mt-1 break-words">{comment.content}</p>
                   </div>
                   <p className="text-xs text-gray-400 mt-1">
                     {new Date(comment.created_at).toLocaleString('ru-RU')}
@@ -447,10 +456,10 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
           )}
         </div>
         
-        <div className="p-5 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-xs font-medium">
+        <div className="p-4 sm:p-5 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-xs sm:text-sm font-medium">
                 {user?.email?.[0]?.toUpperCase() || '?'}
               </span>
             </div>
@@ -460,15 +469,15 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && addComment()}
-                className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-shadow"
+                className="flex-1 px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder="Напишите комментарий..."
               />
               <button
                 onClick={addComment}
                 disabled={!newComment.trim()}
-                className="px-5 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="px-4 py-3 min-w-[60px] bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl disabled:opacity-50"
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-5 h-5" />
               </button>
             </div>
           </div>
@@ -479,9 +488,18 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
 };
 
 // ─────────────────────────────────────────────────────────────
-// 📊 АНАЛИТИКА
+// 📊 АНАЛИТИКА (АДАПТИВНАЯ)
 // ─────────────────────────────────────────────────────────────
 const TaskAnalytics = ({ tasks, onClose }) => {
+  const [isMobileAnalytics, setIsMobileAnalytics] = useState(false);
+  
+  useEffect(() => {
+    setIsMobileAnalytics(window.innerWidth < 640);
+    const handleResize = () => setIsMobileAnalytics(window.innerWidth < 640);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
   const stats = useMemo(() => {
     const total = tasks.length;
     const byStatus = {
@@ -512,50 +530,50 @@ const TaskAnalytics = ({ tasks, onClose }) => {
   };
   
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-10 duration-300">
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 rounded-t-2xl">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4 rounded-t-2xl">
           <div className="flex justify-between items-center">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <BarChart3 className="w-5 h-5" />
               Аналитика задач
             </h3>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">
+            <button onClick={onClose} className="p-2 min-w-[44px] min-h-[44px] hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
         
-        <div className="p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-gradient-to-br from-[#4A6572] to-[#344955] text-white p-5 rounded-2xl shadow-lg">
-              <p className="text-sm opacity-80 mb-1">Всего задач</p>
-              <p className="text-4xl font-bold">{stats.total}</p>
+        <div className="p-4 sm:p-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+            <div className="bg-gradient-to-br from-[#4A6572] to-[#344955] text-white p-3 sm:p-5 rounded-2xl shadow-lg">
+              <p className="text-xs sm:text-sm opacity-80 mb-1">Всего задач</p>
+              <p className="text-2xl sm:text-4xl font-bold">{stats.total}</p>
             </div>
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-5 rounded-2xl shadow-lg">
-              <p className="text-sm opacity-80 mb-1">Выполнено</p>
-              <p className="text-4xl font-bold">{stats.byStatus.received}</p>
+            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-3 sm:p-5 rounded-2xl shadow-lg">
+              <p className="text-xs sm:text-sm opacity-80 mb-1">Выполнено</p>
+              <p className="text-2xl sm:text-4xl font-bold">{stats.byStatus.received}</p>
             </div>
-            <div className="bg-gradient-to-br from-rose-500 to-rose-600 text-white p-5 rounded-2xl shadow-lg">
-              <p className="text-sm opacity-80 mb-1">Просрочено</p>
-              <p className="text-4xl font-bold">{stats.overdue}</p>
+            <div className="bg-gradient-to-br from-rose-500 to-rose-600 text-white p-3 sm:p-5 rounded-2xl shadow-lg">
+              <p className="text-xs sm:text-sm opacity-80 mb-1">Просрочено</p>
+              <p className="text-2xl sm:text-4xl font-bold">{stats.overdue}</p>
             </div>
-            <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white p-5 rounded-2xl shadow-lg">
-              <p className="text-sm opacity-80 mb-1">Завершено</p>
-              <p className="text-4xl font-bold">{stats.completionRate}%</p>
+            <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white p-3 sm:p-5 rounded-2xl shadow-lg">
+              <p className="text-xs sm:text-sm opacity-80 mb-1">Завершено</p>
+              <p className="text-2xl sm:text-4xl font-bold">{stats.completionRate}%</p>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-gray-50 dark:bg-gray-700/30 p-5 rounded-2xl">
-              <h4 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <div className={`grid ${isMobileAnalytics ? 'grid-cols-1' : 'lg:grid-cols-2'} gap-4 sm:gap-6`}>
+            <div className="bg-gray-50 dark:bg-gray-700/30 p-4 sm:p-5 rounded-2xl">
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2 text-sm sm:text-base">
                 <Activity className="w-5 h-5 text-[#4A6572]" />
                 По статусам
               </h4>
               <div className="space-y-4">
                 {Object.entries(stats.byStatus).map(([status, count]) => (
                   <div key={status} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center justify-between text-xs sm:text-sm">
                       <div className="flex items-center gap-2">
                         <div className={`w-2.5 h-2.5 rounded-full ${statusColors[status]?.bg}`}></div>
                         <span className="text-gray-600 dark:text-gray-400">
@@ -575,17 +593,17 @@ const TaskAnalytics = ({ tasks, onClose }) => {
               </div>
             </div>
             
-            <div className="bg-gray-50 dark:bg-gray-700/30 p-5 rounded-2xl">
-              <h4 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <div className="bg-gray-50 dark:bg-gray-700/30 p-4 sm:p-5 rounded-2xl">
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2 text-sm sm:text-base">
                 <Flag className="w-5 h-5 text-[#4A6572]" />
                 По приоритетам
               </h4>
               <div className="space-y-4">
                 {Object.entries(stats.byPriority).map(([priority, count]) => (
                   <div key={priority} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center justify-between text-xs sm:text-sm">
                       <div className="flex items-center gap-2">
-                        <span>{priority === 'low' ? '🟢' : priority === 'medium' ? '🟡' : '🔴'}</span>
+                        <span className="text-base">{priority === 'low' ? '🟢' : priority === 'medium' ? '🟡' : '🔴'}</span>
                         <span className="text-gray-600 dark:text-gray-400">
                           {priority === 'low' ? 'Низкий' : priority === 'medium' ? 'Средний' : 'Высокий'}
                         </span>
@@ -604,14 +622,14 @@ const TaskAnalytics = ({ tasks, onClose }) => {
             </div>
           </div>
           
-          <div className="mt-6 grid grid-cols-2 gap-4">
-            <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl">
-              <p className="text-sm text-indigo-700 dark:text-indigo-300 mb-1">📎 Привязано к заявкам</p>
-              <p className="text-2xl font-bold text-indigo-800 dark:text-indigo-200">{stats.withApplications}</p>
+          <div className="mt-4 sm:mt-6 grid grid-cols-2 gap-3 sm:gap-4">
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 sm:p-4 rounded-xl">
+              <p className="text-xs sm:text-sm text-indigo-700 dark:text-indigo-300 mb-1">📎 Привязано к заявкам</p>
+              <p className="text-xl sm:text-2xl font-bold text-indigo-800 dark:text-indigo-200">{stats.withApplications}</p>
             </div>
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl">
-              <p className="text-sm text-blue-700 dark:text-blue-300 mb-1">👥 Активных задач</p>
-              <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">{stats.total - stats.byStatus.received - stats.byStatus.canceled}</p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 rounded-xl">
+              <p className="text-xs sm:text-sm text-blue-700 dark:text-blue-300 mb-1">👥 Активных задач</p>
+              <p className="text-xl sm:text-2xl font-bold text-blue-800 dark:text-blue-200">{stats.total - stats.byStatus.received - stats.byStatus.canceled}</p>
             </div>
           </div>
         </div>
@@ -621,7 +639,7 @@ const TaskAnalytics = ({ tasks, onClose }) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🎯 ОСНОВНОЙ КОМПОНЕНТ TASKBOARD
+// 🎯 ОСНОВНОЙ КОМПОНЕНТ TASKBOARD (МОБИЛЬНАЯ ВЕРСИЯ)
 // ─────────────────────────────────────────────────────────────
 const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRole }) => {
   const [tasks, setTasks] = useState([]);
@@ -634,8 +652,24 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
   const [searchTerm, setSearchTerm] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [viewMode, setViewMode] = useState('kanban');
+  const [viewMode, setViewMode] = useState('list');
   const [companyUsers, setCompanyUsers] = useState([]);
+  const [isMobileView, setIsMobileView] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Определяем мобильное устройство
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobileView(mobile);
+      if (mobile) {
+        setViewMode('list');
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   const canCreateTasks = userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
   const canEditTasks = userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
@@ -863,124 +897,168 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
     overdue: tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'received' && t.status !== 'canceled').length
   }), [tasks]);
   
+  // Очистка фильтров
+  const clearFilters = () => {
+    setSearchTerm('');
+    setPriorityFilter('all');
+    setStatusFilter('all');
+    setShowFilters(false);
+  };
+  
+  // Количество активных фильтров
+  const activeFiltersCount = (searchTerm ? 1 : 0) + (priorityFilter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0);
+  
   return (
-    <div className="max-w-7xl mx-auto p-4 page-enter">
-      {/* Шапка */}
-      <div className="mb-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Briefcase className="w-8 h-8 text-[#4A6572]" />
-              Задачи
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {canCreateTasks ? 'Управляйте задачами команды' : 'Отслеживайте свои задачи'}
-            </p>
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 page-enter">
+      {/* Шапка - адаптивная */}
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Briefcase className="w-6 h-6 sm:w-8 sm:h-8 text-[#4A6572]" />
+              <div>
+                <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">
+                  Задачи
+                </h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+                  {canCreateTasks ? 'Управляйте задачами команды' : 'Отслеживайте свои задачи'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-1 sm:gap-2">
+              {/* Статистика - компактная на мобильных */}
+              <div className="hidden md:flex items-center gap-2 text-xs">
+                <div className="px-2 py-1 bg-gray-100 rounded-full">
+                  Всего: {stats.total}
+                </div>
+                {stats.overdue > 0 && (
+                  <div className="px-2 py-1 bg-rose-100 text-rose-700 rounded-full">
+                    Просрочено: {stats.overdue}
+                  </div>
+                )}
+              </div>
+              
+              {/* Кнопки действий */}
+              <button
+                onClick={() => setShowAnalytics(true)}
+                className="p-2 bg-white dark:bg-gray-800 text-gray-700 rounded-xl border"
+                title="Аналитика"
+              >
+                <BarChart3 className="w-5 h-5" />
+              </button>
+              
+              {!isMobileView && (
+                <button
+                  onClick={() => setViewMode(viewMode === 'kanban' ? 'list' : 'kanban')}
+                  className="p-2 bg-white dark:bg-gray-800 text-gray-700 rounded-xl border"
+                >
+                  {viewMode === 'kanban' ? <List className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
+                </button>
+              )}
+              
+              <button
+                onClick={loadTasks}
+                className="p-2 bg-white dark:bg-gray-800 text-gray-700 rounded-xl border"
+              >
+                <RefreshCw className="w-5 h-5" />
+              </button>
+              
+              {canCreateTasks && (
+                <button
+                  onClick={() => { setEditingTask(null); setShowModal(true); }}
+                  className="px-3 sm:px-4 py-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl font-medium text-sm flex items-center gap-1"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden xs:inline">Новая</span>
+                </button>
+              )}
+            </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            {/* Статистика */}
-            <div className="hidden md:flex items-center gap-3 text-sm">
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full">
-                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                <span className="text-gray-600 dark:text-gray-300">Всего: {stats.total}</span>
+          {/* Мобильная статистика */}
+          {isMobileView && (
+            <div className="flex gap-2 text-xs">
+              <div className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full">
+                📊 {stats.total}
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 rounded-full">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                <span className="text-emerald-700 dark:text-emerald-300">Выполнено: {stats.completed}</span>
+              <div className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full">
+                ✅ {stats.completed}
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-blue-700 dark:text-blue-300">В работе: {stats.inProgress}</span>
+              <div className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                ⏳ {stats.inProgress}
               </div>
               {stats.overdue > 0 && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-100 dark:bg-rose-900/30 rounded-full">
-                  <div className="w-2 h-2 bg-rose-500 rounded-full"></div>
-                  <span className="text-rose-700 dark:text-rose-300">Просрочено: {stats.overdue}</span>
+                <div className="px-2 py-1 bg-rose-100 text-rose-700 rounded-full">
+                  ⚠️ {stats.overdue}
                 </div>
               )}
             </div>
-            
-            {/* Кнопки действий */}
+          )}
+          
+          {/* Фильтры - кнопка показать/скрыть на мобильных */}
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowAnalytics(true)}
-              className="p-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
-              title="Аналитика"
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-1 px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 rounded-xl"
             >
-              <BarChart3 className="w-5 h-5" />
+              <Filter className="w-4 h-4" />
+              Фильтры
+              {activeFiltersCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs bg-[#4A6572] text-white rounded-full">
+                  {activeFiltersCount}
+                </span>
+              )}
             </button>
             
-            <button
-              onClick={() => setViewMode(viewMode === 'kanban' ? 'list' : 'kanban')}
-              className="p-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
-              title={viewMode === 'kanban' ? 'Список' : 'Канбан'}
-            >
-              {viewMode === 'kanban' ? <List className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
-            </button>
-            
-            <button
-              onClick={loadTasks}
-              className="p-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
-              title="Обновить"
-            >
-              <RefreshCw className="w-5 h-5" />
-            </button>
-            
-            {canCreateTasks && (
+            {activeFiltersCount > 0 && (
               <button
-                onClick={() => { setEditingTask(null); setShowModal(true); }}
-                className="px-5 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2"
+                onClick={clearFilters}
+                className="px-3 py-2 text-sm text-red-600 flex items-center gap-1"
               >
-                <Plus className="w-4 h-4" />
-                Новая задача
+                <X className="w-4 h-4" />
+                Сбросить
               </button>
             )}
           </div>
-        </div>
-        
-        {/* Фильтры */}
-        <div className="flex flex-wrap items-center gap-3 mt-4">
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Поиск задач..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-[#4A6572] focus:border-transparent"
-            />
-          </div>
           
-          <select
-            value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-[#4A6572]"
-          >
-            <option value="all">Все приоритеты</option>
-            <option value="high">🔴 Высокий</option>
-            <option value="medium">🟡 Средний</option>
-            <option value="low">🟢 Низкий</option>
-          </select>
-          
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-[#4A6572]"
-          >
-            <option value="all">Все статусы</option>
-            <option value="pending">📋 Новые</option>
-            <option value="in_progress">⏳ В работе</option>
-            <option value="received">✅ Выполнены</option>
-            <option value="canceled">❌ Отменены</option>
-          </select>
-          
-          {(searchTerm || priorityFilter !== 'all' || statusFilter !== 'all') && (
-            <button
-              onClick={() => { setSearchTerm(''); setPriorityFilter('all'); setStatusFilter('all'); }}
-              className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <X className="w-4 h-4" />
-            </button>
+          {/* Панель фильтров - показывается при showFilters */}
+          {(showFilters || !isMobileView) && (
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Поиск задач..."
+                  className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700"
+                />
+              </div>
+              
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="px-3 py-2 text-sm border rounded-xl bg-white dark:bg-gray-700"
+              >
+                <option value="all">Все приоритеты</option>
+                <option value="high">🔴 Высокий</option>
+                <option value="medium">🟡 Средний</option>
+                <option value="low">🟢 Низкий</option>
+              </select>
+              
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 text-sm border rounded-xl bg-white dark:bg-gray-700"
+              >
+                <option value="all">Все статусы</option>
+                <option value="pending">📋 Новые</option>
+                <option value="in_progress">⏳ В работе</option>
+                <option value="received">✅ Выполнены</option>
+                <option value="canceled">❌ Отменены</option>
+              </select>
+            </div>
           )}
         </div>
       </div>
@@ -997,28 +1075,29 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
           {canCreateTasks && (
             <button
               onClick={() => { setEditingTask(null); setShowModal(true); }}
-              className="mt-4 px-5 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl font-medium hover:shadow-lg transition-all inline-flex items-center gap-2"
+              className="mt-4 px-5 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl font-medium inline-flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Создать первую задачу
             </button>
           )}
         </div>
-      ) : viewMode === 'kanban' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      ) : viewMode === 'kanban' && !isMobileView ? (
+        // Канбан-вид только на десктопе
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           {columns.map(col => (
             <div
               key={col.id}
-              className={`rounded-xl p-4 ${col.bg} min-h-[550px] transition-all`}
+              className={`rounded-xl p-3 sm:p-4 ${col.bg} min-h-[450px] transition-all`}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, col.id)}
             >
-              <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <div className="flex items-center justify-between mb-4 pb-2 border-b">
+                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 text-sm sm:text-base">
                   <span>{col.icon}</span>
                   {col.title}
                 </h3>
-                <span className="text-xs bg-white dark:bg-gray-700 px-2 py-1 rounded-full font-medium">
+                <span className="text-xs bg-white dark:bg-gray-700 px-2 py-1 rounded-full">
                   {filteredTasks.filter(t => t.status === col.id).length}
                 </span>
               </div>
@@ -1043,95 +1122,20 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
           ))}
         </div>
       ) : (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700/50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Задача</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Статус</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Приоритет</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Срок</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Исполнитель</th>
-                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700 dark:text-gray-300"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredTasks.map(task => (
-                  <tr key={task.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{task.title}</p>
-                        {task.description && (
-                          <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{task.description}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700">
-                        {task.status === 'pending' ? '📋 Новая' : 
-                         task.status === 'in_progress' ? '⏳ В работе' : 
-                         task.status === 'received' ? '✅ Выполнена' : '❌ Отменена'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        task.priority === 'high' ? 'bg-rose-100 text-rose-800' :
-                        task.priority === 'medium' ? 'bg-amber-100 text-amber-800' :
-                        'bg-emerald-100 text-emerald-800'
-                      }`}>
-                        {task.priority === 'high' ? '🔴 Высокий' :
-                         task.priority === 'medium' ? '🟡 Средний' : '🟢 Низкий'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {task.due_date && (
-                        <div className={`flex items-center gap-1 text-sm ${
-                          new Date(task.due_date) < new Date() && task.status !== 'received' 
-                            ? 'text-rose-600' : 'text-gray-600 dark:text-gray-400'
-                        }`}>
-                          <Calendar className="w-3.5 h-3.5" />
-                          {new Date(task.due_date).toLocaleDateString('ru-RU')}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                      {task.assigned_name || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => { setSelectedTaskForComments(task); setShowCommentsModal(true); }}
-                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                          title="Комментарии"
-                        >
-                          <MessageSquare className="w-4 h-4 text-gray-500" />
-                        </button>
-                        {canEditTasks && (
-                          <button
-                            onClick={() => { setEditingTask(task); setShowModal(true); }}
-                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                            title="Редактировать"
-                          >
-                            <Edit3 className="w-4 h-4 text-gray-500" />
-                          </button>
-                        )}
-                        {canEditTasks && (
-                          <button
-                            onClick={() => handleDeleteTask(task.id)}
-                            className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
-                            title="Удалить"
-                          >
-                            <Trash2 className="w-4 h-4 text-rose-500" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        // Список (основной вид на мобильных)
+        <div className="space-y-2">
+          {filteredTasks.map(task => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onEdit={(task) => { setEditingTask(task); setShowModal(true); }}
+              onDelete={handleDeleteTask}
+              onOpenComments={(task) => { setSelectedTaskForComments(task); setShowCommentsModal(true); }}
+              applications={applications}
+              showNotification={showNotification}
+              userRole={userRole}
+            />
+          ))}
         </div>
       )}
       
