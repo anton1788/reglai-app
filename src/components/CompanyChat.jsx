@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from '
 import { 
   Send, Smile, Paperclip, Edit2, Trash2, X, Check, 
   AtSign, Loader2, MessageCircle, Shield, User, AlertCircle,
-  Plus, Users, Settings, Search, CornerUpLeft, Bookmark, BookmarkCheck
+  Plus, Users, Settings, Search, CornerUpLeft, Bookmark, BookmarkCheck, Menu
 } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 import MessageItem from './MessageItem';
@@ -66,18 +66,19 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [replyTo, setReplyTo] = useState(null);
   const [savedMessages, setSavedMessages] = useState(new Set());
   const [typingUsers, setTypingUsers] = useState(new Set());
-  const [showSidebar, setShowSidebar] = useState(true);
-
-  // ========== МОБИЛЬНАЯ АДАПТАЦИЯ ==========
-  const [isMobileChat, setIsMobileChat] = useState(false);
-  const [showMobileSidebar, setShowMobileSidebar] = useState(true);
+  
+  // Мобильная адаптация
+  const [isMobile, setIsMobile] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true); // На мобильных показываем либо сайдбар, либо чат
 
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < 768;
-      setIsMobileChat(mobile);
-      if (!mobile) {
-        setShowMobileSidebar(true);
+      setIsMobile(mobile);
+      if (mobile) {
+        setShowSidebar(true); // На мобильных по умолчанию показываем сайдбар
+      } else {
+        setShowSidebar(true); // На десктопе сайдбар всегда виден
       }
     };
     checkMobile();
@@ -109,8 +110,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
     
     setActiveChannel(dmId);
-    if (window.innerWidth < 768) {
-      setShowSidebar(false);
+    if (isMobile) {
+      setShowSidebar(false); // На мобильных после выбора чата показываем сообщения
     }
   };
 
@@ -783,190 +784,218 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   };
 
+  // Функция для переключения сайдбара на мобильных
+  const toggleSidebar = () => {
+    setShowSidebar(!showSidebar);
+  };
+
+  // Функция для выбора канала на мобильных
+  const handleChannelSelect = (channelId) => {
+    setActiveChannel(channelId);
+    if (isMobile) {
+      setShowSidebar(false);
+    }
+  };
+
   // ========== RENDER ==========
   return (
-    <div className="flex flex-col w-full h-full bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        <ChatSidebar
-          channels={allChannels}
-          activeChannel={activeChannel}
-          onChannelSelect={setActiveChannel}
-          canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
-          onCreateChannel={() => setShowCreateModal(true)}
-          connectionStatus={connectionStatus}
-          isMobile={window.innerWidth < 768}
-          showSidebar={showSidebar}
-          onCloseSidebar={() => setShowSidebar(false)}
-          onChannelSettings={(channel) => {
-            setSelectedChannel(channel);
-            setShowChannelSettings(true);
-            loadChannelMembers(channel.id);
-          }}
-          onDeleteChannel={deleteChannel}
-          currentUserRole={userRole}
-          companyUsers={companyUsers}
-          currentUser={user}
-          onStartDirectChat={startDirectChat}
-        />
+    <div className="flex flex-col w-full h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+      {/* Мобильная кнопка назад */}
+      {isMobile && !showSidebar && (
+        <button
+          onClick={toggleSidebar}
+          className="absolute top-3 left-3 z-20 p-2 bg-white dark:bg-gray-800 rounded-full shadow-md border border-gray-200 dark:border-gray-700"
+        >
+          <Menu className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+        </button>
+      )}
+      
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
+        {/* Сайдбар - на мобильных показывается когда showSidebar === true */}
+        {(showSidebar || !isMobile) && (
+          <ChatSidebar
+            channels={allChannels}
+            activeChannel={activeChannel}
+            onChannelSelect={handleChannelSelect}
+            canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
+            onCreateChannel={() => setShowCreateModal(true)}
+            connectionStatus={connectionStatus}
+            isMobile={isMobile}
+            showSidebar={showSidebar}
+            onCloseSidebar={toggleSidebar}
+            onChannelSettings={(channel) => {
+              setSelectedChannel(channel);
+              setShowChannelSettings(true);
+              loadChannelMembers(channel.id);
+            }}
+            onDeleteChannel={deleteChannel}
+            currentUserRole={userRole}
+            companyUsers={companyUsers}
+            currentUser={user}
+            onStartDirectChat={startDirectChat}
+          />
+        )}
 
-        {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Header - адаптивный */}
-          <header className="flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
-            <div className="flex items-center gap-2 sm:gap-3">
-              {isMobileChat && !showMobileSidebar && (
-                <button 
-                  onClick={() => setShowMobileSidebar(true)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <MessageCircle className="w-5 h-5" />
-                </button>
+        {/* Main Chat Area - на мобильных показывается когда showSidebar === false */}
+        {(!isMobile || !showSidebar) && (
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            {/* Header */}
+            <header className="flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {isMobile && !showSidebar && (
+                  <button 
+                    onClick={toggleSidebar}
+                    className="p-2 hover:bg-gray-100 rounded-lg"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+                )}
+                
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <span className="text-xl sm:text-2xl bg-gray-100 dark:bg-gray-700 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
+                    {currentChannel?.icon || '💬'}
+                  </span>
+                  <div>
+                    <h2 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+                      {currentChannel?.label || currentChannel?.name}
+                    </h2>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+                      {currentChannel?.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
+                <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <span>{messages.length}</span>
+              </div>
+            </header>
+
+            {/* Messages List */}
+            <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 min-h-0">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center h-40 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
+                  <span className="text-sm text-gray-500">Загрузка...</span>
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                    <MessageCircle className="w-8 h-8 opacity-50" />
+                  </div>
+                  <p className="font-medium text-base sm:text-lg">Нет сообщений</p>
+                  <p className="text-xs sm:text-sm mt-1 opacity-70">Начните обсуждение!</p>
+                </div>
+              ) : (
+                <>
+                  {messages.map(msg => (
+                    <MessageItem
+                      key={msg.id}
+                      msg={msg}
+                      user={user}
+                      userRole={userRole}
+                      isOwn={msg.user_id === user?.id}
+                      isEditing={editingMessageId === msg.id}
+                      editText={editText}
+                      onStartEdit={startEdit}
+                      onSaveEdit={saveEdit}
+                      onCancelEdit={cancelEdit}
+                      onDelete={deleteMessage}
+                      onToggleReaction={toggleReaction}
+                      onReply={handleReply}
+                      onToggleSave={toggleSaveMessage}
+                      isSaved={savedMessages.has(msg.id)}
+                      showReactionsPicker={showReactionsPicker}
+                      setShowReactionsPicker={setShowReactionsPicker}
+                      formatMessage={formatMessage}
+                      formatTime={formatTime}
+                      language={language}
+                      textareaRef={textareaRef}
+                      companyUsers={companyUsers}
+                    />
+                  ))}
+                  <div ref={messagesEndRef} />
+                </>
+              )}
+            </div>
+
+            {/* Input Area */}
+            <div className="flex-shrink-0 p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-white/50 dark:bg-gray-800/50">
+              {typingUsers.size > 0 && (
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <span className="text-xs text-gray-500 animate-pulse">
+                    {Array.from(typingUsers).map(id => {
+                      const userData = companyUsers.find(u => u.user_id === id);
+                      return userData?.full_name?.split(' ')[0];
+                    }).join(', ')} печатает...
+                  </span>
+                </div>
               )}
               
-              <div className="flex items-center gap-2 sm:gap-3">
-                <span className="text-xl sm:text-2xl bg-gray-100 dark:bg-gray-700 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
-                  {currentChannel?.icon || '💬'}
-                </span>
-                <div>
-                  <h2 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
-                    {currentChannel?.label || currentChannel?.name}
-                  </h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-                    {currentChannel?.description}
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
-              <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-              <span>{messages.length}</span>
-            </div>
-          </header>
-
-          {/* Messages List - адаптивный */}
-          <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 min-h-0">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center h-40 gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
-                <span className="text-sm text-gray-500">Загрузка...</span>
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
-                  <MessageCircle className="w-8 h-8 opacity-50" />
-                </div>
-                <p className="font-medium text-base sm:text-lg">Нет сообщений</p>
-                <p className="text-xs sm:text-sm mt-1 opacity-70">Начните обсуждение!</p>
-              </div>
-            ) : (
-              <>
-                {messages.map(msg => (
-                  <MessageItem
-                    key={msg.id}
-                    msg={msg}
-                    user={user}
-                    userRole={userRole}
-                    isOwn={msg.user_id === user?.id}
-                    isEditing={editingMessageId === msg.id}
-                    editText={editText}
-                    onStartEdit={startEdit}
-                    onSaveEdit={saveEdit}
-                    onCancelEdit={cancelEdit}
-                    onDelete={deleteMessage}
-                    onToggleReaction={toggleReaction}
-                    onReply={handleReply}
-                    onToggleSave={toggleSaveMessage}
-                    isSaved={savedMessages.has(msg.id)}
-                    showReactionsPicker={showReactionsPicker}
-                    setShowReactionsPicker={setShowReactionsPicker}
-                    formatMessage={formatMessage}
-                    formatTime={formatTime}
-                    language={language}
-                    textareaRef={textareaRef}
-                    companyUsers={companyUsers}
-                  />
-                ))}
-                <div ref={messagesEndRef} />
-              </>
-            )}
-          </div>
-
-          {/* Input Area */}
-          <div className="flex-shrink-0 p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-white/50 dark:bg-gray-800/50">
-            {typingUsers.size > 0 && (
-              <div className="mb-2 flex items-center gap-2">
-                <div className="typing-indicator">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-                <span className="text-xs text-gray-500 animate-pulse">
-                  {Array.from(typingUsers).map(id => {
-                    const userData = companyUsers.find(u => u.user_id === id);
-                    return userData?.full_name?.split(' ')[0];
-                  }).join(', ')} печатает...
-                </span>
-              </div>
-            )}
-            
-            {replyTo && (
-              <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex justify-between items-start border-l-4 border-[#4A6572]">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 text-xs">
-                    <CornerUpLeft className="w-3 h-3 text-[#4A6572]" />
-                    <span className="font-bold text-[#4A6572] dark:text-[#F9AA33]">
-                      Ответ {replyTo.user?.user_metadata?.full_name || 'пользователю'}:
-                    </span>
+              {replyTo && (
+                <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex justify-between items-start border-l-4 border-[#4A6572]">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 text-xs">
+                      <CornerUpLeft className="w-3 h-3 text-[#4A6572]" />
+                      <span className="font-bold text-[#4A6572] dark:text-[#F9AA33]">
+                        Ответ {replyTo.user?.user_metadata?.full_name || 'пользователю'}:
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate mt-1">
+                      {replyTo.content?.slice(0, 80)}
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 truncate mt-1">
-                    {replyTo.content?.slice(0, 80)}
-                  </p>
+                  <button onClick={() => setReplyTo(null)} className="p-1 hover:bg-gray-200 rounded-lg">
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
                 </div>
-                <button onClick={() => setReplyTo(null)} className="p-1 hover:bg-gray-200 rounded-lg">
-                  <X className="w-4 h-4 text-gray-500" />
+              )}
+              
+              <div className="flex items-end gap-2">
+                <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300">
+                  <Paperclip className="w-5 h-5" />
+                  <input type="file" onChange={handleFileUpload} className="hidden" accept="image/*,.pdf,.doc,.docx" />
+                </label>
+
+                <div className="flex-1 relative">
+                  <textarea
+                    ref={textareaRef}
+                    value={newMessage}
+                    onChange={handleTextareaChange}
+                    onKeyDown={handleKeyDown}
+                    placeholder={replyTo ? `Ответ ${replyTo.user?.user_metadata?.full_name}...` : (t?.('chat.placeholder') || 'Введите сообщение...')}
+                    className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700/50 border border-gray-200/50 dark:border-gray-600/50 rounded-xl focus:ring-2 focus:ring-[#4A6572] resize-none text-sm"
+                    rows={1}
+                    style={{ minHeight: '44px', maxHeight: '120px' }}
+                  />
+                </div>
+
+                <button
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim() || sending}
+                  className={`p-2.5 rounded-xl transition-all ${
+                    !newMessage.trim() || sending
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white hover:shadow-lg active:scale-95'
+                  }`}
+                >
+                  {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                 </button>
               </div>
-            )}
-            
-            <div className="flex items-end gap-2">
-              <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300">
-                <Paperclip className="w-5 h-5" />
-                <input type="file" onChange={handleFileUpload} className="hidden" accept="image/*,.pdf,.doc,.docx" />
-              </label>
-
-              <div className="flex-1 relative">
-                <textarea
-                  ref={textareaRef}
-                  value={newMessage}
-                  onChange={handleTextareaChange}
-                  onKeyDown={handleKeyDown}
-                  placeholder={replyTo ? `Ответ ${replyTo.user?.user_metadata?.full_name}...` : (t?.('chat.placeholder') || 'Введите сообщение...')}
-                  className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700/50 border border-gray-200/50 dark:border-gray-600/50 rounded-xl focus:ring-2 focus:ring-[#4A6572] resize-none text-sm"
-                  rows={1}
-                  style={{ minHeight: '44px', maxHeight: '120px' }}
-                />
+              
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 dark:text-gray-500">
+                <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> — отправить
+                <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ml-2">Shift+Enter</kbd> — новая строка
               </div>
-
-              <button
-                onClick={sendMessage}
-                disabled={!newMessage.trim() || sending}
-                className={`p-2.5 rounded-xl transition-all ${
-                  !newMessage.trim() || sending
-                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white hover:shadow-lg active:scale-95'
-                }`}
-              >
-                {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-              </button>
-            </div>
-            
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 dark:text-gray-500">
-              <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> — отправить
-              <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ml-2">Shift+Enter</kbd> — новая строка
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Create Channel Modal */}
