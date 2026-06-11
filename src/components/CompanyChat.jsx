@@ -75,11 +75,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     const checkMobile = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      if (mobile) {
-        setShowSidebar(true); // На мобильных по умолчанию показываем сайдбар
-      } else {
-        setShowSidebar(true); // На десктопе сайдбар всегда виден
-      }
+      setShowSidebar(true); // Просто всегда true при загрузке
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
@@ -210,27 +206,34 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   }, [userCompanyId]);
 
   const loadMessages = useCallback(async () => {
-    if (!userCompanyId || !activeChannel) return;
+  if (!userCompanyId || !activeChannel) return;
+  
+  setLoading(true);
+  try {
+    const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+    const isDirectChat = activeChannel?.startsWith('dm_');
     
-    setLoading(true);
-    try {
-      const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
-      let query = supabase
-        .from('company_messages')
-        .select('*')
-        .eq('company_id', userCompanyId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: true })
-        .limit(100);
-      
-      if (isSystemChannel) {
-        query = query.eq('channel', activeChannel).eq('channel_type', 'system');
-      } else {
-        query = query.eq('channel_id', activeChannel);
-      }
-      
-      const { data: messagesData, error } = await query;
-      if (error) throw error;
+    let query = supabase
+      .from('company_messages')
+      .select('*')
+      .eq('company_id', userCompanyId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true })
+      .limit(100);
+    
+    if (isSystemChannel) {
+      query = query.eq('channel', activeChannel).eq('channel_type', 'system');
+    } else if (isDirectChat) {
+      query = query.eq('channel_id', activeChannel).eq('channel_type', 'direct');
+    } else {
+      query = query.eq('channel_id', activeChannel).eq('channel_type', 'custom');
+    }
+    
+    const { data: messagesData, error } = await query;
+    if (error) {
+      console.error('❌ Ошибка загрузки:', error);
+      throw error;
+    }
       
       const messageIds = messagesData?.map(m => m.id) || [];
       let reactionsMap = {};
@@ -447,52 +450,70 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   }, [activeChannel, user?.id]);
 
   // ========== ОТПРАВКА СООБЩЕНИЯ ==========
-  const sendMessage = async () => {
-    const content = newMessage.trim();
-    if (!content || !user?.id || sending) return;
+const sendMessage = async () => {
+  const content = newMessage.trim();
+  if (!content || !user?.id || sending) return;
+  
+  if (!canWriteToChannel(activeChannel)) {
+    showNotification?.('У вас нет прав на отправку сообщений в этот канал', 'error');
+    return;
+  }
+  
+  const safeCompanyId = userCompanyId;
+  if (!safeCompanyId) {
+    showNotification?.('Ошибка: компания не указана', 'error');
+    return;
+  }
+  
+  setSending(true);
+  try {
+    const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+    const isDirectChat = activeChannel?.startsWith('dm_');
     
-    if (!canWriteToChannel(activeChannel)) {
-      showNotification?.('У вас нет прав на отправку сообщений в этот канал', 'error');
-      return;
+    // Базовые поля, общие для всех типов сообщений
+    const messageData = {
+      company_id: safeCompanyId,
+      user_id: user.id,
+      content: content,
+      created_at: new Date().toISOString(),
+      reply_to_message_id: replyTo?.id || null
+    };
+    
+    if (isSystemChannel) {
+      // Для системных каналов
+      messageData.channel = activeChannel;
+      messageData.channel_type = 'system';
+      // Не отправляем channel_id для системных каналов
+    } else if (isDirectChat) {
+      // Для личных сообщений
+      messageData.channel_id = activeChannel;
+      messageData.channel_type = 'direct';
+      messageData.channel = null; // Явно устанавливаем null
+    } else {
+      // Для пользовательских каналов
+      messageData.channel_id = activeChannel;
+      messageData.channel_type = 'custom';
+      messageData.channel = null;
     }
     
-    const safeCompanyId = userCompanyId;
-    if (!safeCompanyId) {
-      showNotification?.('Ошибка: компания не указана', 'error');
-      return;
+    console.log('📤 Отправка сообщения:', messageData);
+    
+    const { error } = await supabase.from('company_messages').insert([messageData]);
+    if (error) {
+      console.error('❌ Ошибка Supabase:', error);
+      throw error;
     }
     
-    setSending(true);
-    try {
-      const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
-      const messageData = {
-        company_id: safeCompanyId,
-        user_id: user.id,
-        content: content,
-        created_at: new Date().toISOString(),
-        reply_to_message_id: replyTo?.id || null
-      };
-      
-      if (isSystemChannel) {
-        messageData.channel = activeChannel;
-        messageData.channel_type = 'system';
-      } else {
-        messageData.channel_id = activeChannel;
-      }
-      
-      const { error } = await supabase.from('company_messages').insert([messageData]);
-      if (error) throw error;
-      
-      setNewMessage('');
-      setReplyTo(null);
-      textareaRef.current?.focus();
-    } catch (err) {
-      console.error('Ошибка отправки:', err);
-      showNotification?.('Не удалось отправить сообщение', 'error');
-    } finally {
-      setSending(false);
-    }
-  };
+    setNewMessage('');
+    setReplyTo(null);
+    textareaRef.current?.focus();
+  } catch (err) {
+    console.error('Ошибка отправки:', err);
+    showNotification?.('Не удалось отправить сообщение: ' + (err.message || 'неизвестная ошибка'), 'error');
+  } finally {
+    setSending(false);
+  }
+};
 
   // ========== УПРАВЛЕНИЕ УЧАСТНИКАМИ ==========
   const loadChannelMembers = async (channelId) => {
