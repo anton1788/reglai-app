@@ -68,6 +68,23 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [showSidebar, setShowSidebar] = useState(true);
 
+      // ========== МОБИЛЬНАЯ АДАПТАЦИЯ ==========
+  const [isMobileChat, setIsMobileChat] = useState(false);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(true);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobileChat(mobile);
+      if (!mobile) {
+        setShowMobileSidebar(true);
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   // ========== ЛИЧНЫЕ СООБЩЕНИЯ ==========
 const startDirectChat = (targetUser) => {
   if (!targetUser || !user?.id) return;
@@ -803,81 +820,86 @@ const allChannels = useMemo(() => {
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Header */}
-          <header className="flex-shrink-0 px-4 py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setShowSidebar(true)}
-                className="md:hidden p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <MessageCircle className="w-5 h-5" />
-              </button>
-              
-              <div className="flex items-center gap-3">
-                <span className="text-2xl bg-gray-100 dark:bg-gray-700 w-10 h-10 rounded-full flex items-center justify-center">
-                  {currentChannel?.icon || '💬'}
-                </span>
-                <div>
-                  <h2 className="font-bold text-gray-900 dark:text-white">{currentChannel?.label || currentChannel?.name}</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-                    {currentChannel?.description}
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
-              <MessageCircle className="w-3.5 h-3.5" />
-              <span>{messages.length}</span>
-            </div>
-          </header>
+          {/* Header - адаптивный */}
+<header className="flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
+  <div className="flex items-center gap-2 sm:gap-3">
+    {isMobileChat && !showMobileSidebar && (
+      <button 
+        onClick={() => setShowMobileSidebar(true)}
+        className="p-2 hover:bg-gray-100 rounded-lg"
+      >
+        <MessageCircle className="w-5 h-5" />
+      </button>
+    )}
+    
+    <div className="flex items-center gap-2 sm:gap-3">
+      <span className="text-xl sm:text-2xl bg-gray-100 dark:bg-gray-700 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
+        {currentChannel?.icon || '💬'}
+      </span>
+      <div>
+        <h2 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+          {currentChannel?.label || currentChannel?.name}
+        </h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+          {currentChannel?.description}
+        </p>
+      </div>
+    </div>
+  </div>
+  
+  <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
+    <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+    <span>{messages.length}</span>
+  </div>
+</header>
 
           {/* Messages List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center h-40 gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
-                <span className="text-sm text-gray-500">Загрузка...</span>
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
-                  <MessageCircle className="w-8 h-8 opacity-50" />
-                </div>
-                <p className="font-medium text-lg">Нет сообщений</p>
-                <p className="text-sm mt-1 opacity-70">Начните обсуждение!</p>
-              </div>
-            ) : (
-              <>
-                {messages.map(msg => (
-                  <MessageItem
-                    key={msg.id}
-                    msg={msg}
-                    user={user}
-                    userRole={userRole}
-                    isOwn={msg.user_id === user?.id}
-                    isEditing={editingMessageId === msg.id}
-                    editText={editText}
-                    onStartEdit={startEdit}
-                    onSaveEdit={saveEdit}
-                    onCancelEdit={cancelEdit}
-                    onDelete={deleteMessage}
-                    onToggleReaction={toggleReaction}
-                    onReply={handleReply}
-                    onToggleSave={toggleSaveMessage}
-                    isSaved={savedMessages.has(msg.id)}
-                    showReactionsPicker={showReactionsPicker}
-                    setShowReactionsPicker={setShowReactionsPicker}
-                    formatMessage={formatMessage}
-                    formatTime={formatTime}
-                    language={language}
-                    textareaRef={textareaRef}
-                    companyUsers={companyUsers}
-                  />
-                ))}
-                <div ref={messagesEndRef} />
-              </>
-            )}
-          </div>
+<div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 min-h-0">
+  {loading ? (
+    <div className="flex flex-col items-center justify-center h-40 gap-3">
+      <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
+      <span className="text-sm text-gray-500">Загрузка...</span>
+    </div>
+  ) : messages.length === 0 ? (
+    <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+      <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+        <MessageCircle className="w-8 h-8 opacity-50" />
+      </div>
+      <p className="font-medium text-base sm:text-lg">Нет сообщений</p>
+      <p className="text-xs sm:text-sm mt-1 opacity-70">Начните обсуждение!</p>
+    </div>
+  ) : (
+    <>
+      {messages.map(msg => (
+        <MessageItem
+          key={msg.id}
+          msg={msg}
+          user={user}
+          userRole={userRole}
+          isOwn={msg.user_id === user?.id}
+          isEditing={editingMessageId === msg.id}
+          editText={editText}
+          onStartEdit={startEdit}
+          onSaveEdit={saveEdit}
+          onCancelEdit={cancelEdit}
+          onDelete={deleteMessage}
+          onToggleReaction={toggleReaction}
+          onReply={handleReply}
+          onToggleSave={toggleSaveMessage}
+          isSaved={savedMessages.has(msg.id)}
+          showReactionsPicker={showReactionsPicker}
+          setShowReactionsPicker={setShowReactionsPicker}
+          formatMessage={formatMessage}
+          formatTime={formatTime}
+          language={language}
+          textareaRef={textareaRef}
+          companyUsers={companyUsers}
+        />
+      ))}
+      <div ref={messagesEndRef} />
+    </>
+  )}
+</div>
 
           {/* Input Area */}
           <div className="flex-shrink-0 p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-white/50 dark:bg-gray-800/50">

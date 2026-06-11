@@ -524,29 +524,41 @@ const Navbar = ({
 
       {/* Планшетная навигация - иконки с подписями (видна на sm и md) */}
       {navItems.length > 0 && (
-        <div className="hidden sm:flex lg:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 overflow-x-auto no-scrollbar">
-          <div className="flex gap-1 p-2">
-            {navItems.slice(0, 6).map((item) => {
-              const Icon = item.icon;
-              const isActive = currentPage === item.id || 
-                (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history'));
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => { onNavigate?.(item.path); setIsMobileMenuOpen(false); }}
-                  className={`flex flex-col items-center gap-1 px-2 sm:px-3 py-2 rounded-lg transition-all flex-shrink-0 ${
-                    isActive
-                      ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-700/50'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-xs font-medium">{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        // В планшетной навигации (строки ~450-480), замените на:
+
+<div className="hidden sm:flex lg:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 overflow-x-auto no-scrollbar">
+  <div className="flex gap-1 p-2">
+    {navItems.slice(0, 6).map((item) => {
+      const Icon = item.icon;
+      const isActive = currentPage === item.id || 
+        (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history'));
+      return (
+        <button
+          key={item.id}
+          onClick={() => { onNavigate?.(item.path); setIsMobileMenuOpen(false); }}
+          className={`flex flex-col items-center gap-1 px-2 sm:px-3 py-2 rounded-lg transition-all flex-shrink-0 min-w-[70px] ${
+            isActive
+              ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-700/50'
+          }`}
+        >
+          <Icon className="w-5 h-5" />
+          <span className="text-[11px] font-medium truncate max-w-[70px]">{item.label}</span>
+        </button>
+      );
+    })}
+    {/* Показать остальные пункты в меню бургера */}
+    {navItems.length > 6 && (
+      <button
+        onClick={() => setIsMobileMenuOpen(true)}
+        className="flex flex-col items-center gap-1 px-2 py-2 rounded-lg flex-shrink-0 min-w-[70px] text-gray-600 dark:text-gray-400"
+      >
+        <Menu className="w-5 h-5" />
+        <span className="text-[11px] font-medium">Ещё</span>
+      </button>
+    )}
+  </div>
+</div>
       )}
 
       {/* Десктопная навигация - горизонтальное меню с прокруткой (только lg и выше) */}
