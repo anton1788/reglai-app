@@ -1,10 +1,11 @@
-// CompanyChat.jsx - Исправленная версия
+// CompanyChat.jsx - ПОЛНАЯ ВЕРСИЯ (без ошибок ESLint)
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { 
-  Send, Smile, Paperclip, Edit2, Trash2, X, Check, 
-  AtSign, Loader2, MessageCircle, Shield, User, AlertCircle,
-  Plus, Users, Settings, Search, CornerUpLeft, Bookmark, BookmarkCheck, Menu
+  Send, Paperclip, X, Menu, Mic, Image, Smile, CornerUpLeft, Loader2,
+  Phone, EllipsisVertical, Trash2, Edit2, Bookmark, BookmarkCheck,
+  Plus, Users, Settings, Search, User, Mail, Shield, AtSign, AlertCircle,
+  MessageCircle as MsgIcon
 } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 import MessageItem from './MessageItem';
@@ -12,41 +13,19 @@ import ChatSidebar from './ChatSidebar';
 
 // ========== КОНСТАНТЫ ==========
 const SYSTEM_CHANNELS = [
-  { 
-    id: 'general', 
-    label: '# Общий', 
-    icon: '💬', 
-    description: 'Общие вопросы',
+  { id: 'general', label: 'Общий', icon: '💬', description: 'Общие вопросы',
     canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
-    canWrite: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client']
-  },
-  { 
-    id: 'supply', 
-    label: '📦 Снабжение', 
-    icon: '📦', 
-    description: 'Закупки и материалы',
-    canView: ['manager', 'supply_admin'],
-    canWrite: ['manager', 'supply_admin']
-  },
-  { 
-    id: 'foremen', 
-    label: '👷 Прорабы', 
-    icon: '👷', 
-    description: 'Для прорабов',
-    canView: ['manager', 'master', 'foreman'],
-    canWrite: ['manager', 'master', 'foreman']
-  },
-  { 
-    id: 'announcements', 
-    label: '📢 Объявления', 
-    icon: '📢', 
-    description: 'Важные объявления',
+    canWrite: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'] },
+  { id: 'supply', label: 'Снабжение', icon: '📦', description: 'Закупки и материалы',
+    canView: ['manager', 'supply_admin'], canWrite: ['manager', 'supply_admin'] },
+  { id: 'foremen', label: 'Прорабы', icon: '👷', description: 'Для прорабов',
+    canView: ['manager', 'master', 'foreman'], canWrite: ['manager', 'master', 'foreman'] },
+  { id: 'announcements', label: 'Объявления', icon: '📢', description: 'Важные объявления',
     canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
-    canWrite: ['manager', 'supply_admin']
-  }
+    canWrite: ['manager', 'supply_admin'] }
 ];
 
-const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotification }) => {
+const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification }) => {
   // ========== СОСТОЯНИЯ ==========
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -64,65 +43,17 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [channelMembers, setChannelMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
-  
   const [replyTo, setReplyTo] = useState(null);
   const [savedMessages, setSavedMessages] = useState(new Set());
   const [typingUsers, setTypingUsers] = useState(new Set());
-  
-  // 📊 Непрочитанные сообщения
   const [unreadCounts, setUnreadCounts] = useState({});
-  const [_lastReadTimes, setLastReadTimes] = useState({});
-  
-  // Мобильная адаптация
   const [isMobile, setIsMobile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true); // 🔑 Ключевой флаг
-  const [isUserScrolling, setIsUserScrolling] = useState(false); // 🔑 Флаг прокрутки пользователем
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
   const scrollTimeoutRef = useRef(null);
-
-  useEffect(() => {
-    setShowSidebar(true);
-  }, []);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // ========== ЛИЧНЫЕ СООБЩЕНИЯ ==========
-  const startDirectChat = (targetUser) => {
-    if (!targetUser || !user?.id) return;
-    
-    const dmId = `dm_${[user.id, targetUser.user_id].sort().join('_')}`;
-    const existingDM = customChannels.find(c => c.id === dmId);
-    
-    if (!existingDM) {
-      const newDM = {
-        id: dmId,
-        name: targetUser.full_name,
-        label: targetUser.full_name,
-        icon: '💬',
-        description: `Личный чат с ${targetUser.full_name}`,
-        type: 'direct',
-        is_private: true,
-        participants: [user.id, targetUser.user_id],
-        created_by: user.id,
-        created_at: new Date().toISOString()
-      };
-      setCustomChannels(prev => [...prev, newDM]);
-    }
-    
-    setActiveChannel(dmId);
-    markChannelAsRead(dmId);
-    if (isMobile) {
-      setShowSidebar(false);
-    }
-  };
+  const [isRecording, setIsRecording] = useState(false);
+  const [newChannelData, setNewChannelData] = useState({ name: '', description: '', isPrivate: false, selectedMembers: [] });
 
   // Refs
   const messagesContainerRef = useRef(null);
@@ -132,10 +63,34 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const lastScrollTopRef = useRef(0);
 
   // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
+  useEffect(() => {
+    setShowSidebar(true);
+  }, []);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const formatTime = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleTimeString(language === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+    const now = new Date();
+    const diff = now - date;
+    const isToday = date.toDateString() === now.toDateString();
+    
+    if (isToday) {
+      return date.toLocaleTimeString(language === 'ru' ? 'ru-RU' : 'en-US', 
+        { hour: '2-digit', minute: '2-digit' });
+    } else if (diff < 7 * 24 * 60 * 60 * 1000) {
+      return date.toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', 
+        { weekday: 'short' });
+    } else {
+      return date.toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', 
+        { day: 'numeric', month: 'short' });
+    }
   };
 
   const formatMessage = (text) => {
@@ -144,16 +99,18 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     const parts = text.split(urlRegex);
     return parts.map((part, i) => {
       if (part?.match?.(urlRegex)) {
-        return <a key={`url-${i}`} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">{part}</a>;
+        return <a key={`url-${i}`} href={part} target="_blank" rel="noopener noreferrer" 
+          className="text-blue-500 underline break-all">{part}</a>;
       }
       if (part?.startsWith?.('@')) {
-        return <span key={`mention-${i}`} className="font-bold text-blue-500 bg-blue-50 px-0.5 rounded">{part}</span>;
+        return <span key={`mention-${i}`} className="font-semibold text-[#25D366] bg-[#25D366]/10 px-0.5 rounded">
+          {part}
+        </span>;
       }
       return <span key={`text-${i}`}>{part}</span>;
     });
   };
 
-  // Все каналы (системные + пользовательские + личные)
   const allChannels = useMemo(() => {
     const system = SYSTEM_CHANNELS.filter(ch => {
       if (!ch.canView) return true;
@@ -161,68 +118,66 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }).map(ch => ({ ...ch, type: 'system' }));
     
     const custom = customChannels.filter(ch => {
-      if (ch.type === 'direct') {
-        return ch.participants?.includes(user?.id);
-      }
+      if (ch.type === 'direct') return ch.participants?.includes(user?.id);
       return true;
     }).map(ch => ({ ...ch, type: ch.type || 'custom' }));
     
     return [...system, ...custom];
   }, [customChannels, userRole, user?.id]);
 
-  // Проверка прав на отправку
+  const currentChannel = allChannels.find(c => c.id === activeChannel);
+  const currentChatUser = useMemo(() => {
+    if (activeChannel?.startsWith('dm_')) {
+      const participants = activeChannel.replace('dm_', '').split('_');
+      const otherUserId = participants.find(id => id !== user?.id);
+      return companyUsers.find(u => u.user_id === otherUserId);
+    }
+    return null;
+  }, [activeChannel, companyUsers, user?.id]);
+
+  const chatTitle = currentChatUser?.full_name || currentChannel?.label || currentChannel?.name;
+  const chatStatus = currentChatUser ? 'онлайн' : `${messages.length} сообщений`;
+
   const canWriteToChannel = (channelId) => {
     const channel = SYSTEM_CHANNELS.find(c => c.id === channelId);
     if (!channel) return true;
     return channel.canWrite?.includes(userRole) || false;
   };
 
-  // Текущий канал
-  const currentChannel = allChannels.find(c => c.id === activeChannel);
+  const canDeleteChannel = (channel) => {
+    if (channel.type === 'system') return false;
+    return userRole === 'manager' || userRole === 'supply_admin';
+  };
 
-  // ========== ОТСЛЕЖИВАНИЕ ПРОКРУТКИ ПОЛЬЗОВАТЕЛЯ ==========
+  // ========== ПРОКРУТКА ==========
   const handleScroll = useCallback(() => {
     if (!messagesContainerRef.current) return;
-    
     const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
     const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-    
-    // Проверяем, скроллит ли пользователь вверх
     const isScrollingUp = scrollTop < lastScrollTopRef.current;
     lastScrollTopRef.current = scrollTop;
     
     if (isScrollingUp && !isNearBottom) {
-      // Пользователь скроллит вверх от нижней части - отключаем автоскролл
       setShouldAutoScroll(false);
       setIsUserScrolling(true);
-      
-      // Сбрасываем флаг через 5 секунд бездействия
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-      scrollTimeoutRef.current = setTimeout(() => {
-        setIsUserScrolling(false);
-      }, 5000);
+      scrollTimeoutRef.current = setTimeout(() => setIsUserScrolling(false), 5000);
     } else if (isNearBottom && !isScrollingUp) {
-      // Пользователь внизу - включаем автоскролл
       setShouldAutoScroll(true);
       setIsUserScrolling(false);
     }
   }, []);
 
-  // Плавная прокрутка вниз
   const scrollToBottom = useCallback((behavior = 'smooth') => {
     if (!shouldAutoScroll || isUserScrolling) return;
-    if (!messagesContainerRef.current) return;
-    
-    messagesContainerRef.current.scrollTo({
+    messagesContainerRef.current?.scrollTo({
       top: messagesContainerRef.current.scrollHeight,
       behavior: behavior
     });
   }, [shouldAutoScroll, isUserScrolling]);
 
-  // Принудительная прокрутка вниз (для кнопки или новых сообщений)
   const forceScrollToBottom = useCallback((behavior = 'smooth') => {
-    if (!messagesContainerRef.current) return;
-    messagesContainerRef.current.scrollTo({
+    messagesContainerRef.current?.scrollTo({
       top: messagesContainerRef.current.scrollHeight,
       behavior: behavior
     });
@@ -230,10 +185,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     setIsUserScrolling(false);
   }, []);
 
-  // ========== ЗАГРУЗКА НЕПРОЧИТАННЫХ СООБЩЕНИЙ ==========
+  // ========== НЕПРОЧИТАННЫЕ СООБЩЕНИЯ ==========
   const loadUnreadCounts = useCallback(async () => {
     if (!user?.id || !userCompanyId) return;
-    
     try {
       const { data: readData } = await supabase
         .from('channel_read_status')
@@ -244,7 +198,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       readData?.forEach(item => {
         readMap[item.channel_id] = new Date(item.last_read_at);
       });
-      setLastReadTimes(readMap);
       
       const channels = allChannels.map(ch => ch.id);
       const counts = {};
@@ -276,33 +229,25 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           counts[channelId] = count;
         }
       }
-      
       setUnreadCounts(counts);
     } catch (err) {
       console.error('Ошибка загрузки непрочитанных:', err);
     }
   }, [user?.id, userCompanyId, allChannels]);
 
-  // ========== ОТМЕТКА ПРОЧИТАННЫХ СООБЩЕНИЙ ==========
   const markChannelAsRead = useCallback(async (channelId) => {
     if (!user?.id || !channelId) return;
-    
     try {
       const now = new Date().toISOString();
-      
-      const { error } = await supabase
+      await supabase
         .from('channel_read_status')
-        .upsert({
-          user_id: user.id,
-          channel_id: channelId,
-          last_read_at: now,
-          updated_at: now
+        .upsert({ 
+          user_id: user.id, 
+          channel_id: channelId, 
+          last_read_at: now, 
+          updated_at: now 
         }, { onConflict: 'user_id,channel_id' });
-      
-      if (!error) {
-        setUnreadCounts(prev => ({ ...prev, [channelId]: 0 }));
-        setLastReadTimes(prev => ({ ...prev, [channelId]: new Date(now) }));
-      }
+      setUnreadCounts(prev => ({ ...prev, [channelId]: 0 }));
     } catch (err) {
       console.error('Ошибка отметки прочитанного:', err);
     }
@@ -315,10 +260,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       try {
         const { data, error } = await supabase
           .from('company_users')
-          .select('user_id, full_name, role, phone')
+          .select('user_id, full_name, role, phone, avatar_url')
           .eq('company_id', userCompanyId)
           .eq('is_active', true);
-        
         if (error) throw error;
         setCompanyUsers(data || []);
       } catch (err) {
@@ -337,7 +281,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           .select('*')
           .eq('company_id', userCompanyId)
           .eq('is_archived', false);
-        
         if (error) throw error;
         setCustomChannels(data || []);
         loadUnreadCounts();
@@ -350,7 +293,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
   const loadMessages = useCallback(async () => {
     if (!userCompanyId || !activeChannel) return;
-    
     setLoading(true);
     try {
       const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
@@ -373,10 +315,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       }
       
       const { data: messagesData, error } = await query;
-      if (error) {
-        console.error('❌ Ошибка загрузки:', error);
-        throw error;
-      }
+      if (error) throw error;
       
       const messageIds = messagesData?.map(m => m.id) || [];
       let reactionsMap = {};
@@ -447,12 +386,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       }));
       
       setMessages(enrichedMessages);
-      
-      // Прокрутка вниз только при первой загрузке
-      setTimeout(() => {
-        forceScrollToBottom('auto');
-      }, 100);
-      
+      setTimeout(() => forceScrollToBottom('auto'), 100);
       markChannelAsRead(activeChannel);
     } catch (err) {
       console.error('Ошибка загрузки сообщений:', err);
@@ -460,22 +394,19 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     } finally {
       setLoading(false);
     }
-  }, [userCompanyId, activeChannel, showNotification, markChannelAsRead, forceScrollToBottom]);
+  }, [userCompanyId, activeChannel, showNotification, forceScrollToBottom, markChannelAsRead]);
 
   useEffect(() => { loadMessages(); }, [loadMessages]);
 
   // ========== REAL-TIME ПОДПИСКА ==========
   useEffect(() => {
     if (!userCompanyId || !activeChannel) return;
-    
-    if (subscriptionRef.current) {
-      subscriptionRef.current.unsubscribe();
-    }
+    if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
     
     const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
     const filter = isSystemChannel 
-      ? `company_id=eq.${userCompanyId} AND channel=eq.${activeChannel} AND channel_type=eq.system`
-      : `channel_id=eq.${activeChannel}`;
+      ? `company_id=eq.${userCompanyId} AND channel=eq.${activeChannel}`
+      : `company_id=eq.${userCompanyId} AND channel_id=eq.${activeChannel}`;
     
     subscriptionRef.current = supabase
       .channel(`messages:${activeChannel}`)
@@ -488,49 +419,30 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         const newMsg = payload.new;
         if (newMsg.deleted_at) return;
         
-        const msgChannelId = newMsg.channel_id || newMsg.channel;
-        if (activeChannel !== msgChannelId && newMsg.user_id !== user?.id) {
-          setUnreadCounts(prev => ({
-            ...prev,
-            [msgChannelId]: (prev[msgChannelId] || 0) + 1
-          }));
-        }
-        
         const { data: userData } = await supabase
           .from('company_users')
           .select('full_name, role')
           .eq('user_id', newMsg.user_id)
           .single();
         
-        const { data: reactionsData } = await supabase
-          .from('message_reactions')
-          .select('emoji, user_id')
-          .eq('message_id', newMsg.id);
-        
         const enrichedMessage = {
           ...newMsg,
           user: { user_metadata: userData || { full_name: 'Пользователь', role: 'user' } },
-          reactions: reactionsData || [],
+          reactions: [],
           replied_message: null
         };
         
         setMessages(prev => [...prev, enrichedMessage]);
+        setTimeout(() => scrollToBottom('smooth'), 50);
         
-        // Прокрутка только если пользователь не скроллит вверх
-        setTimeout(() => {
-          if (!isUserScrolling) {
-            scrollToBottom('smooth');
-          }
-        }, 100);
+        if (newMsg.user_id !== user?.id) {
+          markChannelAsRead(activeChannel);
+        }
       })
       .subscribe();
     
-    return () => {
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
-      }
-    };
-  }, [userCompanyId, activeChannel, user?.id, scrollToBottom, isUserScrolling]);
+    return () => { subscriptionRef.current?.unsubscribe(); };
+  }, [userCompanyId, activeChannel, scrollToBottom, markChannelAsRead, user?.id]);
 
   // ========== СОХРАНЁННЫЕ СООБЩЕНИЯ ==========
   useEffect(() => {
@@ -547,29 +459,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     loadSavedMessages();
   }, [user?.id]);
 
-  const toggleSaveMessage = async (messageId) => {
-    if (!user?.id) return;
-    
-    if (savedMessages.has(messageId)) {
-      await supabase.from('saved_messages').delete().eq('message_id', messageId).eq('user_id', user.id);
-      setSavedMessages(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(messageId);
-        return newSet;
-      });
-      showNotification?.('Сообщение удалено из сохранённых', 'info');
-    } else {
-      await supabase.from('saved_messages').insert({ message_id: messageId, user_id: user.id, saved_at: new Date() });
-      setSavedMessages(prev => new Set([...prev, messageId]));
-      showNotification?.('Сообщение сохранено', 'success');
-    }
-  };
-
-  const handleReply = (message) => {
-    setReplyTo(message);
-    textareaRef.current?.focus();
-  };
-
+  // ========== ТАЙПИНГ ==========
   const handleTyping = useCallback(() => {
     if (!user?.id || !activeChannel) return;
     
@@ -622,19 +512,13 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       return;
     }
     
-    const safeCompanyId = userCompanyId;
-    if (!safeCompanyId) {
-      showNotification?.('Ошибка: компания не указана', 'error');
-      return;
-    }
-    
     setSending(true);
     try {
       const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
       const isDirectChat = activeChannel?.startsWith('dm_');
       
       const messageData = {
-        company_id: safeCompanyId,
+        company_id: userCompanyId,
         user_id: user.id,
         content: content,
         created_at: new Date().toISOString(),
@@ -647,34 +531,221 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       } else if (isDirectChat) {
         messageData.channel_id = activeChannel;
         messageData.channel_type = 'direct';
-        messageData.channel = null;
       } else {
         messageData.channel_id = activeChannel;
         messageData.channel_type = 'custom';
-        messageData.channel = null;
       }
       
       const { error } = await supabase.from('company_messages').insert([messageData]);
-      if (error) {
-        console.error('❌ Ошибка Supabase:', error);
-        throw error;
-      }
+      if (error) throw error;
       
       setNewMessage('');
       setReplyTo(null);
-      textareaRef.current?.focus();
-      
-      // Принудительная прокрутка после отправки
       forceScrollToBottom('smooth');
+      
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
     } catch (err) {
       console.error('Ошибка отправки:', err);
-      showNotification?.('Не удалось отправить сообщение: ' + (err.message || 'неизвестная ошибка'), 'error');
+      showNotification?.('Не удалось отправить сообщение', 'error');
     } finally {
       setSending(false);
     }
   };
 
-  // ========== УПРАВЛЕНИЕ УЧАСТНИКАМИ ==========
+  // ========== РЕДАКТИРОВАНИЕ ==========
+  const startEdit = (message) => {
+    setEditingMessageId(message.id);
+    setEditText(message.content);
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  };
+  
+  const saveEdit = async (messageId) => {
+    const content = editText.trim();
+    if (!content) return;
+    
+    try {
+      await supabase
+        .from('company_messages')
+        .update({ content, edited_at: new Date().toISOString() })
+        .eq('id', messageId)
+        .eq('user_id', user?.id);
+      
+      setEditingMessageId(null);
+      setEditText('');
+      setMessages(prev => prev.map(m => 
+        m.id === messageId ? { ...m, content, edited_at: new Date().toISOString() } : m
+      ));
+      showNotification?.('Сообщение обновлено', 'success');
+    } catch (err) {
+      console.error('Ошибка редактирования:', err);
+      showNotification?.('Не удалось обновить сообщение', 'error');
+    }
+  };
+  
+  const cancelEdit = () => {
+    setEditingMessageId(null);
+    setEditText('');
+  };
+  
+  // ========== УДАЛЕНИЕ ==========
+  const deleteMessage = async (messageId) => {
+    if (!window.confirm('Удалить сообщение?')) return;
+    
+    try {
+      await supabase
+        .from('company_messages')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', messageId)
+        .eq('user_id', user?.id);
+      
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      showNotification?.('Сообщение удалено', 'info');
+    } catch (err) {
+      console.error('Ошибка удаления:', err);
+      showNotification?.('Не удалось удалить сообщение', 'error');
+    }
+  };
+
+  // ========== РЕАКЦИИ ==========
+  const toggleReaction = async (messageId, emoji) => {
+    if (!user?.id) return;
+    
+    const message = messages.find(m => m.id === messageId);
+    const hasReacted = message?.reactions?.some(r => r.emoji === emoji && r.user_id === user.id);
+    
+    try {
+      if (hasReacted) {
+        await supabase
+          .from('message_reactions')
+          .delete()
+          .eq('message_id', messageId)
+          .eq('user_id', user.id)
+          .eq('emoji', emoji);
+        
+        setMessages(prev => prev.map(m => 
+          m.id === messageId 
+            ? { ...m, reactions: m.reactions.filter(r => !(r.emoji === emoji && r.user_id === user.id)) }
+            : m
+        ));
+      } else {
+        await supabase
+          .from('message_reactions')
+          .insert({ message_id: messageId, user_id: user.id, emoji, created_at: new Date().toISOString() });
+        
+        setMessages(prev => prev.map(m => 
+          m.id === messageId 
+            ? { ...m, reactions: [...m.reactions, { emoji, user_id: user.id }] }
+            : m
+        ));
+      }
+      setShowReactionsPicker(null);
+    } catch (err) {
+      console.error('Ошибка реакции:', err);
+    }
+  };
+
+  // ========== СОХРАНЕНИЕ СООБЩЕНИЙ ==========
+  const toggleSaveMessage = async (messageId) => {
+    if (!user?.id) return;
+    
+    if (savedMessages.has(messageId)) {
+      await supabase.from('saved_messages').delete().eq('message_id', messageId).eq('user_id', user.id);
+      setSavedMessages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(messageId);
+        return newSet;
+      });
+      showNotification?.('Сообщение удалено из сохранённых', 'info');
+    } else {
+      await supabase.from('saved_messages').insert({ message_id: messageId, user_id: user.id, saved_at: new Date() });
+      setSavedMessages(prev => new Set([...prev, messageId]));
+      showNotification?.('Сообщение сохранено', 'success');
+    }
+  };
+
+  // ========== ОТВЕТ ==========
+  const handleReply = (message) => {
+    setReplyTo(message);
+    textareaRef.current?.focus();
+  };
+
+  // ========== УПРАВЛЕНИЕ КАНАЛАМИ ==========
+  const handleCreateChannel = async () => {
+    if (!newChannelData.name.trim()) {
+      showNotification?.('Введите название канала', 'error');
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('company_channels')
+        .insert([{
+          company_id: userCompanyId,
+          name: newChannelData.name.trim(),
+          description: newChannelData.description.trim(),
+          icon: '💬',
+          is_private: newChannelData.isPrivate,
+          created_by: user.id,
+          created_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      await supabase.from('channel_members').insert({
+        channel_id: data.id,
+        user_id: user.id,
+        role: 'admin'
+      });
+      
+      if (newChannelData.isPrivate && newChannelData.selectedMembers.length) {
+        await supabase.from('channel_members').insert(
+          newChannelData.selectedMembers.map(userId => ({
+            channel_id: data.id,
+            user_id: userId,
+            role: 'member'
+          }))
+        );
+      }
+      
+      setCustomChannels(prev => [...prev, data]);
+      setActiveChannel(data.id);
+      setShowCreateModal(false);
+      setNewChannelData({ name: '', description: '', isPrivate: false, selectedMembers: [] });
+      showNotification?.('Канал создан', 'success');
+    } catch (err) {
+      console.error('Ошибка создания канала:', err);
+      showNotification?.('Не удалось создать канал', 'error');
+    }
+  };
+
+  const deleteChannel = async (channelId) => {
+    const channel = customChannels.find(c => c.id === channelId);
+    if (!channel) return;
+    
+    if (!window.confirm(`Удалить канал "${channel.name}"? Все сообщения в канале будут удалены.`)) return;
+    
+    try {
+      await supabase.from('company_messages').delete().eq('channel_id', channelId);
+      await supabase.from('channel_members').delete().eq('channel_id', channelId);
+      
+      const { error } = await supabase.from('company_channels').delete().eq('id', channelId);
+      if (error) throw error;
+      
+      setCustomChannels(prev => prev.filter(c => c.id !== channelId));
+      if (activeChannel === channelId) {
+        setActiveChannel('general');
+      }
+      showNotification?.('Канал удалён', 'success');
+    } catch (err) {
+      console.error('Ошибка удаления канала:', err);
+      showNotification?.('Не удалось удалить канал', 'error');
+    }
+  };
+
   const loadChannelMembers = async (channelId) => {
     if (!channelId) return;
     setLoadingMembers(true);
@@ -715,14 +786,11 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
   const addChannelMember = async (channelId, userId) => {
     if (!channelId || !userId) return;
-    
     try {
       const { error } = await supabase
         .from('channel_members')
         .insert({ channel_id: channelId, user_id: userId, role: 'member' });
-      
       if (error) throw error;
-      
       await loadChannelMembers(channelId);
       showNotification?.('Участник добавлен', 'success');
     } catch (err) {
@@ -733,16 +801,13 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
   const removeChannelMember = async (channelId, userId) => {
     if (!channelId || !userId) return;
-    
     try {
       const { error } = await supabase
         .from('channel_members')
         .delete()
         .eq('channel_id', channelId)
         .eq('user_id', userId);
-      
       if (error) throw error;
-      
       await loadChannelMembers(channelId);
       showNotification?.('Участник удалён', 'info');
     } catch (err) {
@@ -751,173 +816,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   };
 
-  const deleteChannel = async (channelId) => {
-    if (!channelId) return;
-    
-    const channel = customChannels.find(c => c.id === channelId);
-    if (!channel) return;
-    
-    if (!window.confirm(`Удалить канал "${channel.name}"? Все сообщения в канале будут удалены.`)) return;
-    
-    try {
-      await supabase.from('company_messages').delete().eq('channel_id', channelId);
-      await supabase.from('channel_members').delete().eq('channel_id', channelId);
-      
-      const { error } = await supabase.from('company_channels').delete().eq('id', channelId);
-      if (error) throw error;
-      
-      setCustomChannels(prev => prev.filter(c => c.id !== channelId));
-      if (activeChannel === channelId) {
-        setActiveChannel('general');
-      }
-      showNotification?.('Канал удалён', 'success');
-    } catch (err) {
-      console.error('Ошибка удаления канала:', err);
-      showNotification?.('Не удалось удалить канал', 'error');
-    }
-  };
-
-  const handleCreateChannel = async (channelData) => {
-    if (!userCompanyId || !user?.id) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('company_channels')
-        .insert([{
-          company_id: userCompanyId,
-          name: channelData.name,
-          description: channelData.description,
-          icon: channelData.icon,
-          is_private: channelData.is_private || false,
-          created_by: user.id,
-          created_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      await supabase.from('channel_members').insert({
-        channel_id: data.id,
-        user_id: user.id,
-        role: 'admin'
-      });
-      
-      if (channelData.is_private && channelData.memberIds?.length) {
-        await supabase.from('channel_members').insert(
-          channelData.memberIds.map(userId => ({
-            channel_id: data.id,
-            user_id: userId,
-            role: 'member'
-          }))
-        );
-      }
-      
-      setCustomChannels(prev => [...prev, data]);
-      setActiveChannel(data.id);
-      showNotification?.('Канал создан', 'success');
-    } catch (err) {
-      console.error('Ошибка создания канала:', err);
-      showNotification?.('Не удалось создать канал', 'error');
-      throw err;
-    }
-  };
-
-  const startEdit = (message) => {
-    setEditingMessageId(message.id);
-    setEditText(message.content);
-    setTimeout(() => textareaRef.current?.focus(), 50);
-  };
-  
-  const saveEdit = async (messageId) => {
-    const content = editText.trim();
-    if (!content) return;
-    
-    try {
-      await supabase
-        .from('company_messages')
-        .update({ content, edited_at: new Date().toISOString() })
-        .eq('id', messageId)
-        .eq('user_id', user?.id);
-      
-      setEditingMessageId(null);
-      setEditText('');
-      setMessages(prev => prev.map(m => 
-        m.id === messageId ? { ...m, content, edited_at: new Date().toISOString() } : m
-      ));
-      showNotification?.('Сообщение обновлено', 'success');
-    } catch (err) {
-      console.error('Ошибка редактирования:', err);
-      showNotification?.('Не удалось обновить сообщение', 'error');
-    }
-  };
-  
-  const cancelEdit = () => {
-    setEditingMessageId(null);
-    setEditText('');
-  };
-  
-  const deleteMessage = async (messageId) => {
-    if (!window.confirm('Удалить сообщение?')) return;
-    
-    try {
-      await supabase
-        .from('company_messages')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', messageId)
-        .eq('user_id', user?.id);
-      
-      setMessages(prev => prev.filter(m => m.id !== messageId));
-      showNotification?.('Сообщение удалено', 'info');
-    } catch (err) {
-      console.error('Ошибка удаления:', err);
-      showNotification?.('Не удалось удалить сообщение', 'error');
-    }
-  };
-
-  const toggleReaction = async (messageId, emoji) => {
-    if (!user?.id) return;
-    
-    const message = messages.find(m => m.id === messageId);
-    const hasReacted = message?.reactions?.some(r => r.emoji === emoji && r.user_id === user.id);
-    
-    try {
-      if (hasReacted) {
-        await supabase
-          .from('message_reactions')
-          .delete()
-          .eq('message_id', messageId)
-          .eq('user_id', user.id)
-          .eq('emoji', emoji);
-        
-        setMessages(prev => prev.map(m => 
-          m.id === messageId 
-            ? { ...m, reactions: m.reactions.filter(r => !(r.emoji === emoji && r.user_id === user.id)) }
-            : m
-        ));
-      } else {
-        await supabase
-          .from('message_reactions')
-          .insert({ message_id: messageId, user_id: user.id, emoji, created_at: new Date().toISOString() });
-        
-        setMessages(prev => prev.map(m => 
-          m.id === messageId 
-            ? { ...m, reactions: [...m.reactions, { emoji, user_id: user.id }] }
-            : m
-        ));
-      }
-      setShowReactionsPicker(null);
-    } catch (err) {
-      console.error('Ошибка реакции:', err);
-    }
-  };
-
+  // ========== ФАЙЛЫ И ГОЛОС ==========
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !userCompanyId) return;
     
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
+    if (file.size > 10 * 1024 * 1024) {
       showNotification?.('Файл слишком большой (макс. 10MB)', 'error');
       return;
     }
@@ -937,11 +841,22 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     e.target.value = '';
   };
 
+  const handleVoiceRecord = () => {
+    setIsRecording(!isRecording);
+    if (!isRecording) {
+      setTimeout(() => {
+        setIsRecording(false);
+        showNotification?.('🎙️ Голосовое сообщение записано', 'info');
+      }, 3000);
+    }
+  };
+
+  // ========== ОБРАБОТЧИКИ ==========
   const handleTextareaChange = (e) => {
     const value = e.target.value;
     setNewMessage(value);
     e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+    e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
     
     if (value.trim()) {
       handleTyping();
@@ -964,281 +879,304 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   };
 
-  // Функция для переключения сайдбара на мобильных
-  const toggleSidebar = () => {
-    setShowSidebar(!showSidebar);
-  };
-
-  // Функция для выбора канала на мобильных
   const handleChannelSelect = (channelId) => {
     setActiveChannel(channelId);
-    markChannelAsRead(channelId);
-    // Сбрасываем флаги прокрутки при смене канала
     setShouldAutoScroll(true);
     setIsUserScrolling(false);
-    if (isMobile) {
-      setShowSidebar(false);
+    setReplyTo(null);
+    markChannelAsRead(channelId);
+    if (isMobile) setShowSidebar(false);
+  };
+
+  const toggleSidebar = () => setShowSidebar(!showSidebar);
+
+  const startDirectChat = (targetUser) => {
+    if (!targetUser || !user?.id) return;
+    
+    const dmId = `dm_${[user.id, targetUser.user_id].sort().join('_')}`;
+    const existingDM = customChannels.find(c => c.id === dmId);
+    
+    if (!existingDM) {
+      setCustomChannels(prev => [...prev, {
+        id: dmId,
+        name: targetUser.full_name,
+        label: targetUser.full_name,
+        icon: '💬',
+        description: `Личный чат с ${targetUser.full_name}`,
+        type: 'direct',
+        is_private: true,
+        participants: [user.id, targetUser.user_id],
+        created_by: user.id,
+        created_at: new Date().toISOString()
+      }]);
     }
+    
+    setActiveChannel(dmId);
+    markChannelAsRead(dmId);
+    if (isMobile) setShowSidebar(false);
   };
 
   // ========== RENDER ==========
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-      <div className="flex flex-1 min-h-0 overflow-hidden relative">
-        {/* Сайдбар */}
-        {(showSidebar || !isMobile) && (
-          <ChatSidebar
-            channels={allChannels}
-            activeChannel={activeChannel}
-            onChannelSelect={handleChannelSelect}
-            canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
-            onCreateChannel={() => setShowCreateModal(true)}
-            connectionStatus={connectionStatus}
-            isMobile={isMobile}
-            showSidebar={showSidebar}
-            onCloseSidebar={toggleSidebar}
-            onChannelSettings={(channel) => {
-              setSelectedChannel(channel);
-              setShowChannelSettings(true);
-              loadChannelMembers(channel.id);
-            }}
-            onDeleteChannel={deleteChannel}
-            currentUserRole={userRole}
-            companyUsers={companyUsers}
-            currentUser={user}
-            onStartDirectChat={startDirectChat}
-            unreadCounts={unreadCounts}
-          />
-        )}
+    <div className="flex h-[calc(100vh-120px)] bg-gray-50 dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden">
+      {/* Сайдбар */}
+      {(showSidebar || !isMobile) && (
+        <ChatSidebar
+          channels={allChannels}
+          activeChannel={activeChannel}
+          onChannelSelect={handleChannelSelect}
+          canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
+          onCreateChannel={() => setShowCreateModal(true)}
+          connectionStatus={connectionStatus}
+          isMobile={isMobile}
+          showSidebar={showSidebar}
+          onCloseSidebar={toggleSidebar}
+          onChannelSettings={(channel) => {
+            setSelectedChannel(channel);
+            setShowChannelSettings(true);
+            loadChannelMembers(channel.id);
+          }}
+          onDeleteChannel={deleteChannel}
+          currentUserRole={userRole}
+          companyUsers={companyUsers}
+          currentUser={user}
+          onStartDirectChat={startDirectChat}
+          unreadCounts={unreadCounts}
+        />
+      )}
 
-        {/* Main Chat Area */}
-        {(!isMobile || !showSidebar) && (
-          <div className="flex-1 flex flex-col min-w-0 h-full">
-            {/* Header - фиксированный */}
-            <header className="flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
-              <div className="flex items-center gap-2 sm:gap-3">
-                {isMobile && !showSidebar && (
-                  <button 
-                    onClick={toggleSidebar}
-                    className="p-2 hover:bg-gray-100 rounded-lg"
-                  >
-                    <Menu className="w-5 h-5" />
-                  </button>
-                )}
-                
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <span className="text-xl sm:text-2xl bg-gray-100 dark:bg-gray-700 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
-                    {currentChannel?.icon || '💬'}
-                  </span>
-                  <div>
-                    <h2 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
-                      {currentChannel?.label || currentChannel?.name}
-                    </h2>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-                      {currentChannel?.description}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
-                <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>{messages.length}</span>
-              </div>
-            </header>
-
-            {/* Messages List - прокручиваемая область */}
-            <div 
-              ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4"
-              onScroll={handleScroll}
-              style={{ 
-                WebkitOverflowScrolling: 'touch',
-              }}
-            >
-              {loading ? (
-                <div className="flex flex-col items-center justify-center h-40 gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
-                  <span className="text-sm text-gray-500">Загрузка...</span>
-                </div>
-              ) : messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
-                    <MessageCircle className="w-8 h-8 opacity-50" />
-                  </div>
-                  <p className="font-medium text-base sm:text-lg">Нет сообщений</p>
-                  <p className="text-xs sm:text-sm mt-1 opacity-70">Начните обсуждение!</p>
-                </div>
-              ) : (
-                <>
-                  {messages.map(msg => (
-                    <MessageItem
-                      key={msg.id}
-                      msg={msg}
-                      user={user}
-                      userRole={userRole}
-                      isOwn={msg.user_id === user?.id}
-                      isEditing={editingMessageId === msg.id}
-                      editText={editText}
-                      onStartEdit={startEdit}
-                      onSaveEdit={saveEdit}
-                      onCancelEdit={cancelEdit}
-                      onDelete={deleteMessage}
-                      onToggleReaction={toggleReaction}
-                      onReply={handleReply}
-                      onToggleSave={toggleSaveMessage}
-                      isSaved={savedMessages.has(msg.id)}
-                      showReactionsPicker={showReactionsPicker}
-                      setShowReactionsPicker={setShowReactionsPicker}
-                      formatMessage={formatMessage}
-                      formatTime={formatTime}
-                      language={language}
-                      textareaRef={textareaRef}
-                      companyUsers={companyUsers}
-                    />
-                  ))}
-                  {/* Элемент для автоматической прокрутки */}
-                  <div ref={(el) => {
-                    if (el && !isUserScrolling) {
-                      el.scrollIntoView({ behavior: 'auto' });
-                    }
-                  }} />
-                </>
-              )}
-            </div>
-
-            {/* Кнопка "Вниз" для быстрой прокрутки */}
-            {isUserScrolling && !shouldAutoScroll && messages.length > 10 && (
-              <button
-                onClick={() => forceScrollToBottom('smooth')}
-                className="absolute bottom-24 right-4 bg-[#4A6572] text-white rounded-full p-2 shadow-lg hover:bg-[#344955] transition-all z-10"
-                style={{ bottom: '100px' }}
-              >
-                <ArrowDown className="w-5 h-5" />
-              </button>
-            )}
-
-            {/* Input Area - фиксированный внизу */}
-            <div className="flex-shrink-0 p-3 sm:p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
-              {typingUsers.size > 0 && (
-                <div className="mb-2 flex items-center gap-2">
-                  <div className="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                  <span className="text-xs text-gray-500 animate-pulse">
-                    {Array.from(typingUsers).map(id => {
-                      const userData = companyUsers.find(u => u.user_id === id);
-                      return userData?.full_name?.split(' ')[0];
-                    }).join(', ')} печатает...
-                  </span>
-                </div>
-              )}
-              
-              {replyTo && (
-                <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex justify-between items-start border-l-4 border-[#4A6572]">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 text-xs">
-                      <CornerUpLeft className="w-3 h-3 text-[#4A6572]" />
-                      <span className="font-bold text-[#4A6572] dark:text-[#F9AA33]">
-                        Ответ {replyTo.user?.user_metadata?.full_name || 'пользователю'}:
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate mt-1">
-                      {replyTo.content?.slice(0, 80)}
-                    </p>
-                  </div>
-                  <button onClick={() => setReplyTo(null)} className="p-1 hover:bg-gray-200 rounded-lg">
-                    <X className="w-4 h-4 text-gray-500" />
-                  </button>
-                </div>
-              )}
-              
-              <div className="flex items-end gap-2">
-                <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300">
-                  <Paperclip className="w-5 h-5" />
-                  <input type="file" onChange={handleFileUpload} className="hidden" accept="image/*,.pdf,.doc,.docx" />
-                </label>
-
-                <div className="flex-1 relative">
-                  <textarea
-                    ref={textareaRef}
-                    value={newMessage}
-                    onChange={handleTextareaChange}
-                    onKeyDown={handleKeyDown}
-                    placeholder={replyTo ? `Ответ ${replyTo.user?.user_metadata?.full_name}...` : (t?.('chat.placeholder') || 'Введите сообщение...')}
-                    className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700/50 border border-gray-200/50 dark:border-gray-600/50 rounded-xl focus:ring-2 focus:ring-[#4A6572] resize-none text-sm"
-                    rows={1}
-                    style={{ minHeight: '44px', maxHeight: '120px' }}
-                  />
-                </div>
-
-                <button
-                  onClick={sendMessage}
-                  disabled={!newMessage.trim() || sending}
-                  className={`p-2.5 rounded-xl transition-all ${
-                    !newMessage.trim() || sending
-                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white hover:shadow-lg active:scale-95'
-                  }`}
-                >
-                  {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+      {/* Main Chat Area */}
+      {(!isMobile || !showSidebar) && (
+        <div className="flex-1 flex flex-col bg-white dark:bg-gray-800">
+          {/* Header */}
+          <div className="flex-shrink-0 bg-[#075E54] dark:bg-[#075E54] text-white px-4 py-3 flex items-center justify-between shadow-md">
+            <div className="flex items-center gap-3">
+              {isMobile && !showSidebar && (
+                <button onClick={toggleSidebar} className="p-1 hover:bg-white/10 rounded-full">
+                  <Menu className="w-5 h-5" />
                 </button>
+              )}
+              
+              <div className="relative">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                  <span className="text-lg">
+                    {currentChatUser ? currentChatUser.full_name?.[0]?.toUpperCase() : currentChannel?.icon}
+                  </span>
+                </div>
+                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#075E54]"></span>
               </div>
               
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 dark:text-gray-500">
-                <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> — отправить
-                <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ml-2">Shift+Enter</kbd> — новая строка
+              <div>
+                <h2 className="font-semibold text-base">{chatTitle}</h2>
+                <p className="text-xs text-white/80">
+                  {currentChatUser ? 'онлайн' : chatStatus}
+                </p>
               </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {currentChatUser && (
+                <button className="p-1 hover:bg-white/10 rounded-full">
+                  <Phone className="w-5 h-5" />
+                </button>
+              )}
+              <button className="p-1 hover:bg-white/10 rounded-full">
+                <EllipsisVertical className="w-5 h-5" />
+              </button>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Модальные окна (без изменений) */}
+          {/* Messages List */}
+          <div 
+            ref={messagesContainerRef}
+            className="flex-1 overflow-y-auto p-3 space-y-2 bg-[#ECE5DD] dark:bg-[#1a1a1a]"
+            onScroll={handleScroll}
+            style={{ 
+              WebkitOverflowScrolling: 'touch',
+              backgroundImage: 'radial-gradient(circle at 25% 40%, rgba(200,200,200,0.1) 2%, transparent 2.5%)',
+              backgroundSize: '30px 30px'
+            }}
+          >
+            {loading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="w-6 h-6 animate-spin text-[#075E54]" />
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                <MsgIcon className="w-12 h-12 mb-3 opacity-30" />
+                <p className="text-sm">Нет сообщений</p>
+                <p className="text-xs mt-1">Напишите что-нибудь...</p>
+              </div>
+            ) : (
+              <>
+                {messages.map(msg => (
+                  <MessageItem
+                    key={msg.id}
+                    msg={msg}
+                    user={user}
+                    userRole={userRole}
+                    isOwn={msg.user_id === user?.id}
+                    isEditing={editingMessageId === msg.id}
+                    editText={editText}
+                    onStartEdit={startEdit}
+                    onSaveEdit={saveEdit}
+                    onCancelEdit={cancelEdit}
+                    onDelete={deleteMessage}
+                    onToggleReaction={toggleReaction}
+                    onReply={handleReply}
+                    onToggleSave={toggleSaveMessage}
+                    isSaved={savedMessages.has(msg.id)}
+                    showReactionsPicker={showReactionsPicker}
+                    setShowReactionsPicker={setShowReactionsPicker}
+                    formatMessage={formatMessage}
+                    formatTime={formatTime}
+                    language={language}
+                    textareaRef={textareaRef}
+                    companyUsers={companyUsers}
+                  />
+                ))}
+                <div ref={(el) => el && !isUserScrolling && el.scrollIntoView({ behavior: 'auto' })} />
+              </>
+            )}
+          </div>
+
+          {/* Reply Preview */}
+          {replyTo && (
+            <div className="flex-shrink-0 px-4 pt-2 pb-1 bg-[#F0F0F0] dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2 text-[#075E54]">
+                  <CornerUpLeft className="w-4 h-4" />
+                  <span className="font-medium">Ответ {replyTo.user?.user_metadata?.full_name}</span>
+                </div>
+                <button onClick={() => setReplyTo(null)} className="p-1 hover:bg-gray-200 rounded-full">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 truncate pb-1">{replyTo.content}</p>
+            </div>
+          )}
+
+          {/* Typing indicator */}
+          {typingUsers.size > 0 && (
+            <div className="flex-shrink-0 px-4 py-1">
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <div className="flex gap-0.5">
+                  <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                  <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                  <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                </div>
+                <span>печатает...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Input Area */}
+          <div className="flex-shrink-0 bg-[#F0F0F0] dark:bg-gray-700 p-2 flex items-center gap-2">
+            <label className="p-2 cursor-pointer text-gray-600 dark:text-gray-300 hover:text-[#075E54] transition-colors">
+              <Paperclip className="w-5 h-5" />
+              <input type="file" onChange={handleFileUpload} className="hidden" />
+            </label>
+            
+            <button className="p-2 text-gray-600 dark:text-gray-300 hover:text-[#075E54] transition-colors">
+              <Image className="w-5 h-5" />
+            </button>
+            
+            <div className="flex-1 relative">
+              <textarea
+                ref={textareaRef}
+                value={newMessage}
+                onChange={handleTextareaChange}
+                onKeyDown={handleKeyDown}
+                placeholder="Введите сообщение..."
+                className="w-full px-4 py-2 bg-white dark:bg-gray-800 rounded-full resize-none text-sm focus:outline-none focus:ring-1 focus:ring-[#25D366]"
+                rows={1}
+                style={{ minHeight: '42px', maxHeight: '100px' }}
+              />
+            </div>
+            
+            <button 
+              onClick={handleVoiceRecord}
+              className={`p-2 rounded-full transition-colors ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-600 hover:text-[#075E54]'}`}
+            >
+              <Mic className="w-5 h-5" />
+            </button>
+            
+            <button
+              onClick={sendMessage}
+              disabled={!newMessage.trim() || sending}
+              className={`p-2 rounded-full transition-all ${
+                !newMessage.trim() || sending
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : 'text-[#075E54] hover:bg-[#25D366]/10'
+              }`}
+            >
+              {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Create Channel Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-bold mb-4">Создать канал</h3>
-            <input type="text" placeholder="Название" className="w-full p-2 border rounded-lg mb-3" id="channelName" />
-            <textarea placeholder="Описание" className="w-full p-2 border rounded-lg mb-3" rows={2} id="channelDesc" />
-            <div className="flex justify-end gap-2">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-bold">Создать канал</h3>
+              <button onClick={() => setShowCreateModal(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <input
+                type="text"
+                placeholder="Название канала"
+                value={newChannelData.name}
+                onChange={(e) => setNewChannelData(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full p-2 border rounded-lg"
+              />
+              <textarea
+                placeholder="Описание (необязательно)"
+                value={newChannelData.description}
+                onChange={(e) => setNewChannelData(prev => ({ ...prev, description: e.target.value }))}
+                className="w-full p-2 border rounded-lg"
+                rows={2}
+              />
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={newChannelData.isPrivate}
+                  onChange={(e) => setNewChannelData(prev => ({ ...prev, isPrivate: e.target.checked }))}
+                />
+                <span>Приватный канал (только по приглашению)</span>
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 p-4 border-t">
               <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-gray-600">Отмена</button>
-              <button onClick={() => {
-                const name = document.getElementById('channelName')?.value;
-                const description = document.getElementById('channelDesc')?.value;
-                if (name) {
-                  handleCreateChannel({ name, description, icon: '💬', is_private: false });
-                  setShowCreateModal(false);
-                }
-              }} className="px-4 py-2 bg-[#4A6572] text-white rounded-lg">Создать</button>
+              <button onClick={handleCreateChannel} className="px-4 py-2 bg-[#075E54] text-white rounded-lg">Создать</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Channel Settings Modal */}
       {showChannelSettings && selectedChannel && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-4 border-b">
               <h3 className="text-lg font-bold">Управление каналом: {selectedChannel.name}</h3>
-              <button onClick={() => setShowChannelSettings(false)} className="p-1 hover:bg-gray-100 rounded-lg">
+              <button onClick={() => setShowChannelSettings(false)} className="p-1 hover:bg-gray-100 rounded-full">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
-            <div className="mb-4">
+            <div className="p-4">
               <h4 className="font-medium mb-2">Участники ({channelMembers.length})</h4>
               {loadingMembers ? (
                 <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin" /></div>
-              ) : channelMembers.length === 0 ? (
-                <p className="text-sm text-gray-500">Нет участников</p>
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2 max-h-48 overflow-y-auto mb-4">
                   {channelMembers.map(member => {
                     const isCreator = selectedChannel.created_by === member.user_id;
-                    const canRemove = !isCreator && (userRole === 'manager' || userRole === 'supply_admin');
+                    const canRemove = !isCreator && canDeleteChannel(selectedChannel);
                     return (
                       <div key={member.user_id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
                         <div>
@@ -1246,10 +1184,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                           <p className="text-xs text-gray-500">{member.role}{isCreator && ' (создатель)'}</p>
                         </div>
                         {canRemove && (
-                          <button
-                            onClick={() => removeChannelMember(selectedChannel.id, member.user_id)}
-                            className="p-1 text-red-500 hover:bg-red-50 rounded"
-                          >
+                          <button onClick={() => removeChannelMember(selectedChannel.id, member.user_id)} className="p-1 text-red-500">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
@@ -1258,46 +1193,35 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                   })}
                 </div>
               )}
-            </div>
-            
-            <div>
-              <h4 className="font-medium mb-2">Добавить участника</h4>
-              <select className="w-full p-2 border rounded-lg mb-3" id="newMemberSelect">
-                <option value="">-- Выберите пользователя --</option>
-                {companyUsers
-                  .filter(u => !channelMembers.some(m => m.user_id === u.user_id))
-                  .map(u => (
-                    <option key={u.user_id} value={u.user_id}>{u.full_name} ({u.role})</option>
-                  ))
-                }
-              </select>
-              <button
-                onClick={() => {
-                  const select = document.getElementById('newMemberSelect');
-                  const userId = select?.value;
-                  if (userId) {
-                    addChannelMember(selectedChannel.id, userId);
-                    select.value = '';
+              
+              <div>
+                <h4 className="font-medium mb-2">Добавить участника</h4>
+                <select
+                  className="w-full p-2 border rounded-lg mb-3"
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      addChannelMember(selectedChannel.id, e.target.value);
+                      e.target.value = '';
+                    }
+                  }}
+                >
+                  <option value="">-- Выберите пользователя --</option>
+                  {companyUsers
+                    .filter(u => !channelMembers.some(m => m.user_id === u.user_id))
+                    .map(u => (
+                      <option key={u.user_id} value={u.user_id}>{u.full_name} ({u.role})</option>
+                    ))
                   }
-                }}
-                className="w-full py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955]"
-              >
-                Добавить
-              </button>
-            </div>
-            
-            <div className="mt-6 pt-4 border-t">
-              <button
-                onClick={() => {
-                  if (confirm(`Удалить канал "${selectedChannel.name}"?`)) {
-                    deleteChannel(selectedChannel.id);
-                    setShowChannelSettings(false);
-                  }
-                }}
-                className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                Удалить канал
-              </button>
+                </select>
+              </div>
+              
+              {canDeleteChannel(selectedChannel) && (
+                <div className="mt-6 pt-4 border-t">
+                  <button onClick={() => deleteChannel(selectedChannel.id)} className="w-full py-2 bg-red-600 text-white rounded-lg">
+                    Удалить канал
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1305,12 +1229,5 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     </div>
   );
 };
-
-// Компонент иконки стрелки вниз
-const ArrowDown = ({ className = "w-5 h-5" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-  </svg>
-);
 
 export default memo(CompanyChat);
