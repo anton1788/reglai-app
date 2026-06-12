@@ -876,15 +876,22 @@ useEffect(() => {
   };
 
   const handleTextareaChange = (e) => {
-    const value = e.target.value;
-    setNewMessage(value);
-    e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-    
-    if (value.trim()) {
-      handleTyping();
+  const value = e.target.value;
+  setNewMessage(value);
+  e.target.style.height = 'auto';
+  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+  
+  if (value.trim()) {
+    handleTyping();
+  }
+  
+  // Авто-скролл к последнему сообщению при вводе
+  setTimeout(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
-  };
+  }, 50);
+};
   
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -917,316 +924,320 @@ useEffect(() => {
   };
 
   // ========== RENDER ==========
-  return (
-    <div className="flex flex-col w-full h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-      {/* Мобильная кнопка назад */}
-      {isMobile && !showSidebar && (
-        <button
-          onClick={toggleSidebar}
-          className="absolute top-3 left-3 z-20 p-2 bg-white dark:bg-gray-800 rounded-full shadow-md border border-gray-200 dark:border-gray-700"
-        >
-          <Menu className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-        </button>
+return (
+  <div className="flex flex-col h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+    <div className="flex flex-1 min-h-0 overflow-hidden relative">
+      {/* Сайдбар */}
+      {(showSidebar || !isMobile) && (
+        <ChatSidebar
+          channels={allChannels}
+          activeChannel={activeChannel}
+          onChannelSelect={handleChannelSelect}
+          canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
+          onCreateChannel={() => setShowCreateModal(true)}
+          connectionStatus={connectionStatus}
+          isMobile={isMobile}
+          showSidebar={showSidebar}
+          onCloseSidebar={toggleSidebar}
+          onChannelSettings={(channel) => {
+            setSelectedChannel(channel);
+            setShowChannelSettings(true);
+            loadChannelMembers(channel.id);
+          }}
+          onDeleteChannel={deleteChannel}
+          currentUserRole={userRole}
+          companyUsers={companyUsers}
+          currentUser={user}
+          onStartDirectChat={startDirectChat}
+          unreadCounts={unreadCounts}
+        />
       )}
-      
-      <div className="flex flex-1 min-h-0 overflow-hidden relative">
-        {/* Сайдбар - на мобильных показывается когда showSidebar === true */}
-        {(showSidebar || !isMobile) && (
-          <ChatSidebar
-            channels={allChannels}
-            activeChannel={activeChannel}
-            onChannelSelect={handleChannelSelect}
-            canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
-            onCreateChannel={() => setShowCreateModal(true)}
-            connectionStatus={connectionStatus}
-            isMobile={isMobile}
-            showSidebar={showSidebar}
-            onCloseSidebar={toggleSidebar}
-            onChannelSettings={(channel) => {
-              setSelectedChannel(channel);
-              setShowChannelSettings(true);
-              loadChannelMembers(channel.id);
-            }}
-            onDeleteChannel={deleteChannel}
-            currentUserRole={userRole}
-            companyUsers={companyUsers}
-            currentUser={user}
-            onStartDirectChat={startDirectChat}
-            unreadCounts={unreadCounts}
-          />
-        )}
 
-        {/* Main Chat Area - на мобильных показывается когда showSidebar === false */}
-        {(!isMobile || !showSidebar) && (
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            {/* Header */}
-            <header className="flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
-              <div className="flex items-center gap-2 sm:gap-3">
-                {isMobile && !showSidebar && (
-                  <button 
-                    onClick={toggleSidebar}
-                    className="p-2 hover:bg-gray-100 rounded-lg"
-                  >
-                    <Menu className="w-5 h-5" />
-                  </button>
-                )}
-                
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <span className="text-xl sm:text-2xl bg-gray-100 dark:bg-gray-700 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
-                    {currentChannel?.icon || '💬'}
-                  </span>
-                  <div>
-                    <h2 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
-                      {currentChannel?.label || currentChannel?.name}
-                    </h2>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-                      {currentChannel?.description}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
-                <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>{messages.length}</span>
-              </div>
-            </header>
-
-            {/* Messages List */}
-            <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 min-h-0">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center h-40 gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
-                  <span className="text-sm text-gray-500">Загрузка...</span>
-                </div>
-              ) : messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
-                    <MessageCircle className="w-8 h-8 opacity-50" />
-                  </div>
-                  <p className="font-medium text-base sm:text-lg">Нет сообщений</p>
-                  <p className="text-xs sm:text-sm mt-1 opacity-70">Начните обсуждение!</p>
-                </div>
-              ) : (
-                <>
-                  {messages.map(msg => (
-                    <MessageItem
-                      key={msg.id}
-                      msg={msg}
-                      user={user}
-                      userRole={userRole}
-                      isOwn={msg.user_id === user?.id}
-                      isEditing={editingMessageId === msg.id}
-                      editText={editText}
-                      onStartEdit={startEdit}
-                      onSaveEdit={saveEdit}
-                      onCancelEdit={cancelEdit}
-                      onDelete={deleteMessage}
-                      onToggleReaction={toggleReaction}
-                      onReply={handleReply}
-                      onToggleSave={toggleSaveMessage}
-                      isSaved={savedMessages.has(msg.id)}
-                      showReactionsPicker={showReactionsPicker}
-                      setShowReactionsPicker={setShowReactionsPicker}
-                      formatMessage={formatMessage}
-                      formatTime={formatTime}
-                      language={language}
-                      textareaRef={textareaRef}
-                      companyUsers={companyUsers}
-                    />
-                  ))}
-                  <div ref={messagesEndRef} />
-                </>
-              )}
-            </div>
-
-            {/* Input Area */}
-            <div className="flex-shrink-0 p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-white/50 dark:bg-gray-800/50">
-              {typingUsers.size > 0 && (
-                <div className="mb-2 flex items-center gap-2">
-                  <div className="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                  <span className="text-xs text-gray-500 animate-pulse">
-                    {Array.from(typingUsers).map(id => {
-                      const userData = companyUsers.find(u => u.user_id === id);
-                      return userData?.full_name?.split(' ')[0];
-                    }).join(', ')} печатает...
-                  </span>
-                </div>
-              )}
-              
-              {replyTo && (
-                <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex justify-between items-start border-l-4 border-[#4A6572]">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 text-xs">
-                      <CornerUpLeft className="w-3 h-3 text-[#4A6572]" />
-                      <span className="font-bold text-[#4A6572] dark:text-[#F9AA33]">
-                        Ответ {replyTo.user?.user_metadata?.full_name || 'пользователю'}:
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate mt-1">
-                      {replyTo.content?.slice(0, 80)}
-                    </p>
-                  </div>
-                  <button onClick={() => setReplyTo(null)} className="p-1 hover:bg-gray-200 rounded-lg">
-                    <X className="w-4 h-4 text-gray-500" />
-                  </button>
-                </div>
-              )}
-              
-              <div className="flex items-end gap-2">
-                <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300">
-                  <Paperclip className="w-5 h-5" />
-                  <input type="file" onChange={handleFileUpload} className="hidden" accept="image/*,.pdf,.doc,.docx" />
-                </label>
-
-                <div className="flex-1 relative">
-                  <textarea
-                    ref={textareaRef}
-                    value={newMessage}
-                    onChange={handleTextareaChange}
-                    onKeyDown={handleKeyDown}
-                    placeholder={replyTo ? `Ответ ${replyTo.user?.user_metadata?.full_name}...` : (t?.('chat.placeholder') || 'Введите сообщение...')}
-                    className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700/50 border border-gray-200/50 dark:border-gray-600/50 rounded-xl focus:ring-2 focus:ring-[#4A6572] resize-none text-sm"
-                    rows={1}
-                    style={{ minHeight: '44px', maxHeight: '120px' }}
-                  />
-                </div>
-
-                <button
-                  onClick={sendMessage}
-                  disabled={!newMessage.trim() || sending}
-                  className={`p-2.5 rounded-xl transition-all ${
-                    !newMessage.trim() || sending
-                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white hover:shadow-lg active:scale-95'
-                  }`}
+      {/* Main Chat Area */}
+      {(!isMobile || !showSidebar) && (
+        <div className="flex-1 flex flex-col min-w-0 h-full">
+          {/* Header - фиксированный */}
+          <header className="flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
+            <div className="flex items-center gap-2 sm:gap-3">
+              {isMobile && !showSidebar && (
+                <button 
+                  onClick={toggleSidebar}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
                 >
-                  {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                  <Menu className="w-5 h-5" />
+                </button>
+              )}
+              
+              <div className="flex items-center gap-2 sm:gap-3">
+                <span className="text-xl sm:text-2xl bg-gray-100 dark:bg-gray-700 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
+                  {currentChannel?.icon || '💬'}
+                </span>
+                <div>
+                  <h2 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+                    {currentChannel?.label || currentChannel?.name}
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+                    {currentChannel?.description}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
+              <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <span>{messages.length}</span>
+            </div>
+          </header>
+
+          {/* Messages List - прокручиваемая область */}
+          <div 
+  className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4"
+  style={{ 
+    WebkitOverflowScrolling: 'touch',
+    overflowAnchor: 'none'
+  }}
+>
+            {loading ? (
+              <div className="flex flex-col items-center justify-center h-40 gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
+                <span className="text-sm text-gray-500">Загрузка...</span>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                  <MessageCircle className="w-8 h-8 opacity-50" />
+                </div>
+                <p className="font-medium text-base sm:text-lg">Нет сообщений</p>
+                <p className="text-xs sm:text-sm mt-1 opacity-70">Начните обсуждение!</p>
+              </div>
+            ) : (
+              <>
+                {messages.map(msg => (
+                  <MessageItem
+                    key={msg.id}
+                    msg={msg}
+                    user={user}
+                    userRole={userRole}
+                    isOwn={msg.user_id === user?.id}
+                    isEditing={editingMessageId === msg.id}
+                    editText={editText}
+                    onStartEdit={startEdit}
+                    onSaveEdit={saveEdit}
+                    onCancelEdit={cancelEdit}
+                    onDelete={deleteMessage}
+                    onToggleReaction={toggleReaction}
+                    onReply={handleReply}
+                    onToggleSave={toggleSaveMessage}
+                    isSaved={savedMessages.has(msg.id)}
+                    showReactionsPicker={showReactionsPicker}
+                    setShowReactionsPicker={setShowReactionsPicker}
+                    formatMessage={formatMessage}
+                    formatTime={formatTime}
+                    language={language}
+                    textareaRef={textareaRef}
+                    companyUsers={companyUsers}
+                  />
+                ))}
+                {/* Элемент для автоматической прокрутки */}
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </div>
+
+          {/* Input Area - фиксированный внизу */}
+          <div className="flex-shrink-0 p-3 sm:p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
+            {typingUsers.size > 0 && (
+              <div className="mb-2 flex items-center gap-2">
+                <div className="typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <span className="text-xs text-gray-500 animate-pulse">
+                  {Array.from(typingUsers).map(id => {
+                    const userData = companyUsers.find(u => u.user_id === id);
+                    return userData?.full_name?.split(' ')[0];
+                  }).join(', ')} печатает...
+                </span>
+              </div>
+            )}
+            
+            {replyTo && (
+              <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex justify-between items-start border-l-4 border-[#4A6572]">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 text-xs">
+                    <CornerUpLeft className="w-3 h-3 text-[#4A6572]" />
+                    <span className="font-bold text-[#4A6572] dark:text-[#F9AA33]">
+                      Ответ {replyTo.user?.user_metadata?.full_name || 'пользователю'}:
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 truncate mt-1">
+                    {replyTo.content?.slice(0, 80)}
+                  </p>
+                </div>
+                <button onClick={() => setReplyTo(null)} className="p-1 hover:bg-gray-200 rounded-lg">
+                  <X className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
-              
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 dark:text-gray-500">
-                <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> — отправить
-                <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ml-2">Shift+Enter</kbd> — новая строка
+            )}
+            
+            <div className="flex items-end gap-2">
+              <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300">
+                <Paperclip className="w-5 h-5" />
+                <input type="file" onChange={handleFileUpload} className="hidden" accept="image/*,.pdf,.doc,.docx" />
+              </label>
+
+              <div className="flex-1 relative">
+                <textarea
+                  ref={textareaRef}
+                  value={newMessage}
+                  onChange={handleTextareaChange}
+                  onKeyDown={handleKeyDown}
+                  onFocus={() => {
+                    // Скролл к последнему сообщению при фокусе
+                    setTimeout(() => {
+                      if (messagesEndRef.current) {
+                        messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                      }
+                    }, 150);
+                  }}
+                  placeholder={replyTo ? `Ответ ${replyTo.user?.user_metadata?.full_name}...` : (t?.('chat.placeholder') || 'Введите сообщение...')}
+                  className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700/50 border border-gray-200/50 dark:border-gray-600/50 rounded-xl focus:ring-2 focus:ring-[#4A6572] resize-none text-sm"
+                  rows={1}
+                  style={{ minHeight: '44px', maxHeight: '120px' }}
+                />
               </div>
-            </div>
-          </div>
-        )}
-      </div>
 
-      {/* Create Channel Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-bold mb-4">Создать канал</h3>
-            <input type="text" placeholder="Название" className="w-full p-2 border rounded-lg mb-3" id="channelName" />
-            <textarea placeholder="Описание" className="w-full p-2 border rounded-lg mb-3" rows={2} id="channelDesc" />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-gray-600">Отмена</button>
-              <button onClick={() => {
-                const name = document.getElementById('channelName')?.value;
-                const description = document.getElementById('channelDesc')?.value;
-                if (name) {
-                  handleCreateChannel({ name, description, icon: '💬', is_private: false });
-                  setShowCreateModal(false);
-                }
-              }} className="px-4 py-2 bg-[#4A6572] text-white rounded-lg">Создать</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Channel Settings Modal */}
-      {showChannelSettings && selectedChannel && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Управление каналом: {selectedChannel.name}</h3>
-              <button onClick={() => setShowChannelSettings(false)} className="p-1 hover:bg-gray-100 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="mb-4">
-              <h4 className="font-medium mb-2">Участники ({channelMembers.length})</h4>
-              {loadingMembers ? (
-                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin" /></div>
-              ) : channelMembers.length === 0 ? (
-                <p className="text-sm text-gray-500">Нет участников</p>
-              ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {channelMembers.map(member => {
-                    const isCreator = selectedChannel.created_by === member.user_id;
-                    const canRemove = !isCreator && (userRole === 'manager' || userRole === 'supply_admin');
-                    return (
-                      <div key={member.user_id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium">{member.user?.full_name || 'Пользователь'}</p>
-                          <p className="text-xs text-gray-500">{member.role}{isCreator && ' (создатель)'}</p>
-                        </div>
-                        {canRemove && (
-                          <button
-                            onClick={() => removeChannelMember(selectedChannel.id, member.user_id)}
-                            className="p-1 text-red-500 hover:bg-red-50 rounded"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            
-            <div>
-              <h4 className="font-medium mb-2">Добавить участника</h4>
-              <select className="w-full p-2 border rounded-lg mb-3" id="newMemberSelect">
-                <option value="">-- Выберите пользователя --</option>
-                {companyUsers
-                  .filter(u => !channelMembers.some(m => m.user_id === u.user_id))
-                  .map(u => (
-                    <option key={u.user_id} value={u.user_id}>{u.full_name} ({u.role})</option>
-                  ))
-                }
-              </select>
               <button
-                onClick={() => {
-                  const select = document.getElementById('newMemberSelect');
-                  const userId = select?.value;
-                  if (userId) {
-                    addChannelMember(selectedChannel.id, userId);
-                    select.value = '';
-                  }
-                }}
-                className="w-full py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955]"
+                onClick={sendMessage}
+                disabled={!newMessage.trim() || sending}
+                className={`p-2.5 rounded-xl transition-all ${
+                  !newMessage.trim() || sending
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white hover:shadow-lg active:scale-95'
+                }`}
               >
-                Добавить
+                {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
               </button>
             </div>
             
-            <div className="mt-6 pt-4 border-t">
-              <button
-                onClick={() => {
-                  if (confirm(`Удалить канал "${selectedChannel.name}"?`)) {
-                    deleteChannel(selectedChannel.id);
-                    setShowChannelSettings(false);
-                  }
-                }}
-                className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                Удалить канал
-              </button>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 dark:text-gray-500">
+              <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> — отправить
+              <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ml-2">Shift+Enter</kbd> — новая строка
             </div>
           </div>
         </div>
       )}
     </div>
-  );
+
+    {/* Модальные окна (без изменений) */}
+    {showCreateModal && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
+          <h3 className="text-lg font-bold mb-4">Создать канал</h3>
+          <input type="text" placeholder="Название" className="w-full p-2 border rounded-lg mb-3" id="channelName" />
+          <textarea placeholder="Описание" className="w-full p-2 border rounded-lg mb-3" rows={2} id="channelDesc" />
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-gray-600">Отмена</button>
+            <button onClick={() => {
+              const name = document.getElementById('channelName')?.value;
+              const description = document.getElementById('channelDesc')?.value;
+              if (name) {
+                handleCreateChannel({ name, description, icon: '💬', is_private: false });
+                setShowCreateModal(false);
+              }
+            }} className="px-4 py-2 bg-[#4A6572] text-white rounded-lg">Создать</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {showChannelSettings && selectedChannel && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold">Управление каналом: {selectedChannel.name}</h3>
+            <button onClick={() => setShowChannelSettings(false)} className="p-1 hover:bg-gray-100 rounded-lg">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="mb-4">
+            <h4 className="font-medium mb-2">Участники ({channelMembers.length})</h4>
+            {loadingMembers ? (
+              <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin" /></div>
+            ) : channelMembers.length === 0 ? (
+              <p className="text-sm text-gray-500">Нет участников</p>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {channelMembers.map(member => {
+                  const isCreator = selectedChannel.created_by === member.user_id;
+                  const canRemove = !isCreator && (userRole === 'manager' || userRole === 'supply_admin');
+                  return (
+                    <div key={member.user_id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium">{member.user?.full_name || 'Пользователь'}</p>
+                        <p className="text-xs text-gray-500">{member.role}{isCreator && ' (создатель)'}</p>
+                      </div>
+                      {canRemove && (
+                        <button
+                          onClick={() => removeChannelMember(selectedChannel.id, member.user_id)}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          
+          <div>
+            <h4 className="font-medium mb-2">Добавить участника</h4>
+            <select className="w-full p-2 border rounded-lg mb-3" id="newMemberSelect">
+              <option value="">-- Выберите пользователя --</option>
+              {companyUsers
+                .filter(u => !channelMembers.some(m => m.user_id === u.user_id))
+                .map(u => (
+                  <option key={u.user_id} value={u.user_id}>{u.full_name} ({u.role})</option>
+                ))
+              }
+            </select>
+            <button
+              onClick={() => {
+                const select = document.getElementById('newMemberSelect');
+                const userId = select?.value;
+                if (userId) {
+                  addChannelMember(selectedChannel.id, userId);
+                  select.value = '';
+                }
+              }}
+              className="w-full py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955]"
+            >
+              Добавить
+            </button>
+          </div>
+          
+          <div className="mt-6 pt-4 border-t">
+            <button
+              onClick={() => {
+                if (confirm(`Удалить канал "${selectedChannel.name}"?`)) {
+                  deleteChannel(selectedChannel.id);
+                  setShowChannelSettings(false);
+                }
+              }}
+              className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Удалить канал
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+);
 };
 
 export default memo(CompanyChat);
