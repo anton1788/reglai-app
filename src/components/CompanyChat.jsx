@@ -72,19 +72,25 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [_lastReadTimes, setLastReadTimes] = useState({});
   
   // Мобильная адаптация
-  const [isMobile, setIsMobile] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
+  // Мобильная адаптация
+const [isMobile, setIsMobile] = useState(false);
+const [showSidebar, setShowSidebar] = useState(true);
 
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      setShowSidebar(true);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+// Только при монтировании устанавливаем начальное состояние
+useEffect(() => {
+  setShowSidebar(true);
+}, []);
+
+useEffect(() => {
+  const checkMobile = () => {
+    const mobile = window.innerWidth < 768;
+    setIsMobile(mobile);
+    // Не сбрасываем showSidebar здесь!
+  };
+  checkMobile();
+  window.addEventListener('resize', checkMobile);
+  return () => window.removeEventListener('resize', checkMobile);
+}, []);
 
   // ========== ЛИЧНЫЕ СООБЩЕНИЯ ==========
   const startDirectChat = (targetUser) => {
