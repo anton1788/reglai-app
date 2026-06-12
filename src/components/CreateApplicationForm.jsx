@@ -1,1067 +1,1039 @@
-// src/components/CreateApplicationForm.jsx
-import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
+// src/components/ApplicationList.jsx
+import React, { useMemo, useCallback, useEffect, memo, useState, useRef } from 'react';
 import {
-  Plus, Trash2, Save, Package, ShoppingCart, CheckCircle, X, Send, Loader2,
-  Copy, Download, Briefcase, FileText, Warehouse, AlertCircle, Sparkles,
-  ChevronDown, RotateCcw, Undo2, Info, Minus, Camera
+Package, Search, Shield, FileText, Download, Ban,
+CheckCircle, AlertCircle, AlertTriangle, Clock, Archive,
+X, ArrowLeft, Loader2, ShoppingCart, ChevronDown, ChevronUp,
+Sparkles, Undo2, Info, RefreshCw, Mail, XCircle, Warehouse,
+Send, CheckCircle2, Hourglass, Boxes, Save
 } from 'lucide-react';
-import MaterialCart from './MaterialCart';
-import ClientSelector from './ClientSelector';
+import CommentsSection from './CommentsSection';
+import MobileMaterialCard from './MobileMaterialCard';
+import { saveCommentDraft, getCommentDraft, clearCommentDraft } from '../utils/autoSaveUtils';
 
 // ─────────────────────────────────────────────────────────────
-// 📦 КОНСТАНТЫ
+// 📦 ИМПОРТ СТАТУСОВ ИЗ ЦЕНТРАЛИЗОВАННОГО ФАЙЛА
 // ─────────────────────────────────────────────────────────────
+import {
+APPLICATION_STATUS,
+ITEM_STATUS,
+STATUS_COLORS,
+STATUS_ICONS,
+STATUS_I18N,
+getStatusText,
+isApplicationActive,
+isApplicationCompleted,
+requiresMasterConfirmation
+} from '../utils/applicationStatuses';
 
-const UNIT_OPTIONS = ['шт', 'кг', 'м', 'м²', 'м³', 'л', 'уп', 'комплект', 'набор'];
-const PHONE_REGEX = /^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$/;
-const MAX_INPUT_LENGTH = 500;
-const DEBOUNCE_MS = 300;
-const ANIMATION_DURATION = 200;
+// ─────────────────────────────────────────────────────────────
+// 📦 КОНФИГУРАЦИЯ СТАТУСОВ
+// ─────────────────────────────────────────────────────────────
+const STATUS_CONFIG = {
+[APPLICATION_STATUS.DRAFT]: {
+labelKey: STATUS_I18N[APPLICATION_STATUS.DRAFT]?.ru || 'statusDraft',
+icon: STATUS_ICONS[APPLICATION_STATUS.DRAFT] || Hourglass,
+colorClass: 'text-gray-800 bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+},
+[APPLICATION_STATUS.PENDING]: {
+labelKey: STATUS_I18N[APPLICATION_STATUS.PENDING]?.ru || 'statusPending',
+icon: STATUS_ICONS[APPLICATION_STATUS.PENDING] || AlertCircle,
+colorClass: 'text-orange-800 bg-orange-200 dark:bg-orange-900/40 dark:text-orange-300',
+overdueColorClass: 'text-red-800 bg-red-200 dark:bg-red-900/70 dark:text-red-200 border-2 border-red-500'
+},
+[APPLICATION_STATUS.ADMIN_PROCESSING]: {
+labelKey: STATUS_I18N[APPLICATION_STATUS.ADMIN_PROCESSING]?.ru || 'statusAdminProcessing',
+icon: STATUS_ICONS[APPLICATION_STATUS.ADMIN_PROCESSING] || Package,
+colorClass: 'text-blue-800 bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300'
+},
+[APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: {
+labelKey: STATUS_I18N[APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]?.ru || 'statusPartialWarehouse',
+icon: STATUS_ICONS[APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE] || Boxes,
+colorClass: 'text-indigo-800 bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300'
+},
+[APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: {
+labelKey: STATUS_I18N[APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]?.ru || 'statusPendingConfirmation',
+icon: STATUS_ICONS[APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION] || Mail,
+colorClass: 'text-purple-800 bg-purple-200 dark:bg-purple-900/40 dark:text-purple-300'
+},
+[APPLICATION_STATUS.RECEIVED]: {
+labelKey: STATUS_I18N[APPLICATION_STATUS.RECEIVED]?.ru || 'statusReceived',
+icon: STATUS_ICONS[APPLICATION_STATUS.RECEIVED] || CheckCircle2,
+colorClass: 'text-green-800 bg-green-200 dark:bg-green-900/40 dark:text-green-300'
+},
+[APPLICATION_STATUS.PARTIAL_RECEIVED]: {
+labelKey: STATUS_I18N[APPLICATION_STATUS.PARTIAL_RECEIVED]?.ru || 'statusPartialReceived',
+icon: STATUS_ICONS[APPLICATION_STATUS.PARTIAL_RECEIVED] || AlertCircle,
+colorClass: 'text-amber-800 bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300'
+},
+[APPLICATION_STATUS.REJECTED]: {
+labelKey: STATUS_I18N[APPLICATION_STATUS.REJECTED]?.ru || 'statusRejected',
+icon: STATUS_ICONS[APPLICATION_STATUS.REJECTED] || XCircle,
+colorClass: 'text-red-800 bg-red-200 dark:bg-red-900/40 dark:text-red-300'
+},
+[APPLICATION_STATUS.CANCELED]: {
+labelKey: STATUS_I18N[APPLICATION_STATUS.CANCELED]?.ru || 'statusCanceled',
+icon: STATUS_ICONS[APPLICATION_STATUS.CANCELED] || Ban,
+colorClass: 'text-gray-800 bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+},
+overdue: {
+labelKey: 'overdue',
+icon: AlertTriangle,
+colorClass: 'text-red-800 bg-red-200 dark:bg-red-900/70 dark:text-red-200 border-2 border-red-500',
+isOverdue: true
+},
+[ITEM_STATUS.PENDING]: {
+labelKey: STATUS_I18N[ITEM_STATUS.PENDING]?.ru || 'itemStatusPending',
+icon: Hourglass,
+colorClass: 'text-gray-700 bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+},
+[ITEM_STATUS.ON_WAREHOUSE]: {
+labelKey: STATUS_I18N[ITEM_STATUS.ON_WAREHOUSE]?.ru || 'itemStatusOnWarehouse',
+icon: Warehouse,
+colorClass: 'text-blue-700 bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300'
+},
+[ITEM_STATUS.SENT_TO_MASTER]: {
+labelKey: STATUS_I18N[ITEM_STATUS.SENT_TO_MASTER]?.ru || 'itemStatusSent',
+icon: Send,
+colorClass: 'text-purple-700 bg-purple-200 dark:bg-purple-900/40 dark:text-purple-300'
+},
+[ITEM_STATUS.CONFIRMED]: {
+labelKey: STATUS_I18N[ITEM_STATUS.CONFIRMED]?.ru || 'itemStatusConfirmed',
+icon: CheckCircle2,
+colorClass: 'text-green-700 bg-green-200 dark:bg-green-900/40 dark:text-green-300'
+},
+[ITEM_STATUS.REJECTED]: {
+labelKey: STATUS_I18N[ITEM_STATUS.REJECTED]?.ru || 'itemStatusRejected',
+icon: XCircle,
+colorClass: 'text-red-700 bg-red-200 dark:bg-red-900/40 dark:text-red-300'
+}
+};
+
+const DEFAULT_STATUS = {
+labelKey: 'statusUnknown',
+icon: AlertCircle,
+colorClass: 'text-gray-800 bg-gray-200 dark:bg-gray-700/60 dark:text-gray-200'
+};
 
 // ─────────────────────────────────────────────────────────────
 // 🎨 СТИЛИ И АНИМАЦИИ
 // ─────────────────────────────────────────────────────────────
+const ANIMATION_DURATION = 200;
+const UNDO_TIMEOUT_MS = 3000;
 
 const styles = `
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(10px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-.form-enter { animation: slideIn ${ANIMATION_DURATION}ms ease-out forwards; }
+@keyframes slideIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+.app-card-enter { animation: slideIn ${ANIMATION_DURATION}ms ease-out forwards; }
 .fade-enter { animation: fadeIn ${ANIMATION_DURATION}ms ease-out forwards; }
 .pulse { animation: pulse 2s ease-in-out infinite; }
-.shimmer {
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+.shimmer { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+.progress-glow { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+.application-card { transition: all 0.2s ease; will-change: transform, box-shadow; }
+.application-card:active { transform: scale(0.99); }
+
+/* Мобильная адаптация */
+@media (max-width: 768px) {
+  .application-card {
+    padding: 12px;
+  }
+  .filters-row {
+    gap: 8px;
+  }
+  .filter-input {
+    font-size: 14px;
+  }
 }
-.material-row {
-  transition: all 0.2s ease;
-  will-change: transform, box-shadow;
-}
-.material-row:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
-}
-.quantity-stepper input::-webkit-outer-spin-button,
-.quantity-stepper input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.quantity-stepper input[type=number] {
-  -moz-appearance: textfield;
+
+/* Адаптивные кнопки действий */
+@media (max-width: 640px) {
+  .action-buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .action-buttons button {
+    flex: 1;
+    min-width: 80px;
+    justify-content: center;
+  }
 }
 `;
 
 // ─────────────────────────────────────────────────────────────
 // 🔧 ХЕЛПЕРЫ
 // ─────────────────────────────────────────────────────────────
-
-const sanitizeInput = (text, maxLength = MAX_INPUT_LENGTH) => {
-  if (typeof text !== 'string') return '';
-  return text.replace(/[<>]/g, '').slice(0, maxLength).trim();
+const getDaysSince = (dateString) => {
+if (!dateString) return 0;
+const now = new Date();
+const created = new Date(dateString);
+const diffTime = Math.abs(now - created);
+return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
 
-const clamp = (value, min = 1, max = 10000) => {
-  const num = typeof value === 'string' ? parseInt(value, 10) : value;
-  return isNaN(num) ? min : Math.max(min, Math.min(num, max));
+const escapeHtml = (unsafe) => {
+if (typeof unsafe !== 'string') return '';
+return unsafe
+.replace(/&/g, '&amp;')
+.replace(/</g, '&lt;')
+.replace(/>/g, '&gt;')
+.replace(/"/g, '&quot;')
+.replace(/'/g, '&#039;');
 };
 
-// ─────────────────────────────────────────────────────────────
-// 🎣 КАСТОМНЫЕ ХУКИ
-// ─────────────────────────────────────────────────────────────
-
-const useClickOutside = (ref, handler) => {
-  useEffect(() => {
-    const listener = (event) => {
-      if (!ref.current || ref.current.contains(event.target)) return;
-      handler(event);
-    };
-    document.addEventListener('mousedown', listener);
-    document.addEventListener('touchstart', listener);
-    return () => {
-      document.removeEventListener('mousedown', listener);
-      document.removeEventListener('touchstart', listener);
-    };
-  }, [ref, handler]);
+const formatDate = (dateString, language) => {
+if (!dateString) return '';
+try {
+return new Date(dateString).toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US', {
+day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+});
+} catch {
+return dateString;
+}
 };
 
-const useDebounce = (value, delay) => {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
+const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num);
+
+// ─────────────────────────────────────────────────────────────
+// 🎨 UI КОМПОНЕНТЫ
+// ─────────────────────────────────────────────────────────────
+const StatusBadge = memo(({ status, createdAt, statusText, t }) => {
+const isOverdue = status === APPLICATION_STATUS.PENDING && getDaysSince(createdAt) > 2;
+const config = STATUS_CONFIG[isOverdue ? 'overdue' : status] || DEFAULT_STATUS;
+const StatusIcon = config.icon;
+const displayText = statusText || t(config.labelKey) || config.labelKey;
+return (
+<span
+className={`inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-medium rounded-full whitespace-nowrap transition-all ${
+isOverdue ? config.overdueColorClass : config.colorClass
+} ${isOverdue ? 'pulse' : ''}`}
+role="status"
+aria-live="polite"
+>
+<StatusIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0" aria-hidden="true" />
+{displayText}
+{isOverdue && <AlertTriangle className="w-2.5 h-2.5 sm:w-3 sm:h-3 ml-1" aria-hidden="true" />}
+</span>
+);
+});
+StatusBadge.displayName = 'StatusBadge';
+
+const ExportButton = memo(({ label, onClick, disabled, loading, ariaLabel, icon: IconComponent }) => {
+const Icon = IconComponent;
+return (
+<button
+onClick={onClick}
+disabled={disabled || loading}
+className="group relative px-2 py-1.5 sm:px-3 sm:py-1.5 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl border border-gray-300/50 dark:border-gray-600/50 hover:bg-gray-50/80 dark:hover:bg-gray-600/80 hover:border-indigo-300/60 dark:hover:border-indigo-500/60 text-[10px] sm:text-xs font-medium flex items-center justify-center gap-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md"
+aria-label={ariaLabel || label}
+title={label}
+>
+{loading ? (
+<Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin text-indigo-600" aria-hidden="true" />
+) : (
+<Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0 group-hover:scale-110 transition-transform" aria-hidden="true" />
+)}
+<span className="hidden xs:inline">{label}</span>
+</button>
+);
+});
+ExportButton.displayName = 'ExportButton';
+
+const ProgressBar = memo(({ onWarehouse, confirmed, total, t }) => {
+const warehouseProgress = total > 0 ? Math.round((onWarehouse / total) * 100) : 0;
+const confirmationProgress = total > 0 ? Math.round((confirmed / total) * 100) : 0;
+const isComplete = confirmationProgress === 100 && total > 0;
+return (
+<div className="mb-3" aria-label={t('progressLabel')}>
+<div className="flex justify-between text-[10px] sm:text-xs mb-1.5">
+<span className="font-medium text-gray-700 dark:text-gray-300">
+{t('warehouse')}: {formatNumber(onWarehouse)}/{formatNumber(total)}
+{confirmed > 0 && ` • ${t('confirmed')}: ${formatNumber(confirmed)}`}
+</span>
+<span className={`font-semibold ${isComplete ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+{confirmationProgress}%
+</span>
+</div>
+<div className="w-full bg-gray-200/60 dark:bg-gray-700/60 rounded-full h-1.5 overflow-hidden">
+<div
+className="h-1.5 rounded-full bg-gradient-to-r from-blue-400 to-blue-500 transition-all duration-500"
+style={{ width: `${Math.min(warehouseProgress, 100)}%` }}
+role="progressbar"
+/>
+{confirmed > 0 && (
+<div
+className={`h-1.5 rounded-full transition-all duration-500 -mt-1.5 ${
+isComplete ? 'bg-gradient-to-r from-green-400 to-emerald-500 progress-glow' : 'bg-gradient-to-r from-green-400 to-green-500'
+}`}
+style={{ width: `${Math.min(confirmationProgress, 100)}%` }}
+/>
+)}
+</div>
+</div>
+);
+});
+ProgressBar.displayName = 'ProgressBar';
+
+const Toast = memo(({ message, type, onClose, onUndo, canUndo, t }) => {
+useEffect(() => {
+if (!canUndo) {
+const timer = setTimeout(onClose, UNDO_TIMEOUT_MS);
+return () => clearTimeout(timer);
+}
+}, [onClose, canUndo]);
+const config = {
+success: { bg: 'bg-green-50 dark:bg-green-900/30', border: 'border-green-200 dark:border-green-800', text: 'text-green-800 dark:text-green-200', icon: CheckCircle },
+error: { bg: 'bg-red-50 dark:bg-red-900/30', border: 'border-red-200 dark:border-red-800', text: 'text-red-800 dark:text-red-200', icon: AlertCircle },
+info: { bg: 'bg-blue-50 dark:bg-blue-900/30', border: 'border-blue-200 dark:border-blue-800', text: 'text-blue-800 dark:text-blue-200', icon: Info }
 };
+const { bg, border, text, icon: Icon } = config[type] || config.info;
+return (
+<div className={`fixed bottom-4 right-4 z-[80] flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border ${bg} ${border} ${text} modal-enter max-w-sm`}>
+<Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+<p className="text-sm font-medium flex-1">{message}</p>
+{canUndo && onUndo && (
+<button
+onClick={onUndo}
+className="px-3 py-1 text-xs font-medium bg-white/50 dark:bg-gray-700/50 rounded-lg hover:bg-white/70 dark:hover:bg-gray-600/50 transition-colors flex items-center gap-1"
+>
+<Undo2 className="w-3.5 h-3.5" aria-hidden="true" />
+{t('undo') || 'Отменить'}
+</button>
+)}
+<button onClick={onClose} className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors" aria-label={t('close')}>
+<X className="w-4 h-4" aria-hidden="true" />
+</button>
+</div>
+);
+});
+Toast.displayName = 'Toast';
 
-// ─────────────────────────────────────────────────────────────
-// 🎨 UI КОМПОНЕНТЫ (мемоизированные)
-// ─────────────────────────────────────────────────────────────
-
-const FormHeader = memo(({ t }) => (
-  <header className="flex items-center gap-4 mb-8 pb-4 border-b border-gray-200/60 dark:border-gray-700/60">
-    <div className="p-3 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl shadow-lg shadow-indigo-500/20">
-      <img
-        src="/icon-512.png"
-        alt=""
-        className="w-7 h-7"
-        style={{ objectFit: 'contain' }}
-        loading="lazy"
-      />
-    </div>
-    <div>
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('createApplication')}</h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-        {t('createApplicationSubtitle') || 'Заполните данные для отправки заявки'}
-      </p>
-    </div>
-  </header>
+const ApplicationCardSkeleton = memo(() => (
+<article className="app-card-enter bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 sm:p-5 rounded-2xl border border-gray-200/60 dark:border-gray-700/60 animate-pulse">
+<div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+<div className="flex-1 min-w-0">
+<div className="flex items-start justify-between gap-2 mb-2">
+<div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+<div className="h-6 bg-gray-200 dark:bg-gray-700 rounded-full w-20" />
+</div>
+<div className="space-y-2 mb-3">
+<div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+<div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+<div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
+</div>
+<div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full w-full mb-1" />
+<div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full w-3/4" />
+</div>
+<div className="flex flex-wrap sm:flex-col gap-2">
+{[...Array(3)].map((_, i) => (
+<div key={i} className="h-8 bg-gray-200 dark:bg-gray-700 rounded-xl w-20" />
+))}
+</div>
+</div>
+</article>
 ));
-FormHeader.displayName = 'FormHeader';
-
-const QuickActions = memo(({ onCloneLast, onDownloadTemplate, onImportExcel, onSaveTemplate, t }) => {
-  const actionStyles = {
-    blue: 'from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 focus:ring-blue-500',
-    gray: 'from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 focus:ring-gray-500',
-    green: 'from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 focus:ring-green-500',
-    purple: 'from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 focus:ring-purple-500'
-  };
-
-  const actions = [
-    { icon: Copy, action: onCloneLast, label: t('cloneLastApplication'), color: 'blue' },
-    { icon: Download, action: onDownloadTemplate, label: t('downloadTemplate'), color: 'gray' },
-    { icon: FileText, action: onImportExcel, label: t('importFromExcel'), color: 'green' },
-    { icon: Briefcase, action: onSaveTemplate, label: t('saveTemplate'), color: 'purple' }
-  ];
-
-  return (
-    <div className="flex flex-wrap gap-2 mb-6" role="group" aria-label={t('quickActions')}>
-      {actions.map((action, idx) => {
-        const Icon = action.icon;
-        return (
-          <button
-            key={idx}
-            type="button"
-            onClick={action.action}
-            className={`flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r ${actionStyles[action.color]} text-white rounded-xl text-sm font-medium transition-all shadow-md hover:shadow-lg focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800`}
-            aria-label={action.label}
-          >
-            <Icon className="w-4 h-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{action.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-});
-QuickActions.displayName = 'QuickActions';
-
-const ObjectInput = memo(({
-  value,
-  onChange,
-  onFocus,
-  onKeyDown,
-  suggestions,
-  showSuggestions,
-  activeIndex,
-  onSelect,
-  error,
-  t,
-  inputRef,
-  listRef
-}) => {
-  const listboxId = 'object-suggestions';
-  
-  return (
-    <fieldset className="relative">
-      <legend className="sr-only">{t('objectName')}</legend>
-      <label htmlFor="objectName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-        {t('objectName')} <span className="text-red-500" aria-hidden="true">*</span>
-      </label>
-      
-      <div className="relative">
-        <input
-          id="objectName"
-          ref={inputRef}
-          type="text"
-          value={value}
-          onChange={onChange}
-          onFocus={onFocus}
-          onKeyDown={onKeyDown}
-          className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white transition-all ${
-            error ? 'border-red-400 focus:ring-red-500' : 'border-gray-200/60 dark:border-gray-600/60 hover:border-indigo-300/60'
-          }`}
-          placeholder={t('objectNamePlaceholder')}
-          required
-          aria-invalid={!!error}
-          aria-describedby={error ? 'objectName-error' : undefined}
-          aria-autocomplete="list"
-          aria-controls={showSuggestions ? listboxId : undefined}
-          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-item-${activeIndex}` : undefined}
-        />
-        {value && (
-          <button
-            type="button"
-            onClick={() => onChange({ target: { value: '' } })}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-            aria-label={t('clear')}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-      
-      {error && (
-        <p id="objectName-error" className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5 form-error" role="alert">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-          {error}
-        </p>
-      )}
-      
-      {showSuggestions && suggestions.length > 0 && (
-        <ul
-          id={listboxId}
-          ref={listRef}
-          role="listbox"
-          className="absolute z-30 mt-2 w-full bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border border-gray-200/60 dark:border-gray-600/60 rounded-xl shadow-xl max-h-60 overflow-auto form-enter"
-        >
-          {suggestions.map((obj, idx) => (
-            <li
-              key={idx}
-              id={`${listboxId}-item-${idx}`}
-              role="option"
-              aria-selected={idx === activeIndex}
-              className={`px-4 py-3 cursor-pointer text-gray-900 dark:text-white transition-all ${
-                idx === activeIndex
-                  ? 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 text-indigo-900 dark:text-indigo-100 border-l-4 border-indigo-500'
-                  : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
-              }`}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onSelect(obj);
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-gray-400" aria-hidden="true" />
-                <span className="font-medium">{obj}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </fieldset>
-  );
-});
-ObjectInput.displayName = 'ObjectInput';
-
-const ForemanField = memo(({ id, label, value, onChange, type = 'text', placeholder, error }) => (
-  <div>
-    <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-      {label} <span className="text-red-500" aria-hidden="true">*</span>
-    </label>
-    <input
-      id={id}
-      type={type}
-      value={value}
-      onChange={onChange}
-      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white transition-all ${
-        error ? 'border-red-400 focus:ring-red-500' : 'border-gray-200/60 dark:border-gray-600/60 hover:border-indigo-300/60'
-      }`}
-      placeholder={placeholder}
-      required
-      aria-invalid={!!error}
-    />
-    {error && (
-      <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5 form-error" role="alert">
-        <AlertCircle className="w-4 h-4" aria-hidden="true" />
-        {error}
-      </p>
-    )}
-  </div>
-));
-ForemanField.displayName = 'ForemanField';
-
-const WarehouseInfo = memo(({ t }) => (
-  <div className="mb-6 p-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200/50 dark:border-blue-700/50" role="note">
-    <div className="flex items-start gap-3">
-      <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-        <Warehouse className="w-5 h-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
-      </div>
-      <div>
-        <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
-          {t('materialTrackingTitle')}
-        </h4>
-        <p className="text-sm text-gray-700 dark:text-gray-300">
-          {t('materialTrackingDescription')}
-        </p>
-        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-blue-700 dark:text-blue-300">
-          <span className="flex items-center gap-1.5">
-            <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
-            {t('receiptEqualsIncome')}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
-            {t('issueEqualsExpense')}
-          </span>
-        </div>
-      </div>
-    </div>
-  </div>
-));
-WarehouseInfo.displayName = 'WarehouseInfo';
-
-const MaterialRow = memo(({
-  material,
-  index,
-  onUpdate,
-  onRemove,
-  onAddPhoto,
-  capturedPhotos,
-  selectedApplicationId,
-  suggestions,
-  showSuggestions,
-  onSuggestionSelect,
-  unitOptions,
-  t
-}) => {
-  const [localSuggestions, setLocalSuggestions] = useState([]);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const inputRef = useRef(null);
-  const listboxId = `material-suggestions-${index}`;
-  
-  const debouncedValue = useDebounce(material.description, DEBOUNCE_MS);
-  
-  useEffect(() => {
-    if (debouncedValue && suggestions.length > 0) {
-      const filtered = suggestions
-        .filter(s => s.toLowerCase().includes(debouncedValue.toLowerCase()))
-        .slice(0, 5);
-      setLocalSuggestions(filtered);
-    } else {
-      setLocalSuggestions([]);
-    }
-    setActiveIndex(-1);
-  }, [debouncedValue, suggestions]);
-
-  const handleKeyDown = useCallback((e) => {
-    if (!showSuggestions || localSuggestions.length === 0) return;
-    
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setActiveIndex(prev => Math.min(prev + 1, localSuggestions.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActiveIndex(prev => Math.max(prev - 1, -1));
-    } else if (e.key === 'Enter' && activeIndex >= 0) {
-      e.preventDefault();
-      onSuggestionSelect(index, localSuggestions[activeIndex]);
-      setLocalSuggestions([]);
-      setActiveIndex(-1);
-    } else if (e.key === 'Escape') {
-      setLocalSuggestions([]);
-      setActiveIndex(-1);
-    }
-  }, [showSuggestions, localSuggestions, activeIndex, index, onSuggestionSelect]);
-
-  const handleQuantityChange = useCallback((e) => {
-    const value = clamp(e.target.value, 1, 10000);
-    onUpdate(index, 'quantity', value);
-  }, [index, onUpdate]);
-
-  const handleIncrement = useCallback(() => {
-    onUpdate(index, 'quantity', clamp((material.quantity || 1) + 1, 1, 10000));
-  }, [index, material.quantity, onUpdate]);
-
-  const handleDecrement = useCallback(() => {
-    onUpdate(index, 'quantity', clamp((material.quantity || 1) - 1, 1, 10000));
-  }, [index, material.quantity, onUpdate]);
-
-  const photoKey = selectedApplicationId ? `${selectedApplicationId}-${index}` : `temp-${index}`;
-  const photos = capturedPhotos?.[photoKey] || [];
-
-  return (
-    <article
-      className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60 hover:border-indigo-300/60 dark:hover:border-indigo-600/60 transition-all"
-      role="listitem"
-      aria-labelledby={`material-label-${index}`}
-    >
-      <div className="flex flex-col lg:flex-row gap-4">
-        <div className="flex-1 relative">
-          <label htmlFor={`material-${index}`} className="sr-only">{t('materialDescription')}</label>
-          <input
-            id={`material-${index}`}
-            ref={inputRef}
-            type="text"
-            value={material.description}
-            onChange={(e) => onUpdate(index, 'description', sanitizeInput(e.target.value))}
-            onFocus={() => setLocalSuggestions(localSuggestions.length > 0 ? localSuggestions : [])}
-            onKeyDown={handleKeyDown}
-            className="w-full px-4 py-3 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-            placeholder={t('materialDescriptionPlaceholder')}
-            required
-            aria-autocomplete="list"
-            aria-controls={localSuggestions.length > 0 ? listboxId : undefined}
-            aria-activedescendant={activeIndex >= 0 ? `${listboxId}-item-${activeIndex}` : undefined}
-          />
-          
-          {showSuggestions && localSuggestions.length > 0 && (
-            <ul
-              id={listboxId}
-              role="listbox"
-              className="absolute z-20 mt-2 w-full bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border border-gray-200/60 dark:border-gray-600/60 rounded-xl shadow-xl max-h-40 overflow-auto form-enter"
-            >
-              {localSuggestions.map((suggestion, idx) => (
-                <li
-                  key={idx}
-                  id={`${listboxId}-item-${idx}`}
-                  role="option"
-                  aria-selected={idx === activeIndex}
-                  className={`px-4 py-2.5 cursor-pointer text-gray-900 dark:text-white transition-all ${
-                    idx === activeIndex 
-                      ? 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 text-indigo-900 dark:text-indigo-100 border-l-4 border-indigo-500' 
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                  }`}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    onSuggestionSelect(index, suggestion);
-                    setLocalSuggestions([]);
-                  }}
-                  onMouseEnter={() => setActiveIndex(idx)}
-                >
-                  {suggestion}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="quantity-stepper flex items-center gap-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-1">
-            <button
-              type="button"
-              onClick={handleDecrement}
-              disabled={material.quantity <= 1}
-              className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              aria-label={t('decreaseQuantity')}
-            >
-              <Minus className="w-4 h-4" aria-hidden="true" />
-            </button>
-            <input
-              type="number"
-              min="1"
-              max="10000"
-              value={material.quantity}
-              onChange={handleQuantityChange}
-              className="w-14 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium"
-              aria-label={t('quantity')}
-            />
-            <button
-              type="button"
-              onClick={handleIncrement}
-              className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-600 transition-colors"
-              aria-label={t('increaseQuantity')}
-            >
-              <Plus className="w-4 h-4" aria-hidden="true" />
-            </button>
-          </div>
-          
-          <select
-            value={material.unit}
-            onChange={(e) => onUpdate(index, 'unit', e.target.value)}
-            className="px-3 py-2.5 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-            aria-label={t('unit')}
-          >
-            {unitOptions.map(unit => (
-              <option key={unit} value={unit}>{unit}</option>
-            ))}
-          </select>
-          
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onAddPhoto?.(index)}
-              className="p-2.5 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors"
-              title={t('addPhoto') || 'Добавить фото'}
-              aria-label={t('addPhoto') || 'Добавить фото'}
-            >
-              <Camera className="w-4.5 h-4.5" aria-hidden="true" />
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => onRemove(index)}
-              className="p-2.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
-              aria-label={t('removeMaterial')}
-              title={t('removeMaterial')}
-            >
-              <Trash2 className="w-4.5 h-4.5" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      </div>
-      
-      {photos.length > 0 && (
-        <div className="flex gap-2 mt-3 flex-wrap">
-          {photos.map((url, i) => (
-            <div key={i} className="relative group">
-              <img 
-                src={url} 
-                alt={`${t('materialPhoto') || 'Фото материала'} ${i + 1}`}
-                className="w-12 h-12 object-cover rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const newPhotos = photos.filter((_, idx) => idx !== i);
-                  if (onUpdate) {
-                    onUpdate(index, 'photos', newPhotos);
-                  }
-                }}
-                className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-label={t('removePhoto') || 'Удалить фото'}
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </article>
-  );
-});
-MaterialRow.displayName = 'MaterialRow';
-
-const TemplateSelector = memo(({ templates, onLoad, t }) => {
-  if (!templates?.length) return null;
-  
-  return (
-    <div className="flex flex-wrap gap-3 items-end">
-      <div className="flex-1 min-w-[200px]">
-        <label htmlFor="template-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          {t('selectTemplate')}
-        </label>
-        <div className="relative">
-          <select
-            id="template-select"
-            onChange={(e) => {
-              const template = templates.find(tpl => tpl.id === parseInt(e.target.value));
-              if (template) onLoad(template.materials, template.template_name);
-              e.target.value = '';
-            }}
-            className="w-full px-4 py-3 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none"
-            defaultValue=""
-          >
-            <option value="" disabled>{t('selectTemplate')}</option>
-            {templates.map(template => (
-              <option key={template.id} value={template.id}>
-                {sanitizeInput(template.template_name)}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" aria-hidden="true" />
-        </div>
-      </div>
-    </div>
-  );
-});
-TemplateSelector.displayName = 'TemplateSelector';
-
-const SubmitButton = memo(({ canSubmit, isLoading, t }) => (
-  <button
-    type="submit"
-    disabled={!canSubmit}
-    className={`w-full py-4 px-6 rounded-2xl font-semibold shadow-lg transition-all duration-300 flex items-center justify-center gap-3 focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
-      canSubmit
-        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl hover:scale-[1.02] focus:ring-indigo-500'
-        : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
-    }`}
-    aria-busy={isLoading}
-  >
-    {isLoading ? (
-      <>
-        <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-        <span className="text-lg">{t('sending')}</span>
-      </>
-    ) : (
-      <>
-        <Send className="w-5 h-5" aria-hidden="true" />
-        <span className="text-lg">{t('sendApplication')}</span>
-      </>
-    )}
-  </button>
-));
-SubmitButton.displayName = 'SubmitButton';
-
-// ─────────────────────────────────────────────────────────────
-// 🎨 MODAL COMPONENT
-// ─────────────────────────────────────────────────────────────
-
-const TemplateModal = memo(({ templateName, setTemplateName, onSave, onClose, t }) => {
-  const inputRef = useRef(null);
-  
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') onClose();
-    if (e.key === 'Enter' && templateName.trim()) onSave();
-  }, [templateName, onSave, onClose]);
-
-  return (
-    <div 
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 fade-enter"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="template-modal-title"
-      onKeyDown={handleKeyDown}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl rounded-2xl shadow-2xl w-full max-w-md p-6 outline-none form-enter border border-gray-200/50 dark:border-gray-700/50">
-        <header className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200/60 dark:border-gray-700/60">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl">
-              <Briefcase className="w-5 h-5 text-white" aria-hidden="true" />
-            </div>
-            <h3 id="template-modal-title" className="text-lg font-bold text-gray-900 dark:text-white">
-              {t('saveAsTemplate')}
-            </h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            aria-label={t('close')}
-          >
-            <X className="w-5 h-5" aria-hidden="true" />
-          </button>
-        </header>
-        
-        <div className="space-y-5">
-          <div>
-            <label htmlFor="template-name-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('templateName')}
-            </label>
-            <input
-              id="template-name-input"
-              ref={inputRef}
-              type="text"
-              value={templateName}
-              onChange={(e) => setTemplateName(sanitizeInput(e.target.value, 100))}
-              onKeyDown={handleKeyDown}
-              className="w-full px-4 py-3 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-              placeholder={t('templateNamePlaceholder')}
-              maxLength={100}
-              required
-            />
-          </div>
-          
-          <footer className="flex justify-end gap-3 pt-4 border-t border-gray-200/60 dark:border-gray-700/60">
-            <button
-              onClick={onClose}
-              className="px-5 py-2.5 text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 transition-colors rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50"
-            >
-              {t('cancel')}
-            </button>
-            <button
-              onClick={onSave}
-              disabled={!templateName.trim()}
-              className={`px-5 py-2.5 rounded-xl font-medium transition-all flex items-center gap-2 ${
-                templateName.trim()
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              <Save className="w-4 h-4" aria-hidden="true" />
-              {t('save')}
-            </button>
-          </footer>
-        </div>
-      </div>
-    </div>
-  );
-});
-TemplateModal.displayName = 'TemplateModal';
+ApplicationCardSkeleton.displayName = 'ApplicationCardSkeleton';
 
 // ─────────────────────────────────────────────────────────────
 // 🧩 ОСНОВНОЙ КОМПОНЕНТ
 // ─────────────────────────────────────────────────────────────
-
-const CreateApplicationForm = memo(({
-  formData,
-  setFormData,
-  templates,
-  showTemplateModal,
-  setShowTemplateModal,
-  templateName,
-  setTemplateName,
-  t,
-  handleSubmit,
-  handlePhoneChange,
-  addMaterial,
-  removeMaterial,
-  updateMaterial,
-  restoreFromCart,
-  removeFromCartPermanently,
-  selectObject,
-  handleObjectInput,
-  saveTemplate,
-  selectMaterial,
-  loadTemplate,
-  filteredObjects,
-  showObjectSuggestions,
-  setShowObjectSuggestions,
-  objectInputRef,
-  materialHistory,
-  showMaterialSuggestions,
-  unitOptions = UNIT_OPTIONS,
-  onExcelImport,
-  onCloneLast,
-  onDownloadTemplate,
-  isLoading,
-  fileInputRef,
-  capturedPhotos,
-  selectedApplication,
-  onAddPhoto,
-  selectedClientId,
-  onClientSelect,
-  companyId
+const ApplicationList = memo(({
+applications,
+title,
+emptyMessage,
+user,
+isAdminMode,
+permissions,
+userRole,
+t,
+viewMode,
+language,
+uniqueDates,
+page,
+totalPages,
+onAdminLogout,
+onDownloadHTML,
+onDownloadPDF,
+onDownloadXLSX,
+onOpenReceiveModal,
+onCancelApplication,
+onAddComment,
+onToggleComments,
+onPageChange,
+searchTerm,
+statusFilter,
+dateFilter,
+viewedFilter,
+onSearchChange,
+onStatusFilterChange,
+onDateFilterChange,
+onViewedFilterChange,
+onClearFilters,
+expandedMaterials,
+onToggleMaterial,
+comments = {},
+showComments = {},
+isLoading = false,
+isExportingPDF = false,
+isExportingXLSX = false
 }) => {
-  // ─────────────────────────────────────────────────────────
-  // 📊 STATE & REFS
-  // ─────────────────────────────────────────────────────────
-  
-  const [objectSearch, setObjectSearch] = useState('');
-  const [activeObjectIndex, setActiveObjectIndex] = useState(-1);
-  const [formErrors, setFormErrors] = useState({}); // ✅ ДОБАВЛЕНО ДЛЯ ВАЛИДАЦИИ
-  
-  const objectListRef = useRef(null);
-  const formRef = useRef(null);
-  
-  const debouncedObjectSearch = useDebounce(objectSearch, DEBOUNCE_MS);
+const [toast, setToast] = useState(null);
+const toastTimerRef = useRef(null);
+const [commentDrafts, setCommentDrafts] = useState({});
+const commentTimerRef = useRef({});
+const [isMobileView, setIsMobileView] = useState(false);
+const [showFilters, setShowFilters] = useState(false);
 
-  // ─────────────────────────────────────────────────────────
-  // 🎨 INJECT STYLES
-  // ─────────────────────────────────────────────────────────
-  
-  useEffect(() => {
-    const styleEl = document.createElement('style');
-    styleEl.textContent = styles;
-    document.head.appendChild(styleEl);
-    return () => document.head.removeChild(styleEl);
-  }, []);
+// Определение мобильного устройства
+useEffect(() => {
+const checkMobile = () => {
+setIsMobileView(window.innerWidth < 768);
+};
+checkMobile();
+window.addEventListener('resize', checkMobile);
+return () => window.removeEventListener('resize', checkMobile);
+}, []);
 
-  // ─────────────────────────────────────────────────────────
-  // 🔁 MEMOIZED VALUES
-  // ─────────────────────────────────────────────────────────
-  
-  const filteredObjectsMemo = useMemo(() => {
-    if (!debouncedObjectSearch) return filteredObjects.slice(0, 10);
-    return filteredObjects
-      .filter(obj => obj.toLowerCase().includes(debouncedObjectSearch.toLowerCase()))
-      .slice(0, 10);
-  }, [debouncedObjectSearch, filteredObjects]);
+useEffect(() => {
+const styleEl = document.createElement('style');
+styleEl.textContent = styles;
+document.head.appendChild(styleEl);
+return () => document.head.removeChild(styleEl);
+}, []);
 
-  const canSubmit = useMemo(() => {
-    return (
-      formData.objectName.trim() &&
-      formData.foremanName.trim() &&
-      PHONE_REGEX.test(formData.foremanPhone) &&
-      formData.materials.length > 0 &&
-      formData.materials.every(m => m.description.trim() && m.quantity >= 1) &&
-      !isLoading
-    );
-  }, [formData, isLoading]);
+const showToast = useCallback((message, type = 'info', canUndo = false, undoFn = null) => {
+if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+setToast({ message, type, canUndo, undoFn, id: Date.now() });
+if (!canUndo) {
+toastTimerRef.current = setTimeout(() => {
+setToast(null);
+toastTimerRef.current = null;
+}, UNDO_TIMEOUT_MS);
+}
+}, []);
 
-  // ─────────────────────────────────────────────────────────
-  // ✅ ФУНКЦИЯ ВАЛИДАЦИИ (ДОБАВЛЕНА)
-  // ─────────────────────────────────────────────────────────
-  
-  const validateForm = useCallback(() => {
-    const errors = {};
-    
-    if (!formData.objectName?.trim()) {
-      errors.objectName = t('requiredField') || 'Укажите название объекта';
-    }
-    
-    if (!formData.foremanName?.trim()) {
-      errors.foremanName = t('requiredField') || 'Укажите ФИО прораба';
-    }
-    
-    if (!PHONE_REGEX.test(formData.foremanPhone)) {
-      errors.foremanPhone = t('invalidPhone') || 'Неверный формат телефона. Пример: +7 (999) 123-45-67';
-    }
-    
-    const validMaterials = formData.materials.filter(m => m.description?.trim() && m.quantity > 0);
-    if (validMaterials.length === 0) {
-      errors.materials = t('invalidMaterials') || 'Добавьте хотя бы один материал';
-    }
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [formData, t]);
+const loadCommentDraft = useCallback((applicationId) => {
+const savedDraft = getCommentDraft(applicationId);
+if (savedDraft) {
+setCommentDrafts(prev => ({ ...prev, [applicationId]: savedDraft }));
+} else {
+setCommentDrafts(prev => ({ ...prev, [applicationId]: '' }));
+}
+return savedDraft || '';
+}, []);
 
-  // ─────────────────────────────────────────────────────────
-  // ⌨️ KEYBOARD SHORTCUTS
-  // ─────────────────────────────────────────────────────────
-  
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && canSubmit && !isLoading) {
-        e.preventDefault();
-        formRef.current?.requestSubmit();
-        return;
-      }
-      if (e.key === 'Escape') {
-        setShowObjectSuggestions(false);
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [canSubmit, isLoading, setShowObjectSuggestions]);
+const handleCommentChange = useCallback((applicationId, value) => {
+setCommentDrafts(prev => ({ ...prev, [applicationId]: value }));
+if (commentTimerRef.current[applicationId]) {
+clearTimeout(commentTimerRef.current[applicationId]);
+}
+commentTimerRef.current[applicationId] = setTimeout(() => {
+if (value && value.trim()) {
+saveCommentDraft(applicationId, value);
+} else {
+clearCommentDraft(applicationId);
+}
+}, 1000);
+}, []);
 
-  // ─────────────────────────────────────────────────────────
-  // 🎛️ ОБРАБОТЧИКИ
-  // ─────────────────────────────────────────────────────────
-  
-  const handleObjectKeyDown = useCallback((e) => {
-    if (!showObjectSuggestions || filteredObjectsMemo.length === 0) return;
-    
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setActiveObjectIndex(prev => Math.min(prev + 1, filteredObjectsMemo.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActiveObjectIndex(prev => Math.max(prev - 1, -1));
-    } else if (e.key === 'Enter' && activeObjectIndex >= 0) {
-      e.preventDefault();
-      selectObject(filteredObjectsMemo[activeObjectIndex]);
-      setShowObjectSuggestions(false);
-      setActiveObjectIndex(-1);
-    } else if (e.key === 'Escape') {
-      setShowObjectSuggestions(false);
-      setActiveObjectIndex(-1);
-    }
-  }, [showObjectSuggestions, filteredObjectsMemo, activeObjectIndex, selectObject, setShowObjectSuggestions]);
+const clearCommentDraftHandler = useCallback((applicationId) => {
+clearCommentDraft(applicationId);
+setCommentDrafts(prev => ({ ...prev, [applicationId]: '' }));
+if (commentTimerRef.current[applicationId]) {
+clearTimeout(commentTimerRef.current[applicationId]);
+}
+}, []);
 
-  const handleMaterialSuggestionSelect = useCallback((index, suggestion) => {
-    selectMaterial(index, suggestion);
-  }, [selectMaterial]);
+useEffect(() => {
+const handleKeyDown = (e) => {
+if (e.key === 'Escape') {
+if (searchTerm) onSearchChange('');
+if (statusFilter !== 'all') onStatusFilterChange('all');
+if (toast) setToast(null);
+}
+if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && applications.length > 0) {
+e.preventDefault();
+showToast(t('exportStarted') || 'Экспорт начат', 'info');
+}
+};
+document.addEventListener('keydown', handleKeyDown);
+return () => document.removeEventListener('keydown', handleKeyDown);
+}, [searchTerm, statusFilter, applications.length, onSearchChange, onStatusFilterChange, t, toast, showToast]);
 
-  // ✅ ОБНОВЛЕННЫЙ onSubmit С ВАЛИДАЦИЕЙ
-  const onSubmit = useCallback((e) => {
-    e.preventDefault();
-    if (validateForm()) {
-      handleSubmit(e);
-    } else {
-      const firstError = document.querySelector('.form-error');
-      if (firstError) {
-        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }
-  }, [validateForm, handleSubmit]);
+useEffect(() => {
+  // ✅ Копируем значения ref в локальные переменные,
+  // чтобы cleanup использовал актуальные на момент монтирования таймеры
+  const timers = commentTimerRef.current;
+  const toastTimer = toastTimerRef.current;
 
-  // Закрытие dropdown при клике вне
-  useClickOutside(objectListRef, () => setShowObjectSuggestions(false));
+  return () => {
+    if (toastTimer) clearTimeout(toastTimer);
+    Object.values(timers).forEach(timer => {
+      if (timer) clearTimeout(timer);
+    });
+  };
+}, []);
 
-  // ─────────────────────────────────────────────────────────
-  // 📋 РЕНДЕРИНГ
-  // ─────────────────────────────────────────────────────────
+const getRoleLabel = useCallback((role) => {
+const ROLE_OPTIONS = [
+{ value: 'foreman', label: t('foremanName') },
+{ value: 'supply_admin', label: t('roleSupplyAdmin') || 'Администратор снабжения' },
+{ value: 'manager', label: t('roleManager') || 'Руководитель' },
+{ value: 'accountant', label: t('roleAccountant') || 'Бухгалтер' }
+];
+return ROLE_OPTIONS.find(r => r.value === role)?.label || role;
+}, [t]);
 
-  return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-gray-200/50 dark:border-gray-700/50 form-enter">
-        
-        {/* Header */}
-        <FormHeader t={t} />
-        
-        {/* Quick Actions */}
-        <QuickActions
-          onCloneLast={onCloneLast}
-          onDownloadTemplate={onDownloadTemplate}
-          onImportExcel={() => fileInputRef?.current?.click()}
-          onSaveTemplate={() => setShowTemplateModal(true)}
-          t={t}
-        />
-        
-        <form ref={formRef} onSubmit={onSubmit} className="space-y-6" noValidate>
-          
-          {/* Hidden File Input */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            onChange={onExcelImport}
-            className="hidden"
-            aria-hidden="true"
-            tabIndex={-1}
-          />
-          
-          {/* Object Name with Autocomplete */}
-          <ObjectInput
-            value={formData.objectName}
-            onChange={(e) => {
-              setObjectSearch(e.target.value);
-              handleObjectInput?.(e);
-              if (formErrors.objectName) setFormErrors(prev => ({ ...prev, objectName: null }));
-            }}
-            onFocus={() => setShowObjectSuggestions(true)}
-            onKeyDown={handleObjectKeyDown}
-            suggestions={filteredObjectsMemo}
-            showSuggestions={showObjectSuggestions}
-            activeIndex={activeObjectIndex}
-            onSelect={(obj) => {
-              selectObject(obj);
-              setShowObjectSuggestions(false);
-              if (formErrors.objectName) setFormErrors(prev => ({ ...prev, objectName: null }));
-            }}
-            error={formErrors.objectName}
-            t={t}
-            inputRef={objectInputRef}
-            listRef={objectListRef}
-          />
+const getMaterialStatus = useCallback((material, translate) => {
+const requestedQty = Number(material.quantity) || 0;
+const onWarehouse = Number(material.supplier_received_quantity) || 0;
+const confirmed = Number(material.received) || 0;
+const itemStatus = material.status || ITEM_STATUS.PENDING;
 
-          {/* Выбор заказчика */}
-          {companyId && onClientSelect && (
-            <ClientSelector
-              companyId={companyId}
-              selectedClientId={selectedClientId}
-              onSelect={onClientSelect}
-              t={t}
-            />
-          )}
+if (confirmed >= requestedQty && requestedQty > 0) {
+return {
+text: translate('statusReceived'),
+class: STATUS_CONFIG[ITEM_STATUS.CONFIRMED]?.colorClass || DEFAULT_STATUS.colorClass,
+icon: STATUS_CONFIG[ITEM_STATUS.CONFIRMED]?.icon || CheckCircle2
+};
+}
+if (onWarehouse > 0 && confirmed < requestedQty) {
+return {
+text: translate('itemStatusOnWarehouse') || 'На складе',
+class: STATUS_CONFIG[ITEM_STATUS.ON_WAREHOUSE]?.colorClass || DEFAULT_STATUS.colorClass,
+icon: STATUS_CONFIG[ITEM_STATUS.ON_WAREHOUSE]?.icon || Warehouse
+};
+}
+if (itemStatus === ITEM_STATUS.SENT_TO_MASTER) {
+return {
+text: translate('itemStatusSent') || 'Отправлено',
+class: STATUS_CONFIG[ITEM_STATUS.SENT_TO_MASTER]?.colorClass || DEFAULT_STATUS.colorClass,
+icon: STATUS_CONFIG[ITEM_STATUS.SENT_TO_MASTER]?.icon || Send
+};
+}
+return {
+text: translate('statusPending'),
+class: STATUS_CONFIG[ITEM_STATUS.PENDING]?.colorClass || DEFAULT_STATUS.colorClass,
+icon: STATUS_CONFIG[ITEM_STATUS.PENDING]?.icon || Hourglass
+};
+}, []);
 
-          {/* Foreman Name */}
-          <ForemanField
-            id="foremanName"
-            label={t('foremanName')}
-            value={formData.foremanName}
-            onChange={(e) => {
-              setFormData(prev => ({ ...prev, foremanName: sanitizeInput(e.target.value) }));
-              if (formErrors.foremanName) setFormErrors(prev => ({ ...prev, foremanName: null }));
-            }}
-            placeholder={t('foremanNamePlaceholder')}
-            error={formErrors.foremanName}
-          />
+const canShowReceiveButton = useCallback((app, role) => {
+if (role !== 'supply_admin' && role !== 'manager') return false;
+const isActiveStatus = [
+APPLICATION_STATUS.PENDING,
+APPLICATION_STATUS.ADMIN_PROCESSING,
+APPLICATION_STATUS.PARTIAL_RECEIVED
+].includes(app.status);
+const hasUnreceivedMaterials = app.materials?.some(m =>
+(Number(m.supplier_received_quantity) || 0) < (Number(m.quantity) || 0)
+);
+return isActiveStatus && hasUnreceivedMaterials;
+}, []);
 
-          {/* Foreman Phone */}
-          <ForemanField
-            id="foremanPhone"
-            label={t('foremanPhone')}
-            value={formData.foremanPhone}
-            onChange={(e) => {
-              handlePhoneChange(e);
-              if (formErrors.foremanPhone) setFormErrors(prev => ({ ...prev, foremanPhone: null }));
-            }}
-            type="tel"
-            placeholder={t('phonePlaceholder')}
-            error={formErrors.foremanPhone}
-          />
+const canShowSendToMasterButton = useCallback((app, role) => {
+if (role !== 'supply_admin' && role !== 'manager') return false;
+if (![APPLICATION_STATUS.ADMIN_PROCESSING, APPLICATION_STATUS.PARTIAL_RECEIVED, APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION].includes(app.status)) return false;
+const hasReceivedUnsentMaterials = app.materials?.some(m =>
+(Number(m.supplier_received_quantity) || 0) > 0 &&
+m.status !== ITEM_STATUS.SENT_TO_MASTER &&
+(Number(m.received) || 0) < (Number(m.quantity) || 0)
+);
+return hasReceivedUnsentMaterials;
+}, []);
 
-          {/* Warehouse Info */}
-          <WarehouseInfo t={t} />
-
-          {/* Templates Section */}
-          <TemplateSelector
-            templates={templates}
-            onLoad={loadTemplate}
-            t={t}
-          />
-
-          {/* Material Cart */}
-          {formData.cart?.length > 0 && (
-            <MaterialCart
-              cart={formData.cart}
-              restoreMaterial={restoreFromCart}
-              removeMaterialPermanently={removeFromCartPermanently}
-              t={t}
-              isStandaloneView={false}
-            />
-          )}
-
-          {/* Materials List */}
-          <section aria-labelledby="materials-heading">
-            <div className="flex justify-between items-center mb-4">
-              <h3 id="materials-heading" className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                <Package className="w-4 h-4" aria-hidden="true" />
-                {t('materials')} <span className="text-red-500" aria-hidden="true">*</span>
-              </h3>
-              <button
-                type="button"
-                onClick={addMaterial}
-                className="flex items-center gap-2 px-4 py-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors focus:ring-2 focus:ring-indigo-500"
-              >
-                <Plus className="w-4 h-4" aria-hidden="true" />
-                <span className="text-sm font-medium">{t('addMaterial')}</span>
-              </button>
-            </div>
-            
-            {/* ✅ ОТОБРАЖЕНИЕ ОШИБКИ МАТЕРИАЛОВ */}
-            {formErrors.materials && (
-              <p className="mb-4 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5 form-error" role="alert">
-                <AlertCircle className="w-4 h-4" aria-hidden="true" />
-                {formErrors.materials}
-              </p>
-            )}
-            
-            <div className="space-y-3" role="list" aria-label={t('materialsList')}>
-              {formData.materials.map((material, index) => (
-                <MaterialRow
-                  key={index}
-                  material={material}
-                  index={index}
-                  onUpdate={updateMaterial}
-                  onRemove={removeMaterial}
-                  onAddPhoto={onAddPhoto}
-                  capturedPhotos={capturedPhotos}
-                  selectedApplicationId={selectedApplication?.id}
-                  suggestions={materialHistory}
-                  showSuggestions={!!showMaterialSuggestions[index]}
-                  onSuggestionSelect={handleMaterialSuggestionSelect}
-                  unitOptions={unitOptions}
-                  t={t}
-                />
-              ))}
-            </div>
-          </section>
-
-          {/* Submit Button */}
-          <SubmitButton canSubmit={canSubmit} isLoading={isLoading} t={t} />
-          
-          {/* Keyboard hints */}
-          <div className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500">
-            <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded mr-2">Ctrl+Enter — отправить</span>
-            <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть список</span>
-          </div>
-        </form>
-      </div>
-
-      {/* Template Modal */}
-      {showTemplateModal && (
-        <TemplateModal
-          templateName={templateName}
-          setTemplateName={setTemplateName}
-          onSave={saveTemplate}
-          onClose={() => setShowTemplateModal(false)}
-          t={t}
-        />
-      )}
-    </div>
-  );
+const getVisibleMaterials = useCallback((materials, viewMode) => {
+if (!materials || !Array.isArray(materials)) return [];
+const validMaterials = materials.filter(m =>
+m?.description?.trim() &&
+(Number(m.quantity) || 0) > 0
+);
+if (viewMode === 'received') {
+return validMaterials.filter(m => {
+const confirmed = Number(m.received) || 0;
+const requested = Number(m.quantity) || 0;
+return confirmed >= requested && requested > 0;
 });
+}
+if (viewMode === 'inwork' || viewMode === 'confirmation') {
+return validMaterials.filter(m => {
+const confirmed = Number(m.received) || 0;
+const requested = Number(m.quantity) || 0;
+return confirmed < requested;
+});
+}
+return validMaterials;
+}, []);
 
-CreateApplicationForm.displayName = 'CreateApplicationForm';
+const processedApplications = useMemo(() => {
+return applications.map(app => {
+const totalMaterials = app.materials?.reduce((sum, m) => sum + (Number(m.quantity) || 0), 0) || 0;
+const onWarehouse = app.materials?.reduce((sum, m) => sum + (Number(m.supplier_received_quantity) || 0), 0) || 0;
+const confirmed = app.materials?.reduce((sum, m) => sum + (Number(m.received) || 0), 0) || 0;
+const isActive = isApplicationActive(app.status);
+const isCompleted = isApplicationCompleted(app.status);
+return {
+...app,
+_calculated: {
+totalMaterials,
+onWarehouse,
+confirmed,
+isActive,
+isCompleted,
+warehouseProgress: totalMaterials > 0 ? Math.round((onWarehouse / totalMaterials) * 100) : 0,
+confirmationProgress: totalMaterials > 0 ? Math.round((confirmed / totalMaterials) * 100) : 0
+}
+};
+});
+}, [applications]);
 
-export default CreateApplicationForm;
+const handleDownloadPDF = useCallback((app) => {
+if (!isExportingPDF) onDownloadPDF(app);
+}, [isExportingPDF, onDownloadPDF]);
+
+const handleDownloadXLSX = useCallback((app) => {
+if (!isExportingXLSX) onDownloadXLSX(app);
+}, [isExportingXLSX, onDownloadXLSX]);
+
+const handlePageChange = useCallback((newPage) => {
+if (newPage >= 1 && newPage <= totalPages) {
+onPageChange(newPage);
+}
+}, [totalPages, onPageChange]);
+
+const handleCancel = useCallback((app) => {
+if (window.confirm(t('confirmCancel') || 'Отменить заявку?')) {
+onCancelApplication(app.id);
+showToast(t('applicationCanceled') || 'Заявка отменена', 'success', true, () => {});
+}
+}, [onCancelApplication, t, showToast]);
+
+const hasActiveFilters = searchTerm || statusFilter !== 'all' || dateFilter || viewedFilter !== 'all';
+const activeFiltersCount = (searchTerm ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0) + (dateFilter ? 1 : 0) + (viewedFilter !== 'all' ? 1 : 0);
+
+return (
+<div className="max-w-7xl mx-auto p-2 sm:p-4 app-card-enter">
+<div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-3 sm:p-6 border border-gray-200/50 dark:border-gray-700/50">
+  
+  {/* Header */}
+  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
+    <div className="flex items-center gap-2 sm:gap-3">
+      <div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/20">
+        <Package className="w-4 h-4 sm:w-5 sm:h-5 text-white" aria-hidden="true" />
+      </div>
+      <div>
+        <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{title}</h2>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+          {formatNumber(applications.length)} {applications.length === 1 ? 'заявка' : applications.length < 5 ? 'заявки' : 'заявок'}
+        </p>
+      </div>
+    </div>
+    {isAdminMode && (
+      <button
+        onClick={onAdminLogout}
+        className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl text-xs sm:text-sm font-medium flex items-center gap-1.5 transition-all shadow-lg shadow-red-500/25"
+      >
+        <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden="true" />
+        <span>{t('adminMode')}</span>
+      </button>
+    )}
+  </div>
+
+  {/* Filters */}
+  <div className="mb-4 sm:mb-6">
+    {isMobileView && (
+      <button
+        onClick={() => setShowFilters(!showFilters)}
+        className="flex items-center justify-center gap-2 px-3 py-2 mb-3 text-sm bg-gray-100 dark:bg-gray-700 rounded-xl w-full"
+      >
+        <Search className="w-4 h-4" />
+        Фильтры
+        {activeFiltersCount > 0 && (
+          <span className="ml-1 px-1.5 py-0.5 text-xs bg-indigo-500 text-white rounded-full">
+            {activeFiltersCount}
+          </span>
+        )}
+        <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+      </button>
+    )}
+    
+    {(showFilters || !isMobileView) && (
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 filters-row">
+        <div className="flex-1 min-w-[150px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" aria-hidden="true" />
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white"
+              placeholder={t('searchByObjectOrForeman')}
+            />
+            {searchTerm && (
+              <button
+                onClick={() => onSearchChange('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => onStatusFilterChange(e.target.value)}
+          className="flex-1 min-w-[120px] px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+        >
+          <option value="all">{t('allStatuses')}</option>
+          <option value={APPLICATION_STATUS.DRAFT}>{t('statusDraft') || 'Черновик'}</option>
+          <option value={APPLICATION_STATUS.PENDING}>{t('statusPending')}</option>
+          <option value={APPLICATION_STATUS.ADMIN_PROCESSING}>{t('statusAdminProcessing') || 'Приёмка'}</option>
+          <option value={APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE}>{t('statusPartialWarehouse') || 'Частично на складе'}</option>
+          <option value={APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION}>{t('statusPendingConfirmation') || 'Ожидает подтверждения'}</option>
+          <option value={APPLICATION_STATUS.RECEIVED}>{t('statusReceived')}</option>
+          <option value={APPLICATION_STATUS.PARTIAL_RECEIVED}>{t('statusPartialReceived') || 'Частично получено'}</option>
+          <option value={APPLICATION_STATUS.REJECTED}>{t('statusRejected') || 'Отклонено'}</option>
+          <option value={APPLICATION_STATUS.CANCELED}>{t('statusCanceled')}</option>
+        </select>
+
+        {uniqueDates && uniqueDates.length > 0 && (
+          <select
+            value={dateFilter}
+            onChange={(e) => onDateFilterChange(e.target.value)}
+            className="flex-1 min-w-[120px] px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+          >
+            <option value="">{t('allDates')}</option>
+            {uniqueDates?.slice(0, 10).map(date => (
+              <option key={date} value={date}>{date}</option>
+            ))}
+          </select>
+        )}
+
+        {permissions?.canViewAll && (
+          <select
+            value={viewedFilter}
+            onChange={(e) => onViewedFilterChange(e.target.value)}
+            className="flex-1 min-w-[100px] px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+          >
+            <option value="all">{t('allRequests')}</option>
+            <option value="new">{t('onlyNew')}</option>
+          </select>
+        )}
+
+        {hasActiveFilters && (
+          <button
+            onClick={onClearFilters}
+            className="px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-medium flex items-center gap-1.5 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            {!isMobileView && t('clearFilters')}
+          </button>
+        )}
+      </div>
+    )}
+    
+    <div className="mt-2 flex flex-wrap gap-2 text-[10px] sm:text-xs text-gray-400 dark:text-gray-500">
+      <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — сбросить фильтры</span>
+      <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded">Ctrl+Enter — экспорт</span>
+    </div>
+  </div>
+
+  {/* Loading / Empty States */}
+  {isLoading && (
+    <div className="space-y-4">
+      {[...Array(3)].map((_, i) => <ApplicationCardSkeleton key={i} />)}
+    </div>
+  )}
+
+  {!isLoading && applications.length === 0 && (
+    <div className="text-center py-16" role="status" aria-live="polite">
+      <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gray-100 dark:bg-gray-800 mb-4">
+        <Package className="w-10 h-10 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+      </div>
+      <p className="text-lg font-medium text-gray-900 dark:text-white mb-1">{emptyMessage || t('noApplications')}</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        {hasActiveFilters ? t('tryClearFilters') || 'Попробуйте сбросить фильтры' : t('createFirstApplication') || 'Создайте первую заявку'}
+      </p>
+    </div>
+  )}
+
+  {/* Applications List */}
+  {!isLoading && processedApplications.length > 0 && (
+    <div className="space-y-4" role="list">
+      {processedApplications.map((application) => {
+        const { _calculated: calc } = application;
+
+        const exportButtons = [
+          { key: 'html', icon: FileText, label: t('downloadHTML'), action: () => { const filteredMaterials = getVisibleMaterials(application.materials, viewMode); onDownloadHTML({ ...application, materials: filteredMaterials }); }, loading: false },
+          { key: 'pdf', icon: Download, label: t('downloadPDF'), action: () => { const filteredMaterials = getVisibleMaterials(application.materials, viewMode); handleDownloadPDF({ ...application, materials: filteredMaterials }); }, loading: isExportingPDF },
+          { key: 'xlsx', icon: Download, label: t('downloadXLSX'), action: () => { const filteredMaterials = getVisibleMaterials(application.materials, viewMode); handleDownloadXLSX({ ...application, materials: filteredMaterials }); }, loading: isExportingXLSX }
+        ];
+
+        return (
+          <article
+            key={application.id}
+            className="app-card-enter application-card bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 sm:p-5 rounded-2xl border border-gray-200/60 dark:border-gray-700/60 hover:border-indigo-300/60 dark:hover:border-indigo-600/60"
+            aria-labelledby={`app-title-${application.id}`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              {/* Main Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 mb-2 flex-wrap">
+                  <h3 id={`app-title-${application.id}`} className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate" title={application.object_name}>
+                    {application.object_name}
+                  </h3>
+                  <StatusBadge status={application.status} createdAt={application.created_at} statusText={getStatusText(application.status, language)} t={t} />
+                </div>
+                <dl className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 space-y-1 mb-3">
+                  <div><dt className="font-medium text-gray-700 dark:text-gray-300 inline">{t('foremanName')}:</dt><dd className="inline ml-1">{application.foreman_name}</dd></div>
+                  <div><dt className="font-medium text-gray-700 dark:text-gray-300 inline">{t('foremanPhone')}:</dt><dd className="inline ml-1">{application.foreman_phone || t('notSpecified')}</dd></div>
+                  <div><dt className="font-medium text-gray-700 dark:text-gray-300 inline">{t('created')}:</dt><dd className="inline ml-1">{formatDate(application.created_at, language)}</dd></div>
+                </dl>
+
+                {calc.isActive && calc.totalMaterials > 0 && (
+                  <ProgressBar onWarehouse={calc.onWarehouse} confirmed={calc.confirmed} total={calc.totalMaterials} t={t} />
+                )}
+
+                {calc.isCompleted && (
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    {t('completed')}
+                  </div>
+                )}
+
+                {/* Materials */}
+                {isMobileView ? (
+                  <div className="space-y-2">
+                    {getVisibleMaterials(application.materials, viewMode)?.map((material, idx) => (
+                      <MobileMaterialCard
+                        key={`${application.id}-mat-${idx}`}
+                        material={material}
+                        index={idx}
+                        language={language}
+                        t={t}
+                        isOpen={expandedMaterials?.[`${application.id}-${idx}`] || false}
+                        onToggle={() => onToggleMaterial(application.id, idx)}
+                        getMaterialStatus={getMaterialStatus}
+                        escapeHtml={escapeHtml}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" role="table">
+                      <thead className="bg-gray-50 dark:bg-gray-700/50">
+                        <tr>
+                          {['#', 'description', 'requested', 'received', 'unit', 'status'].map((key) => (
+                            <th key={key} scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                              {key === '#' ? '#' : t(`material${key.charAt(0).toUpperCase() + key.slice(1)}`) || key}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {getVisibleMaterials(application.materials, viewMode)?.map((material, idx) => {
+                          const matStatus = getMaterialStatus(material, t);
+                          const requestedQty = Number(material.quantity) || 0;
+                          const onWarehouse = Number(material.supplier_received_quantity) || 0;
+                          const confirmed = Number(material.received) || 0;
+                          return (
+                            <tr key={`${application.id}-mat-${idx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                              <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{formatNumber(idx + 1)}</td>
+                              <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" title={material.description}>{material.description}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{formatNumber(requestedQty)}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-gray-700 dark:text-gray-300">{t('confirmed')}: {formatNumber(confirmed)}</span>
+                                  {onWarehouse > 0 && confirmed < requestedQty && (
+                                    <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1"><Warehouse className="w-3 h-3" />{t('onWarehouse')}: {formatNumber(onWarehouse)}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{material.unit}</td>
+                              <td className="px-4 py-2 whitespace-nowrap">
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${matStatus.class}`}>
+                                  {matStatus.icon && <matStatus.icon className="w-3 h-3" aria-hidden="true" />}
+                                  {matStatus.text}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap sm:flex-col gap-2 sm:ml-6 action-buttons">
+                {exportButtons.map((btn) => (
+                  <ExportButton key={btn.key} icon={btn.icon} label={btn.label} onClick={() => btn.action()} disabled={application.status === APPLICATION_STATUS.CANCELED} loading={btn.loading} />
+                ))}
+
+                {application.status !== APPLICATION_STATUS.CANCELED && (
+                  <>
+                    {canShowReceiveButton(application, userRole) && (
+                      <button onClick={() => onOpenReceiveModal(application, 'admin_receive')} className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl text-[10px] sm:text-xs font-medium flex items-center gap-1 transition-all shadow-lg shadow-blue-500/25">
+                        <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{t('acceptToWarehouse') || 'Приёмка'}</span>
+                      </button>
+                    )}
+
+                    {canShowSendToMasterButton(application, userRole) && (
+                      <button onClick={() => onOpenReceiveModal(application, 'admin_send_to_master')} className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl text-[10px] sm:text-xs font-medium flex items-center gap-1 transition-all shadow-lg shadow-purple-500/25">
+                        <Send className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{t('sendToMaster') || 'Отправить'}</span>
+                      </button>
+                    )}
+
+                    {userRole === 'foreman' && requiresMasterConfirmation(application.status) && application.user_id === user?.id && (
+                      <button onClick={() => onOpenReceiveModal(application, 'master_confirm')} className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-[10px] sm:text-xs font-medium flex items-center gap-1 transition-all shadow-lg shadow-green-500/25">
+                        <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{t('confirmReceipt') || 'Подтвердить'}</span>
+                      </button>
+                    )}
+
+                    {userRole === 'foreman' && isApplicationActive(application.status) && application.status === APPLICATION_STATUS.PENDING && application.user_id === user?.id && (
+                      <button onClick={() => handleCancel(application)} className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl text-[10px] sm:text-xs font-medium flex items-center gap-1 transition-all shadow-lg shadow-red-500/25">
+                        <Ban className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{t('cancelApplication')}</span>
+                      </button>
+                    )}
+
+                    {userRole === 'master' && requiresMasterConfirmation(application.status) && application.user_id === user?.id && (
+                      <button onClick={() => onOpenReceiveModal(application, 'master_confirm')} className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-[10px] sm:text-xs font-medium flex items-center gap-1 transition-all shadow-lg shadow-green-500/25">
+                        <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{t('confirmReceipt') || 'Подтвердить'}</span>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Comments Section */}
+            <CommentsSection
+              application={application}
+              comments={comments}
+              showComments={showComments}
+              onToggleComments={() => onToggleComments(application.id)}
+              onAddComment={(content) => onAddComment(application.id, content)}
+              language={language}
+              t={t}
+              getRoleLabel={getRoleLabel}
+              escapeHtml={escapeHtml}
+              isLoading={isLoading}
+              user={user}
+              draftValue={commentDrafts[application.id] || ''}
+              onDraftChange={(value) => handleCommentChange(application.id, value)}
+              onClearDraft={() => clearCommentDraftHandler(application.id)}
+              onOpen={() => loadCommentDraft(application.id)}
+            />
+
+            {/* Change History */}
+            {application.status_history?.length > 0 && (
+              <details className="mt-4 pt-4 border-t border-gray-200/30 dark:border-gray-700/30 group">
+                <summary className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white cursor-pointer list-none flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                  {t('changeHistory') || 'История изменений'}
+                  <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4 group-open:rotate-180 transition-transform" aria-hidden="true" />
+                </summary>
+                <div className="mt-2 space-y-2 max-h-40 sm:max-h-60 overflow-y-auto">
+                  {application.status_history.slice().reverse().map((entry, idx) => (
+                    <div key={idx} className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 flex flex-wrap items-center gap-1">
+                      <span className="font-medium text-gray-900 dark:text-white shrink-0">{formatDate(entry.timestamp, language)}</span>
+                      <span className="text-gray-400">→</span>
+                      <span className="shrink-0">{getStatusText(entry.new_status, language) || entry.new_status}</span>
+                      {entry.details && <span className="text-gray-500 dark:text-gray-500 ml-1">({entry.details})</span>}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </article>
+        );
+      })}
+    </div>
+  )}
+
+  {/* Pagination */}
+  {totalPages > 1 && (
+    <nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')}>
+      <button onClick={() => handlePageChange(page - 1)} disabled={page === 1} className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1 text-sm">
+        <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden="true" />
+        {t('prev')}
+      </button>
+      <span className="px-3 py-2 sm:px-4 sm:py-2.5 text-sm text-gray-700 dark:text-gray-300 font-medium bg-gray-100 dark:bg-gray-700 rounded-xl" aria-current="page">
+        {formatNumber(page)} / {formatNumber(totalPages)}
+      </span>
+      <button onClick={() => handlePageChange(page + 1)} disabled={page === totalPages} className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1 text-sm">
+        {t('next')}
+        <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 rotate-180" aria-hidden="true" />
+      </button>
+    </nav>
+  )}
+</div>
+
+{/* Toast Notification */}
+{toast && (
+  <Toast message={toast.message} type={toast.type} canUndo={toast.canUndo} onClose={() => setToast(null)} onUndo={toast.undoFn} t={t} />
+)}
+
+<div className="sr-only" aria-live="polite" aria-atomic="true">
+  {toast ? toast.message : ''}
+</div>
+</div>
+);
+});
+ApplicationList.displayName = 'ApplicationList';
+export default ApplicationList;
+
+[{
+	"resource": "/C:/Users/Антон/Desktop/реглай рабочая/my-project/src/components/ApplicationList.jsx",
+	"owner": "eslint1",
+	"code": {
+		"value": "no-unused-vars",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-unused-vars",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'isMobile' is defined but never used.",
+	"source": "eslint",
+	"startLineNumber": 346,
+	"startColumn": 1,
+	"endLineNumber": 346,
+	"endColumn": 9,
+	"modelVersionId": 11,
+	"tags": [
+		1
+	],
+	"origin": "extHost1"
+},{
+	"resource": "/C:/Users/Антон/Desktop/реглай рабочая/my-project/src/components/ApplicationList.jsx",
+	"owner": "eslint1",
+	"code": {
+		"value": "react-hooks/exhaustive-deps",
+		"target": {
+			"$mid": 1,
+			"path": "/facebook/react/issues/14920",
+			"scheme": "https",
+			"authority": "github.com"
+		}
+	},
+	"severity": 4,
+	"message": "The ref value 'commentTimerRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'commentTimerRef.current' to a variable inside the effect, and use that variable in the cleanup function.",
+	"source": "eslint",
+	"startLineNumber": 469,
+	"startColumn": 31,
+	"endLineNumber": 469,
+	"endColumn": 38,
+	"modelVersionId": 11,
+	"origin": "extHost1"
+}]

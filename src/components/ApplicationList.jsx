@@ -9,7 +9,6 @@ Send, CheckCircle2, Hourglass, Boxes, Save
 } from 'lucide-react';
 import CommentsSection from './CommentsSection';
 import MobileMaterialCard from './MobileMaterialCard';
-// ✅ ИМПОРТ АВТОСОХРАНЕНИЯ КОММЕНТАРИЕВ
 import { saveCommentDraft, getCommentDraft, clearCommentDraft } from '../utils/autoSaveUtils';
 
 // ─────────────────────────────────────────────────────────────
@@ -31,85 +30,82 @@ requiresMasterConfirmation
 // 📦 КОНФИГУРАЦИЯ СТАТУСОВ
 // ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
-// Заявки
 [APPLICATION_STATUS.DRAFT]: {
 labelKey: STATUS_I18N[APPLICATION_STATUS.DRAFT]?.ru || 'statusDraft',
 icon: STATUS_ICONS[APPLICATION_STATUS.DRAFT] || Hourglass,
-colorClass: STATUS_COLORS[APPLICATION_STATUS.DRAFT] || 'text-gray-800 bg-gray-200'
+colorClass: 'text-gray-800 bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
 },
 [APPLICATION_STATUS.PENDING]: {
 labelKey: STATUS_I18N[APPLICATION_STATUS.PENDING]?.ru || 'statusPending',
 icon: STATUS_ICONS[APPLICATION_STATUS.PENDING] || AlertCircle,
-colorClass: STATUS_COLORS[APPLICATION_STATUS.PENDING] || 'text-orange-800 bg-orange-200',
+colorClass: 'text-orange-800 bg-orange-200 dark:bg-orange-900/40 dark:text-orange-300',
 overdueColorClass: 'text-red-800 bg-red-200 dark:bg-red-900/70 dark:text-red-200 border-2 border-red-500'
 },
 [APPLICATION_STATUS.ADMIN_PROCESSING]: {
 labelKey: STATUS_I18N[APPLICATION_STATUS.ADMIN_PROCESSING]?.ru || 'statusAdminProcessing',
 icon: STATUS_ICONS[APPLICATION_STATUS.ADMIN_PROCESSING] || Package,
-colorClass: STATUS_COLORS[APPLICATION_STATUS.ADMIN_PROCESSING] || 'text-blue-800 bg-blue-200'
+colorClass: 'text-blue-800 bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300'
 },
 [APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: {
 labelKey: STATUS_I18N[APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]?.ru || 'statusPartialWarehouse',
 icon: STATUS_ICONS[APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE] || Boxes,
-colorClass: STATUS_COLORS[APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE] || 'text-indigo-800 bg-indigo-200'
+colorClass: 'text-indigo-800 bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300'
 },
 [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: {
 labelKey: STATUS_I18N[APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]?.ru || 'statusPendingConfirmation',
 icon: STATUS_ICONS[APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION] || Mail,
-colorClass: STATUS_COLORS[APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION] || 'text-purple-800 bg-purple-200'
+colorClass: 'text-purple-800 bg-purple-200 dark:bg-purple-900/40 dark:text-purple-300'
 },
 [APPLICATION_STATUS.RECEIVED]: {
 labelKey: STATUS_I18N[APPLICATION_STATUS.RECEIVED]?.ru || 'statusReceived',
 icon: STATUS_ICONS[APPLICATION_STATUS.RECEIVED] || CheckCircle2,
-colorClass: STATUS_COLORS[APPLICATION_STATUS.RECEIVED] || 'text-green-800 bg-green-200'
+colorClass: 'text-green-800 bg-green-200 dark:bg-green-900/40 dark:text-green-300'
 },
 [APPLICATION_STATUS.PARTIAL_RECEIVED]: {
 labelKey: STATUS_I18N[APPLICATION_STATUS.PARTIAL_RECEIVED]?.ru || 'statusPartialReceived',
 icon: STATUS_ICONS[APPLICATION_STATUS.PARTIAL_RECEIVED] || AlertCircle,
-colorClass: STATUS_COLORS[APPLICATION_STATUS.PARTIAL_RECEIVED] || 'text-amber-800 bg-amber-200'
+colorClass: 'text-amber-800 bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300'
 },
 [APPLICATION_STATUS.REJECTED]: {
 labelKey: STATUS_I18N[APPLICATION_STATUS.REJECTED]?.ru || 'statusRejected',
 icon: STATUS_ICONS[APPLICATION_STATUS.REJECTED] || XCircle,
-colorClass: STATUS_COLORS[APPLICATION_STATUS.REJECTED] || 'text-red-800 bg-red-200'
+colorClass: 'text-red-800 bg-red-200 dark:bg-red-900/40 dark:text-red-300'
 },
 [APPLICATION_STATUS.CANCELED]: {
 labelKey: STATUS_I18N[APPLICATION_STATUS.CANCELED]?.ru || 'statusCanceled',
 icon: STATUS_ICONS[APPLICATION_STATUS.CANCELED] || Ban,
-colorClass: STATUS_COLORS[APPLICATION_STATUS.CANCELED] || 'text-gray-800 bg-gray-200'
+colorClass: 'text-gray-800 bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
 },
-// ✅ 'overdue' для просроченных заявок
 overdue: {
 labelKey: 'overdue',
 icon: AlertTriangle,
 colorClass: 'text-red-800 bg-red-200 dark:bg-red-900/70 dark:text-red-200 border-2 border-red-500',
 isOverdue: true
 },
-// Позиции
 [ITEM_STATUS.PENDING]: {
 labelKey: STATUS_I18N[ITEM_STATUS.PENDING]?.ru || 'itemStatusPending',
 icon: Hourglass,
-colorClass: STATUS_COLORS[ITEM_STATUS.PENDING] || 'text-gray-700 bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+colorClass: 'text-gray-700 bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
 },
 [ITEM_STATUS.ON_WAREHOUSE]: {
 labelKey: STATUS_I18N[ITEM_STATUS.ON_WAREHOUSE]?.ru || 'itemStatusOnWarehouse',
 icon: Warehouse,
-colorClass: STATUS_COLORS[ITEM_STATUS.ON_WAREHOUSE] || 'text-blue-700 bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300'
+colorClass: 'text-blue-700 bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300'
 },
 [ITEM_STATUS.SENT_TO_MASTER]: {
 labelKey: STATUS_I18N[ITEM_STATUS.SENT_TO_MASTER]?.ru || 'itemStatusSent',
 icon: Send,
-colorClass: STATUS_COLORS[ITEM_STATUS.SENT_TO_MASTER] || 'text-purple-700 bg-purple-200 dark:bg-purple-900/40 dark:text-purple-300'
+colorClass: 'text-purple-700 bg-purple-200 dark:bg-purple-900/40 dark:text-purple-300'
 },
 [ITEM_STATUS.CONFIRMED]: {
 labelKey: STATUS_I18N[ITEM_STATUS.CONFIRMED]?.ru || 'itemStatusConfirmed',
 icon: CheckCircle2,
-colorClass: STATUS_COLORS[ITEM_STATUS.CONFIRMED] || 'text-green-700 bg-green-200 dark:bg-green-900/40 dark:text-green-300'
+colorClass: 'text-green-700 bg-green-200 dark:bg-green-900/40 dark:text-green-300'
 },
 [ITEM_STATUS.REJECTED]: {
 labelKey: STATUS_I18N[ITEM_STATUS.REJECTED]?.ru || 'itemStatusRejected',
 icon: XCircle,
-colorClass: STATUS_COLORS[ITEM_STATUS.REJECTED] || 'text-red-700 bg-red-200 dark:bg-red-900/40 dark:text-red-300'
+colorClass: 'text-red-700 bg-red-200 dark:bg-red-900/40 dark:text-red-300'
 }
 };
 
@@ -136,11 +132,34 @@ const styles = `
 .shimmer { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
 .progress-glow { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
 .application-card { transition: all 0.2s ease; will-change: transform, box-shadow; }
-.application-card:hover { transform: translateY(-2px); box-shadow: 0 12px 35px rgba(0,0,0,0.12); }
-.application-card:active { transform: translateY(0); }
-.quantity-stepper input::-webkit-outer-spin-button,
-.quantity-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.quantity-stepper input[type=number] { -moz-appearance: textfield; }
+.application-card:active { transform: scale(0.99); }
+
+/* Мобильная адаптация */
+@media (max-width: 768px) {
+  .application-card {
+    padding: 12px;
+  }
+  .filters-row {
+    gap: 8px;
+  }
+  .filter-input {
+    font-size: 14px;
+  }
+}
+
+/* Адаптивные кнопки действий */
+@media (max-width: 640px) {
+  .action-buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .action-buttons button {
+    flex: 1;
+    min-width: 80px;
+    justify-content: center;
+  }
+}
 `;
 
 // ─────────────────────────────────────────────────────────────
@@ -187,16 +206,15 @@ const StatusIcon = config.icon;
 const displayText = statusText || t(config.labelKey) || config.labelKey;
 return (
 <span
-className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap transition-all ${
+className={`inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-medium rounded-full whitespace-nowrap transition-all ${
 isOverdue ? config.overdueColorClass : config.colorClass
 } ${isOverdue ? 'pulse' : ''}`}
 role="status"
 aria-live="polite"
-aria-label={`${displayText}${isOverdue ? ` • ${t('overdue')}` : ''}`}
 >
-<StatusIcon className="w-4 h-4 mr-1 flex-shrink-0" aria-hidden="true" />
+<StatusIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0" aria-hidden="true" />
 {displayText}
-{isOverdue && <AlertTriangle className="w-3 h-3 ml-1" aria-hidden="true" />}
+{isOverdue && <AlertTriangle className="w-2.5 h-2.5 sm:w-3 sm:h-3 ml-1" aria-hidden="true" />}
 </span>
 );
 });
@@ -208,16 +226,16 @@ return (
 <button
 onClick={onClick}
 disabled={disabled || loading}
-className="group relative px-3 py-1.5 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl border border-gray-300/50 dark:border-gray-600/50 hover:bg-gray-50/80 dark:hover:bg-gray-600/80 hover:border-indigo-300/60 dark:hover:border-indigo-500/60 text-xs font-medium flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md"
+className="group relative px-2 py-1.5 sm:px-3 sm:py-1.5 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl border border-gray-300/50 dark:border-gray-600/50 hover:bg-gray-50/80 dark:hover:bg-gray-600/80 hover:border-indigo-300/60 dark:hover:border-indigo-500/60 text-[10px] sm:text-xs font-medium flex items-center justify-center gap-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md"
 aria-label={ariaLabel || label}
 title={label}
 >
 {loading ? (
-<Loader2 className="w-3.5 h-3.5 mr-1 animate-spin text-indigo-600" aria-hidden="true" />
+<Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin text-indigo-600" aria-hidden="true" />
 ) : (
-<Icon className="w-3.5 h-3.5 mr-1 flex-shrink-0 group-hover:scale-110 transition-transform" aria-hidden="true" />
+<Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0 group-hover:scale-110 transition-transform" aria-hidden="true" />
 )}
-<span className="hidden sm:inline">{label}</span>
+<span className="hidden xs:inline">{label}</span>
 </button>
 );
 });
@@ -229,7 +247,7 @@ const confirmationProgress = total > 0 ? Math.round((confirmed / total) * 100) :
 const isComplete = confirmationProgress === 100 && total > 0;
 return (
 <div className="mb-3" aria-label={t('progressLabel')}>
-<div className="flex justify-between text-xs mb-1.5">
+<div className="flex justify-between text-[10px] sm:text-xs mb-1.5">
 <span className="font-medium text-gray-700 dark:text-gray-300">
 {t('warehouse')}: {formatNumber(onWarehouse)}/{formatNumber(total)}
 {confirmed > 0 && ` • ${t('confirmed')}: ${formatNumber(confirmed)}`}
@@ -238,29 +256,18 @@ return (
 {confirmationProgress}%
 </span>
 </div>
-<div className="w-full bg-gray-200/60 dark:bg-gray-700/60 rounded-full h-2 overflow-hidden">
+<div className="w-full bg-gray-200/60 dark:bg-gray-700/60 rounded-full h-1.5 overflow-hidden">
 <div
-className="h-2 rounded-full bg-gradient-to-r from-blue-400 to-blue-500 transition-all duration-500"
+className="h-1.5 rounded-full bg-gradient-to-r from-blue-400 to-blue-500 transition-all duration-500"
 style={{ width: `${Math.min(warehouseProgress, 100)}%` }}
 role="progressbar"
-aria-valuenow={warehouseProgress}
-aria-valuemin={0}
-aria-valuemax={100}
-title={t('onWarehouse')}
 />
 {confirmed > 0 && (
 <div
-className={`h-2 rounded-full transition-all duration-500 -mt-2 ${
-isComplete
-? 'bg-gradient-to-r from-green-400 to-emerald-500 progress-glow'
-: 'bg-gradient-to-r from-green-400 to-green-500'
+className={`h-1.5 rounded-full transition-all duration-500 -mt-1.5 ${
+isComplete ? 'bg-gradient-to-r from-green-400 to-emerald-500 progress-glow' : 'bg-gradient-to-r from-green-400 to-green-500'
 }`}
 style={{ width: `${Math.min(confirmationProgress, 100)}%` }}
-role="progressbar"
-aria-valuenow={confirmationProgress}
-aria-valuemin={0}
-aria-valuemax={100}
-title={t('confirmed')}
 />
 )}
 </div>
@@ -336,7 +343,6 @@ const ApplicationList = memo(({
 applications,
 title,
 emptyMessage,
-isMobile,
 user,
 isAdminMode,
 permissions,
@@ -375,10 +381,20 @@ isExportingXLSX = false
 }) => {
 const [toast, setToast] = useState(null);
 const toastTimerRef = useRef(null);
-
-// ✅ СОСТОЯНИЯ ДЛЯ АВТОСОХРАНЕНИЯ КОММЕНТАРИЕВ
 const [commentDrafts, setCommentDrafts] = useState({});
 const commentTimerRef = useRef({});
+const [isMobileView, setIsMobileView] = useState(false);
+const [showFilters, setShowFilters] = useState(false);
+
+// Определение мобильного устройства
+useEffect(() => {
+const checkMobile = () => {
+setIsMobileView(window.innerWidth < 768);
+};
+checkMobile();
+window.addEventListener('resize', checkMobile);
+return () => window.removeEventListener('resize', checkMobile);
+}, []);
 
 useEffect(() => {
 const styleEl = document.createElement('style');
@@ -398,7 +414,6 @@ toastTimerRef.current = null;
 }
 }, []);
 
-// ✅ ЗАГРУЗКА ЧЕРНОВИКА ПРИ ОТКРЫТИИ КОММЕНТАРИЕВ
 const loadCommentDraft = useCallback((applicationId) => {
 const savedDraft = getCommentDraft(applicationId);
 if (savedDraft) {
@@ -409,14 +424,11 @@ setCommentDrafts(prev => ({ ...prev, [applicationId]: '' }));
 return savedDraft || '';
 }, []);
 
-// ✅ АВТОСОХРАНЕНИЕ ПРИ ВВОДЕ ТЕКСТА
 const handleCommentChange = useCallback((applicationId, value) => {
 setCommentDrafts(prev => ({ ...prev, [applicationId]: value }));
-
 if (commentTimerRef.current[applicationId]) {
 clearTimeout(commentTimerRef.current[applicationId]);
 }
-
 commentTimerRef.current[applicationId] = setTimeout(() => {
 if (value && value.trim()) {
 saveCommentDraft(applicationId, value);
@@ -426,11 +438,9 @@ clearCommentDraft(applicationId);
 }, 1000);
 }, []);
 
-// ✅ ОЧИСТКА ЧЕРНОВИКА ПОСЛЕ ОТПРАВКИ
 const clearCommentDraftHandler = useCallback((applicationId) => {
 clearCommentDraft(applicationId);
 setCommentDrafts(prev => ({ ...prev, [applicationId]: '' }));
-
 if (commentTimerRef.current[applicationId]) {
 clearTimeout(commentTimerRef.current[applicationId]);
 }
@@ -596,502 +606,382 @@ showToast(t('applicationCanceled') || 'Заявка отменена', 'success'
 }, [onCancelApplication, t, showToast]);
 
 const hasActiveFilters = searchTerm || statusFilter !== 'all' || dateFilter || viewedFilter !== 'all';
+const activeFiltersCount = (searchTerm ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0) + (dateFilter ? 1 : 0) + (viewedFilter !== 'all' ? 1 : 0);
 
 return (
-<div className="max-w-7xl mx-auto p-4 app-card-enter">
-<div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
-{/* Header */}
-<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
-<div className="flex items-center gap-3">
-<div className="p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/20">
-<Package className="w-5 h-5 text-white" aria-hidden="true" />
-</div>
-<div>
-<h2 className="text-2xl font-bold text-gray-900 dark:text-white">{title}</h2>
-<p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-{formatNumber(applications.length)} {applications.length === 1 ? 'заявка' : applications.length < 5 ? 'заявки' : 'заявок'}
-</p>
-</div>
-</div>
-{isAdminMode && (
-<button
-onClick={onAdminLogout}
-className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-red-500/25"
-aria-label={t('exitAdminMode')}
->
-<Shield className="w-4 h-4" aria-hidden="true" />
-<span>{t('adminMode')}</span>
-</button>
-)}
-</div>
+<div className="max-w-7xl mx-auto p-2 sm:p-4 app-card-enter">
+<div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-3 sm:p-6 border border-gray-200/50 dark:border-gray-700/50">
+  
+  {/* Header */}
+  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
+    <div className="flex items-center gap-2 sm:gap-3">
+      <div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/20">
+        <Package className="w-4 h-4 sm:w-5 sm:h-5 text-white" aria-hidden="true" />
+      </div>
+      <div>
+        <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{title}</h2>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+          {formatNumber(applications.length)} {applications.length === 1 ? 'заявка' : applications.length < 5 ? 'заявки' : 'заявок'}
+        </p>
+      </div>
+    </div>
+    {isAdminMode && (
+      <button
+        onClick={onAdminLogout}
+        className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl text-xs sm:text-sm font-medium flex items-center gap-1.5 transition-all shadow-lg shadow-red-500/25"
+      >
+        <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden="true" />
+        <span>{t('adminMode')}</span>
+      </button>
+    )}
+  </div>
 
-{/* Filters */}
-<div className="mb-6">
-<div className="flex flex-wrap gap-3 items-end">
-<div className="flex-1 min-w-[200px]">
-<label htmlFor="search-input" className="sr-only">{t('search')}</label>
-<div className="relative">
-<Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" aria-hidden="true" />
-<input
-id="search-input"
-type="search"
-value={searchTerm}
-onChange={(e) => onSearchChange(e.target.value)}
-className="w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
-placeholder={t('searchByObjectOrForeman')}
-aria-label={t('search')}
-/>
-{searchTerm && (
-<button
-onClick={() => onSearchChange('')}
-className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-aria-label={t('clear')}
->
-<X className="w-4 h-4" aria-hidden="true" />
-</button>
-)}
-</div>
-</div>
+  {/* Filters */}
+  <div className="mb-4 sm:mb-6">
+    {isMobileView && (
+      <button
+        onClick={() => setShowFilters(!showFilters)}
+        className="flex items-center justify-center gap-2 px-3 py-2 mb-3 text-sm bg-gray-100 dark:bg-gray-700 rounded-xl w-full"
+      >
+        <Search className="w-4 h-4" />
+        Фильтры
+        {activeFiltersCount > 0 && (
+          <span className="ml-1 px-1.5 py-0.5 text-xs bg-indigo-500 text-white rounded-full">
+            {activeFiltersCount}
+          </span>
+        )}
+        <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+      </button>
+    )}
+    
+    {(showFilters || !isMobileView) && (
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 filters-row">
+        <div className="flex-1 min-w-[150px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" aria-hidden="true" />
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white"
+              placeholder={t('searchByObjectOrForeman')}
+            />
+            {searchTerm && (
+              <button
+                onClick={() => onSearchChange('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
 
-<div>
-<label htmlFor="status-filter" className="sr-only">{t('filterByStatus')}</label>
-<select
-id="status-filter"
-value={statusFilter}
-onChange={(e) => onStatusFilterChange(e.target.value)}
-className="px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer"
-aria-label={t('filterByStatus')}
->
-<option value="all">{t('allStatuses')}</option>
-<option value={APPLICATION_STATUS.DRAFT}>{t('statusDraft') || 'Черновик'}</option>
-<option value={APPLICATION_STATUS.PENDING}>{t('statusPending')}</option>
-<option value={APPLICATION_STATUS.ADMIN_PROCESSING}>{t('statusAdminProcessing') || 'Приёмка'}</option>
-<option value={APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE}>{t('statusPartialWarehouse') || 'Частично на складе'}</option>
-<option value={APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION}>{t('statusPendingConfirmation') || 'Ожидает подтверждения'}</option>
-<option value={APPLICATION_STATUS.RECEIVED}>{t('statusReceived')}</option>
-<option value={APPLICATION_STATUS.PARTIAL_RECEIVED}>{t('statusPartialReceived') || 'Частично получено'}</option>
-<option value={APPLICATION_STATUS.REJECTED}>{t('statusRejected') || 'Отклонено'}</option>
-<option value={APPLICATION_STATUS.CANCELED}>{t('statusCanceled')}</option>
-</select>
-</div>
+        <select
+          value={statusFilter}
+          onChange={(e) => onStatusFilterChange(e.target.value)}
+          className="flex-1 min-w-[120px] px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+        >
+          <option value="all">{t('allStatuses')}</option>
+          <option value={APPLICATION_STATUS.DRAFT}>{t('statusDraft') || 'Черновик'}</option>
+          <option value={APPLICATION_STATUS.PENDING}>{t('statusPending')}</option>
+          <option value={APPLICATION_STATUS.ADMIN_PROCESSING}>{t('statusAdminProcessing') || 'Приёмка'}</option>
+          <option value={APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE}>{t('statusPartialWarehouse') || 'Частично на складе'}</option>
+          <option value={APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION}>{t('statusPendingConfirmation') || 'Ожидает подтверждения'}</option>
+          <option value={APPLICATION_STATUS.RECEIVED}>{t('statusReceived')}</option>
+          <option value={APPLICATION_STATUS.PARTIAL_RECEIVED}>{t('statusPartialReceived') || 'Частично получено'}</option>
+          <option value={APPLICATION_STATUS.REJECTED}>{t('statusRejected') || 'Отклонено'}</option>
+          <option value={APPLICATION_STATUS.CANCELED}>{t('statusCanceled')}</option>
+        </select>
 
-<div>
-<label htmlFor="date-filter" className="sr-only">{t('filterByDate')}</label>
-<select
-id="date-filter"
-value={dateFilter}
-onChange={(e) => onDateFilterChange(e.target.value)}
-className="px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer"
-aria-label={t('filterByDate')}
->
-<option value="">{t('allDates')}</option>
-{uniqueDates?.map(date => (
-<option key={date} value={date}>{date}</option>
-))}
-</select>
-</div>
+        {uniqueDates && uniqueDates.length > 0 && (
+          <select
+            value={dateFilter}
+            onChange={(e) => onDateFilterChange(e.target.value)}
+            className="flex-1 min-w-[120px] px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+          >
+            <option value="">{t('allDates')}</option>
+            {uniqueDates?.slice(0, 10).map(date => (
+              <option key={date} value={date}>{date}</option>
+            ))}
+          </select>
+        )}
 
-{permissions?.canViewAll && (
-<div>
-<label htmlFor="viewed-filter" className="sr-only">{t('filterByViewed')}</label>
-<select
-id="viewed-filter"
-value={viewedFilter}
-onChange={(e) => onViewedFilterChange(e.target.value)}
-className="px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer"
-aria-label={t('filterByViewed')}
->
-<option value="all">{t('allRequests')}</option>
-<option value="new">{t('onlyNew')}</option>
-</select>
-</div>
-)}
+        {permissions?.canViewAll && (
+          <select
+            value={viewedFilter}
+            onChange={(e) => onViewedFilterChange(e.target.value)}
+            className="flex-1 min-w-[100px] px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+          >
+            <option value="all">{t('allRequests')}</option>
+            <option value="new">{t('onlyNew')}</option>
+          </select>
+        )}
 
-{hasActiveFilters && (
-<button
-onClick={onClearFilters}
-className="px-4 py-2.5 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 hover:from-gray-200 hover:to-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-500 text-gray-800 dark:text-gray-200 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5"
-aria-label={t('clearFilters')}
->
-<RefreshCw className="w-4 h-4" aria-hidden="true" />
-{t('clearFilters')}
-</button>
-)}
-</div>
-<div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-400 dark:text-gray-500">
-<span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — сбросить фильтры</span>
-<span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded">Ctrl+Enter — экспорт</span>
-</div>
-</div>
+        {hasActiveFilters && (
+          <button
+            onClick={onClearFilters}
+            className="px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-medium flex items-center gap-1.5 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            {!isMobileView && t('clearFilters')}
+          </button>
+        )}
+      </div>
+    )}
+    
+    <div className="mt-2 flex flex-wrap gap-2 text-[10px] sm:text-xs text-gray-400 dark:text-gray-500">
+      <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — сбросить фильтры</span>
+      <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded">Ctrl+Enter — экспорт</span>
+    </div>
+  </div>
 
-{/* Loading / Empty States */}
-{isLoading && (
-<div className="space-y-4">
-{[...Array(3)].map((_, i) => <ApplicationCardSkeleton key={i} />)}
-</div>
-)}
+  {/* Loading / Empty States */}
+  {isLoading && (
+    <div className="space-y-4">
+      {[...Array(3)].map((_, i) => <ApplicationCardSkeleton key={i} />)}
+    </div>
+  )}
 
-{!isLoading && applications.length === 0 && (
-<div className="text-center py-16" role="status" aria-live="polite">
-<div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gray-100 dark:bg-gray-800 mb-4">
-<Package className="w-10 h-10 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-</div>
-<p className="text-lg font-medium text-gray-900 dark:text-white mb-1">{emptyMessage || t('noApplications')}</p>
-<p className="text-sm text-gray-500 dark:text-gray-400">
-{hasActiveFilters ? t('tryClearFilters') || 'Попробуйте сбросить фильтры' : t('createFirstApplication') || 'Создайте первую заявку'}
-</p>
-</div>
-)}
+  {!isLoading && applications.length === 0 && (
+    <div className="text-center py-16" role="status" aria-live="polite">
+      <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gray-100 dark:bg-gray-800 mb-4">
+        <Package className="w-10 h-10 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+      </div>
+      <p className="text-lg font-medium text-gray-900 dark:text-white mb-1">{emptyMessage || t('noApplications')}</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        {hasActiveFilters ? t('tryClearFilters') || 'Попробуйте сбросить фильтры' : t('createFirstApplication') || 'Создайте первую заявку'}
+      </p>
+    </div>
+  )}
 
-{/* Applications List */}
-{!isLoading && processedApplications.length > 0 && (
-<div className="space-y-4" role="list" aria-label={t('applicationsList')}>
-{processedApplications.map((application) => {
-const { _calculated: calc } = application;
+  {/* Applications List */}
+  {!isLoading && processedApplications.length > 0 && (
+    <div className="space-y-4" role="list">
+      {processedApplications.map((application) => {
+        const { _calculated: calc } = application;
 
-const exportButtons = [
-{
-key: 'html',
-icon: FileText,
-label: t('downloadHTML'),
-action: () => {
-const filteredMaterials = getVisibleMaterials(application.materials, viewMode);
-onDownloadHTML({ ...application, materials: filteredMaterials });
-},
-loading: false
-},
-{
-key: 'pdf',
-icon: Download,
-label: t('downloadPDF'),
-action: () => {
-const filteredMaterials = getVisibleMaterials(application.materials, viewMode);
-handleDownloadPDF({ ...application, materials: filteredMaterials });
-},
-loading: isExportingPDF
-},
-{
-key: 'xlsx',
-icon: Download,
-label: t('downloadXLSX'),
-action: () => {
-const filteredMaterials = getVisibleMaterials(application.materials, viewMode);
-handleDownloadXLSX({ ...application, materials: filteredMaterials });
-},
-loading: isExportingXLSX
-}
-];
+        const exportButtons = [
+          { key: 'html', icon: FileText, label: t('downloadHTML'), action: () => { const filteredMaterials = getVisibleMaterials(application.materials, viewMode); onDownloadHTML({ ...application, materials: filteredMaterials }); }, loading: false },
+          { key: 'pdf', icon: Download, label: t('downloadPDF'), action: () => { const filteredMaterials = getVisibleMaterials(application.materials, viewMode); handleDownloadPDF({ ...application, materials: filteredMaterials }); }, loading: isExportingPDF },
+          { key: 'xlsx', icon: Download, label: t('downloadXLSX'), action: () => { const filteredMaterials = getVisibleMaterials(application.materials, viewMode); handleDownloadXLSX({ ...application, materials: filteredMaterials }); }, loading: isExportingXLSX }
+        ];
 
-return (
-<article
-key={application.id}
-className="app-card-enter application-card bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 sm:p-5 rounded-2xl border border-gray-200/60 dark:border-gray-700/60 hover:border-indigo-300/60 dark:hover:border-indigo-600/60 focus-within:ring-2 focus-within:ring-indigo-500"
-aria-labelledby={`app-title-${application.id}`}
-role="listitem"
->
-<div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-{/* Main Content */}
-<div className="flex-1 min-w-0">
-<div className="flex items-start justify-between gap-2 mb-2">
-<h3
-id={`app-title-${application.id}`}
-className="text-lg font-semibold text-gray-900 dark:text-white truncate"
-title={application.object_name}
->
-{application.object_name}
-</h3>
-<StatusBadge
-status={application.status}
-createdAt={application.created_at}
-statusText={getStatusText(application.status, language)}
-t={t}
-/>
-</div>
-<dl className="text-sm text-gray-600 dark:text-gray-400 space-y-1 mb-3">
-<div>
-<dt className="font-medium text-gray-700 dark:text-gray-300 inline">{t('foremanName')}:</dt>
-<dd className="inline ml-1">{application.foreman_name}</dd>
-</div>
-<div>
-<dt className="font-medium text-gray-700 dark:text-gray-300 inline">{t('foremanPhone')}:</dt>
-<dd className="inline ml-1">{application.foreman_phone || t('notSpecified')}</dd>
-</div>
-<div>
-<dt className="font-medium text-gray-700 dark:text-gray-300 inline">{t('created')}:</dt>
-<dd className="inline ml-1">{formatDate(application.created_at, language)}</dd>
-</div>
-</dl>
+        return (
+          <article
+            key={application.id}
+            className="app-card-enter application-card bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 sm:p-5 rounded-2xl border border-gray-200/60 dark:border-gray-700/60 hover:border-indigo-300/60 dark:hover:border-indigo-600/60"
+            aria-labelledby={`app-title-${application.id}`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              {/* Main Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 mb-2 flex-wrap">
+                  <h3 id={`app-title-${application.id}`} className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate" title={application.object_name}>
+                    {application.object_name}
+                  </h3>
+                  <StatusBadge status={application.status} createdAt={application.created_at} statusText={getStatusText(application.status, language)} t={t} />
+                </div>
+                <dl className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 space-y-1 mb-3">
+                  <div><dt className="font-medium text-gray-700 dark:text-gray-300 inline">{t('foremanName')}:</dt><dd className="inline ml-1">{application.foreman_name}</dd></div>
+                  <div><dt className="font-medium text-gray-700 dark:text-gray-300 inline">{t('foremanPhone')}:</dt><dd className="inline ml-1">{application.foreman_phone || t('notSpecified')}</dd></div>
+                  <div><dt className="font-medium text-gray-700 dark:text-gray-300 inline">{t('created')}:</dt><dd className="inline ml-1">{formatDate(application.created_at, language)}</dd></div>
+                </dl>
 
-{calc.isActive && calc.totalMaterials > 0 && (
-<ProgressBar
-onWarehouse={calc.onWarehouse}
-confirmed={calc.confirmed}
-total={calc.totalMaterials}
-t={t}
-/>
-)}
+                {calc.isActive && calc.totalMaterials > 0 && (
+                  <ProgressBar onWarehouse={calc.onWarehouse} confirmed={calc.confirmed} total={calc.totalMaterials} t={t} />
+                )}
 
-{calc.isCompleted && (
-<div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-<CheckCircle className="w-3 h-3" />
-{t('completed')}
-</div>
-)}
+                {calc.isCompleted && (
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    {t('completed')}
+                  </div>
+                )}
 
-{/* Materials */}
-{isMobile ? (
-<div className="space-y-2" role="list" aria-label={t('materialsList')}>
-{getVisibleMaterials(application.materials, viewMode)?.map((material, idx) => (
-<MobileMaterialCard
-key={`${application.id}-mat-${idx}`}
-material={material}
-index={idx}
-language={language}
-t={t}
-isOpen={expandedMaterials?.[`${application.id}-${idx}`] || false}
-onToggle={() => onToggleMaterial(application.id, idx)}
-getMaterialStatus={getMaterialStatus}
-escapeHtml={escapeHtml}
-/>
-))}
-</div>
-) : (
-<div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-<table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" role="table" aria-label={t('materialsTable')}>
-<thead className="bg-gray-50 dark:bg-gray-700/50">
-<tr>
-{['#', 'description', 'requested', 'received', 'unit', 'status'].map((key) => (
-<th
-key={key}
-scope="col"
-className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
->
-{key === '#' ? '#' : t(`material${key.charAt(0).toUpperCase() + key.slice(1)}`) || key}
-</th>
-))}
-</tr>
-</thead>
-<tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-{getVisibleMaterials(application.materials, viewMode, userRole)?.map((material, idx) => {
-const matStatus = getMaterialStatus(material, t);
-const requestedQty = Number(material.quantity) || 0;
-const onWarehouse = Number(material.supplier_received_quantity) || 0;
-const confirmed = Number(material.received) || 0;
-return (
-<tr key={`${application.id}-mat-${idx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-<td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{formatNumber(idx + 1)}</td>
-<td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" title={material.description}>
-{material.description}
-</td>
-<td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{formatNumber(requestedQty)}</td>
-<td className="px-4 py-2 whitespace-nowrap text-sm">
-<div className="flex flex-col gap-1">
-<span className="text-gray-700 dark:text-gray-300">
-{t('confirmed')}: {formatNumber(confirmed)}
-</span>
-{onWarehouse > 0 && confirmed < requestedQty && (
-<span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-<Warehouse className="w-3 h-3" />
-{t('onWarehouse')}: {formatNumber(onWarehouse)}
-</span>
-)}
-</div>
-</td>
-<td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{material.unit}</td>
-<td className="px-4 py-2 whitespace-nowrap">
-<span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${matStatus.class}`}>
-{matStatus.icon && <matStatus.icon className="w-3 h-3" aria-hidden="true" />}
-{matStatus.text}
-</span>
-</td>
-</tr>
-);
-})}
-</tbody>
-</table>
-</div>
-)}
-</div>
+                {/* Materials */}
+                {isMobileView ? (
+                  <div className="space-y-2">
+                    {getVisibleMaterials(application.materials, viewMode)?.map((material, idx) => (
+                      <MobileMaterialCard
+                        key={`${application.id}-mat-${idx}`}
+                        material={material}
+                        index={idx}
+                        language={language}
+                        t={t}
+                        isOpen={expandedMaterials?.[`${application.id}-${idx}`] || false}
+                        onToggle={() => onToggleMaterial(application.id, idx)}
+                        getMaterialStatus={getMaterialStatus}
+                        escapeHtml={escapeHtml}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" role="table">
+                      <thead className="bg-gray-50 dark:bg-gray-700/50">
+                        <tr>
+                          {['#', 'description', 'requested', 'received', 'unit', 'status'].map((key) => (
+                            <th key={key} scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                              {key === '#' ? '#' : t(`material${key.charAt(0).toUpperCase() + key.slice(1)}`) || key}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {getVisibleMaterials(application.materials, viewMode)?.map((material, idx) => {
+                          const matStatus = getMaterialStatus(material, t);
+                          const requestedQty = Number(material.quantity) || 0;
+                          const onWarehouse = Number(material.supplier_received_quantity) || 0;
+                          const confirmed = Number(material.received) || 0;
+                          return (
+                            <tr key={`${application.id}-mat-${idx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                              <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{formatNumber(idx + 1)}</td>
+                              <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" title={material.description}>{material.description}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{formatNumber(requestedQty)}</td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-gray-700 dark:text-gray-300">{t('confirmed')}: {formatNumber(confirmed)}</span>
+                                  {onWarehouse > 0 && confirmed < requestedQty && (
+                                    <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1"><Warehouse className="w-3 h-3" />{t('onWarehouse')}: {formatNumber(onWarehouse)}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{material.unit}</td>
+                              <td className="px-4 py-2 whitespace-nowrap">
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${matStatus.class}`}>
+                                  {matStatus.icon && <matStatus.icon className="w-3 h-3" aria-hidden="true" />}
+                                  {matStatus.text}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
 
-{/* Action Buttons */}
-<div className="flex flex-wrap sm:flex-col gap-2 sm:ml-6 sm:justify-start">
-{exportButtons.map((btn) => (
-<ExportButton
-key={btn.key}
-icon={btn.icon}
-label={btn.label}
-onClick={() => btn.action()}
-disabled={application.status === APPLICATION_STATUS.CANCELED}
-loading={btn.loading}
-ariaLabel={`${btn.label} — ${application.object_name}`}
-/>
-))}
+              {/* Action Buttons */}
+              <div className="flex flex-wrap sm:flex-col gap-2 sm:ml-6 action-buttons">
+                {exportButtons.map((btn) => (
+                  <ExportButton key={btn.key} icon={btn.icon} label={btn.label} onClick={() => btn.action()} disabled={application.status === APPLICATION_STATUS.CANCELED} loading={btn.loading} />
+                ))}
 
-{application.status !== APPLICATION_STATUS.CANCELED && (
-<>
-{canShowReceiveButton(application, userRole) && (
-<button
-onClick={() => onOpenReceiveModal(application, 'admin_receive')}
-className="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all shadow-lg shadow-blue-500/25"
-aria-label={t('acceptToWarehouse')}
->
-<Package className="w-3.5 h-3.5" aria-hidden="true" />
-{t('acceptToWarehouse') || 'Приёмка'}
-</button>
-)}
+                {application.status !== APPLICATION_STATUS.CANCELED && (
+                  <>
+                    {canShowReceiveButton(application, userRole) && (
+                      <button onClick={() => onOpenReceiveModal(application, 'admin_receive')} className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl text-[10px] sm:text-xs font-medium flex items-center gap-1 transition-all shadow-lg shadow-blue-500/25">
+                        <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{t('acceptToWarehouse') || 'Приёмка'}</span>
+                      </button>
+                    )}
 
-{canShowSendToMasterButton(application, userRole) && (
-<button
-onClick={() => onOpenReceiveModal(application, 'admin_send_to_master')}
-className="px-3 py-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all shadow-lg shadow-purple-500/25"
-aria-label={t('sendToMaster')}
->
-<Send className="w-3.5 h-3.5" aria-hidden="true" />
-{t('sendToMaster') || 'Отправить'}
-</button>
-)}
+                    {canShowSendToMasterButton(application, userRole) && (
+                      <button onClick={() => onOpenReceiveModal(application, 'admin_send_to_master')} className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl text-[10px] sm:text-xs font-medium flex items-center gap-1 transition-all shadow-lg shadow-purple-500/25">
+                        <Send className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{t('sendToMaster') || 'Отправить'}</span>
+                      </button>
+                    )}
 
-{userRole === 'foreman' &&
-requiresMasterConfirmation(application.status) &&
-application.user_id === user?.id && (
-<button
-onClick={() => onOpenReceiveModal(application, 'master_confirm')}
-className="px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all shadow-lg shadow-green-500/25"
-aria-label={t('confirmReceipt')}
->
-<CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
-{t('confirmReceipt') || 'Подтвердить'}
-</button>
-)}
+                    {userRole === 'foreman' && requiresMasterConfirmation(application.status) && application.user_id === user?.id && (
+                      <button onClick={() => onOpenReceiveModal(application, 'master_confirm')} className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-[10px] sm:text-xs font-medium flex items-center gap-1 transition-all shadow-lg shadow-green-500/25">
+                        <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{t('confirmReceipt') || 'Подтвердить'}</span>
+                      </button>
+                    )}
 
-{userRole === 'foreman' &&
-isApplicationActive(application.status) &&
-application.status === APPLICATION_STATUS.PENDING &&
-application.user_id === user?.id && (
-<button
-onClick={() => handleCancel(application)}
-className="px-3 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all shadow-lg shadow-red-500/25"
-aria-label={t('cancelApplication')}
->
-<Ban className="w-3.5 h-3.5" aria-hidden="true" />
-{t('cancelApplication')}
-</button>
-)}
+                    {userRole === 'foreman' && isApplicationActive(application.status) && application.status === APPLICATION_STATUS.PENDING && application.user_id === user?.id && (
+                      <button onClick={() => handleCancel(application)} className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl text-[10px] sm:text-xs font-medium flex items-center gap-1 transition-all shadow-lg shadow-red-500/25">
+                        <Ban className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{t('cancelApplication')}</span>
+                      </button>
+                    )}
 
-{userRole === 'master' &&
-requiresMasterConfirmation(application.status) &&
-application.user_id === user?.id && (
-<button
-onClick={() => onOpenReceiveModal(application, 'master_confirm')}
-className="px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all shadow-lg shadow-green-500/25"
-aria-label={t('confirmReceipt')}
->
-<CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
-{t('confirmReceipt') || 'Подтвердить'}
-</button>
-)}
-</>
-)}
-</div>
-</div>
+                    {userRole === 'master' && requiresMasterConfirmation(application.status) && application.user_id === user?.id && (
+                      <button onClick={() => onOpenReceiveModal(application, 'master_confirm')} className="px-2 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-[10px] sm:text-xs font-medium flex items-center gap-1 transition-all shadow-lg shadow-green-500/25">
+                        <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{t('confirmReceipt') || 'Подтвердить'}</span>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
 
-{/* Comments Section with Auto-Save Props */}
-<CommentsSection
-application={application}
-comments={comments}
-showComments={showComments}
-onToggleComments={() => onToggleComments(application.id)}
-onAddComment={(content) => onAddComment(application.id, content)}
-language={language}
-t={t}
-getRoleLabel={getRoleLabel}
-escapeHtml={escapeHtml}
-isLoading={isLoading}
-user={user}
-// ✅ ПРОПСЫ ДЛЯ АВТОСОХРАНЕНИЯ
-draftValue={commentDrafts[application.id] || ''}
-onDraftChange={(value) => handleCommentChange(application.id, value)}
-onClearDraft={() => clearCommentDraftHandler(application.id)}
-onOpen={() => loadCommentDraft(application.id)}
-/>
+            {/* Comments Section */}
+            <CommentsSection
+              application={application}
+              comments={comments}
+              showComments={showComments}
+              onToggleComments={() => onToggleComments(application.id)}
+              onAddComment={(content) => onAddComment(application.id, content)}
+              language={language}
+              t={t}
+              getRoleLabel={getRoleLabel}
+              escapeHtml={escapeHtml}
+              isLoading={isLoading}
+              user={user}
+              draftValue={commentDrafts[application.id] || ''}
+              onDraftChange={(value) => handleCommentChange(application.id, value)}
+              onClearDraft={() => clearCommentDraftHandler(application.id)}
+              onOpen={() => loadCommentDraft(application.id)}
+            />
 
-{/* Change History */}
-{application.status_history?.length > 0 && (
-<details className="mt-4 pt-4 border-t border-gray-200/30 dark:border-gray-700/30 group">
-<summary className="text-sm font-semibold text-gray-900 dark:text-white cursor-pointer list-none flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-{t('changeHistory') || 'История изменений'}
-<ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" aria-hidden="true" />
-</summary>
-<div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
-{application.status_history.slice().reverse().map((entry, idx) => (
-<div key={idx} className="text-xs text-gray-600 dark:text-gray-400 flex items-start gap-2">
-<span className="font-medium text-gray-900 dark:text-white shrink-0">
-{formatDate(entry.timestamp, language)}
-</span>
-<span className="text-gray-400">→</span>
-<span className="shrink-0">
-{getStatusText(entry.new_status, language) || entry.new_status}
-</span>
-{entry.details && (
-<span className="text-gray-500 dark:text-gray-500 ml-2">({entry.details})</span>
-)}
-</div>
-))}
-</div>
-</details>
-)}
-</article>
-);
-})}
-</div>
-)}
+            {/* Change History */}
+            {application.status_history?.length > 0 && (
+              <details className="mt-4 pt-4 border-t border-gray-200/30 dark:border-gray-700/30 group">
+                <summary className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white cursor-pointer list-none flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                  {t('changeHistory') || 'История изменений'}
+                  <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4 group-open:rotate-180 transition-transform" aria-hidden="true" />
+                </summary>
+                <div className="mt-2 space-y-2 max-h-40 sm:max-h-60 overflow-y-auto">
+                  {application.status_history.slice().reverse().map((entry, idx) => (
+                    <div key={idx} className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 flex flex-wrap items-center gap-1">
+                      <span className="font-medium text-gray-900 dark:text-white shrink-0">{formatDate(entry.timestamp, language)}</span>
+                      <span className="text-gray-400">→</span>
+                      <span className="shrink-0">{getStatusText(entry.new_status, language) || entry.new_status}</span>
+                      {entry.details && <span className="text-gray-500 dark:text-gray-500 ml-1">({entry.details})</span>}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </article>
+        );
+      })}
+    </div>
+  )}
 
-{/* Pagination */}
-{totalPages > 1 && (
-<nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')} role="navigation">
-<button
-onClick={() => handlePageChange(page - 1)}
-disabled={page === 1}
-className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-aria-label={t('previousPage')}
->
-<ArrowLeft className="w-4 h-4" aria-hidden="true" />
-{t('prev')}
-</button>
-<span className="px-4 py-2.5 text-gray-700 dark:text-gray-300 font-medium bg-gray-100 dark:bg-gray-700 rounded-xl" aria-current="page">
-{formatNumber(page)} / {formatNumber(totalPages)}
-</span>
-<button
-onClick={() => handlePageChange(page + 1)}
-disabled={page === totalPages}
-className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-aria-label={t('nextPage')}
->
-{t('next')}
-<ArrowLeft className="w-4 h-4 rotate-180" aria-hidden="true" />
-</button>
-</nav>
-)}
+  {/* Pagination */}
+  {totalPages > 1 && (
+    <nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')}>
+      <button onClick={() => handlePageChange(page - 1)} disabled={page === 1} className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1 text-sm">
+        <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden="true" />
+        {t('prev')}
+      </button>
+      <span className="px-3 py-2 sm:px-4 sm:py-2.5 text-sm text-gray-700 dark:text-gray-300 font-medium bg-gray-100 dark:bg-gray-700 rounded-xl" aria-current="page">
+        {formatNumber(page)} / {formatNumber(totalPages)}
+      </span>
+      <button onClick={() => handlePageChange(page + 1)} disabled={page === totalPages} className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1 text-sm">
+        {t('next')}
+        <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 rotate-180" aria-hidden="true" />
+      </button>
+    </nav>
+  )}
 </div>
 
 {/* Toast Notification */}
 {toast && (
-<Toast
-message={toast.message}
-type={toast.type}
-canUndo={toast.canUndo}
-onClose={() => setToast(null)}
-onUndo={toast.undoFn}
-t={t}
-/>
+  <Toast message={toast.message} type={toast.type} canUndo={toast.canUndo} onClose={() => setToast(null)} onUndo={toast.undoFn} t={t} />
 )}
 
 <div className="sr-only" aria-live="polite" aria-atomic="true">
-{toast ? toast.message : ''}
+  {toast ? toast.message : ''}
 </div>
 </div>
 );
 });
 ApplicationList.displayName = 'ApplicationList';
-
 export default ApplicationList;

@@ -8,7 +8,7 @@ import {
   Plus, UserPlus, Briefcase,
   CheckCircle, ShoppingCart, Code, Shield, Sparkles,
   Globe, WifiOff, History, Eye, Clock,
-  Target, ChevronLeft, ChevronRight, Merge
+  Target, ChevronLeft, ChevronRight, GitMerge
 } from 'lucide-react';
 
 const Navbar = ({ 
@@ -41,10 +41,33 @@ const Navbar = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showLeftScroll, setShowLeftScroll] = useState(false);
   const [showRightScroll, setShowRightScroll] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const profileRef = useRef(null);
   const notificationsRef = useRef(null);
   const searchRef = useRef(null);
   const navScrollRef = useRef(null);
+
+  // Определение мобильного устройства
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Блокировка скролла при открытом мобильном меню
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileMenuOpen]);
 
   // Закрытие меню при клике вне
   useEffect(() => {
@@ -132,47 +155,38 @@ const Navbar = ({
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
 
-    // ✅ CRM Sales - Лиды (только для manager и supply_admin)
     if (userRole === 'manager' || userRole === 'supply_admin') {
       items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
     }
 
-    // ✅ Объединение заявок (только для manager и supply_admin)
     if (userRole === 'manager' || userRole === 'supply_admin') {
-      items.push({ id: 'merge', label: 'Объединение заявок', icon: Merge, path: '/merge' });
+      items.push({ id: 'merge', label: 'Объединение заявок', icon: GitMerge, path: '/merge' });
     }
 
-    // ✅ Для мастера и прораба - только заявки (свои), история
     if (userRole === 'master' || userRole === 'foreman') {
       items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
       items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
     }
 
-    // ✅ Склад (для manager, supply_admin, foreman)
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman') {
       items.push({ id: 'warehouse', label: 'Склад', icon: Package, path: '/warehouse' });
     }
 
-    // ✅ Клиенты (для manager и client_manager)
     if (userRole === 'manager' || userRole === 'client_manager') {
       items.push({ id: 'clients', label: 'Клиенты', icon: Users, path: '/clients' });
     }
 
-    // ✅ АНАЛИТИКА - ТОЛЬКО для manager, supply_admin, director, владельца компании
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
       items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
     }
 
-    // ✅ Документы - для всех, кроме client (у клиента отдельный раздел)
     if (userRole !== 'client') {
       items.push({ id: 'documents', label: 'Документы', icon: FileText, path: '/documents' });
     }
 
-    // ✅ Чат - для всех
     items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
     items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
 
-    // ✅ Согласование (только для manager и director)
     if (userRole === 'manager' || userRole === 'director') {
       items.push({ 
         id: 'approvals', 
@@ -182,32 +196,26 @@ const Navbar = ({
       });
     }
 
-    // ✅ Сотрудники (только для manager)
     if (userRole === 'manager') {
       items.push({ id: 'employees', label: 'Сотрудники', icon: Users, path: '/employees' });
     }
 
-    // ✅ Корзина
     if (cartItemsCount > 0) {
       items.push({ id: 'cart', label: `Корзина (${cartItemsCount})`, icon: ShoppingCart, path: '/cart' });
     }
 
-    // ✅ API (только для manager)
     if (userRole === 'manager') {
       items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
     }
 
-    // ✅ АУДИТ - ТОЛЬКО для manager и director
     if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
       items.push({ id: 'audit', label: 'Аудит', icon: Eye, path: '/audit' });
     }
 
-    // ✅ Задачи
     if (userRole !== 'client') {
       items.push({ id: 'tasks', label: 'Задачи', icon: Target, path: '/tasks' });
     }
 
-    // ✅ Для заказчика - отдельные пункты
     if (userRole === 'client') {
       items.push({ id: 'clientDashboard', label: 'Мой объект', icon: Home, path: '/client' });
       items.push({ id: 'clientDocuments', label: 'Мои документы', icon: FileText, path: '/client/documents' });
@@ -273,7 +281,7 @@ const Navbar = ({
             </button>
           </div>
 
-          {/* Поиск - центрированный */}
+          {/* Поиск - на мобильных скрываем, показываем только иконку */}
           <div className="hidden md:flex items-center flex-1 max-w-md mx-4">
             <form onSubmit={handleSearch} className="w-full">
               <div className="relative">
@@ -292,6 +300,20 @@ const Navbar = ({
               </div>
             </form>
           </div>
+
+          {/* Мобильная кнопка поиска */}
+          {isMobile && (
+            <button
+              onClick={() => {
+                const searchInput = document.getElementById('mobile-search');
+                searchInput?.classList.toggle('hidden');
+                searchInput?.focus();
+              }}
+              className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              <Search className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            </button>
+          )}
 
           {/* Правая часть */}
           <div className="flex items-center gap-1 flex-shrink-0">
@@ -522,7 +544,26 @@ const Navbar = ({
         </div>
       </div>
 
-      {/* Планшетная навигация - иконки с подписями (видна на sm и md) */}
+      {/* Мобильный поиск (скрытый по умолчанию) */}
+      {isMobile && (
+        <div id="mobile-search" className="hidden px-4 py-2 border-t border-gray-200 dark:border-gray-800">
+          <form onSubmit={handleSearch}>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Поиск..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A6572] bg-gray-50 dark:bg-gray-800"
+                autoFocus
+              />
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Планшетная навигация - иконки с подписями */}
       {navItems.length > 0 && (
         <div className="hidden sm:flex lg:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 overflow-x-auto no-scrollbar">
           <div className="flex gap-1 p-2">
@@ -534,26 +575,34 @@ const Navbar = ({
                 <button
                   key={item.id}
                   onClick={() => { onNavigate?.(item.path); setIsMobileMenuOpen(false); }}
-                  className={`flex flex-col items-center gap-1 px-2 sm:px-3 py-2 rounded-lg transition-all flex-shrink-0 ${
+                  className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-all flex-shrink-0 min-w-[70px] ${
                     isActive
                       ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-700/50'
                   }`}
                 >
                   <Icon className="w-5 h-5" />
-                  <span className="text-xs font-medium">{item.label}</span>
+                  <span className="text-[11px] font-medium truncate max-w-[70px]">{item.label}</span>
                 </button>
               );
             })}
+            {navItems.length > 6 && (
+              <button
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="flex flex-col items-center gap-1 px-2 py-2 rounded-lg flex-shrink-0 min-w-[70px] text-gray-600 dark:text-gray-400"
+              >
+                <Menu className="w-5 h-5" />
+                <span className="text-[11px] font-medium">Ещё</span>
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {/* Десктопная навигация - горизонтальное меню с прокруткой (только lg и выше) */}
+      {/* Десктопная навигация */}
       {navItems.length > 0 && (
         <div className="hidden lg:block border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
           <div className="w-full px-4 relative">
-            {/* Кнопка прокрутки влево */}
             {showLeftScroll && (
               <button
                 onClick={() => scrollNav('left')}
@@ -563,7 +612,6 @@ const Navbar = ({
               </button>
             )}
             
-            {/* Прокручиваемое меню */}
             <div 
               ref={navScrollRef}
               className="flex overflow-x-auto no-scrollbar gap-1 py-2 scroll-smooth"
@@ -606,7 +654,6 @@ const Navbar = ({
               })}
             </div>
             
-            {/* Кнопка прокрутки вправо */}
             {showRightScroll && (
               <button
                 onClick={() => scrollNav('right')}
@@ -621,8 +668,8 @@ const Navbar = ({
 
       {/* Мобильное меню (бургер) */}
       {isMobileMenuOpen && (
-        <div className="lg:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 fade-enter max-h-[calc(100vh-56px)] overflow-y-auto">
-          <form onSubmit={handleSearch} className="p-4 border-b border-gray-100 dark:border-gray-800">
+        <div className="lg:hidden fixed inset-0 top-14 bg-white dark:bg-gray-900 z-40 overflow-y-auto fade-enter">
+          <form onSubmit={handleSearch} className="p-4 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -631,11 +678,12 @@ const Navbar = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A6572] bg-gray-50 dark:bg-gray-800"
+                autoFocus
               />
             </div>
           </form>
           
-          <div className="p-2">
+          <div className="p-2 pb-20">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id ||
