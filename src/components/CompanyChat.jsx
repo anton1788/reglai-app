@@ -57,9 +57,10 @@ const MessageItem = memo(function({
   onStartEdit, onSaveEdit, onCancelEdit, onDelete, 
   onToggleReaction, onReply, onToggleSave, isSaved,
   showReactionsPicker, setShowReactionsPicker, 
-  formatMessage, formatTime, language, textareaRef, companyUsers 
+  formatMessage, formatTime, language, textareaRef, companyUsers,
+  onPinMessage, isPinned, onCopyMessage
 }) {
-  const REACTION_EMOJIS = ['👍', '❤️', '😂', '', '😢', ''];
+  const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
   
   const reactionCounts = useMemo(() => {
     if (!msg.reactions?.length) return {};
@@ -82,8 +83,17 @@ const MessageItem = memo(function({
     return formatTime?.(msg.created_at, language);
   }, [msg.created_at, language, formatTime]);
 
+  const handleDoubleClick = () => {
+    if (!msg.deleted_at && !isEditing) {
+      onToggleReaction?.(msg.id, '❤️');
+    }
+  };
+
   return (
-    <article className={`group flex gap-3 ${isOwn ? 'flex-row-reverse' : ''} animate-in fade-in`}>
+    <article 
+      className={`group flex gap-3 ${isOwn ? 'flex-row-reverse' : ''} animate-in fade-in`}
+      onDoubleClick={handleDoubleClick}
+    >
       <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0 ${isOwn ? 'order-2' : ''}`}>
         <span className="text-white text-xs font-medium">
           {msg.user?.user_metadata?.full_name?.[0]?.toUpperCase() || '?'}
@@ -106,7 +116,7 @@ const MessageItem = memo(function({
           isOwn 
             ? 'bg-[#4A6572] text-white rounded-br-md' 
             : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md border border-gray-100 dark:border-gray-600'
-        }`}>
+        } ${isPinned ? 'border-l-4 border-l-yellow-400' : ''}`}>
           {isEditing ? (
             <div className="flex gap-2 items-start">
               <textarea 
@@ -168,7 +178,7 @@ const MessageItem = memo(function({
             {msg.edited_at && <span className="ml-1 opacity-70">(изм.)</span>}
           </time>
           
-          {!isEditing && (
+          {!isEditing && !msg.deleted_at && (
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button 
                 onClick={() => setShowReactionsPicker?.(showReactionsPicker === msg.id ? null : msg.id)}
@@ -188,6 +198,12 @@ const MessageItem = memo(function({
                   <Bookmark className="w-3.5 h-3.5 text-gray-500" />
                 )}
               </button>
+
+              <button onClick={() => onCopyMessage?.(msg.id)} className="p-1 hover:bg-gray-200/50 rounded-full">
+                <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+              </button>
               
               {canEdit && (
                 <button onClick={() => onStartEdit?.(msg)} className="p-1 hover:bg-blue-100/50 rounded text-blue-500">
@@ -197,6 +213,13 @@ const MessageItem = memo(function({
               {canDelete && (
                 <button onClick={() => onDelete?.(msg.id)} className="p-1 hover:bg-red-100/50 rounded text-red-500">
                   <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {onPinMessage && (
+                <button onClick={() => onPinMessage?.(msg.id)} className="p-1 hover:bg-yellow-100/50 rounded text-yellow-500">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                  </svg>
                 </button>
               )}
             </div>
@@ -310,55 +333,54 @@ const ChatSidebar = memo(function({
       </div>
       
       <nav className="flex-1 overflow-y-auto p-2 space-y-1">
-  {channels.map(channel => {
-    const isActive = activeChannel === channel.id;
-    const unread = unreadCounts[channel.id] || 0;
-    const lastRead = lastReadTimes?.[channel.id];
-    
-    // Форматируем время последнего чтения
-    const formatLastRead = (date) => {
-      if (!date) return null;
-      const now = new Date();
-      const readDate = new Date(date);
-      const diffMs = now - readDate;
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
-      
-      if (diffMins < 1) return 'только что';
-      if (diffMins < 60) return `${diffMins} мин назад`;
-      if (diffHours < 24) return `${diffHours} ч назад`;
-      if (diffDays < 7) return `${diffDays} дн назад`;
-      return readDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-    };
-    
-    const lastReadText = formatLastRead(lastRead);
-    
-    return (
-      <div key={channel.id} className="relative group">
-        <button
-          onClick={() => onChannelSelect(channel.id)}
-          className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium flex flex-col gap-1 transition-all ${
-            isActive 
-              ? 'bg-[#4A6572] text-white shadow-md' 
-              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
-          }`}
-        >
-          <div className="flex items-center gap-3 w-full">
-            <span className="text-lg">{channel.icon}</span>
-            <span className="truncate flex-1">{channel.label || channel.name}</span>
-            {unread > 0 && (
-              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                {unread}
-              </span>
-            )}
-          </div>
-          {lastReadText && (
-            <div className="text-[10px] opacity-60 pl-8">
-              Прочитано: {lastReadText}
-            </div>
-          )}
-        </button>
+        {channels.map(channel => {
+          const isActive = activeChannel === channel.id;
+          const unread = unreadCounts[channel.id] || 0;
+          const lastRead = lastReadTimes?.[channel.id];
+          
+          const formatLastRead = (date) => {
+            if (!date) return null;
+            const now = new Date();
+            const readDate = new Date(date);
+            const diffMs = now - readDate;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+            
+            if (diffMins < 1) return 'только что';
+            if (diffMins < 60) return `${diffMins} мин назад`;
+            if (diffHours < 24) return `${diffHours} ч назад`;
+            if (diffDays < 7) return `${diffDays} дн назад`;
+            return readDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+          };
+          
+          const lastReadText = formatLastRead(lastRead);
+          
+          return (
+            <div key={channel.id} className="relative group">
+              <button
+                onClick={() => onChannelSelect(channel.id)}
+                className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium flex flex-col gap-1 transition-all ${
+                  isActive 
+                    ? 'bg-[#4A6572] text-white shadow-md' 
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-3 w-full">
+                  <span className="text-lg">{channel.icon}</span>
+                  <span className="truncate flex-1">{channel.label || channel.name}</span>
+                  {unread > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                      {unread}
+                    </span>
+                  )}
+                </div>
+                {lastReadText && (
+                  <div className="text-[10px] opacity-60 pl-8">
+                    Прочитано: {lastReadText}
+                  </div>
+                )}
+              </button>
               
               {channel.type !== 'system' && canManageChannels && (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -455,22 +477,42 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [showSidebar, setShowSidebar] = useState(true);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
+  
+  // Только pinnedMessages
+  const [pinnedMessages, setPinnedMessages] = useState([]);
+  
+  const messagesContainerRef = useRef(null);
+  const textareaRef = useRef(null);
+  const subscriptionRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
   const scrollTimeoutRef = useRef(null);
+  const isUserScrollingRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const animationFrameRef = useRef(null);
 
+  // Обновляем ref при изменении состояния
   useEffect(() => {
-    setShowSidebar(true);
-  }, []);
+    isUserScrollingRef.current = isUserScrolling;
+  }, [isUserScrolling]);
 
+  // Определение мобильного устройства
   useEffect(() => {
     const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
+      setIsMobile(window.innerWidth < 768);
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Показываем сайдбар на десктопе
+  useEffect(() => {
+    if (!isMobile) {
+      setShowSidebar(true);
+    }
+  }, [isMobile]);
+
+  // Проверка соединения
   useEffect(() => {
     const checkConnection = async () => {
       try {
@@ -491,7 +533,128 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     return () => clearInterval(interval);
   }, []);
 
-  const startDirectChat = (targetUser) => {
+  // Обработчик скролла с использованием requestAnimationFrame для плавности
+  const handleScroll = useCallback(() => {
+    if (!messagesContainerRef.current) return;
+    
+    const container = messagesContainerRef.current;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+    const isScrollingUp = scrollTop < lastScrollTopRef.current;
+    lastScrollTopRef.current = scrollTop;
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(() => {
+      if (isScrollingUp && !isNearBottom) {
+        setShouldAutoScroll(false);
+        setIsUserScrolling(true);
+        
+        if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = setTimeout(() => {
+          setIsUserScrolling(false);
+        }, 3000);
+      } else if (isNearBottom && !isScrollingUp) {
+        setShouldAutoScroll(true);
+        setIsUserScrolling(false);
+      }
+    });
+  }, []);
+
+  // Плавная прокрутка вниз
+  const scrollToBottom = useCallback((behavior = 'smooth') => {
+    if (!messagesContainerRef.current) return;
+    if (!shouldAutoScroll || isUserScrollingRef.current) return;
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(() => {
+      if (messagesContainerRef.current && (!isUserScrollingRef.current || behavior === 'auto')) {
+        messagesContainerRef.current.scrollTo({
+          top: messagesContainerRef.current.scrollHeight,
+          behavior: behavior
+        });
+      }
+    });
+  }, [shouldAutoScroll]);
+
+  // Принудительная прокрутка вниз (игнорирует флаг)
+  const forceScrollToBottom = useCallback((behavior = 'smooth') => {
+    if (!messagesContainerRef.current) return;
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(() => {
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTo({
+          top: messagesContainerRef.current.scrollHeight,
+          behavior: behavior
+        });
+      }
+    });
+    setShouldAutoScroll(true);
+    setIsUserScrolling(false);
+    isUserScrollingRef.current = false;
+  }, []);
+
+  // Форматирование времени
+  const formatTime = useCallback((dateString, lang = language) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+  }, [language]);
+
+  // Форматирование сообщения с ссылками и упоминаниями
+  const formatMessage = useCallback((text) => {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) => {
+      if (part?.match?.(urlRegex)) {
+        return <a key={`url-${i}`} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">{part}</a>;
+      }
+      if (part?.startsWith?.('@')) {
+        return <span key={`mention-${i}`} className="font-bold text-blue-500 bg-blue-50 px-0.5 rounded">{part}</span>;
+      }
+      return <span key={`text-${i}`}>{part}</span>;
+    });
+  }, []);
+
+  // Все каналы (системные + пользовательские)
+  const allChannels = useMemo(() => {
+    const system = SYSTEM_CHANNELS.filter(ch => {
+      if (!ch.canView) return true;
+      return ch.canView.includes(userRole);
+    }).map(ch => ({ ...ch, type: 'system' }));
+    
+    const custom = customChannels.filter(ch => {
+      if (ch.type === 'direct') {
+        return ch.participants?.includes(user?.id);
+      }
+      return true;
+    }).map(ch => ({ ...ch, type: ch.type || 'custom' }));
+    
+    return [...system, ...custom];
+  }, [customChannels, userRole, user?.id]);
+
+  // Проверка прав на запись в канал
+  const canWriteToChannel = useCallback((channelId) => {
+    const channel = SYSTEM_CHANNELS.find(c => c.id === channelId);
+    if (!channel) return true;
+    return channel.canWrite?.includes(userRole) || false;
+  }, [userRole]);
+
+  // Текущий канал
+  const currentChannel = allChannels.find(c => c.id === activeChannel);
+
+  // Личный чат
+  const startDirectChat = useCallback((targetUser) => {
     if (!targetUser || !user?.id) return;
     
     const dmId = `dm_${[user.id, targetUser.user_id].sort().join('_')}`;
@@ -514,111 +677,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
     
     setActiveChannel(dmId);
-    markChannelAsRead(dmId);
     if (isMobile) {
       setShowSidebar(false);
     }
-  };
+  }, [user?.id, customChannels, isMobile]);
 
-  const messagesContainerRef = useRef(null);
-  const textareaRef = useRef(null);
-  const subscriptionRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
-  const lastScrollTopRef = useRef(0);
-  const isUserScrollingRef = useRef(isUserScrolling);
-
-  useEffect(() => {
-    isUserScrollingRef.current = isUserScrolling;
-  }, [isUserScrolling]);
-
-  const formatTime = (dateString, lang = language) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const formatMessage = (text) => {
-    if (!text) return null;
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
-    return parts.map((part, i) => {
-      if (part?.match?.(urlRegex)) {
-        return <a key={`url-${i}`} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">{part}</a>;
-      }
-      if (part?.startsWith?.('@')) {
-        return <span key={`mention-${i}`} className="font-bold text-blue-500 bg-blue-50 px-0.5 rounded">{part}</span>;
-      }
-      return <span key={`text-${i}`}>{part}</span>;
-    });
-  };
-
-  const allChannels = useMemo(() => {
-    const system = SYSTEM_CHANNELS.filter(ch => {
-      if (!ch.canView) return true;
-      return ch.canView.includes(userRole);
-    }).map(ch => ({ ...ch, type: 'system' }));
-    
-    const custom = customChannels.filter(ch => {
-      if (ch.type === 'direct') {
-        return ch.participants?.includes(user?.id);
-      }
-      return true;
-    }).map(ch => ({ ...ch, type: ch.type || 'custom' }));
-    
-    return [...system, ...custom];
-  }, [customChannels, userRole, user?.id]);
-
-  const canWriteToChannel = (channelId) => {
-    const channel = SYSTEM_CHANNELS.find(c => c.id === channelId);
-    if (!channel) return true;
-    return channel.canWrite?.includes(userRole) || false;
-  };
-
-  const currentChannel = allChannels.find(c => c.id === activeChannel);
-
-  const handleScroll = useCallback(() => {
-    if (!messagesContainerRef.current) return;
-    
-    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-    
-    const isScrollingUp = scrollTop < lastScrollTopRef.current;
-    lastScrollTopRef.current = scrollTop;
-    
-    if (isScrollingUp && !isNearBottom) {
-      setShouldAutoScroll(false);
-      setIsUserScrolling(true);
-      
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-      scrollTimeoutRef.current = setTimeout(() => {
-        setIsUserScrolling(false);
-      }, 5000);
-    } else if (isNearBottom && !isScrollingUp) {
-      setShouldAutoScroll(true);
-      setIsUserScrolling(false);
-    }
-  }, []);
-
-  const scrollToBottom = useCallback((behavior = 'smooth') => {
-    if (!shouldAutoScroll || isUserScrollingRef.current) return;
-    if (!messagesContainerRef.current) return;
-    
-    messagesContainerRef.current.scrollTo({
-      top: messagesContainerRef.current.scrollHeight,
-      behavior: behavior
-    });
-  }, [shouldAutoScroll]);
-
-  const forceScrollToBottom = useCallback((behavior = 'smooth') => {
-    if (!messagesContainerRef.current) return;
-    messagesContainerRef.current.scrollTo({
-      top: messagesContainerRef.current.scrollHeight,
-      behavior: behavior
-    });
-    setShouldAutoScroll(true);
-    setIsUserScrolling(false);
-  }, []);
-
+  // Загрузка непрочитанных сообщений
   const loadUnreadCounts = useCallback(async () => {
     if (!user?.id || !userCompanyId) return;
     
@@ -671,6 +735,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [user?.id, userCompanyId, allChannels]);
 
+  // Отметка канала как прочитанного
   const markChannelAsRead = useCallback(async (channelId) => {
     if (!user?.id || !channelId) return;
     
@@ -695,6 +760,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [user?.id]);
 
+  // Загрузка пользователей компании
   useEffect(() => {
     const loadUsers = async () => {
       if (!userCompanyId) return;
@@ -714,6 +780,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     loadUsers();
   }, [userCompanyId]);
 
+  // Загрузка пользовательских каналов
   useEffect(() => {
     const loadCustomChannels = async () => {
       if (!userCompanyId) return;
@@ -737,6 +804,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     loadCustomChannels();
   }, [userCompanyId, loadUnreadCounts]);
 
+  // Загрузка сообщений
   const loadMessages = useCallback(async () => {
     if (!userCompanyId || !activeChannel) return;
     
@@ -763,7 +831,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       
       const { data: messagesData, error } = await query;
       if (error) {
-        console.error('❌ Ошибка загрузки:', error);
+        console.error('Ошибка загрузки:', error);
         throw error;
       }
       
@@ -828,6 +896,17 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         }
       }
       
+      // Загрузка закрепленных сообщений
+      const { data: pinnedData } = await supabase
+        .from('company_messages')
+        .select('id')
+        .eq('company_id', userCompanyId)
+        .eq('is_pinned', true);
+      
+      if (pinnedData) {
+        setPinnedMessages(pinnedData.map(p => p.id));
+      }
+      
       const enrichedMessages = (messagesData || []).map(msg => ({
         ...msg,
         user: { user_metadata: usersMap[msg.user_id] || { full_name: 'Пользователь', role: 'user' } },
@@ -839,7 +918,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       
       setTimeout(() => {
         forceScrollToBottom('auto');
-      }, 100);
+      }, 150);
       
       markChannelAsRead(activeChannel);
     } catch (err) {
@@ -850,8 +929,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [userCompanyId, activeChannel, showNotification, markChannelAsRead, forceScrollToBottom]);
 
-  useEffect(() => { loadMessages(); }, [loadMessages]);
+  // Загрузка сообщений при смене канала
+  useEffect(() => {
+    loadMessages();
+  }, [loadMessages]);
 
+  // Подписка на новые сообщения
   useEffect(() => {
     if (!userCompanyId || !activeChannel) return;
     
@@ -904,10 +987,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         setMessages(prev => [...prev, enrichedMessage]);
         
         setTimeout(() => {
-          if (!isUserScrollingRef.current) {
-            scrollToBottom('smooth');
-          }
-        }, 100);
+          scrollToBottom('smooth');
+        }, 50);
       })
       .subscribe();
     
@@ -918,6 +999,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     };
   }, [userCompanyId, activeChannel, user?.id, scrollToBottom]);
 
+  // Загрузка сохранённых сообщений
   useEffect(() => {
     const loadSavedMessages = async () => {
       if (!user?.id) return;
@@ -932,7 +1014,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     loadSavedMessages();
   }, [user?.id]);
 
-  const toggleSaveMessage = async (messageId) => {
+  // Сохранение/удаление сообщения
+  const toggleSaveMessage = useCallback(async (messageId) => {
     if (!user?.id) return;
     
     if (savedMessages.has(messageId)) {
@@ -948,13 +1031,15 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       setSavedMessages(prev => new Set([...prev, messageId]));
       showNotification?.('Сообщение сохранено', 'success');
     }
-  };
+  }, [user?.id, savedMessages, showNotification]);
 
-  const handleReply = (message) => {
+  // Ответ на сообщение
+  const handleReply = useCallback((message) => {
     setReplyTo(message);
-    textareaRef.current?.focus();
-  };
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  }, []);
 
+  // Индикатор печати
   const handleTyping = useCallback(() => {
     if (!user?.id || !activeChannel) return;
     
@@ -975,6 +1060,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }, 1000);
   }, [user?.id, activeChannel, user?.user_metadata?.full_name]);
 
+  // Подписка на события печати
   useEffect(() => {
     if (!activeChannel) return;
     
@@ -997,7 +1083,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     return () => { typingChannel.unsubscribe(); };
   }, [activeChannel, user?.id]);
 
-  const sendMessage = async () => {
+  // Отправка сообщения
+  const sendMessage = useCallback(async () => {
     const content = newMessage.trim();
     if (!content || !user?.id || sending) return;
     
@@ -1040,13 +1127,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       
       const { error } = await supabase.from('company_messages').insert([messageData]);
       if (error) {
-        console.error('❌ Ошибка Supabase:', error);
+        console.error('Ошибка Supabase:', error);
         throw error;
       }
       
       setNewMessage('');
       setReplyTo(null);
-      textareaRef.current?.focus();
       
       forceScrollToBottom('smooth');
     } catch (err) {
@@ -1055,9 +1141,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     } finally {
       setSending(false);
     }
-  };
+  }, [newMessage, user?.id, sending, activeChannel, canWriteToChannel, userCompanyId, replyTo, showNotification, forceScrollToBottom]);
 
-  const loadChannelMembers = async (channelId) => {
+  // Загрузка участников канала
+  const loadChannelMembers = useCallback(async (channelId) => {
     if (!channelId) return;
     setLoadingMembers(true);
     try {
@@ -1093,9 +1180,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     } finally {
       setLoadingMembers(false);
     }
-  };
+  }, [showNotification]);
 
-  const addChannelMember = async (channelId, userId) => {
+  // Добавление участника в канал
+  const addChannelMember = useCallback(async (channelId, userId) => {
     if (!channelId || !userId) return;
     
     try {
@@ -1111,9 +1199,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       console.error('Ошибка добавления участника:', err);
       showNotification?.('Не удалось добавить участника', 'error');
     }
-  };
+  }, [loadChannelMembers, showNotification]);
 
-  const removeChannelMember = async (channelId, userId) => {
+  // Удаление участника из канала
+  const removeChannelMember = useCallback(async (channelId, userId) => {
     if (!channelId || !userId) return;
     
     try {
@@ -1131,9 +1220,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       console.error('Ошибка удаления участника:', err);
       showNotification?.('Не удалось удалить участника', 'error');
     }
-  };
+  }, [loadChannelMembers, showNotification]);
 
-  const deleteChannel = async (channelId) => {
+  // Удаление канала
+  const deleteChannel = useCallback(async (channelId) => {
     if (!channelId) return;
     
     const channel = customChannels.find(c => c.id === channelId);
@@ -1157,9 +1247,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       console.error('Ошибка удаления канала:', err);
       showNotification?.('Не удалось удалить канал', 'error');
     }
-  };
+  }, [customChannels, activeChannel, showNotification]);
 
-  const handleCreateChannel = async (channelData) => {
+  // Создание канала
+  const handleCreateChannel = useCallback(async (channelData) => {
     if (!userCompanyId || !user?.id) return;
     
     try {
@@ -1203,15 +1294,16 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       showNotification?.('Не удалось создать канал', 'error');
       throw err;
     }
-  };
+  }, [userCompanyId, user?.id, showNotification]);
 
-  const startEdit = (message) => {
+  // Редактирование сообщения
+  const startEdit = useCallback((message) => {
     setEditingMessageId(message.id);
     setEditText(message.content);
     setTimeout(() => textareaRef.current?.focus(), 50);
-  };
+  }, []);
   
-  const saveEdit = async (messageId) => {
+  const saveEdit = useCallback(async (messageId) => {
     const content = editText.trim();
     if (!content) return;
     
@@ -1232,14 +1324,15 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       console.error('Ошибка редактирования:', err);
       showNotification?.('Не удалось обновить сообщение', 'error');
     }
-  };
+  }, [editText, user?.id, showNotification]);
   
-  const cancelEdit = () => {
+  const cancelEdit = useCallback(() => {
     setEditingMessageId(null);
     setEditText('');
-  };
-  
-  const deleteMessage = async (messageId) => {
+  }, []);
+
+  // Удаление сообщения
+  const deleteMessage = useCallback(async (messageId) => {
     if (!window.confirm('Удалить сообщение?')) return;
     
     try {
@@ -1255,9 +1348,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       console.error('Ошибка удаления:', err);
       showNotification?.('Не удалось удалить сообщение', 'error');
     }
-  };
+  }, [user?.id, showNotification]);
 
-  const toggleReaction = async (messageId, emoji) => {
+  // Реакция на сообщение
+  const toggleReaction = useCallback(async (messageId, emoji) => {
     if (!user?.id) return;
     
     const message = messages.find(m => m.id === messageId);
@@ -1292,9 +1386,49 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     } catch (err) {
       console.error('Ошибка реакции:', err);
     }
-  };
+  }, [user?.id, messages]);
 
-  const handleFileUpload = async (e) => {
+  // ========== НОВЫЕ ФУНКЦИИ ==========
+  
+  // Закрепить сообщение
+  const handlePinMessage = useCallback(async (messageId) => {
+    try {
+      if (pinnedMessages.includes(messageId)) {
+        setPinnedMessages(prev => prev.filter(id => id !== messageId));
+        await supabase
+          .from('company_messages')
+          .update({ is_pinned: false, pinned_at: null })
+          .eq('id', messageId);
+        showNotification?.('Сообщение откреплено', 'info');
+      } else {
+        if (pinnedMessages.length >= 5) {
+          showNotification?.('Нельзя закрепить более 5 сообщений', 'warning');
+          return;
+        }
+        setPinnedMessages(prev => [...prev, messageId]);
+        await supabase
+          .from('company_messages')
+          .update({ is_pinned: true, pinned_at: new Date().toISOString() })
+          .eq('id', messageId);
+        showNotification?.('Сообщение закреплено', 'success');
+      }
+    } catch (err) {
+      console.error('Ошибка при закреплении:', err);
+      showNotification?.('Не удалось закрепить сообщение', 'error');
+    }
+  }, [pinnedMessages, showNotification]);
+
+  // Копировать сообщение
+  const handleCopyMessage = useCallback((messageId) => {
+    const message = messages.find(m => m.id === messageId);
+    if (message && message.content) {
+      navigator.clipboard.writeText(message.content);
+      showNotification?.('Текст скопирован в буфер обмена', 'success');
+    }
+  }, [messages, showNotification]);
+
+  // Загрузка файла
+  const handleFileUpload = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file || !userCompanyId) return;
     
@@ -1317,9 +1451,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       showNotification?.('Не удалось загрузить файл', 'error');
     }
     e.target.value = '';
-  };
+  }, [userCompanyId, showNotification]);
 
-  const handleTextareaChange = (e) => {
+  // Обработка текстового поля
+  const handleTextareaChange = useCallback((e) => {
     const value = e.target.value;
     setNewMessage(value);
     e.target.style.height = 'auto';
@@ -1328,9 +1463,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     if (value.trim()) {
       handleTyping();
     }
-  };
+  }, [handleTyping]);
   
-  const handleKeyDown = (e) => {
+  const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (editingMessageId) {
@@ -1344,48 +1479,59 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       setShowReactionsPicker(null);
       setReplyTo(null);
     }
-  };
+  }, [editingMessageId, saveEdit, sendMessage, cancelEdit]);
 
-  const toggleSidebar = () => {
-    setShowSidebar(!showSidebar);
-  };
+  // Переключение сайдбара
+  const toggleSidebar = useCallback(() => {
+    setShowSidebar(prev => !prev);
+  }, []);
 
-  const handleChannelSelect = (channelId) => {
+  // Выбор канала
+  const handleChannelSelect = useCallback((channelId) => {
     setActiveChannel(channelId);
-    markChannelAsRead(channelId);
     setShouldAutoScroll(true);
     setIsUserScrolling(false);
+    isUserScrollingRef.current = false;
     if (isMobile) {
       setShowSidebar(false);
     }
-  };
+  }, [isMobile]);
+
+  // Очистка таймеров при размонтировании
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         <ChatSidebar
-  channels={allChannels}
-  activeChannel={activeChannel}
-  onChannelSelect={handleChannelSelect}
-  canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
-  onCreateChannel={() => setShowCreateModal(true)}
-  connectionStatus={connectionStatus}
-  isMobile={isMobile}
-  showSidebar={showSidebar}
-  onCloseSidebar={toggleSidebar}
-  onChannelSettings={(channel) => {
-    setSelectedChannel(channel);
-    setShowChannelSettings(true);
-    loadChannelMembers(channel.id);
-  }}
-  onDeleteChannel={deleteChannel}
-  currentUserRole={userRole}
-  companyUsers={companyUsers}
-  currentUser={user}
-  onStartDirectChat={startDirectChat}
-  unreadCounts={unreadCounts}
-  lastReadTimes={lastReadTimes}
-/>
+          channels={allChannels}
+          activeChannel={activeChannel}
+          onChannelSelect={handleChannelSelect}
+          canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
+          onCreateChannel={() => setShowCreateModal(true)}
+          connectionStatus={connectionStatus}
+          isMobile={isMobile}
+          showSidebar={showSidebar}
+          onCloseSidebar={toggleSidebar}
+          onChannelSettings={(channel) => {
+            setSelectedChannel(channel);
+            setShowChannelSettings(true);
+            loadChannelMembers(channel.id);
+          }}
+          onDeleteChannel={deleteChannel}
+          currentUserRole={userRole}
+          companyUsers={companyUsers}
+          currentUser={user}
+          onStartDirectChat={startDirectChat}
+          unreadCounts={unreadCounts}
+          lastReadTimes={lastReadTimes}
+        />
 
         {(!isMobile || !showSidebar) && (
           <div className="flex-1 flex flex-col min-w-0 h-full">
@@ -1466,11 +1612,14 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                       language={language}
                       textareaRef={textareaRef}
                       companyUsers={companyUsers}
+                      onPinMessage={handlePinMessage}
+                      isPinned={pinnedMessages.includes(msg.id)}
+                      onCopyMessage={handleCopyMessage}
                     />
                   ))}
                   <div ref={(el) => {
-                    if (el && !isUserScrolling) {
-                      el.scrollIntoView({ behavior: 'auto' });
+                    if (el && shouldAutoScroll && !isUserScrolling) {
+                      el.scrollIntoView({ behavior: 'auto', block: 'end' });
                     }
                   }} />
                 </>
