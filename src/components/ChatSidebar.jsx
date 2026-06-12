@@ -1,3 +1,5 @@
+// ChatSidebar.jsx - ИСПРАВЛЕННЫЙ (с личными чатами)
+
 import React, { useState } from 'react';
 import { MessageCircle, Plus, Shield, X, Settings, Trash2, Users, Search, User, Mail } from 'lucide-react';
 
@@ -7,7 +9,7 @@ const ChatSidebar = ({
   isMobile, showSidebar, onCloseSidebar,
   onChannelSettings, onDeleteChannel, currentUserRole,
   companyUsers, currentUser, onStartDirectChat,
-  unreadCounts = {} // ← ДОБАВЬТЕ ЭТУ СТРОКУ в пропсы
+  unreadCounts = {}
 }) => {
   const [showContacts, setShowContacts] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,6 +21,7 @@ const ChatSidebar = ({
     return currentUserRole === 'manager' || currentUserRole === 'supply_admin';
   };
   
+  // Фильтрация пользователей для контактов
   const filteredUsers = companyUsers?.filter(u => 
     u.user_id !== currentUser?.id &&
     (u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -32,6 +35,18 @@ const ChatSidebar = ({
     masters: filteredUsers.filter(u => u.role === 'master' || u.role === 'foreman'),
     others: filteredUsers.filter(u => !['manager', 'director', 'supply_admin', 'master', 'foreman'].includes(u.role))
   };
+  
+  // Получение существующих DM чатов
+  const existingDMChannels = channels.filter(ch => ch.type === 'direct');
+  
+  // Пользователи, с которыми уже есть DM чаты
+  const usersWithDM = existingDMChannels.flatMap(ch => ch.participants || []);
+  
+  // Пользователи, с которыми НЕТ DM чатов
+  const usersWithoutDM = companyUsers?.filter(u => 
+    u.user_id !== currentUser?.id && 
+    !usersWithDM.includes(u.user_id)
+  ) || [];
   
   return (
     <aside className={`${isMobile ? 'fixed inset-0 z-50 bg-white dark:bg-gray-800 w-80' : 'w-80'} border-r border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30 flex flex-col overflow-hidden`}>
@@ -62,7 +77,7 @@ const ChatSidebar = ({
       
       <div className="flex-1 overflow-y-auto p-3">
         {!showContacts ? (
-          // Каналы
+          // ========== КАНАЛЫ ==========
           <>
             <div className="flex items-center justify-between mb-3 px-2">
               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Каналы</h3>
@@ -74,45 +89,51 @@ const ChatSidebar = ({
             </div>
             
             <nav className="space-y-1">
-              {/* Личные сообщения - отдельная секция */}
-              <div className="mb-2">
-                <h4 className="text-xs font-semibold text-gray-400 px-2 py-1">ЛИЧНЫЕ СООБЩЕНИЯ</h4>
-                {companyUsers?.filter(u => u.user_id !== currentUser?.id).slice(0, 5).map(user => {
-                  const dmChannelId = `dm_${[currentUser?.id, user.user_id].sort().join('_')}`;
-                  const isActive = activeChannel === dmChannelId;
-                  const unreadCount = unreadCounts?.[dmChannelId] || 0;
-                  return (
-                    <button
-                      key={user.user_id}
-                      onClick={() => onStartDirectChat(user)}
-                      className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${
-                        isActive ? 'bg-[#4A6572] text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'
-                      }`}
-                    >
-                      <div className="relative">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center">
-                          <span className="text-white text-xs font-medium">
-                            {user.full_name?.[0]?.toUpperCase() || '?'}
-                          </span>
+              {/* ЛИЧНЫЕ СООБЩЕНИЯ - существующие DM чаты */}
+              {existingDMChannels.length > 0 && (
+                <div className="mb-3">
+                  <h4 className="text-xs font-semibold text-gray-400 px-2 py-1">ЛИЧНЫЕ СООБЩЕНИЯ</h4>
+                  {existingDMChannels.map(channel => {
+                    // Находим собеседника
+                    const otherUserId = channel.participants?.find(id => id !== currentUser?.id);
+                    const otherUser = companyUsers?.find(u => u.user_id === otherUserId);
+                    const isActive = activeChannel === channel.id;
+                    const unreadCount = unreadCounts?.[channel.id] || 0;
+                    
+                    if (!otherUser) return null;
+                    
+                    return (
+                      <button
+                        key={channel.id}
+                        onClick={() => onChannelSelect(channel.id)}
+                        className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${
+                          isActive ? 'bg-[#4A6572] text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <div className="relative">
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center">
+                            <span className="text-white text-xs font-medium">
+                              {otherUser.full_name?.[0]?.toUpperCase() || '?'}
+                            </span>
+                          </div>
+                          <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full border-2 border-white"></span>
                         </div>
-                        <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full border-2 border-white"></span>
-                      </div>
-                      <span className="truncate flex-1">{user.full_name}</span>
-                      {unreadCount > 0 && (
-                        <span className="ml-1 px-1.5 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full min-w-[20px] text-center">
-                          {unreadCount > 99 ? '99+' : unreadCount}
-                        </span>
-                      )}
-                      <Mail className="w-3 h-3 opacity-50" />
-                    </button>
-                  );
-                })}
-              </div>
+                        <span className="truncate flex-1">{otherUser.full_name}</span>
+                        {unreadCount > 0 && (
+                          <span className="ml-1 px-1.5 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full min-w-[20px] text-center">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               
-              {/* Групповые каналы */}
+              {/* ГРУППОВЫЕ КАНАЛЫ */}
               <div>
                 <h4 className="text-xs font-semibold text-gray-400 px-2 py-1">ГРУППОВЫЕ КАНАЛЫ</h4>
-                {channels.map(channel => {
+                {channels.filter(ch => ch.type !== 'direct').map(channel => {
                   const isActive = activeChannel === channel.id;
                   const isSystem = channel.type === 'system';
                   const canDelete = !isSystem && canDeleteChannel(channel);
@@ -169,7 +190,7 @@ const ChatSidebar = ({
             </nav>
           </>
         ) : (
-          // Контакты (остается без изменений)
+          // ========== КОНТАКТЫ ==========
           <>
             <div className="mb-3">
               <div className="relative">
@@ -184,8 +205,38 @@ const ChatSidebar = ({
               </div>
             </div>
             
+            {/* Кнопка "Начать новый чат" */}
+            {usersWithoutDM.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-semibold text-gray-500 mb-2">НОВЫЙ ЧАТ</h4>
+                {usersWithoutDM.slice(0, 5).map(user => (
+                  <div key={user.user_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 cursor-pointer group">
+                    <div className="relative">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center">
+                        <span className="text-white text-xs font-medium">
+                          {user.full_name?.[0]?.toUpperCase() || '?'}
+                        </span>
+                      </div>
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{user.full_name}</p>
+                      <p className="text-xs text-gray-500">{user.role === 'supply_admin' ? 'Снабжение' : user.role === 'manager' ? 'Руководитель' : 'Сотрудник'}</p>
+                    </div>
+                    <button 
+                      onClick={() => onStartDirectChat(user)}
+                      className="p-1.5 text-[#4A6572] hover:bg-gray-200 rounded-full"
+                      title="Начать чат"
+                    >
+                      <Mail className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* Существующие контакты по ролям */}
             <div className="space-y-4">
-              {/* Руководители */}
               {usersByRole.managers.length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-gray-500 mb-2">Руководители</h4>
@@ -205,7 +256,7 @@ const ChatSidebar = ({
                       </div>
                       <button 
                         onClick={() => onStartDirectChat(user)}
-                        className="p-1.5 text-[#4A6572] hover:bg-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1.5 text-[#4A6572] hover:bg-gray-200 rounded-full"
                         title="Написать сообщение"
                       >
                         <Mail className="w-4 h-4" />
@@ -215,7 +266,6 @@ const ChatSidebar = ({
                 </div>
               )}
               
-              {/* Снабжение */}
               {usersByRole.supply.length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-gray-500 mb-2">Снабжение</h4>
@@ -235,7 +285,7 @@ const ChatSidebar = ({
                       </div>
                       <button 
                         onClick={() => onStartDirectChat(user)}
-                        className="p-1.5 text-[#4A6572] hover:bg-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1.5 text-[#4A6572] hover:bg-gray-200 rounded-full"
                         title="Написать сообщение"
                       >
                         <Mail className="w-4 h-4" />
@@ -245,7 +295,6 @@ const ChatSidebar = ({
                 </div>
               )}
               
-              {/* Прорабы */}
               {usersByRole.masters.length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-gray-500 mb-2">Прорабы</h4>
@@ -265,7 +314,7 @@ const ChatSidebar = ({
                       </div>
                       <button 
                         onClick={() => onStartDirectChat(user)}
-                        className="p-1.5 text-[#4A6572] hover:bg-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1.5 text-[#4A6572] hover:bg-gray-200 rounded-full"
                         title="Написать сообщение"
                       >
                         <Mail className="w-4 h-4" />
@@ -275,7 +324,6 @@ const ChatSidebar = ({
                 </div>
               )}
               
-              {/* Другие сотрудники */}
               {usersByRole.others.length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-gray-500 mb-2">Другие сотрудники</h4>
@@ -294,7 +342,7 @@ const ChatSidebar = ({
                       </div>
                       <button 
                         onClick={() => onStartDirectChat(user)}
-                        className="p-1.5 text-[#4A6572] hover:bg-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1.5 text-[#4A6572] hover:bg-gray-200 rounded-full"
                         title="Написать сообщение"
                       >
                         <Mail className="w-4 h-4" />
