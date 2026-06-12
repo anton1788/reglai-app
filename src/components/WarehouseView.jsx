@@ -5,7 +5,7 @@ Package, Download, Search, Filter, Truck, Loader2, CheckCircle, XCircle,
 Users, MapPin, AlertCircle, Plus, Minus, Edit2, ArrowRight, FileText,
 History, TrendingUp, Eye, Calendar, Info, ChevronDown, ChevronUp,
 Sparkles, Undo2, CheckCircle2, AlertTriangle, ArrowUpRight, ArrowDownLeft,
-Trash2, X, Menu
+Trash2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -20,6 +20,7 @@ const MEDIUM_STOCK_THRESHOLD = 50;
 const SEARCH_DEBOUNCE_MS = 300;
 const ANIMATION_DURATION = 200;
 
+// ЛОКАЛЬНАЯ МАПА ТРАНЗАКЦИЙ
 const TRANSACTION_TYPE_LABELS = {
 income: 'Приход',
 expense: 'Расход',
@@ -27,73 +28,17 @@ write_off: 'Списание',
 return: 'Возврат'
 };
 
-// === Анимации и стили с мобильной адаптацией ===
+// === Анимации и стили ===
 const styles = `
 @keyframes slideIn { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 .warehouse-card { transition: all 0.2s ease; will-change: transform, box-shadow; }
-.warehouse-card:active { transform: scale(0.99); }
+.warehouse-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.12); }
+.warehouse-card:active { transform: translateY(0); }
 .stat-card { transition: all 0.2s ease; }
-.stat-card:active { transform: scale(0.98); }
-
-/* Мобильная адаптация */
-@media (max-width: 768px) {
-  .warehouse-table th, .warehouse-table td {
-    padding: 0.5rem 0.75rem;
-    font-size: 12px;
-  }
-  .mode-toggle {
-    width: 100%;
-  }
-  .mode-btn {
-    flex: 1;
-    text-align: center;
-  }
-}
-
-@media (max-width: 640px) {
-  .action-buttons-mobile {
-    flex-direction: column;
-    gap: 8px;
-  }
-  .action-buttons-mobile button {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  /* Преобразование таблицы в карточки */
-  .warehouse-table thead {
-    display: none;
-  }
-  .warehouse-table tbody tr {
-    display: block;
-    margin-bottom: 12px;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 12px;
-  }
-  .warehouse-table tbody tr td {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid #e5e7eb;
-  }
-  .warehouse-table tbody tr td:last-child {
-    border-bottom: none;
-  }
-  .warehouse-table tbody tr td::before {
-    content: attr(data-label);
-    font-weight: 600;
-    color: #6b7280;
-    margin-right: 12px;
-    font-size: 11px;
-    min-width: 80px;
-  }
-}
-
+.stat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.15); }
 .modal-enter { animation: slideIn ${ANIMATION_DURATION}ms ease-out forwards; }
 .fade-enter { animation: fadeIn ${ANIMATION_DURATION}ms ease-out forwards; }
 .pulse { animation: pulse 2s ease-in-out infinite; }
@@ -146,18 +91,18 @@ minute: '2-digit'
 };
 
 // === Подкомпоненты ===
-const SectionHeader = memo(({ title, actions, subtitle, icon: Icon, isMobile }) => (
-<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
-<div className="flex items-center gap-2 sm:gap-3">
-<div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/20">
-{Icon && <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" aria-hidden="true" />}
+const SectionHeader = memo(({ title, actions, subtitle, icon: Icon }) => (
+<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+<div className="flex items-center gap-3">
+<div className="p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/20">
+{Icon && <Icon className="w-5 h-5 text-white" aria-hidden="true" />}
 </div>
 <div>
-<h2 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white">{title}</h2>
-{subtitle && <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
+<h2 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h2>
+{subtitle && <p className="text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
 </div>
 </div>
-{actions && <div className={`flex gap-2 ${isMobile ? 'flex-wrap' : ''}`}>{actions}</div>}
+{actions && <div className="flex gap-2">{actions}</div>}
 </div>
 ));
 SectionHeader.displayName = 'SectionHeader';
@@ -165,22 +110,22 @@ SectionHeader.displayName = 'SectionHeader';
 const StatCard = memo(({ label, value, color, onClick, tooltip, icon: Icon }) => (
 <button
 onClick={onClick}
-className="stat-card bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-200/60 dark:border-gray-700/60 hover:border-indigo-300/60 dark:hover:border-indigo-600/60 text-left w-full active:scale-95 transition-all"
+className="stat-card bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-2xl border border-gray-200/60 dark:border-gray-700/60 hover:border-indigo-300/60 dark:hover:border-indigo-600/60 text-left w-full"
 title={tooltip}
 >
-<div className="flex items-center justify-between mb-1 sm:mb-2">
-<span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{label}</span>
-{Icon && <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${color} opacity-60`} aria-hidden="true" />}
+<div className="flex items-center justify-between mb-2">
+<span className="text-sm text-gray-500 dark:text-gray-400">{label}</span>
+{Icon && <Icon className={`w-5 h-5 ${color} opacity-60`} aria-hidden="true" />}
 </div>
-<div className={`text-lg sm:text-2xl font-bold ${color}`}>{formatNumber(value)}</div>
-<div className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 mt-0.5 sm:mt-1">
+<div className={`text-2xl font-bold ${color}`}>{formatNumber(value)}</div>
+<div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
 {tooltip || 'Нажмите для деталей'}
 </div>
 </button>
 ));
 StatCard.displayName = 'StatCard';
 
-// Компонент: Таблица материалов (с мобильной адаптацией)
+// Компонент: Таблица материалов с кнопкой удаления
 const WarehouseTable = memo(({
 items,
 onAdjust,
@@ -195,9 +140,9 @@ isFromApplications = false,
 }) => {
 if (!items || items.length === 0) {
 return (
-<div className="text-center py-8 sm:py-12 bg-white/80 dark:bg-gray-800/80 rounded-xl sm:rounded-2xl border border-gray-200/60 dark:border-gray-700/60">
-{isFromApplications ? <FileText className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-3" /> : <Package className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-3" />}
-<p className="text-sm sm:text-base text-gray-500 dark:text-gray-400">
+<div className="text-center py-12 bg-white/80 dark:bg-gray-800/80 rounded-2xl border border-gray-200/60 dark:border-gray-700/60">
+{isFromApplications ? <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" /> : <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />}
+<p className="text-gray-500 dark:text-gray-400">
 {t(isFromApplications ? 'noMaterialsFromApplications' : 'noItems')}
 </p>
 </div>
@@ -207,19 +152,19 @@ return (
 const canEdit = userRole === 'supply_admin' || userRole === 'manager';
 
 return (
-<div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-200/60 dark:border-gray-700/60 overflow-hidden">
+<div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/60 dark:border-gray-700/60 overflow-hidden">
 <div className="overflow-x-auto">
 <table className="warehouse-table">
 <thead className="sticky top-0 z-10">
 <tr>
 <th className="w-8"></th>
-<th className="min-w-[200px]">{t('name') || 'Наименование'}</th>
-<th className="w-20 text-center">{t('unit') || 'Ед.'}</th>
-<th className="w-28 text-center">{t('balance') || 'Остаток'}</th>
-<th className="w-28 text-center">{t('income') || 'Приход'}</th>
-{isFromApplications && <th className="w-28 text-center">{t('requested') || 'Запрошено'}</th>}
-<th className="w-28 text-center">{t('status') || 'Статус'}</th>
-<th className="w-44 text-right">{t('actions') || 'Действия'}</th>
+<th className="min-w-[250px]">{t('name') || 'Наименование'}</th>
+<th className="w-24 text-center">{t('unit') || 'Ед.'}</th>
+<th className="w-32 text-center">{t('balance') || 'Остаток'}</th>
+<th className="w-32 text-center">{t('income') || 'Приход'}</th>
+{isFromApplications && <th className="w-32 text-center">{t('requested') || 'Запрошено'}</th>}
+<th className="w-32 text-center">{t('status') || 'Статус'}</th>
+<th className="w-48 text-right">{t('actions') || 'Действия'}</th>
 </tr>
 </thead>
 <tbody>
@@ -252,15 +197,15 @@ const statusConfig = getStatusConfig();
 
 return (
 <tr key={item.id || index} className="group">
-<td className="text-center" data-label="">
+<td className="text-center">
 {isFromApplications ? <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /> : <Package className="w-4 h-4 text-gray-400" />}
 </td>
-<td data-label={t('name') || 'Наименование'}>
-<div className="flex flex-col gap-0.5">
+<td>
+<div className="flex items-center gap-2">
 <button
 onClick={() => !isFromApplications && onViewHistory?.(item)}
 disabled={itemLoading || isFromApplications}
-className="font-semibold text-gray-900 dark:text-white text-left hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-50 text-sm"
+className="font-semibold text-gray-900 dark:text-white text-left hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-50"
 title={item.name}
 >
 {item.name || '—'}
@@ -273,7 +218,7 @@ title={item.name}
 )}
 </div>
 </td>
-<td className="text-center text-sm text-gray-600 dark:text-gray-300" data-label={t('unit') || 'Ед.'}>
+<td className="text-center text-sm text-gray-600 dark:text-gray-300">
 {!isFromApplications && (
 <button
 onClick={() => onEditUnit?.(item)}
@@ -285,8 +230,8 @@ title={t('editUnit')}
 )}
 {isFromApplications && (item.unit || 'шт')}
 </td>
-<td className="text-center" data-label={t('balance') || 'Остаток'}>
-<span className={`font-bold text-base sm:text-lg ${
+<td className="text-center">
+<span className={`font-bold text-lg ${
 isFromApplications 
 ? (balance >= requested ? 'text-green-600' : balance > 0 ? 'text-blue-600' : 'text-gray-600')
 : (isLow ? 'text-red-600' : isMedium ? 'text-yellow-600' : 'text-green-600')
@@ -294,21 +239,21 @@ isFromApplications
 {formatNumber(balance)}
 </span>
 </td>
-<td className="text-center text-blue-600 font-medium" data-label={t('income') || 'Приход'}>
+<td className="text-center text-blue-600 font-medium">
 {formatNumber(item.totalIncome || 0)}
 </td>
 {isFromApplications && (
-<td className="text-center text-sm text-gray-600 dark:text-gray-300" data-label={t('requested') || 'Запрошено'}>
+<td className="text-center text-sm text-gray-600 dark:text-gray-300">
 {formatNumber(requested)}
 </td>
 )}
-<td className="text-center" data-label={t('status') || 'Статус'}>
-<span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.class}`}>
+<td className="text-center">
+<span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.class}`}>
 <statusConfig.icon className="w-3 h-3" />
 {statusConfig.label}
 </span>
 </td>
-<td className="text-right" data-label={t('actions') || 'Действия'}>
+<td className="text-right">
 <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
 {!isFromApplications && onAdjust && (
 <button
@@ -317,8 +262,8 @@ disabled={itemLoading}
 className="table-action-btn text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
 title={t('adjustBalance')}
 >
-<Edit2 className="w-3 h-3" />
-<span className="hidden xs:inline">{t('adjust') || 'Корр.'}</span>
+<Edit2 className="w-3.5 h-3.5" />
+{t('adjust') || 'Корр.'}
 </button>
 )}
 {balance > 0 && canEdit && !isFromApplications && onTransfer && (
@@ -328,8 +273,8 @@ disabled={itemLoading}
 className="table-action-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
 title={t('transfer')}
 >
-<Truck className="w-3 h-3" />
-<span className="hidden xs:inline">{t('transfer') || 'Выдать'}</span>
+<Truck className="w-3.5 h-3.5" />
+{t('transfer') || 'Выдать'}
 </button>
 )}
 {canEdit && !isFromApplications && onDelete && (
@@ -339,8 +284,8 @@ disabled={itemLoading}
 className="table-action-btn text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
 title={t('delete') || 'Удалить'}
 >
-<Trash2 className="w-3 h-3" />
-<span className="hidden xs:inline">{t('delete') || 'Удалить'}</span>
+<Trash2 className="w-3.5 h-3.5" />
+{t('delete') || 'Удалить'}
 </button>
 )}
 {!isFromApplications && onViewHistory && (
@@ -350,7 +295,7 @@ disabled={itemLoading}
 className="table-action-btn text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
 title={t('history')}
 >
-<History className="w-3 h-3" />
+<History className="w-3.5 h-3.5" />
 </button>
 )}
 </div>
@@ -366,7 +311,10 @@ title={t('history')}
 });
 WarehouseTable.displayName = 'WarehouseTable';
 
-const TransactionRow = memo(({ trans, t }) => {
+const TransactionRow = memo(({
+trans,
+// t - не используется
+}) => {
 const isIncome = trans.transaction_type === 'income';
 const typeConfig = isIncome
 ? { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-300', sign: '+', icon: ArrowDownLeft }
@@ -376,28 +324,29 @@ const typeConfig = isIncome
 
 return (
 <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-<td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-500 whitespace-nowrap" data-label={t('date') || 'Дата'}>{formatDate(trans.created_at, 'ru')}</td>
-<td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-gray-900 dark:text-white max-w-[120px] sm:max-w-[150px] truncate" data-label={t('item') || 'Товар'}>{trans.item_name || '—'}</td>
-<td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm" data-label={t('type') || 'Тип'}>
-<span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${typeConfig.bg} ${typeConfig.text}`}>
+<td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{formatDate(trans.created_at, 'ru')}</td>
+<td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white max-w-[150px] truncate">{trans.item_name || '—'}</td>
+<td className="px-4 py-3 text-sm">
+<span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${typeConfig.bg} ${typeConfig.text}`}>
 <typeConfig.icon className="w-3 h-3" aria-hidden="true" />
 {TRANSACTION_TYPE_LABELS[trans.transaction_type] || trans.transaction_type}
 </span>
 </td>
-<td className={`px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold ${isIncome ? 'transaction-income' : 'transaction-expense'}`} data-label={t('quantity') || 'Кол-во'}>
+<td className={`px-4 py-3 text-sm font-bold ${isIncome ? 'transaction-income' : 'transaction-expense'}`}>
 {typeConfig.sign}{formatNumber(Number(trans.quantity) || 0)}
 </td>
-<td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-700 dark:text-gray-300 max-w-[100px] truncate" data-label={t('destination') || 'Объект'}>
+<td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 max-w-[120px] truncate">
 {(trans.transaction_type === 'expense' || trans.transaction_type === 'write_off')
 ? trans.target_object_name
 : trans.applications?.object_name || '—'}
 </td>
-<td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-700 dark:text-gray-300 max-w-[100px] truncate" data-label={t('recipient') || 'Получатель'}>
+<td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 max-w-[100px] truncate">
 {(trans.transaction_type === 'expense' || trans.transaction_type === 'write_off')
 ? trans.recipient_name
 : trans.user_email?.split('@')[0] || '—'}
 </td>
-<td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-500 dark:text-gray-400 max-w-[120px] truncate" data-label={t('comment') || 'Комментарий'} title={trans.comment}>
+<td className="px-4 py-3 text-sm text-gray-500">{trans.recipient_phone || '—'}</td>
+<td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-[150px] truncate" title={trans.comment}>
 {trans.comment || '—'}
 </td>
 </tr>
@@ -412,52 +361,52 @@ const isLow = balance < LOW_STOCK_THRESHOLD;
 const canEdit = userRole === 'supply_admin' || userRole === 'manager';
 
 return (
-<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 modal-enter" role="dialog" aria-modal="true" onClick={(e) => e.target === e.currentTarget && onClose()}>
-<div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl w-[95%] sm:max-w-2xl max-h-[85vh] flex flex-col border border-gray-200/50 dark:border-gray-700/50">
-<div className="flex items-center justify-between p-3 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
-<div className="flex items-center gap-2 sm:gap-3">
-<div className="p-1.5 sm:p-2 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg sm:rounded-xl">
-<Package className="w-4 h-4 sm:w-5 sm:h-5 text-white" aria-hidden="true" />
+<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-enter" role="dialog" aria-modal="true">
+<div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col border border-gray-200/50 dark:border-gray-700/50">
+<div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
+<div className="flex items-center gap-3">
+<div className="p-2 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl">
+<Package className="w-5 h-5 text-white" aria-hidden="true" />
 </div>
-<h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{item.name || '—'}</h3>
+<h3 className="text-lg font-bold text-gray-900 dark:text-white">{item.name || '—'}</h3>
 </div>
 <button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors" aria-label={t('close')}>
 <XCircle className="w-5 h-5" aria-hidden="true" />
 </button>
 </div>
-<div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
-<div className="grid grid-cols-2 gap-2 sm:gap-4">
+<div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+<div className="grid grid-cols-2 gap-4">
 {[
 { label: t('warehouseUnit') || 'Ед. изм.', value: item.unit || 'шт', icon: Info },
 { label: t('warehouseBalance') || 'Остаток', value: formatNumber(balance), color: isLow ? 'text-red-600' : 'text-green-600', icon: Package },
 { label: t('warehouseIncome') || 'Приход', value: formatNumber(item.totalIncome || 0), color: 'text-blue-600', icon: TrendingUp },
 { label: t('warehouseUpdated') || 'Обновлено', value: formatDate(item.last_updated, language), icon: Calendar }
 ].map((stat, idx) => (
-<div key={idx} className="bg-gray-50 dark:bg-gray-800/50 p-2 sm:p-4 rounded-lg sm:rounded-xl">
-<div className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mb-0.5 sm:mb-1">
-<stat.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" aria-hidden="true" />
+<div key={idx} className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl">
+<div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-1">
+<stat.icon className="w-3.5 h-3.5" aria-hidden="true" />
 {stat.label}
 </div>
-<div className={`text-sm sm:text-lg font-semibold ${stat.color || 'text-gray-900 dark:text-white'}`}>{stat.value}</div>
+<div className={`text-lg font-semibold ${stat.color || 'text-gray-900 dark:text-white'}`}>{stat.value}</div>
 </div>
 ))}
 </div>
 <div>
-<h4 className="font-semibold text-gray-900 dark:text-white mb-2 sm:mb-3 flex items-center gap-1 sm:gap-2 text-sm sm:text-base">
-<History className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden="true" />
+<h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+<History className="w-4 h-4" aria-hidden="true" />
 {t('transactionHistory') || 'История движений'}
 </h4>
 {isLoading ? (
-<div className="flex justify-center py-6 sm:py-8"><Loader2 className="w-6 h-6 animate-spin text-indigo-600" /></div>
+<div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-indigo-600" /></div>
 ) : history?.length > 0 ? (
-<div className="overflow-x-auto -mx-3 sm:mx-0">
-<table className="min-w-full text-xs sm:text-sm">
+<div className="overflow-x-auto -mx-4 sm:mx-0">
+<table className="min-w-full text-sm">
 <thead className="bg-gray-50 dark:bg-gray-800/50 sticky top-0">
 <tr>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">{t('date')}</th>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">{t('type')}</th>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">{t('quantity')}</th>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">{t('comment')}</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('date')}</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('type')}</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('quantity')}</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{t('comment')}</th>
 </tr>
 </thead>
 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -465,9 +414,9 @@ return (
 const isInc = tx.transaction_type === 'income';
 return (
 <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-<td className="px-2 sm:px-4 py-1.5 sm:py-2 text-gray-500">{formatDate(tx.created_at, language)}</td>
-<td className="px-2 sm:px-4 py-1.5 sm:py-2">
-<span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
+<td className="px-4 py-2 text-gray-500">{formatDate(tx.created_at, language)}</td>
+<td className="px-4 py-2">
+<span className={`px-2 py-1 rounded-full text-xs font-medium ${
 isInc ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
 tx.transaction_type === 'expense' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
@@ -475,10 +424,10 @@ tx.transaction_type === 'expense' ? 'bg-orange-100 text-orange-700 dark:bg-orang
 {TRANSACTION_TYPE_LABELS[tx.transaction_type] || tx.transaction_type}
 </span>
 </td>
-<td className={`px-2 sm:px-4 py-1.5 sm:py-2 font-medium ${isInc ? 'text-green-600' : 'text-red-600'}`}>
+<td className={`px-4 py-2 font-medium ${isInc ? 'text-green-600' : 'text-red-600'}`}>
 {isInc ? '+' : '-'}{formatNumber(Number(tx.quantity) || 0)}
 </td>
-<td className="px-2 sm:px-4 py-1.5 sm:py-2 text-gray-600 dark:text-gray-400 truncate max-w-[120px]" title={tx.comment}>{tx.comment || '—'}</td>
+<td className="px-4 py-2 text-gray-600 dark:text-gray-400 truncate max-w-[150px]" title={tx.comment}>{tx.comment || '—'}</td>
 </tr>
 );
 })}
@@ -486,20 +435,20 @@ tx.transaction_type === 'expense' ? 'bg-orange-100 text-orange-700 dark:bg-orang
 </table>
 </div>
 ) : (
-<p className="text-gray-500 dark:text-gray-400 text-center py-4 sm:py-6 text-sm">{t('noTransactions') || 'Нет транзакций'}</p>
+<p className="text-gray-500 dark:text-gray-400 text-center py-6">{t('noTransactions') || 'Нет транзакций'}</p>
 )}
 </div>
 </div>
-<div className="p-3 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-2xl sm:rounded-b-3xl flex justify-end gap-2 sm:gap-3">
-<button onClick={onClose} className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+<div className="p-4 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-3xl flex justify-end gap-3">
+<button onClick={onClose} className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
 {t('close')}
 </button>
 {canEdit && balance > 0 && (
 <button
 onClick={() => { onClose(); onTransfer?.(item); }}
-className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl text-sm font-medium flex items-center gap-1 sm:gap-2 transition-all shadow-lg shadow-green-500/25"
+className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg shadow-green-500/25"
 >
-<Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden="true" />
+<Truck className="w-4 h-4" aria-hidden="true" />
 {t('transfer') || 'Выдать'}
 </button>
 )}
@@ -526,33 +475,33 @@ await onCreate(item, formData.recipientId, formData.objectName, formData.quantit
 };
 
 return (
-<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 modal-enter" role="dialog" aria-modal="true" onClick={(e) => e.target === e.currentTarget && onClose()}>
-<div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl w-[95%] sm:max-w-md border border-gray-200/50 dark:border-gray-700/50">
-<div className="flex items-center justify-between p-3 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
-<div className="flex items-center gap-2 sm:gap-3">
-<div className="p-1.5 sm:p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg sm:rounded-xl">
-<Truck className="w-4 h-4 sm:w-5 sm:h-5 text-white" aria-hidden="true" />
+<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-enter" role="dialog" aria-modal="true">
+<div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full border border-gray-200/50 dark:border-gray-700/50">
+<div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
+<div className="flex items-center gap-3">
+<div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl">
+<Truck className="w-5 h-5 text-white" aria-hidden="true" />
 </div>
-<h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{t('transferTo') || 'Выдача'}</h3>
+<h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('transferTo') || 'Выдача'}</h3>
 </div>
 <button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors" aria-label={t('close')}>
 <XCircle className="w-5 h-5" aria-hidden="true" />
 </button>
 </div>
-<form onSubmit={handleSubmit} className="p-3 sm:p-6 space-y-3 sm:space-y-4">
-<div className="bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
-<p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">{t('material')}</p>
-<p className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">{item.name || '—'}</p>
-<p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1">
+<form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
+<div className="bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 p-4 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
+<p className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">{t('material')}</p>
+<p className="font-semibold text-gray-900 dark:text-white">{item.name || '—'}</p>
+<p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
 {t('available')}: <span className={`font-bold ${balance < LOW_STOCK_THRESHOLD ? 'text-red-600' : 'text-green-600'}`}>{formatNumber(balance)} {item.unit || t('unit')}</span>
 </p>
 </div>
 <div>
-<label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('employee')} *</label>
+<label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('employee')} *</label>
 <select
 value={formData.recipientId}
 onChange={(e) => setFormData(prev => ({ ...prev, recipientId: e.target.value }))}
-className="w-full px-3 sm:px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg sm:rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
 required
 disabled={isLoading}
 >
@@ -565,33 +514,33 @@ disabled={isLoading}
 </select>
 </div>
 <div>
-<label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('destination')} *</label>
+<label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('destination')} *</label>
 <input
 type="text"
 value={formData.objectName}
 onChange={(e) => setFormData(prev => ({ ...prev, objectName: e.target.value }))}
-className="w-full px-3 sm:px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg sm:rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
 placeholder={t('objectPlaceholder')}
 required
 disabled={isLoading}
 />
 </div>
 <div>
-<label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('quantity')} *</label>
+<label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('quantity')} *</label>
 <div className="flex items-center gap-2">
 <button
 type="button"
 onClick={() => setFormData(prev => ({ ...prev, quantity: Math.max(1, prev.quantity - 1) }))}
-className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+className="p-2.5 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
 disabled={isLoading || formData.quantity <= 1}
 >
-<Minus className="w-3.5 h-3.5" aria-hidden="true" />
+<Minus className="w-4 h-4" aria-hidden="true" />
 </button>
 <input
 type="number"
 value={formData.quantity}
 onChange={(e) => setFormData(prev => ({ ...prev, quantity: Math.max(0, Math.min(Number(e.target.value) || 0, balance)) }))}
-className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center focus:ring-2 focus:ring-indigo-500"
+className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center focus:ring-2 focus:ring-indigo-500"
 min="1"
 max={balance}
 required
@@ -600,38 +549,38 @@ disabled={isLoading}
 <button
 type="button"
 onClick={() => setFormData(prev => ({ ...prev, quantity: Math.min(balance, prev.quantity + 1) }))}
-className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+className="p-2.5 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
 disabled={isLoading || formData.quantity >= balance}
 >
-<Plus className="w-3.5 h-3.5" aria-hidden="true" />
+<Plus className="w-4 h-4" aria-hidden="true" />
 </button>
 </div>
 </div>
 <div>
-<label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('comment')}</label>
+<label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('comment')}</label>
 <textarea
 value={formData.comment}
 onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
-className="w-full px-3 sm:px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg sm:rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 resize-none"
+className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 resize-none"
 rows="2"
 disabled={isLoading}
 />
 </div>
-<div className="flex gap-2 sm:gap-3 pt-2 sm:pt-4">
+<div className="flex gap-3 pt-4">
 <button
 type="button"
 onClick={onClose}
 disabled={isLoading}
-className="flex-1 px-3 py-2 text-sm text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 disabled:opacity-50 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+className="flex-1 px-4 py-2.5 text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 disabled:opacity-50 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
 >
 {t('cancel')}
 </button>
 <button
 type="submit"
 disabled={isLoading}
-className="flex-1 px-3 py-2 text-sm bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-lg font-medium flex items-center justify-center gap-1 sm:gap-2 disabled:opacity-50 transition-all shadow-lg shadow-green-500/25"
+className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-lg shadow-green-500/25"
 >
-{isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+{isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
 {t('confirmTransfer')}
 </button>
 </div>
@@ -652,52 +601,52 @@ totalBalance: 'Общий остаток'
 };
 
 return (
-<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 modal-enter" role="dialog" aria-modal="true" onClick={(e) => e.target === e.currentTarget && onClose()}>
-<div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl w-[95%] sm:max-w-4xl max-h-[85vh] flex flex-col border border-gray-200/50 dark:border-gray-700/50">
-<div className="flex items-center justify-between p-3 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
-<h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{titles[type] || 'Детали'}</h3>
+<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-enter" role="dialog" aria-modal="true">
+<div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col border border-gray-200/50 dark:border-gray-700/50">
+<div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
+<h3 className="text-lg font-bold text-gray-900 dark:text-white">{titles[type] || 'Детали'}</h3>
 <button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors" aria-label="Закрыть">
 <XCircle className="w-5 h-5" aria-hidden="true" />
 </button>
 </div>
-<div className="flex-1 overflow-y-auto p-3 sm:p-6">
+<div className="flex-1 overflow-y-auto p-4 sm:p-6">
 {isLoading ? (
-<div className="flex justify-center py-8 sm:py-12"><Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-indigo-600" /></div>
+<div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
 ) : data?.length === 0 ? (
-<p className="text-gray-500 dark:text-gray-400 text-center py-8 sm:py-12 text-sm sm:text-base">Нет данных</p>
+<p className="text-gray-500 dark:text-gray-400 text-center py-12">Нет данных</p>
 ) : type === 'income' ? (
-<div className="overflow-x-auto -mx-3 sm:mx-0">
-<table className="min-w-full text-xs sm:text-sm">
+<div className="overflow-x-auto -mx-4 sm:mx-0">
+<table className="min-w-full text-sm">
 <thead className="bg-gray-50 dark:bg-gray-800/50 sticky top-0">
 <tr>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">Дата</th>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">Товар</th>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">Кол-во</th>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">Комментарий</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Дата</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Товар</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Кол-во</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Комментарий</th>
 </tr>
 </thead>
 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
 {data.map((tx, idx) => (
 <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-<td className="px-2 sm:px-4 py-1.5 sm:py-2 text-gray-500">{formatDate(tx.created_at, language)}</td>
-<td className="px-2 sm:px-4 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-white">{tx.item_name || '—'}</td>
-<td className="px-2 sm:px-4 py-1.5 sm:py-2 text-green-600 font-bold">+{formatNumber(Number(tx.quantity) || 0)}</td>
-<td className="px-2 sm:px-4 py-1.5 sm:py-2 text-gray-600 dark:text-gray-400 truncate max-w-[150px] sm:max-w-[200px]" title={tx.comment}>{tx.comment || '—'}</td>
+<td className="px-4 py-2 text-gray-500">{formatDate(tx.created_at, language)}</td>
+<td className="px-4 py-2 font-medium text-gray-900 dark:text-white">{tx.item_name || '—'}</td>
+<td className="px-4 py-2 text-green-600 font-bold">+{formatNumber(Number(tx.quantity) || 0)}</td>
+<td className="px-4 py-2 text-gray-600 dark:text-gray-400 truncate max-w-[200px]" title={tx.comment}>{tx.comment || '—'}</td>
 </tr>
 ))}
 </tbody>
 </table>
 </div>
 ) : (
-<div className="overflow-x-auto -mx-3 sm:mx-0">
-<table className="min-w-full text-xs sm:text-sm">
+<div className="overflow-x-auto -mx-4 sm:mx-0">
+<table className="min-w-full text-sm">
 <thead className="bg-gray-50 dark:bg-gray-800/50 sticky top-0">
 <tr>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">Название</th>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">Ед.</th>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">Остаток</th>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">Приход</th>
-<th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">Статус</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Название</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Ед.</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Остаток</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Приход</th>
+<th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Статус</th>
 </tr>
 </thead>
 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -712,12 +661,12 @@ const isMed = item.isFromApplications
 : bal < MEDIUM_STOCK_THRESHOLD && !isLow;
 return (
 <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-<td className="px-2 sm:px-4 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-white">{item.name || '—'}</td>
-<td className="px-2 sm:px-4 py-1.5 sm:py-2 text-gray-700 dark:text-gray-300">{item.unit || 'шт'}</td>
-<td className={`px-2 sm:px-4 py-1.5 sm:py-2 font-bold ${isLow ? 'text-red-600' : isMed ? 'text-yellow-600' : 'text-green-600'}`}>{formatNumber(bal)}</td>
-<td className="px-2 sm:px-4 py-1.5 sm:py-2 text-blue-600">{formatNumber(item.totalIncome || 0)}</td>
-<td className="px-2 sm:px-4 py-1.5 sm:py-2">
-<span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
+<td className="px-4 py-2 font-medium text-gray-900 dark:text-white">{item.name || '—'}</td>
+<td className="px-4 py-2 text-gray-700 dark:text-gray-300">{item.unit || 'шт'}</td>
+<td className={`px-4 py-2 font-bold ${isLow ? 'text-red-600' : isMed ? 'text-yellow-600' : 'text-green-600'}`}>{formatNumber(bal)}</td>
+<td className="px-4 py-2 text-blue-600">{formatNumber(item.totalIncome || 0)}</td>
+<td className="px-4 py-2">
+<span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
 isLow ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
 isMed ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' :
 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
@@ -733,8 +682,8 @@ isMed ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-30
 </div>
 )}
 </div>
-<div className="p-3 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-2xl sm:rounded-b-3xl flex justify-end">
-<button onClick={onClose} className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg sm:rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+<div className="p-4 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-3xl flex justify-end">
+<button onClick={onClose} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
 Закрыть
 </button>
 </div>
@@ -775,19 +724,8 @@ const [actionLoading, setActionLoading] = useState({ adjust: null, transfer: nul
 const [statsModal, setStatsModal] = useState({ isOpen: false, type: null, data: [] });
 const [showAddItemModal, setShowAddItemModal] = useState(false);
 const [newItemForm, setNewItemForm] = useState({ name: '', quantity: 1, unit: 'шт' });
-const [isMobile, setIsMobile] = useState(false);
 const lastLoggedRef = useRef({});
 const searchTimerRef = useRef(null);
-
-// Определение мобильного устройства
-useEffect(() => {
-  const checkMobile = () => {
-    setIsMobile(window.innerWidth < 768);
-  };
-  checkMobile();
-  window.addEventListener('resize', checkMobile);
-  return () => window.removeEventListener('resize', checkMobile);
-}, []);
 
 useEffect(() => {
   const styleEl = document.createElement('style');
@@ -804,7 +742,6 @@ useEffect(() => {
   return () => clearTimeout(searchTimerRef.current);
 }, [searchTerm]);
 
-// Материалы из заявок
 const warehouseMaterials = useMemo(() => {
 const materialsMap = new Map();
 
@@ -916,11 +853,12 @@ const loadWarehouseData = useCallback(async () => {
   } finally {
     setIsLoading(false);
   }
-}, [userCompanyId, userRole, supabase, t, showNotification]);
+}, [userRole, supabase, t, showNotification]); // 🔥 УДАЛИЛ userCompanyId из зависимостей
 
 useEffect(() => {
   if (userCompanyId && user?.id) {
     const userCtx = getUserContext(user, null, userRole, userCompanyId);
+    
     if (shouldLogFeature('warehouse', userCompanyId, lastLoggedRef.current)) {
       logWarehouseAccess(supabase, userCtx, 'view');
     }
@@ -1219,40 +1157,39 @@ return () => document.removeEventListener('keydown', handler);
 
 if (isLoading) {
 return (
-<div className="max-w-7xl mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
-<div className="animate-pulse space-y-3 sm:space-y-4">
-<div className="h-6 sm:h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/2 sm:w-1/3"></div>
-<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
-{[...Array(4)].map((_, i) => <div key={i} className="h-20 sm:h-24 bg-gray-200 dark:bg-gray-700 rounded-xl sm:rounded-2xl"></div>)}
+<div className="max-w-7xl mx-auto p-4 space-y-6">
+<div className="animate-pulse space-y-4">
+<div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+{[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>)}
 </div>
-<div className="h-48 sm:h-64 bg-gray-200 dark:bg-gray-700 rounded-xl sm:rounded-2xl"></div>
+<div className="h-64 bg-gray-200 dark:bg-gray-700 rounded-2xl"></div>
 </div>
 </div>
 );
 }
 
 return (
-<div className="max-w-7xl mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
+<div className="max-w-7xl mx-auto p-4 space-y-6">
 <SectionHeader
 title={t('warehouse') || 'Склад'}
 icon={Package}
 subtitle={viewMode === 'warehouse' ? t('warehouseSubtitle') : (t('materialsFromApplications') || 'Материалы из заявок')}
-isMobile={isMobile}
 actions={
-<div className="flex flex-wrap gap-2 action-buttons-mobile">
-<div className={`mode-toggle ${isMobile ? 'w-full' : ''}`}>
+<>
+<div className="mode-toggle">
 <button
 onClick={() => setViewMode('warehouse')}
-className={`mode-btn ${viewMode === 'warehouse' ? 'active' : ''} ${isMobile ? 'text-xs py-1.5 px-3' : ''}`}
+className={`mode-btn ${viewMode === 'warehouse' ? 'active' : ''}`}
 >
-<Package className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" aria-hidden="true" />
+<Package className="w-4 h-4 inline mr-1" aria-hidden="true" />
 {t('warehouse') || 'Склад'}
 </button>
 <button
 onClick={() => setViewMode('fromApplications')}
-className={`mode-btn ${viewMode === 'fromApplications' ? 'active' : ''} ${isMobile ? 'text-xs py-1.5 px-3' : ''}`}
+className={`mode-btn ${viewMode === 'fromApplications' ? 'active' : ''}`}
 >
-<FileText className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" aria-hidden="true" />
+<FileText className="w-4 h-4 inline mr-1" aria-hidden="true" />
 {t('fromApplications') || 'Из заявок'} ({warehouseMaterials.length})
 </button>
 </div>
@@ -1260,72 +1197,80 @@ className={`mode-btn ${viewMode === 'fromApplications' ? 'active' : ''} ${isMobi
 {viewMode === 'fromApplications' && (
 <button
 onClick={() => setShowAllMaterials(!showAllMaterials)}
-className={`px-2 py-1.5 sm:px-4 sm:py-2 rounded-xl border text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-2 transition-colors ${
+className={`px-4 py-2 rounded-xl border text-sm font-medium flex items-center gap-2 transition-colors ${
 showAllMaterials
 ? 'bg-indigo-100 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
 : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
 }`}
+title={showAllMaterials ? 'Показывать только принятые' : 'Показывать все материалы'}
 >
-{showAllMaterials ? <Eye className="w-3 h-3 sm:w-4 sm:h-4" /> : <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />}
-<span className="hidden xs:inline">{showAllMaterials ? (t('showAll') || 'Все') : (t('showReceived') || 'Принятые')}</span>
+{showAllMaterials ? (
+<>
+<Eye className="w-4 h-4" aria-hidden="true" />
+{t('showAll') || 'Все материалы'}
+</>
+) : (
+<>
+<CheckCircle className="w-4 h-4" aria-hidden="true" />
+{t('showReceived') || 'Только принятые'}
+</>
+)}
 </button>
 )}
 
 {canEdit && viewMode === 'warehouse' && (
 <button
 onClick={() => setShowAddItemModal(true)}
-className="px-2 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-indigo-500 to-blue-600 text-white rounded-xl text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-2 transition-all shadow-lg shadow-indigo-500/25"
+className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 text-white rounded-xl hover:from-indigo-600 hover:to-blue-700 text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/25"
 >
-<Plus className="w-3 h-3 sm:w-4 sm:h-4" />
-<span className="hidden xs:inline">{t('addItem') || 'Добавить'}</span>
+<Plus className="w-4 h-4" aria-hidden="true" />
+{t('addItem') || 'Добавить товар'}
 </button>
 )}
 
 <button
 onClick={() => setShowTransactions(!showTransactions)}
-className="px-2 py-1.5 sm:px-4 sm:py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-2 transition-colors"
+className="px-4 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium flex items-center gap-2 transition-colors"
 >
-<Filter className="w-3 h-3 sm:w-4 sm:h-4" />
-<span className="hidden xs:inline">{showTransactions ? t('balances') : t('transactions')}</span>
+<Filter className="w-4 h-4" aria-hidden="true" />
+{showTransactions ? t('balances') : t('transactions')}
 </button>
-
 <button
 onClick={exportToExcel}
 disabled={!displayItems.length}
-className="px-2 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-2 disabled:opacity-50 transition-all shadow-lg shadow-green-500/25"
+className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:from-green-600 hover:to-emerald-700 text-sm font-medium flex items-center gap-2 disabled:opacity-50 transition-all shadow-lg shadow-green-500/25"
 >
-<Download className="w-3 h-3 sm:w-4 sm:h-4" />
-<span className="hidden xs:inline">Excel</span>
+<Download className="w-4 h-4" aria-hidden="true" /> Excel
 </button>
-</div>
+</>
 }
 />
 
 {canEdit && (
-<div className="flex items-center justify-between p-2 sm:p-3 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
-<div className="flex items-center gap-1 sm:gap-2">
-<Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
-<span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
-{t('autoReorder') || 'Автозаказ при минимуме'}
-</span>
-</div>
-<button
-onClick={onToggleAutoReorder}
-className={`relative inline-flex h-5 w-9 sm:h-6 sm:w-11 items-center rounded-full transition-colors ${
-autoReorderEnabled ? 'bg-[#4A6572]' : 'bg-gray-300 dark:bg-gray-600'
-}`}
-role="switch"
-aria-checked={autoReorderEnabled}
-aria-label={t('toggleAutoReorder') || 'Переключить автозаказ'}
->
-<span className={`inline-block h-3 w-3 sm:h-4 sm:w-4 transform rounded-full bg-white transition-transform ${
-autoReorderEnabled ? 'translate-x-5 sm:translate-x-6' : 'translate-x-1'
-}`} />
-</button>
-</div>
+  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-200/60 dark:border-gray-700/60 mb-4">
+    <div className="flex items-center gap-2">
+      <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
+      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {t('autoReorder') || 'Автозаказ при минимуме'}
+      </span>
+    </div>
+    <button
+      onClick={onToggleAutoReorder}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+        autoReorderEnabled ? 'bg-[#4A6572]' : 'bg-gray-300 dark:bg-gray-600'
+      }`}
+      role="switch"
+      aria-checked={autoReorderEnabled}
+      aria-label={t('toggleAutoReorder') || 'Переключить автозаказ'}
+    >
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+        autoReorderEnabled ? 'translate-x-6' : 'translate-x-1'
+      }`} />
+    </button>
+  </div>
 )}
 
-<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 <StatCard label={t('totalItems')} value={stats.totalItems} icon={Package} color="text-gray-900 dark:text-white" onClick={() => loadStatsDetails('totalItems')} />
 <StatCard label={t('totalIncome')} value={stats.totalIncome} icon={TrendingUp} color="text-blue-600" onClick={() => loadStatsDetails('income')} />
 <StatCard label={t('lowStock')} value={stats.lowStock} icon={AlertCircle} color="text-red-600" onClick={() => loadStatsDetails('lowStock')} />
@@ -1333,18 +1278,18 @@ autoReorderEnabled ? 'translate-x-5 sm:translate-x-6' : 'translate-x-1'
 </div>
 
 <div className="relative">
-<Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400" aria-hidden="true" />
+<Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
 <input
 type="text"
 placeholder={viewMode === 'warehouse' ? (t('searchPlaceholder') || 'Поиск по складу...') : (t('searchApplications') || 'Поиск в заявках...')}
 value={searchTerm}
 onChange={(e) => setSearchTerm(e.target.value)}
-className="w-full pl-9 sm:pl-11 pr-8 sm:pr-10 py-2 sm:py-3 text-sm border border-gray-300 dark:border-gray-600 rounded-xl sm:rounded-2xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+className="w-full pl-11 pr-10 py-3 border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
 aria-label={t('search')}
 />
 {searchTerm && (
-<button onClick={() => setSearchTerm('')} className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" aria-label={t('clear')}>
-<XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden="true" />
+<button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" aria-label={t('clear')}>
+<XCircle className="w-4 h-4" aria-hidden="true" />
 </button>
 )}
 </div>
@@ -1364,45 +1309,45 @@ language={language}
 isFromApplications={viewMode === 'fromApplications'}
 />
 ) : (
-<div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-200/60 dark:border-gray-700/60 overflow-hidden">
-<div className="p-3 sm:p-4 border-b border-gray-200/60 dark:border-gray-700/60 flex flex-wrap gap-2 sm:gap-3">
-<select
-value={filterType}
-onChange={(e) => setFilterType(e.target.value)}
-className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg sm:rounded-xl bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500"
->
-<option value="all">{t('all') || 'Все'}</option>
-<option value="income">{t('income') || 'Приход'}</option>
-<option value="expense">{t('expense') || 'Расход'}</option>
-<option value="write_off">{t('writeOff') || 'Списание'}</option>
-</select>
-</div>
-<div className="overflow-x-auto">
-<table className="min-w-full text-xs sm:text-sm">
-<thead className="bg-gray-50 dark:bg-gray-800/50 sticky top-0">
-<tr>
-<th className="px-3 sm:px-4 py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('date') || 'Дата'}</th>
-<th className="px-3 sm:px-4 py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('item') || 'Товар'}</th>
-<th className="px-3 sm:px-4 py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('type') || 'Тип'}</th>
-<th className="px-3 sm:px-4 py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('quantity') || 'Кол-во'}</th>
-<th className="px-3 sm:px-4 py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('destination') || 'Объект'}</th>
-<th className="px-3 sm:px-4 py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('recipient') || 'Получатель'}</th>
-<th className="px-3 sm:px-4 py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('comment') || 'Комментарий'}</th>
-</tr>
-</thead>
-<tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-{filteredTransactions.length === 0 ? (
-<tr>
-<td colSpan="7" className="px-3 sm:px-4 py-6 sm:py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
-{t('noTransactions') || 'Нет транзакций'}
-</td>
-</tr>
-) : (
-filteredTransactions.map(tx => <TransactionRow key={tx.id} trans={tx} t={t} />)
-)}
-</tbody>
-</table>
-</div>
+<div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/60 dark:border-gray-700/60 overflow-hidden">
+  <div className="p-4 border-b border-gray-200/60 dark:border-gray-700/60 flex flex-wrap gap-3">
+    <select
+      value={filterType}
+      onChange={(e) => setFilterType(e.target.value)}
+      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-sm focus:ring-2 focus:ring-indigo-500"
+    >
+      <option value="all">{t('all') || 'Все'}</option>
+      <option value="income">{t('income') || 'Приход'}</option>
+      <option value="expense">{t('expense') || 'Расход'}</option>
+      <option value="write_off">{t('writeOff') || 'Списание'}</option>
+    </select>
+  </div>
+  <div className="overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead className="bg-gray-50 dark:bg-gray-800/50 sticky top-0">
+        <tr>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('date') || 'Дата'}</th>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('item') || 'Товар'}</th>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('type') || 'Тип'}</th>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('quantity') || 'Кол-во'}</th>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('destination') || 'Объект'}</th>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('recipient') || 'Получатель'}</th>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('comment') || 'Комментарий'}</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+        {filteredTransactions.length === 0 ? (
+          <tr>
+            <td colSpan="7" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+              {t('noTransactions') || 'Нет транзакций'}
+            </td>
+          </tr>
+        ) : (
+          filteredTransactions.map(tx => <TransactionRow key={tx.id} trans={tx} t={t} />)
+        )}
+      </tbody>
+    </table>
+  </div>
 </div>
 )}
 
@@ -1439,119 +1384,122 @@ language={language}
 />
 
 {showAddItemModal && (
-<div 
-className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 modal-enter"
-role="dialog"
-aria-modal="true"
-onClick={(e) => e.target === e.currentTarget && setShowAddItemModal(false)}
->
-<div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl w-[95%] sm:max-w-md border border-gray-200/50 dark:border-gray-700/50">
-<div className="flex items-center justify-between p-3 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
-<div className="flex items-center gap-2 sm:gap-3">
-<div className="p-1.5 sm:p-2 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg sm:rounded-xl">
-<Plus className="w-4 h-4 sm:w-5 sm:h-5 text-white" aria-hidden="true" />
-</div>
-<h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-{t('addNewItem') || 'Добавить товар'}
-</h3>
-</div>
-<button 
-onClick={() => setShowAddItemModal(false)} 
-className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
->
-<XCircle className="w-5 h-5" />
-</button>
-</div>
-
-<div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
-<div>
-<label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-{t('name') || 'Наименование товара'} *
-</label>
-<input
-type="text"
-value={newItemForm.name}
-onChange={(e) => setNewItemForm(prev => ({ ...prev, name: e.target.value }))}
-className="w-full px-3 sm:px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg sm:rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-placeholder="Например: Цемент М500"
-autoFocus
-/>
-</div>
-
-<div>
-<label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-{t('quantity') || 'Количество'} *
-</label>
-<div className="flex items-center gap-2">
-<button
-type="button"
-onClick={() => setNewItemForm(prev => ({ ...prev, quantity: Math.max(1, prev.quantity - 1) }))}
-className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
->
-<Minus className="w-3.5 h-3.5" />
-</button>
-<input
-type="number"
-value={newItemForm.quantity}
-onChange={(e) => setNewItemForm(prev => ({ ...prev, quantity: Math.max(1, Number(e.target.value) || 1) }))}
-className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center"
-min="1"
-/>
-<button
-type="button"
-onClick={() => setNewItemForm(prev => ({ ...prev, quantity: prev.quantity + 1 }))}
-className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
->
-<Plus className="w-3.5 h-3.5" />
-</button>
-</div>
-</div>
-
-<div>
-<label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-{t('unit') || 'Единица измерения'}
-</label>
-<select
-value={newItemForm.unit}
-onChange={(e) => setNewItemForm(prev => ({ ...prev, unit: e.target.value }))}
-className="w-full px-3 sm:px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg sm:rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
->
-<option value="шт">шт</option>
-<option value="кг">кг</option>
-<option value="м">м</option>
-<option value="л">л</option>
-<option value="упак">упак</option>
-<option value="комплект">комплект</option>
-</select>
-</div>
-</div>
-
-<div className="p-3 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 rounded-b-2xl sm:rounded-b-3xl flex justify-end gap-2 sm:gap-3">
-<button
-onClick={() => setShowAddItemModal(false)}
-className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50"
->
-{t('cancel') || 'Отмена'}
-</button>
-<button
-onClick={addNewItem}
-disabled={actionLoading.add || !newItemForm.name.trim() || newItemForm.quantity <= 0}
-className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white rounded-lg font-medium flex items-center gap-1 sm:gap-2 disabled:opacity-50 transition-all"
->
-{actionLoading.add ? (
-<Loader2 className="w-3.5 h-3.5 animate-spin" />
-) : (
-<CheckCircle className="w-3.5 h-3.5" />
-)}
-{t('add') || 'Добавить'}
-</button>
-</div>
-</div>
-</div>
+  <div 
+    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-enter"
+    role="dialog"
+    aria-modal="true"
+    onClick={(e) => e.target === e.currentTarget && setShowAddItemModal(false)}
+  >
+    <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full border border-gray-200/50 dark:border-gray-700/50">
+      <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl">
+            <Plus className="w-5 h-5 text-white" aria-hidden="true" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+            {t('addNewItem') || 'Добавить товар'}
+          </h3>
+        </div>
+        <button 
+          onClick={() => setShowAddItemModal(false)} 
+          className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+        >
+          <XCircle className="w-5 h-5" />
+        </button>
+      </div>
+      
+      <div className="p-4 sm:p-6 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('name') || 'Наименование товара'} *
+          </label>
+          <input
+            type="text"
+            value={newItemForm.name}
+            onChange={(e) => setNewItemForm(prev => ({ ...prev, name: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+            placeholder="Например: Цемент М500"
+            autoFocus
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('quantity') || 'Количество'} *
+          </label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setNewItemForm(prev => ({ ...prev, quantity: Math.max(1, prev.quantity - 1) }))}
+              className="p-2.5 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+            <input
+              type="number"
+              value={newItemForm.quantity}
+              onChange={(e) => setNewItemForm(prev => ({ ...prev, quantity: Math.max(1, Number(e.target.value) || 1) }))}
+              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center"
+              min="1"
+            />
+            <button
+              type="button"
+              onClick={() => setNewItemForm(prev => ({ ...prev, quantity: prev.quantity + 1 }))}
+              className="p-2.5 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('unit') || 'Единица измерения'}
+          </label>
+          <select
+            value={newItemForm.unit}
+            onChange={(e) => setNewItemForm(prev => ({ ...prev, unit: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            <option value="шт">шт</option>
+            <option value="кг">кг</option>
+            <option value="м">м</option>
+            <option value="л">л</option>
+            <option value="упак">упак</option>
+            <option value="комплект">комплект</option>
+          </select>
+        </div>
+      </div>
+      
+      <div className="p-4 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 rounded-b-3xl flex justify-end gap-3">
+        <button
+          onClick={() => setShowAddItemModal(false)}
+          className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+        >
+          {t('cancel') || 'Отмена'}
+        </button>
+        <button
+          onClick={addNewItem}
+          disabled={actionLoading.add || !newItemForm.name.trim() || newItemForm.quantity <= 0}
+          className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white rounded-xl font-medium flex items-center gap-2 disabled:opacity-50 transition-all"
+        >
+          {actionLoading.add ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <CheckCircle className="w-4 h-4" />
+          )}
+          {t('add') || 'Добавить'}
+        </button>
+      </div>
+    </div>
+  </div>
 )}
 </div>
 );
 };
 
+// ============================================
+// ЭКСПОРТ
+// ============================================
 WarehouseView.displayName = 'WarehouseView';
 export default memo(WarehouseView);

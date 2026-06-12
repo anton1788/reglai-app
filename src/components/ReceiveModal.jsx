@@ -4,7 +4,7 @@ import {
   X, CheckCircle, XCircle, Package, Warehouse, Send, AlertCircle,
   Loader2, Info, ChevronDown, ChevronUp, Undo2, ShoppingCart,
   ArrowRight, FileText, Download, Mail, CheckCircle2, AlertTriangle,
-  Camera, QrCode, Shield 
+  Camera, QrCode,Shield 
 } from 'lucide-react';
 import {
   APPLICATION_STATUS,
@@ -15,11 +15,12 @@ import {
   WAREHOUSE_TRANSACTION_TYPE
 } from '../utils/applicationStatuses';
 
+// Импорты компонентов
 import QRScanner from './Mobile/QRScanner';
 import PhotoCapture from './Mobile/PhotoCapture';
 
 // ─────────────────────────────────────────────────────────────
-// 🎨 СТИЛИ И АНИМАЦИИ (с мобильной адаптацией)
+// 🎨 СТИЛИ И АНИМАЦИИ
 // ─────────────────────────────────────────────────────────────
 const ANIMATION_DURATION = 200;
 
@@ -60,41 +61,9 @@ const styles = `
   transition: all 0.2s ease;
   will-change: transform, box-shadow;
 }
-
-/* Мобильная адаптация */
-@media (max-width: 768px) {
-  .material-row {
-    padding: 12px;
-  }
-  .quantity-stepper button {
-    width: 36px;
-    height: 36px;
-  }
-  .material-row .flex-col {
-    gap: 12px;
-  }
-  .grid-cols-2 {
-    gap: 8px;
-  }
-}
-
-/* Адаптивные кнопки */
-@media (max-width: 640px) {
-  .modal-footer {
-    flex-direction: column-reverse;
-    gap: 10px;
-  }
-  .modal-footer button {
-    width: 100%;
-    justify-content: center;
-  }
-  .action-buttons {
-    flex-direction: column;
-    gap: 8px;
-  }
-  .action-buttons button {
-    width: 100%;
-  }
+.material-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
 }
 `;
 
@@ -111,9 +80,10 @@ const clamp = function(value, min = 0, max = 10000) {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🎨 UI КОМПОНЕНТЫ (с мобильной адаптацией)
+// 🎨 UI КОМПОНЕНТЫ
 // ─────────────────────────────────────────────────────────────
 
+// ✅ Статус материала
 const MaterialStatusBadge = memo(function({ status, t }) {
   const config = {
     [ITEM_STATUS.PENDING]: { color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300', label: 'statusPending' },
@@ -128,42 +98,45 @@ const MaterialStatusBadge = memo(function({ status, t }) {
   const labelKey = itemConfig.label;
   
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${colorClass}`}>
       {t(labelKey) || status}
     </span>
   );
 });
 MaterialStatusBadge.displayName = 'MaterialStatusBadge';
 
+/// ✅ Прогресс-бар для материала
 const MaterialProgress = memo(function({ requested, onWarehouse, confirmed }) {
   const warehouseProgress = requested > 0 ? Math.round((onWarehouse / requested) * 100) : 0;
   const confirmationProgress = requested > 0 ? Math.round((confirmed / requested) * 100) : 0;
   
   return (
     <div className="space-y-2">
+      {/* На складе */}
       <div className="flex items-center gap-2 text-xs">
-        <Warehouse className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" aria-hidden="true" />
+        <Warehouse className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
         <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
           <div
             className="h-1.5 bg-gradient-to-r from-blue-400 to-blue-500 rounded-full transition-all"
             style={{ width: Math.min(warehouseProgress, 100) + '%' }}
           />
         </div>
-        <span className="text-blue-600 dark:text-blue-400 font-medium w-12 text-right text-xs">
+        <span className="text-blue-600 dark:text-blue-400 font-medium w-12 text-right">
           {formatNumber(onWarehouse)}/{formatNumber(requested)}
         </span>
       </div>
       
+      {/* Подтверждено */}
       {confirmed > 0 && (
         <div className="flex items-center gap-2 text-xs">
-          <CheckCircle2 className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" aria-hidden="true" />
+          <CheckCircle2 className="w-3.5 h-3.5 text-green-600 dark:text-green-400" aria-hidden="true" />
           <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
             <div
               className="h-1.5 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full transition-all"
               style={{ width: Math.min(confirmationProgress, 100) + '%' }}
             />
           </div>
-          <span className="text-green-600 dark:text-green-400 font-medium w-12 text-right text-xs">
+          <span className="text-green-600 dark:text-green-400 font-medium w-12 text-right">
             {formatNumber(confirmed)}/{formatNumber(requested)}
           </span>
         </div>
@@ -173,7 +146,7 @@ const MaterialProgress = memo(function({ requested, onWarehouse, confirmed }) {
 });
 MaterialProgress.displayName = 'MaterialProgress';
 
-// ✅ Админ-ряд (мобильная адаптация)
+// ✅ Строка материала для админа (приёмка на склад)
 const AdminReceiveRow = memo(function({
   material,
   index,
@@ -208,34 +181,35 @@ const AdminReceiveRow = memo(function({
   }, [index, onUpdate]);
   
   return (
-    <article className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-3 sm:p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <h4 className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base break-words flex-1">
-            {material.description || '—'}
-          </h4>
-          <button
-            onClick={() => onPhotoClick?.(index)}
-            className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-            title="Добавить фото материала"
-          >
-            <Camera className="w-4 h-4" />
-          </button>
+    <article className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
+      <div className="flex flex-col lg:flex-row gap-4">
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-semibold text-gray-900 dark:text-white">
+              {material.description || '—'}
+            </h4>
+            <button
+              onClick={() => onPhotoClick?.(index)}
+              className="p-1.5 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              title="Добавить фото материала"
+            >
+              <Camera className="w-4 h-4" />
+            </button>
+          </div>
+          <MaterialProgress
+            requested={requestedQty}
+            onWarehouse={onWarehouse}
+            confirmed={Number(material.received) || 0}
+          />
         </div>
         
-        <MaterialProgress
-          requested={requestedQty}
-          onWarehouse={onWarehouse}
-          confirmed={Number(material.received) || 0}
-        />
-        
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="quantity-stepper flex items-center justify-between gap-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-1 flex-1">
+        <div className="flex items-center gap-3">
+          <div className="quantity-stepper flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-1">
             <button
               type="button"
               onClick={handleDecrement}
               disabled={onWarehouse <= 0}
-              className="w-10 h-10 flex items-center justify-center rounded-lg text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-blue-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="w-9 h-9 flex items-center justify-center rounded-lg text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-blue-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               aria-label={t('decreaseQuantity')}
             >
               <ChevronDown className="w-4 h-4" aria-hidden="true" />
@@ -247,37 +221,40 @@ const AdminReceiveRow = memo(function({
               max={requestedQty}
               value={onWarehouse === 0 ? '' : onWarehouse}
               onChange={handleQuantityChange}
-              className="w-16 text-center px-2 py-2 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium text-base"
+              className="w-16 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               aria-label={t('quantityOnWarehouse')}
             />
             <button
               type="button"
               onClick={handleIncrement}
               disabled={onWarehouse >= requestedQty}
-              className="w-10 h-10 flex items-center justify-center rounded-lg text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-blue-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="w-9 h-9 flex items-center justify-center rounded-lg text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-blue-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               aria-label={t('increaseQuantity')}
             >
               <ChevronUp className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
           
-          <select
-            value={material.unit || 'шт'}
-            onChange={handleUnitChange}
-            className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            aria-label={t('unit')}
-          >
-            {unitOptions.map(function(unit) {
-              return <option key={unit} value={unit}>{unit}</option>;
-            })}
-          </select>
+          <div className="flex flex-col gap-1">
+            <select
+              value={material.unit || 'шт'}
+              onChange={handleUnitChange}
+              className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              aria-label={t('unit')}
+            >
+              {unitOptions.map(function(unit) {
+                return <option key={unit} value={unit}>{unit}</option>;
+              })}
+            </select>
+            <div className="text-xs text-gray-500 dark:text-gray-400 text-center">{t('unit')}</div>
+          </div>
         </div>
       </div>
       
       {remaining > 0 && (
         <div className="mt-3 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
-          <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
-          <span>{t('remainingToAccept')?.replace('{{remaining}}', formatNumber(remaining)) || `Осталось принять: ${remaining}`}</span>
+          <Info className="w-3.5 h-3.5" aria-hidden="true" />
+          {t('remainingToAccept')?.replace('{{remaining}}', formatNumber(remaining)) || `Осталось принять: ${remaining}`}
         </div>
       )}
     </article>
@@ -285,11 +262,10 @@ const AdminReceiveRow = memo(function({
 });
 AdminReceiveRow.displayName = 'AdminReceiveRow';
 
-// ✅ Мастер-ряд (мобильная адаптация)
+// ✅ Строка материала для мастера (подтверждение/отклонение)
 const MasterConfirmRow = memo(function({
   material,
   index,
-  confirmation,
   onUpdate,
   onReject,
   t,
@@ -299,8 +275,8 @@ const MasterConfirmRow = memo(function({
   const confirmed = Number(material.received) || 0;
   const available = onWarehouse - confirmed;
   
-  const [showRejectInput, setShowRejectInput] = useState(confirmation?.action === 'reject');
-  const [rejectReason, setRejectReason] = useState(confirmation?.feedback || '');
+  const [showRejectInput, setShowRejectInput] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
   
   const handleConfirmChange = useCallback(function(e) {
     const value = clamp(e.target.value, 0, available);
@@ -326,96 +302,90 @@ const MasterConfirmRow = memo(function({
   }, [index, available, rejectReason, onReject]);
   
   return (
-    <article className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-3 sm:p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center flex-wrap gap-2">
-          <h4 className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base flex-1 break-words">
-            {material.description || '—'}
-          </h4>
-          <MaterialStatusBadge status={material.status} t={t} />
+    <article className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
+      <div className="flex flex-col lg:flex-row gap-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <h4 className="font-semibold text-gray-900 dark:text-white">
+              {material.description || '—'}
+            </h4>
+            <MaterialStatusBadge status={material.status} t={t} />
+          </div>
+          <MaterialProgress
+            requested={requestedQty}
+            onWarehouse={onWarehouse}
+            confirmed={confirmed}
+          />
         </div>
         
-        <MaterialProgress
-  requested={requestedQty}
-  onWarehouse={onWarehouse}
-  confirmed={confirmed}
-/>
-
-{confirmation?.action === 'reject' && confirmation?.feedback && (
-  <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-    <p className="text-xs text-red-700 dark:text-red-300 flex items-center gap-1">
-      <AlertTriangle className="w-3 h-3" />
-      <span>Отклонено: {confirmation.feedback}</span>
-    </p>
-  </div>
-)}
-        
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="quantity-stepper flex items-center justify-between gap-1.5 bg-green-50 dark:bg-green-900/20 rounded-xl p-1 flex-1">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <div className="quantity-stepper flex items-center gap-1.5 bg-green-50 dark:bg-green-900/20 rounded-xl p-1">
+              <button
+                type="button"
+                onClick={handleDecrement}
+                disabled={confirmed <= 0}
+                className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label={t('decreaseQuantity')}
+              >
+                <ChevronDown className="w-4 h-4" aria-hidden="true" />
+              </button>
+              <input
+                type="number"
+                min="0"
+                max={onWarehouse}
+                value={confirmed}
+                onChange={handleConfirmChange}
+                className="w-16 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium"
+                aria-label={t('confirmQuantity')}
+              />
+              <button
+                type="button"
+                onClick={handleIncrement}
+                disabled={confirmed >= onWarehouse}
+                className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label={t('increaseQuantity')}
+              >
+                <ChevronUp className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+            
             <button
-              type="button"
-              onClick={handleDecrement}
-              disabled={confirmed <= 0}
-              className="w-10 h-10 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              aria-label={t('decreaseQuantity')}
+              onClick={function() { setShowRejectInput(!showRejectInput); }}
+              className="px-3 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors"
+              aria-label={t('rejectMaterial')}
             >
-              <ChevronDown className="w-4 h-4" aria-hidden="true" />
-            </button>
-            <input
-              type="number"
-              min="0"
-              max={onWarehouse}
-              value={confirmed}
-              onChange={handleConfirmChange}
-              className="w-16 text-center px-2 py-2 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium text-base"
-              aria-label={t('confirmQuantity')}
-            />
-            <button
-              type="button"
-              onClick={handleIncrement}
-              disabled={confirmed >= onWarehouse}
-              className="w-10 h-10 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              aria-label={t('increaseQuantity')}
-            >
-              <ChevronUp className="w-4 h-4" aria-hidden="true" />
+              <XCircle className="w-4 h-4" aria-hidden="true" />
+              {t('reject')}
             </button>
           </div>
           
-          <button
-            onClick={function() { setShowRejectInput(!showRejectInput); }}
-            className="px-3 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-colors"
-            aria-label={t('rejectMaterial')}
-          >
-            <XCircle className="w-4 h-4" aria-hidden="true" />
-            {t('reject')}
-          </button>
+          {showRejectInput && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+              <input
+                type="text"
+                value={rejectReason}
+                onChange={function(e) { setRejectReason(e.target.value); }}
+                placeholder={t('rejectReasonPlaceholder') || 'Причина отклонения...'}
+                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500"
+                aria-label={t('rejectReason')}
+              />
+              <button
+                onClick={handleReject}
+                disabled={!rejectReason.trim()}
+                className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {t('confirmReject')}
+              </button>
+            </div>
+          )}
         </div>
-        
-        {showRejectInput && (
-          <div className="flex flex-col sm:flex-row items-stretch gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
-            <input
-              type="text"
-              value={rejectReason}
-              onChange={function(e) { setRejectReason(e.target.value); }}
-              placeholder={t('rejectReasonPlaceholder') || 'Причина отклонения...'}
-              className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500"
-              aria-label={t('rejectReason')}
-            />
-            <button
-              onClick={handleReject}
-              disabled={!rejectReason.trim()}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {t('confirmReject')}
-            </button>
-          </div>
-        )}
       </div>
       
-      {available > 0 && !showRejectInput && (
+      {available > 0 && (
         <div className="mt-3 flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
-          <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
-          <span>{t('availableToConfirm')?.replace('{{available}}', formatNumber(available)) || `Доступно для подтверждения: ${available}`}</span>
+          <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
+          {t('availableToConfirm')?.replace('{{available}}', formatNumber(available)) || `Доступно для подтверждения: ${available}`}
         </div>
       )}
     </article>
@@ -436,7 +406,7 @@ const ReceiveModal = memo(function({
   saveReceiveStatus,
   language,
   escapeHtml,
-  onTakeToWork,
+  onTakeToWork,        // ← ДОБАВИТЬ
   onSendForApproval,
   t,
   modalMode = 'admin_receive',
@@ -444,7 +414,9 @@ const ReceiveModal = memo(function({
   userCompanyId,
   userId,
   userRole,
+  // eslint-disable-next-line no-unused-vars
   onPhotoClick,
+  // eslint-disable-next-line no-unused-vars
   onQRClick,
 }) {
   // ─────────────────────────────────────────────────────────
@@ -455,25 +427,13 @@ const ReceiveModal = memo(function({
   const [transferComment, setTransferComment] = useState('');
   const [itemsToSend, setItemsToSend] = useState([]);
   const [confirmations, setConfirmations] = useState([]);
-  const [isMobile, setIsMobile] = useState(false);
   const modalContentRef = useRef(null);
   
+  // Состояния для фото и QR
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [_photos, _setPhotos] = useState([]);
   const [currentMaterialIndex, setCurrentMaterialIndex] = useState(null);
-  
-  // ─────────────────────────────────────────────────────────
-  // 🔍 ОПРЕДЕЛЕНИЕ МОБИЛЬНОГО УСТРОЙСТВА
-  // ─────────────────────────────────────────────────────────
-  useEffect(function() {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
   
   // ─────────────────────────────────────────────────────────
   // 📞 INJECT STYLES
@@ -561,9 +521,10 @@ const ReceiveModal = memo(function({
         result = await onAdminReceive(localMaterials, selectedApplication);
       }
       else if (modalMode === 'admin_send_to_master' && typeof onSendToMaster === 'function') {
-        const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
-        result = await onSendToMaster(items, selectedApplication);
-      }
+  const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
+  console.log('🔔 Вызов onSendToMaster с items:', items);
+  result = await onSendToMaster(items, selectedApplication);
+}
       else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
         const confirmationsToSend = localMaterials.map(function(m, idx) {
           const conf = confirmations.find(function(c) { return c.materialIndex === idx; });
@@ -643,6 +604,7 @@ const ReceiveModal = memo(function({
     });
   }, []);
   
+  // Обработка QR
   const handleQRScan = useCallback(function(qrData) {
     try {
       const parts = qrData.split('|');
@@ -676,6 +638,7 @@ const ReceiveModal = memo(function({
     }
   }, [selectedApplication, localMaterials, showNotification]);
   
+  // Обработка фото
   const handlePhotoCapture = useCallback(function(capturedPhotos) {
     const photosArray = Array.isArray(capturedPhotos) ? capturedPhotos : [capturedPhotos];
     const photosWithMeta = photosArray.map(function(photo) {
@@ -693,6 +656,7 @@ const ReceiveModal = memo(function({
     setCurrentMaterialIndex(null);
   }, [currentMaterialIndex, localMaterials, showNotification]);
   
+  // Открыть фото для конкретного материала
   const handleOpenPhotoForMaterial = useCallback(function(materialIndex) {
     setCurrentMaterialIndex(materialIndex);
     setShowPhotoCapture(true);
@@ -767,7 +731,7 @@ const ReceiveModal = memo(function({
   
   return (
     <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 modal-enter"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-enter"
       role="dialog"
       aria-modal="true"
       aria-labelledby="receive-modal-title"
@@ -775,20 +739,20 @@ const ReceiveModal = memo(function({
     >
       <div
         ref={modalContentRef}
-        className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-200/50 dark:border-gray-700/50 outline-none"
+        className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col border border-gray-200/50 dark:border-gray-700/50 outline-none"
         tabIndex={-1}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-3 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl">
-              <ModalIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" aria-hidden="true" />
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl">
+              <ModalIcon className="w-5 h-5 text-white" aria-hidden="true" />
             </div>
             <div>
-              <h3 id="receive-modal-title" className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+              <h3 id="receive-modal-title" className="text-lg font-bold text-gray-900 dark:text-white">
                 {modalTitles[modalMode]}
               </h3>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate max-w-[200px] sm:max-w-none">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 {selectedApplication.object_name}
               </p>
             </div>
@@ -799,31 +763,31 @@ const ReceiveModal = memo(function({
             className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors disabled:opacity-50"
             aria-label={t('close')}
           >
-            <X className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
         
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
           {/* Инфо о заявке */}
-          <div className="bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 p-3 sm:p-4 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-xs sm:text-sm">
+          <div className="bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 p-4 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
               <div>
-                <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('foremanName')}</div>
-                <div className="font-medium text-gray-900 dark:text-white truncate">{escapeHtml ? escapeHtml(selectedApplication.foreman_name) : selectedApplication.foreman_name}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">{t('foremanName')}</div>
+                <div className="font-medium text-gray-900 dark:text-white">{escapeHtml ? escapeHtml(selectedApplication.foreman_name) : selectedApplication.foreman_name}</div>
               </div>
               <div>
-                <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('foremanPhone')}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">{t('foremanPhone')}</div>
                 <div className="font-medium text-gray-900 dark:text-white">{selectedApplication.foreman_phone || '—'}</div>
               </div>
               <div>
-                <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('status')}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">{t('status')}</div>
                 <div className="font-medium text-gray-900 dark:text-white">
                   {getStatusText(selectedApplication.status, language)}
                 </div>
               </div>
               <div>
-                <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">{t('materials')}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">{t('materials')}</div>
                 <div className="font-medium text-gray-900 dark:text-white">
                   {selectedApplication.materials ? selectedApplication.materials.length : 0}
                 </div>
@@ -831,17 +795,17 @@ const ReceiveModal = memo(function({
             </div>
           </div>
 
-          {/* История статусов */}
+          {/* История статусов заявки */}
           {selectedApplication.status_history && selectedApplication.status_history.length > 0 && (
-            <div className="p-3 sm:p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
-              <h4 className="font-semibold text-xs sm:text-sm text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden="true" />
+            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+              <h4 className="font-semibold text-sm text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                <FileText className="w-4 h-4" aria-hidden="true" />
                 {t('history') || 'История изменений'}
               </h4>
-              <div className="space-y-2 max-h-32 sm:max-h-40 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                 {selectedApplication.status_history.slice(-5).reverse().map(function(entry, idx) {
                   return (
-                    <div key={idx} className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 flex flex-wrap items-center gap-1 sm:gap-2">
+                    <div key={idx} className="text-xs text-gray-600 dark:text-gray-400 flex items-start gap-2">
                       <span className="font-medium text-gray-900 dark:text-white shrink-0">
                         {entry.action || 'Изменение'}
                       </span>
@@ -849,7 +813,7 @@ const ReceiveModal = memo(function({
                       <span className="shrink-0">
                         {getStatusText(entry.new_status, language) || entry.new_status}
                       </span>
-                      <span className="text-gray-400 ml-auto whitespace-nowrap text-[9px] sm:text-xs">
+                      <span className="text-gray-400 ml-auto whitespace-nowrap">
                         {entry.timestamp ? new Date(entry.timestamp).toLocaleString('ru-RU') : ''}
                       </span>
                     </div>
@@ -862,34 +826,31 @@ const ReceiveModal = memo(function({
           {/* 🔹 АДМИН: Приёмка на склад */}
           {modalMode === 'admin_receive' && (
             <>
-              <div className="flex flex-wrap gap-2 mb-4">
+              {/* Кнопки фото и QR */}
+              <div className="flex gap-2 mb-4">
                 <button
-  onClick={() => {
-    if (onPhotoClick) onPhotoClick(selectedApplication);
-    setCurrentMaterialIndex(null);
-    setShowPhotoCapture(true);
-  }}
-  className="flex-1 sm:flex-none px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 transition-colors shadow-sm text-sm"
->
-  <Camera className="w-4 h-4" />
-  <span>Фото</span>
-</button>
-
-<button
-  onClick={() => {
-    if (onQRClick) onQRClick(selectedApplication);
-    setShowQRScanner(true);
-  }}
-  className="flex-1 sm:flex-none px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center justify-center gap-2 transition-colors shadow-sm text-sm"
->
-  <QrCode className="w-4 h-4" />
-  <span>QR-скан</span>
-</button>
+                  onClick={() => {
+                    setCurrentMaterialIndex(null);
+                    setShowPhotoCapture(true);
+                  }}
+                  className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 transition-colors shadow-sm"
+                >
+                  <Camera className="w-4 h-4" />
+                  Фото материалов
+                </button>
+                
+                <button
+                  onClick={() => setShowQRScanner(true)}
+                  className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 transition-colors shadow-sm"
+                >
+                  <QrCode className="w-4 h-4" />
+                  Сканировать QR
+                </button>
               </div>
               
-              <div className="flex items-center gap-2 text-xs sm:text-sm text-blue-600 dark:text-blue-400">
-                <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" aria-hidden="true" />
-                <span>{t('acceptToWarehouseHint') || 'Укажите количество принятого материала для каждой позиции'}</span>
+              <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                <Info className="w-4 h-4" aria-hidden="true" />
+                {t('acceptToWarehouseHint') || 'Укажите количество принятого материала для каждой позиции'}
               </div>
               
               <div className="space-y-3">
@@ -908,9 +869,9 @@ const ReceiveModal = memo(function({
               </div>
               
               {totalToAccept > 0 && (
-                <div className="flex items-center justify-between p-3 sm:p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-                  <div className="flex items-center gap-2 text-green-700 dark:text-green-300 text-sm">
-                    <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" aria-hidden="true" />
+                <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                  <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                    <CheckCircle className="w-5 h-5" aria-hidden="true" />
                     <span className="font-medium">
                       {t('totalToAccept') || 'Всего к приёмке'}: {formatNumber(totalToAccept)} {t('units')}
                     </span>
@@ -919,83 +880,89 @@ const ReceiveModal = memo(function({
               )}
             </>
           )}
-          
           {/* 🔹 ПАНЕЛЬ РЕШЕНИЙ ДЛЯ СНАБЖЕНЦА */}
-          {modalMode === 'admin_receive' && userRole === 'supply_admin' && (
-            <div className="p-3 sm:p-4 bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
-              <h4 className="font-semibold text-gray-900 dark:text-white mb-3 text-xs sm:text-sm">
-                {t('supplyDecision') || 'Как обработать заявку?'}
-              </h4>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  onClick={() => onTakeToWork?.(selectedApplication)}
-                  className="px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg"
-                >
-                  <Package className="w-4 h-4" />
-                  {t('takeToWork') || '📦 Взять в работу'}
-                </button>
-                
-                <button
-                  onClick={() => onSendForApproval?.(selectedApplication)}
-                  className="px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg"
-                >
-                  <Shield className="w-4 h-4" />
-                  {t('sendForApproval') || '📋 На согласование'}
-                </button>
-              </div>
-              <p className="mt-3 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
-                💡 "В работу" — начать поиск поставщика. "На согласование" — отправить руководителю после получения счета/суммы.
-              </p>
-            </div>
-          )}
+{modalMode === 'admin_receive' && userRole === 'supply_admin' && (
+  <div className="mt-4 p-4 bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
+    <h4 className="font-semibold text-gray-900 dark:text-white mb-3 text-sm">
+      {t('supplyDecision') || 'Как обработать заявку?'}
+    </h4>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {/* 🔹 В работу */}
+      <button
+        onClick={() => onTakeToWork?.(selectedApplication)}
+        className="px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/25"
+      >
+        <Package className="w-4 h-4" />
+        {t('takeToWork') || '📦 Взять в работу'}
+      </button>
+      
+      {/* 🔹 На согласование */}
+      <button
+        onClick={() => onSendForApproval?.(selectedApplication)}
+        className="px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-orange-500/25"
+      >
+        <Shield className="w-4 h-4" />
+        {t('sendForApproval') || '📋 На согласование'}
+      </button>
+    </div>
+    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+      💡 "В работу" — начать поиск поставщика. "На согласование" — отправить руководителю после получения счета/суммы.
+    </p>
+  </div>
+)}
           
           {/* 🔹 АДМИН: Отправка мастеру */}
           {modalMode === 'admin_send_to_master' && (
             <>
-              <div className="flex items-center gap-2 text-xs sm:text-sm text-purple-600 dark:text-purple-400">
-                <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" aria-hidden="true" />
-                <span>{t('sendToMasterHint') || 'Выберите материалы и количество для отправки мастеру'}</span>
+              <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
+                <Mail className="w-4 h-4" aria-hidden="true" />
+                {t('sendToMasterHint') || 'Выберите материалы и количество для отправки мастеру'}
               </div>
               
               <div className="space-y-3">
                 {itemsToSend.map(function(item, index) {
                   return (
-                    <article key={index} className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-3 sm:p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
-                      <div className="flex flex-col gap-3">
-                        <div className="flex justify-between items-center flex-wrap gap-2">
-                          <h4 className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base break-words flex-1">
+                    <article key={index} className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
+                      <div className="flex flex-col lg:flex-row gap-4">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
                             {item.description || '—'}
                           </h4>
                           <div className="text-sm text-gray-600 dark:text-gray-400">
                             {t('onWarehouse')}: {formatNumber(item.supplier_received_quantity)} {item.unit}
                           </div>
                         </div>
-                        
-                        <div className="quantity-stepper flex items-center justify-between gap-1.5 bg-purple-50 dark:bg-purple-900/20 rounded-xl p-1">
-                          <button
-                            type="button"
-                            onClick={function() { handleItemToSendUpdate(index, item.quantityToSend - 1); }}
-                            disabled={item.quantityToSend <= 0}
-                            className="w-10 h-10 flex items-center justify-center rounded-lg text-purple-600 dark:text-purple-400 hover:bg-white dark:hover:bg-purple-900/30 disabled:opacity-40 transition-colors"
-                          >
-                            <ChevronDown className="w-4 h-4" />
-                          </button>
-                          <input
-                            type="number"
-                            min="0"
-                            max={item.supplier_received_quantity}
-                            value={item.quantityToSend}
-                            onChange={function(e) { handleItemToSendUpdate(index, e.target.value); }}
-                            className="w-16 text-center px-2 py-2 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium text-base"
-                          />
-                          <button
-                            type="button"
-                            onClick={function() { handleItemToSendUpdate(index, item.quantityToSend + 1); }}
-                            disabled={item.quantityToSend >= item.supplier_received_quantity}
-                            className="w-10 h-10 flex items-center justify-center rounded-lg text-purple-600 dark:text-purple-400 hover:bg-white dark:hover:bg-purple-900/30 disabled:opacity-40 transition-colors"
-                          >
-                            <ChevronUp className="w-4 h-4" />
-                          </button>
+                        <div className="flex items-center gap-3">
+                          <div className="quantity-stepper flex items-center gap-1.5 bg-purple-50 dark:bg-purple-900/20 rounded-xl p-1">
+                            <button
+                              type="button"
+                              onClick={function() { handleItemToSendUpdate(index, item.quantityToSend - 1); }}
+                              disabled={item.quantityToSend <= 0}
+                              className="w-9 h-9 flex items-center justify-center rounded-lg text-purple-600 dark:text-purple-400 hover:bg-white dark:hover:bg-purple-900/30 disabled:opacity-40 transition-colors"
+                            >
+                              <ChevronDown className="w-4 h-4" />
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              max={item.supplier_received_quantity}
+                              value={item.quantityToSend}
+                              onChange={function(e) { handleItemToSendUpdate(index, e.target.value); }}
+                              className="w-16 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium"
+                            />
+                            <button
+                              type="button"
+                              onClick={function() { handleItemToSendUpdate(index, item.quantityToSend + 1); }}
+                              disabled={item.quantityToSend >= item.supplier_received_quantity}
+                              className="w-9 h-9 flex items-center justify-center rounded-lg text-purple-600 dark:text-purple-400 hover:bg-white dark:hover:bg-purple-900/30 disabled:opacity-40 transition-colors"
+                            >
+                              <ChevronUp className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-gray-500 dark:text-gray-400">{t('unit')}</div>
+                            <div className="font-medium text-gray-900 dark:text-white">{item.unit || 'шт'}</div>
+                          </div>
                         </div>
                       </div>
                     </article>
@@ -1012,15 +979,15 @@ const ReceiveModal = memo(function({
                   value={transferComment}
                   onChange={function(e) { setTransferComment(e.target.value); }}
                   placeholder={t('transferCommentPlaceholder') || 'Комментарий к передаче...'}
-                  className="w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 resize-none"
-                  rows={isMobile ? 2 : 3}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 resize-none"
+                  rows="3"
                 />
               </div>
               
               {totalToSend > 0 && (
-                <div className="flex items-center justify-between p-3 sm:p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
-                  <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300 text-sm">
-                    <Send className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" aria-hidden="true" />
+                <div className="flex items-center justify-between p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
+                  <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                    <Send className="w-5 h-5" aria-hidden="true" />
                     <span className="font-medium">
                       {t('totalToSend') || 'Всего к отправке'}: {formatNumber(totalToSend)} {t('units')}
                     </span>
@@ -1033,42 +1000,137 @@ const ReceiveModal = memo(function({
           {/* 🔹 МАСТЕР: Подтверждение получения */}
           {modalMode === 'master_confirm' && (
             <>
-              <div className="flex items-center gap-2 text-xs sm:text-sm text-green-600 dark:text-green-400">
-                <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" aria-hidden="true" />
-                <span>{t('confirmReceiptHint') || 'Подтвердите получение материалов или укажите причину отклонения'}</span>
+              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+                {t('confirmReceiptHint') || 'Подтвердите получение материалов или укажите причину отклонения'}
               </div>
               
               <div className="space-y-3">
                 {localMaterials.map(function(material, index) {
-  const confirmation = confirmations.find(function(c) { return c.materialIndex === index; }) || {
-    materialIndex: index,
-    action: 'confirm',
-    quantity: 0,
-    feedback: ''
-  };
-  
-  return (
-    <MasterConfirmRow
-      key={index}
-      material={material}
-      index={index}
-      confirmation={confirmation}
-      onUpdate={handleMaterialUpdate}
-      onReject={function(idx, qty, reason) {
-        handleConfirmationUpdate(index, 'reject', qty, reason);
-      }}
-      t={t}
-    />
-  );
-})}
+                  const confirmation = confirmations.find(function(c) { return c.materialIndex === index; }) || {
+                    materialIndex: index,
+                    action: 'confirm',
+                    quantity: 0,
+                    feedback: ''
+                  };
+                  
+                  const requestedQty = Number(material.quantity) || 0;
+                  const onWarehouse = Number(material.supplier_received_quantity) || 0;
+                  const confirmed = confirmation.quantity || 0;
+                  const available = onWarehouse - confirmed;
+                  
+                  return (
+                    <article 
+                      key={index} 
+                      className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60"
+                    >
+                      <div className="flex flex-col lg:flex-row gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-semibold text-gray-900 dark:text-white">
+                              {material.description || '—'}
+                            </h4>
+                            <MaterialStatusBadge status={material.status} t={t} />
+                          </div>
+                          <MaterialProgress
+                            requested={requestedQty}
+                            onWarehouse={onWarehouse}
+                            confirmed={confirmed}
+                          />
+                        </div>
+                        
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="quantity-stepper flex items-center gap-1.5 bg-green-50 dark:bg-green-900/20 rounded-xl p-1">
+                              <button
+                                type="button"
+                                onClick={function() {
+                                  const newValue = clamp(confirmed - 1, 0, onWarehouse);
+                                  handleConfirmationUpdate(index, 'confirm', newValue);
+                                }}
+                                disabled={confirmed <= 0}
+                                className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                aria-label={t('decreaseQuantity')}
+                              >
+                                <ChevronDown className="w-4 h-4" aria-hidden="true" />
+                              </button>
+                              <input
+                                type="number"
+                                min="0"
+                                max={onWarehouse}
+                                value={confirmed}
+                                onChange={function(e) {
+                                  const value = clamp(e.target.value, 0, onWarehouse);
+                                  handleConfirmationUpdate(index, 'confirm', value);
+                                }}
+                                className="w-16 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium"
+                                aria-label={t('confirmQuantity')}
+                              />
+                              <button
+                                type="button"
+                                onClick={function() {
+                                  const newValue = clamp(confirmed + 1, 0, onWarehouse);
+                                  handleConfirmationUpdate(index, 'confirm', newValue);
+                                }}
+                                disabled={confirmed >= onWarehouse}
+                                className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                aria-label={t('increaseQuantity')}
+                              >
+                                <ChevronUp className="w-4 h-4" aria-hidden="true" />
+                              </button>
+                            </div>
+                            
+                            <button
+                              onClick={function() {
+                                const existingReject = confirmations.find(function(c) { return c.materialIndex === index; });
+                                if (existingReject && existingReject.action === 'reject') {
+                                  handleConfirmationUpdate(index, 'confirm', 0);
+                                } else {
+                                  handleConfirmationUpdate(index, 'reject', confirmed, '');
+                                }
+                              }}
+                              className={'px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors ' + (confirmation.action === 'reject'
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                  : 'text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20')}
+                              aria-label={t('rejectMaterial')}
+                            >
+                              <XCircle className="w-4 h-4" aria-hidden="true" />
+                              {confirmation.action === 'reject' ? (t('cancelReject') || 'Отменить') : t('reject')}
+                            </button>
+                          </div>
+                          
+                          {confirmation.action === 'reject' && (
+                            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                              <input
+                                type="text"
+                                value={confirmation.feedback || ''}
+                                onChange={function(e) { handleConfirmationUpdate(index, 'reject', confirmed, e.target.value); }}
+                                placeholder={t('rejectReasonPlaceholder') || 'Причина отклонения...'}
+                                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500"
+                                aria-label={t('rejectReason')}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {available > 0 && confirmation.action !== 'reject' && (
+                        <div className="mt-3 flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                          <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                          {t('availableToConfirm')?.replace('{{available}}', formatNumber(available)) || `Доступно для подтверждения: ${available}`}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
               
               {(totalToConfirm > 0 || totalToReject > 0) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   {totalToConfirm > 0 && (
-                    <div className="flex items-center justify-between p-3 sm:p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-                      <div className="flex items-center gap-2 text-green-700 dark:text-green-300 text-sm">
-                        <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" aria-hidden="true" />
+                    <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                      <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                        <CheckCircle className="w-5 h-5" aria-hidden="true" />
                         <span className="font-medium">
                           {t('toConfirm') || 'К подтверждению'}: {formatNumber(totalToConfirm)}
                         </span>
@@ -1076,9 +1138,9 @@ const ReceiveModal = memo(function({
                     </div>
                   )}
                   {totalToReject > 0 && (
-                    <div className="flex items-center justify-between p-3 sm:p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
-                      <div className="flex items-center gap-2 text-red-700 dark:text-red-300 text-sm">
-                        <XCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" aria-hidden="true" />
+                    <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                      <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                        <XCircle className="w-5 h-5" aria-hidden="true" />
                         <span className="font-medium">
                           {t('toReject') || 'К отклонению'}: {formatNumber(totalToReject)}
                         </span>
@@ -1091,55 +1153,56 @@ const ReceiveModal = memo(function({
           )}
         </div>
 
-        {/* Подсказка о статусе */}
-        {selectedApplication?.status === 'pending_approval' && (
-          <div className="px-3 sm:px-6 pb-2">
-            <p className="text-[10px] sm:text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5 bg-orange-50 dark:bg-orange-900/20 px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg border border-orange-200 dark:border-orange-800">
-              <AlertCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" aria-hidden="true" />
-              <span>{t('applicationPendingApproval') || 'Заявка ожидает одобрения руководителя'}</span>
-            </p>
-          </div>
-        )}
+        {/* 🔽 ВСТАВИТЬ ПОДСКАЗКУ ЗДЕСЬ — ПЕРЕД FOOTER */}
+{selectedApplication?.status === 'pending_approval' && (
+  <div className="px-4 sm:px-6 pb-2">
+    <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5 bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-lg border border-orange-200 dark:border-orange-800">
+      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+      <span>{t('applicationPendingApproval') || 'Заявка ожидает одобрения руководителя'}</span>
+    </p>
+  </div>
+)}
         
         {/* Footer */}
-        <div className="p-3 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-2xl sm:rounded-b-3xl flex flex-col sm:flex-row justify-between items-center gap-3 modal-footer">
+        <div className="p-4 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-3xl flex justify-between items-center gap-3">
           <button
             onClick={onClose}
             disabled={isSaving}
-            className="w-full sm:w-auto px-5 py-2.5 text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 disabled:opacity-50 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            className="px-5 py-2.5 text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 disabled:opacity-50 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
           >
             {t('cancel')}
           </button>
           
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-            <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded mr-2">Ctrl+Enter</span>
-              <span>— сохранить</span>
+          <div className="flex items-center gap-3">
+            <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded mr-2">Ctrl+Enter — сохранить</span>
+              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть</span>
             </div>
             
-            {modalMode === 'admin_receive' && (
-              <button
-                onClick={handleSave}
-                disabled={!hasChanges || isSaving}
-                className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 transition-all shadow-lg ${
-                  hasChanges && !isSaving
-                    ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
-                }`}
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                    <span>{t('saving') || 'Сохранение...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4" aria-hidden="true" />
-                    <span>{t('save') || 'Сохранить'}</span>
-                  </>
-                )}
-              </button>
-            )}
+          {/* Кнопка сохранения - видна для всех, кто может изменять */}
+{modalMode === 'admin_receive' && (
+  <button
+    onClick={handleSave}
+    disabled={!hasChanges || isSaving}
+    className={`px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg ${
+      hasChanges && !isSaving
+        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
+        : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
+    }`}
+  >
+    {isSaving ? (
+      <>
+        <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+        <span>{t('saving') || 'Сохранение...'}</span>
+      </>
+    ) : (
+      <>
+        <CheckCircle className="w-4 h-4" aria-hidden="true" />
+        <span>{t('save') || 'Сохранить'}</span>
+      </>
+    )}
+  </button>
+)}
           </div>
         </div>
       </div>
