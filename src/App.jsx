@@ -34,6 +34,10 @@ import {
 import { WarehouseBalance } from './components/WarehouseView';
 import TaskBoard from './components/TaskBoard';
 import QRScanner from './components/Mobile/QRScanner';
+import { ROLE_VIEWS, getDefaultView, isViewAllowed, shouldHideFromNav } from './utils/roleViews';
+import ManagerMainDashboard from './components/ManagerDashboard/ManagerMainDashboard';
+import AccountantFinanceDashboard from './components/AccountantDashboard/AccountantFinanceDashboard';
+import SmartVoiceSearch from './components/SmartVoiceSearch';
 
 // Добавить в renderNavigation новый пункт 'tasks'
 import SuperAdminCompanyTariffs from './components/SuperAdminCompanyTariffs';
@@ -3253,19 +3257,66 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 🔍 FILTERING
   // ─────────────────────────────────────────────────────────
-  const filteredApplications = useMemo(() => {
+    const filteredApplications = useMemo(() => {
     const apps = isAdminMode ? allApplications : applications;
+    
+    // 🔍 Парсинг умного поиска
+    let smartSearchTerm = searchTerm;
+    let customFilters = {};
+    
+    if (searchTerm.includes(':')) {
+        // Парсим команды типа "status:pending" или "overdue:true"
+        const parts = searchTerm.split(' ');
+        parts.forEach(part => {
+            if (part.includes(':')) {
+                const [key, value] = part.split(':');
+                customFilters[key] = value;
+            } else {
+                smartSearchTerm = part;
+            }
+        });
+    }
+    
     return apps.filter(app => {
-      const matchesSearch = app.object_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        app.foreman_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (app.foreman_phone && app.foreman_phone.includes(searchTerm));
-      const matchesStatus = statusFilter === 'all' ||
+      // Обычный поиск
+      let matchesSearch = true;
+      if (smartSearchTerm && !customFilters.object) {
+        matchesSearch = app.object_name.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
+          app.foreman_name.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
+          (app.foreman_phone && app.foreman_phone.includes(smartSearchTerm));
+      }
+      
+      // Поиск по объекту
+      if (customFilters.object) {
+        matchesSearch = app.object_name.toLowerCase().includes(customFilters.object.toLowerCase());
+      }
+      
+      // Фильтр по статусу из умного поиска
+      let matchesStatus = statusFilter === 'all' ||
         app.status === statusFilter ||
         (statusFilter === 'pending' && [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ADMIN_PROCESSING].includes(app.status));
+      
+      if (customFilters.status) {
+        if (customFilters.status === 'pending') {
+            matchesStatus = [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ADMIN_PROCESSING].includes(app.status);
+        } else if (customFilters.status === 'active') {
+            matchesStatus = ['pending', 'admin_processing', 'partial_received'].includes(app.status);
+        } else if (customFilters.status === 'received') {
+            matchesStatus = app.status === 'received';
+        }
+      }
+      
+      // Фильтр просроченных
+      let matchesOverdue = true;
+      if (customFilters.overdue === 'true') {
+        matchesOverdue = app.status === 'pending' && getDaysSince(app.created_at) > 2;
+      }
+      
       const matchesDate = !dateFilter || app.created_at.startsWith(dateFilter);
       const matchesViewed = viewedFilter === 'all' ||
         (viewedFilter === 'new' && !app.viewed_by_supply_admin);
-      return matchesSearch && matchesStatus && matchesDate && matchesViewed;
+      
+      return matchesSearch && matchesStatus && matchesDate && matchesViewed && matchesOverdue;
     });
   }, [applications, allApplications, isAdminMode, searchTerm, statusFilter, dateFilter, viewedFilter]);
 
@@ -4311,12 +4362,12 @@ useEffect(() => {
   initCleanup();
 }, [user]);
 
-  // 🧭 VIEW ROUTING (ИСПРАВЛЕННЫЙ)
+  // 🧭 VIEW ROUTING (РАСШИРЕННЫЙ ДЛЯ РУКОВОДИТЕЛЕЙ И БУХГАЛТЕРА)
 useEffect(() => {
     if (!user) return;
-    // 🆕 ДОБАВИТЬ: Если пользователь - заказчик, показываем clientDashboard
+    
+    // 🆕 Если пользователь - заказчик, показываем clientDashboard
     if (userRole === 'client') {
-        // Список разрешенных views для клиента
         const allowedClientViews = [
             'clientDashboard', 
             'clientApplications', 
@@ -4327,37 +4378,54 @@ useEffect(() => {
             'clientConfirmation', 
             'clientWorkAct'
         ];
-
-        // Если текущий вид НЕ входит в список разрешенных, переключаем на дашборд
         if (!allowedClientViews.includes(currentView)) {
-            console.log('[Client] Перенаправление на clientDashboard, так как текущий вид:', currentView);
             setCurrentView('clientDashboard');
         }
         return;
     }
-  
-  // 🔒 СУПЕР-АДМИН: Всегда на superAdmin вьюхе
-  if (isSuperAdmin(userRole, user?.user_metadata)) {
-    if (currentView !== 'superAdmin' && currentView !== 'tariffs') {
-      console.log('[SuperAdmin] Перенаправление на superAdmin панель');
-      setCurrentView('superAdmin');
+    
+    // 🔒 СУПЕР-АДМИН: Всегда на superAdmin вьюхе
+    if (isSuperAdmin(userRole, user?.user_metadata)) {
+        if (currentView !== 'superAdmin' && currentView !== 'tariffs') {
+            setCurrentView('superAdmin');
+        }
+        return;
     }
-    return;
-  }
-  
-  // 👨‍💼 ОБЫЧНЫЕ ПОЛЬЗОВАТЕЛИ: устанавливаем начальный вид ТОЛЬКО при загрузке
-  // ⚠️ ВАЖНО: Добавляем флаг, чтобы не сбрасывать при каждом клике
-  if (!initialViewSet) {
-    if (currentUserPermissions.canCreate) {
-      setCurrentView('create');
-    } else if (currentUserPermissions.canViewAnalytics) {
-      setCurrentView('analytics');
-    } else {
-      setCurrentView('pending');
+    
+    // 👨‍💼 РУКОВОДИТЕЛЬ (manager/director)
+    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+        if (!initialViewSet) {
+            setCurrentView('managerDashboard');
+            setInitialViewSet(true);
+        } else if (!isViewAllowed(currentView, userRole)) {
+            setCurrentView('managerDashboard');
+        }
+        return;
     }
-    setInitialViewSet(true);
-  }
-}, [user, userRole, currentUserPermissions.canCreate, currentUserPermissions.canViewAnalytics, currentView]);
+    
+    // 👩‍💼 БУХГАЛТЕР (accountant)
+    if (userRole === 'accountant') {
+        if (!initialViewSet) {
+            setCurrentView('accountantDashboard');
+            setInitialViewSet(true);
+        } else if (!isViewAllowed(currentView, userRole)) {
+            setCurrentView('accountantDashboard');
+        }
+        return;
+    }
+    
+    // 👷 ОСТАЛЬНЫЕ ПОЛЬЗОВАТЕЛИ (master, foreman, supply_admin)
+    if (!initialViewSet) {
+        if (currentUserPermissions.canCreate) {
+            setCurrentView('create');
+        } else if (currentUserPermissions.canViewAnalytics) {
+            setCurrentView('analytics');
+        } else {
+            setCurrentView('pending');
+        }
+        setInitialViewSet(true);
+    }
+}, [user, userRole, currentUserPermissions.canCreate, currentUserPermissions.canViewAnalytics, currentView, initialViewSet, isCompanyOwner]);
 
   // ─────────────────────────────────────────────────────────
   // ⏰ OVERDUE NOTIFICATIONS
@@ -5817,6 +5885,18 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         onToggleAdminMode={() => setIsAdminMode(false)}
       />
       <main className="py-6">
+                {/* Умный поиск - показываем не всем */}
+        {user && (userRole === 'manager' || userRole === 'director' || userRole === 'accountant' || userRole === 'supply_admin') && (
+            <div className="max-w-2xl mx-auto px-4 mb-4">
+                <SmartVoiceSearch
+                    onSearch={(query) => {
+                        setSearchTerm(query);
+                        setCurrentView('inwork');
+                    }}
+                    onNavigate={setCurrentView}
+                />
+            </div>
+        )}
         {/* Весь существующий контент main остается без изменений */}
         {currentView === 'create' && (
           <CreateApplicationForm
@@ -5877,6 +5957,24 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     }}
   />
 )}
+
+        {/* Дашборд для руководителя */}
+        {currentView === 'managerDashboard' && (
+            <ManagerMainDashboard
+                applications={applications}
+                companyUsers={companyUsers}
+                pendingApprovals={pendingApprovals}
+                user={user}
+                setCurrentView={setCurrentView}
+            />
+        )}
+        
+        {/* Дашборд для бухгалтера */}
+        {currentView === 'accountantDashboard' && (
+            <AccountantFinanceDashboard
+                applications={applications}
+            />
+        )}
         
         {currentView === 'received' && (
           <ApplicationList
