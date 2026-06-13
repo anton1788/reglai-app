@@ -4363,69 +4363,84 @@ useEffect(() => {
 }, [user]);
 
   // 🧭 VIEW ROUTING (РАСШИРЕННЫЙ ДЛЯ РУКОВОДИТЕЛЕЙ И БУХГАЛТЕРА)
+// useEffect(() => {
+//     if (!user) return;
+//     
+//     if (userRole === 'client') {
+//         const allowedClientViews = [...];
+//         if (!allowedClientViews.includes(currentView)) {
+//             setCurrentView('clientDashboard');
+//         }
+//         return;
+//     }
+//     
+//     if (isSuperAdmin(userRole, user?.user_metadata)) {
+//         if (currentView !== 'superAdmin' && currentView !== 'tariffs') {
+//             setCurrentView('superAdmin');
+//         }
+//         return;
+//     }
+//     
+//     if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+//         if (!initialViewSet) {
+//             setCurrentView('managerDashboard');
+//             setInitialViewSet(true);
+//         } else if (!isViewAllowed(currentView, userRole)) {
+//             setCurrentView('managerDashboard');
+//         }
+//         return;
+//     }
+//     
+//     if (userRole === 'accountant') {
+//         if (!initialViewSet) {
+//             setCurrentView('accountantDashboard');
+//             setInitialViewSet(true);
+//         } else if (!isViewAllowed(currentView, userRole)) {
+//             setCurrentView('accountantDashboard');
+//         }
+//         return;
+//     }
+//     
+//     if (!initialViewSet) {
+//         if (currentUserPermissions.canCreate) {
+//             setCurrentView('create');
+//         } else if (currentUserPermissions.canViewAnalytics) {
+//             setCurrentView('analytics');
+//         } else {
+//             setCurrentView('pending');
+//         }
+//         setInitialViewSet(true);
+//     }
+// }, [user, userRole, currentUserPermissions.canCreate, currentUserPermissions.canViewAnalytics, currentView, initialViewSet, isCompanyOwner]);
+// 🧭 ПРОСТАЯ МАРШРУТИЗАЦИЯ - ТОЛЬКО ПРИ ПЕРВОЙ ЗАГРУЗКЕ
 useEffect(() => {
-    if (!user) return;
-    
-    // 🆕 Если пользователь - заказчик, показываем clientDashboard
-    if (userRole === 'client') {
-        const allowedClientViews = [
-            'clientDashboard', 
-            'clientApplications', 
-            'clientCalendar', 
-            'clientChat', 
-            'clientDocuments', 
-            'clientPhotos', 
-            'clientConfirmation', 
-            'clientWorkAct'
-        ];
-        if (!allowedClientViews.includes(currentView)) {
-            setCurrentView('clientDashboard');
-        }
-        return;
-    }
-    
-    // 🔒 СУПЕР-АДМИН: Всегда на superAdmin вьюхе
-    if (isSuperAdmin(userRole, user?.user_metadata)) {
-        if (currentView !== 'superAdmin' && currentView !== 'tariffs') {
-            setCurrentView('superAdmin');
-        }
-        return;
-    }
-    
-    // 👨‍💼 РУКОВОДИТЕЛЬ (manager/director)
+  if (!user) return;
+  
+  // Только при первой загрузке устанавливаем начальный вид
+  if (!initialViewSet) {
+    // Руководитель
     if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-        if (!initialViewSet) {
-            setCurrentView('managerDashboard');
-            setInitialViewSet(true);
-        } else if (!isViewAllowed(currentView, userRole)) {
-            setCurrentView('managerDashboard');
-        }
-        return;
+      setCurrentView('managerDashboard');
     }
-    
-    // 👩‍💼 БУХГАЛТЕР (accountant)
-    if (userRole === 'accountant') {
-        if (!initialViewSet) {
-            setCurrentView('accountantDashboard');
-            setInitialViewSet(true);
-        } else if (!isViewAllowed(currentView, userRole)) {
-            setCurrentView('accountantDashboard');
-        }
-        return;
+    // Бухгалтер
+    else if (userRole === 'accountant') {
+      setCurrentView('accountantDashboard');
     }
-    
-    // 👷 ОСТАЛЬНЫЕ ПОЛЬЗОВАТЕЛИ (master, foreman, supply_admin)
-    if (!initialViewSet) {
-        if (currentUserPermissions.canCreate) {
-            setCurrentView('create');
-        } else if (currentUserPermissions.canViewAnalytics) {
-            setCurrentView('analytics');
-        } else {
-            setCurrentView('pending');
-        }
-        setInitialViewSet(true);
+    // Клиент
+    else if (userRole === 'client') {
+      setCurrentView('clientDashboard');
     }
-}, [user, userRole, currentUserPermissions.canCreate, currentUserPermissions.canViewAnalytics, currentView, initialViewSet, isCompanyOwner]);
+    // Остальные
+    else if (currentUserPermissions.canCreate) {
+      setCurrentView('create');
+    } else if (currentUserPermissions.canViewAnalytics) {
+      setCurrentView('analytics');
+    } else {
+      setCurrentView('pending');
+    }
+    setInitialViewSet(true);
+  }
+}, [user, userRole, isCompanyOwner, currentUserPermissions.canCreate, currentUserPermissions.canViewAnalytics, initialViewSet]);
 
   // ─────────────────────────────────────────────────────────
   // ⏰ OVERDUE NOTIFICATIONS
@@ -5831,44 +5846,59 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         userRole={userRole}
         onLogout={handleLogout}
         onNavigate={(path) => {
-          // Основные маршруты
-          if (path === '/') setCurrentView('create');
-          else if (path === '/applications') setCurrentView('inwork');
-          else if (path === '/applications/new') setCurrentView('create');
-          else if (path === '/warehouse') setCurrentView('warehouse');
-          else if (path === '/clients') setCurrentView('clients');
-          else if (path === '/analytics') setCurrentView('analytics');
-          else if (path === '/profile') setCurrentView('profile');
-          else if (path === '/documents') setCurrentView('documents');
-          else if (path === '/chat') setCurrentView('chat');
-          else if (path === '/calendar') setCurrentView('calendar');
-          else if (path === '/settings') setCurrentView('settings');
-          else if (path === '/tariffs') setCurrentView('tariffs');
-          else if (path === '/companyProfile') setCurrentView('companyProfile');
-          else if (path === '/inwork') setCurrentView('inwork');
-          else if (path === '/history') setCurrentView('history');
-          else if (path === '/approvals') setCurrentView('approvals');
-          else if (path === '/employees') setCurrentView('employees');
-          else if (path === '/api') setCurrentView('api');
-          else if (path === '/audit') setCurrentView('audit');
-          else if (path === '/tasks') setCurrentView('tasks');
-          else if (path === '/help') setCurrentView('help');
-          else if (path === '/superAdmin') setCurrentView('superAdmin');
-          else if (path === '/crm-sales') setCurrentView('crm-sales');
-          else if (path === '/merge') setCurrentView('merge');
-          else if (path === '/search') {
-            const params = new URLSearchParams(path.split('?')[1]);
-            const query = params.get('q');
-            if (query) {
-              setSearchTerm(query);
-              setCurrentView('inwork');
-            }
-          }
-          // Для заказчика
-          else if (path === '/client') setCurrentView('clientDashboard');
-          else if (path === '/client/documents') setCurrentView('clientDocuments');
-          else if (path === '/client/chat') setCurrentView('clientChat');
-        }}
+  console.log('🔍 Навигация:', path);
+  
+  // 🏠 ГЛАВНАЯ - умное перенаправление по ролям
+  if (path === '/') {
+    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+      setCurrentView('managerDashboard');
+    } else if (userRole === 'accountant') {
+      setCurrentView('accountantDashboard');
+    } else if (userRole === 'client') {
+      setCurrentView('clientDashboard');
+    } else {
+      setCurrentView('create');
+    }
+    return;
+  }
+  
+  // Остальные маршруты
+  if (path === '/applications') setCurrentView('inwork');
+  else if (path === '/applications/new') setCurrentView('create');
+  else if (path === '/warehouse') setCurrentView('warehouse');
+  else if (path === '/clients') setCurrentView('clients');
+  else if (path === '/analytics') setCurrentView('analytics');
+  else if (path === '/profile') setCurrentView('profile');
+  else if (path === '/documents') setCurrentView('documents');
+  else if (path === '/chat') setCurrentView('chat');
+  else if (path === '/calendar') setCurrentView('calendar');
+  else if (path === '/settings') setCurrentView('settings');
+  else if (path === '/tariffs') setCurrentView('tariffs');
+  else if (path === '/companyProfile') setCurrentView('companyProfile');
+  else if (path === '/inwork') setCurrentView('inwork');
+  else if (path === '/history') setCurrentView('history');
+  else if (path === '/approvals') setCurrentView('approvals');
+  else if (path === '/employees') setCurrentView('employees');
+  else if (path === '/api') setCurrentView('api');
+  else if (path === '/audit') setCurrentView('audit');
+  else if (path === '/tasks') setCurrentView('tasks');
+  else if (path === '/help') setCurrentView('help');
+  else if (path === '/superAdmin') setCurrentView('superAdmin');
+  else if (path === '/crm-sales') setCurrentView('crm-sales');
+  else if (path === '/merge') setCurrentView('merge');
+  else if (path === '/search') {
+    const params = new URLSearchParams(path.split('?')[1]);
+    const query = params.get('q');
+    if (query) {
+      setSearchTerm(query);
+      setCurrentView('inwork');
+    }
+  }
+  // Для заказчика
+  else if (path === '/client') setCurrentView('clientDashboard');
+  else if (path === '/client/documents') setCurrentView('clientDocuments');
+  else if (path === '/client/chat') setCurrentView('clientChat');
+}}
         currentPage={currentView}
         onInvite={() => setShowInviteModal(true)}
         onOpenTariffs={() => setCurrentView('tariffs')}
