@@ -86,3 +86,27 @@ header,
 .animate-scale-in {
   animation: scale-in 0.2s ease-out forwards;
 }
+
+/* Исправление проблемы с пробелами на мобильных устройствах */
+input, 
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+input[type="text"],
+input[type="tel"],
+input[type="email"],
+textarea {
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Для iOS - принудительное включение пробелов */
+@supports (-webkit-touch-callout: none) {
+  input, textarea {
+    -webkit-text-size-adjust: 100%;
+  }
+}

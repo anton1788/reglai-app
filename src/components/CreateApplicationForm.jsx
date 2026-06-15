@@ -201,6 +201,9 @@ const ObjectInput = memo(({
           onChange={onChange}
           onFocus={onFocus}
           onKeyDown={onKeyDown}
+          autoCorrect="off"           // ← ДОБАВИТЬ
+  autoCapitalize="sentences"  // ← ДОБАВИТЬ
+  spellCheck="false"  
           className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white transition-all ${
             error ? 'border-red-400 focus:ring-red-500' : 'border-gray-200/60 dark:border-gray-600/60 hover:border-indigo-300/60'
           }`}
@@ -277,6 +280,9 @@ const ForemanField = memo(({ id, label, value, onChange, type = 'text', placehol
       type={type}
       value={value}
       onChange={onChange}
+      autoCorrect="off"           // ← ДОБАВИТЬ
+  autoCapitalize="sentences"  // ← ДОБАВИТЬ
+  spellCheck="false"
       className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white transition-all ${
         error ? 'border-red-400 focus:ring-red-500' : 'border-gray-200/60 dark:border-gray-600/60 hover:border-indigo-300/60'
       }`}
@@ -409,6 +415,9 @@ const MaterialRow = memo(({
             onChange={(e) => onUpdate(index, 'description', sanitizeInput(e.target.value))}
             onFocus={() => setLocalSuggestions(localSuggestions.length > 0 ? localSuggestions : [])}
             onKeyDown={handleKeyDown}
+            autoCorrect="off"           // ← ДОБАВИТЬ
+  autoCapitalize="sentences"  // ← ДОБАВИТЬ
+  spellCheck="false"  
             className="w-full px-4 py-3 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
             placeholder={t('materialDescriptionPlaceholder')}
             required
