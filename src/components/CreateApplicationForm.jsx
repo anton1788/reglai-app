@@ -841,6 +841,35 @@ const CreateApplicationForm = memo(({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [canSubmit, isLoading, setShowObjectSuggestions]);
 
+  // ─────────────────────────────────────────────────────────────
+// 🔧 ПРИНУДИТЕЛЬНОЕ ИСПРАВЛЕНИЕ ПРОБЕЛОВ (РАБОТАЕТ ВЕЗДЕ)
+// ─────────────────────────────────────────────────────────────
+useEffect(() => {
+  const handleSpaceKey = (e) => {
+    const target = e.target;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+      if (target.type !== 'number' && (e.key === ' ' || e.key === 'Space')) {
+        const start = target.selectionStart;
+        const end = target.selectionEnd;
+        const currentValue = target.value;
+        
+        const newValue = currentValue.substring(0, start) + ' ' + currentValue.substring(end);
+        target.value = newValue;
+        target.selectionStart = target.selectionEnd = start + 1;
+        
+        const inputEvent = new Event('input', { bubbles: true });
+        target.dispatchEvent(inputEvent);
+        
+        e.preventDefault();
+        return false;
+      }
+    }
+  };
+  
+  document.addEventListener('keydown', handleSpaceKey);
+  return () => document.removeEventListener('keydown', handleSpaceKey);
+}, []);
+
   // ─────────────────────────────────────────────────────────
   // 🎛️ ОБРАБОТЧИКИ
   // ─────────────────────────────────────────────────────────
