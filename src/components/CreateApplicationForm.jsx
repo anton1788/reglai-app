@@ -842,32 +842,24 @@ const CreateApplicationForm = memo(({
   }, [canSubmit, isLoading, setShowObjectSuggestions]);
 
   // ─────────────────────────────────────────────────────────────
-// 🔧 ПРИНУДИТЕЛЬНОЕ ИСПРАВЛЕНИЕ ПРОБЕЛОВ (РАБОТАЕТ ВЕЗДЕ)
+// 🔧 ФИКС ПРОБЕЛОВ - ПРОСТО ПРЕДОТВРАЩАЕМ БЛОКИРОВКУ
 // ─────────────────────────────────────────────────────────────
 useEffect(() => {
-  const handleSpaceKey = (e) => {
+  const preventSpaceBlocking = (e) => {
+    // Ничего не блокируем, просто даём браузеру работать
+    // Это нужно, чтобы переопределить возможные глобальные блокировки
     const target = e.target;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-      if (target.type !== 'number' && (e.key === ' ' || e.key === 'Space')) {
-        const start = target.selectionStart;
-        const end = target.selectionEnd;
-        const currentValue = target.value;
-        
-        const newValue = currentValue.substring(0, start) + ' ' + currentValue.substring(end);
-        target.value = newValue;
-        target.selectionStart = target.selectionEnd = start + 1;
-        
-        const inputEvent = new Event('input', { bubbles: true });
-        target.dispatchEvent(inputEvent);
-        
-        e.preventDefault();
-        return false;
+      // Пробел работает нормально - ничего не делаем
+      if (e.key === ' ' || e.key === 'Space') {
+        // Просто разрешаем стандартное поведение
+        return;
       }
     }
   };
   
-  document.addEventListener('keydown', handleSpaceKey);
-  return () => document.removeEventListener('keydown', handleSpaceKey);
+  document.addEventListener('keydown', preventSpaceBlocking);
+  return () => document.removeEventListener('keydown', preventSpaceBlocking);
 }, []);
 
   // ─────────────────────────────────────────────────────────

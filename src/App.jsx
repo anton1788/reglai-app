@@ -4806,21 +4806,6 @@ useEffect(() => {
   return () => clearTimeout(timer);
 }, [userCompanyId, userRole, isCompanyOwner, supabase, showNotification]);
 
-// 🔧 ПРАВИЛЬНЫЙ ФИКС ПРОБЕЛОВ - НЕ БЛОКИРУЕТ СТАНДАРТНОЕ ПОВЕДЕНИЕ
-useEffect(() => {
-  const handleInput = (e) => {
-    const target = e.target;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-      // Просто логируем, ничего не блокируем
-      if (e.inputType === 'insertText' && e.data === ' ') {
-        console.log('Пробел введён в поле:', target.id || target.name);
-      }
-    }
-  };
-  
-  document.addEventListener('input', handleInput);
-  return () => document.removeEventListener('input', handleInput);
-}, []);
 
   const renderLandingPage = () => (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#F5F7FA] via-white to-[#E4EDF5] page-enter">

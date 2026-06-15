@@ -455,7 +455,9 @@ return () => document.removeEventListener('keydown', handleKeyDown);
 useEffect(() => {
 return () => {
 if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-Object.values(commentTimerRef.current).forEach(timer => {
+// Копируем ссылку на ref в локальную переменную для безопасной очистки
+const timers = commentTimerRef.current;
+Object.values(timers).forEach(timer => {
 if (timer) clearTimeout(timer);
 });
 };
@@ -840,76 +842,83 @@ t={t}
 
 {/* Materials */}
 {isMobile ? (
-<div className="space-y-2" role="list" aria-label={t('materialsList')}>
-{getVisibleMaterials(application.materials, viewMode)?.map((material, idx) => (
-<MobileMaterialCard
-key={`${application.id}-mat-${idx}`}
-material={material}
-index={idx}
-language={language}
-t={t}
-isOpen={expandedMaterials?.[`${application.id}-${idx}`] || false}
-onToggle={() => onToggleMaterial(application.id, idx)}
-getMaterialStatus={getMaterialStatus}
-escapeHtml={escapeHtml}
-/>
-))}
-</div>
+  <div className="space-y-2" role="list" aria-label={t('materialsList')}>
+    {/* Показываем все материалы, но с возможностью раскрытия каждого */}
+    {getVisibleMaterials(application.materials, viewMode)?.map((material, idx) => (
+      <MobileMaterialCard
+        key={`${application.id}-mat-${idx}`}
+        material={material}
+        index={idx}
+        t={t}
+        isOpen={expandedMaterials?.[`${application.id}-${idx}`] || false}
+        onToggle={() => onToggleMaterial(application.id, idx)}
+      />
+    ))}
+    
+    {/* Индикатор количества материалов, если их много */}
+    {getVisibleMaterials(application.materials, viewMode)?.length > 5 && (
+      <div className="text-center pt-1">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          {getVisibleMaterials(application.materials, viewMode)?.length} {t('materials')}
+        </p>
+      </div>
+    )}
+  </div>
 ) : (
-<div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-<table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" role="table" aria-label={t('materialsTable')}>
-<thead className="bg-gray-50 dark:bg-gray-700/50">
-<tr>
-{['#', 'description', 'requested', 'received', 'unit', 'status'].map((key) => (
-<th
-key={key}
-scope="col"
-className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
->
-{key === '#' ? '#' : t(`material${key.charAt(0).toUpperCase() + key.slice(1)}`) || key}
-</th>
-))}
-</tr>
-</thead>
-<tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-{getVisibleMaterials(application.materials, viewMode, userRole)?.map((material, idx) => {
-const matStatus = getMaterialStatus(material, t);
-const requestedQty = Number(material.quantity) || 0;
-const onWarehouse = Number(material.supplier_received_quantity) || 0;
-const confirmed = Number(material.received) || 0;
-return (
-<tr key={`${application.id}-mat-${idx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-<td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{formatNumber(idx + 1)}</td>
-<td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" title={material.description}>
-{material.description}
-</td>
-<td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{formatNumber(requestedQty)}</td>
-<td className="px-4 py-2 whitespace-nowrap text-sm">
-<div className="flex flex-col gap-1">
-<span className="text-gray-700 dark:text-gray-300">
-{t('confirmed')}: {formatNumber(confirmed)}
-</span>
-{onWarehouse > 0 && confirmed < requestedQty && (
-<span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-<Warehouse className="w-3 h-3" />
-{t('onWarehouse')}: {formatNumber(onWarehouse)}
-</span>
-)}
-</div>
-</td>
-<td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{material.unit}</td>
-<td className="px-4 py-2 whitespace-nowrap">
-<span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${matStatus.class}`}>
-{matStatus.icon && <matStatus.icon className="w-3 h-3" aria-hidden="true" />}
-{matStatus.text}
-</span>
-</td>
-</tr>
-);
-})}
-</tbody>
-</table>
-</div>
+  <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" role="table" aria-label={t('materialsTable')}>
+      <thead className="bg-gray-50 dark:bg-gray-700/50">
+        <tr>
+          {['#', 'description', 'requested', 'received', 'unit', 'status'].map((key) => (
+            <th
+              key={key}
+              scope="col"
+              className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+            >
+              {key === '#' ? '#' : t(`material${key.charAt(0).toUpperCase() + key.slice(1)}`) || key}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+        {getVisibleMaterials(application.materials, viewMode, userRole)?.map((material, idx) => {
+          const matStatus = getMaterialStatus(material, t);
+          const requestedQty = Number(material.quantity) || 0;
+          const onWarehouse = Number(material.supplier_received_quantity) || 0;
+          const confirmed = Number(material.received) || 0;
+          return (
+            <tr key={`${application.id}-mat-${idx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+              <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{formatNumber(idx + 1)}</td>
+              <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" title={material.description}>
+                {material.description}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{formatNumber(requestedQty)}</td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm">
+                <div className="flex flex-col gap-1">
+                  <span className="text-gray-700 dark:text-gray-300">
+                    {t('confirmed')}: {formatNumber(confirmed)}
+                  </span>
+                  {onWarehouse > 0 && confirmed < requestedQty && (
+                    <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                      <Warehouse className="w-3 h-3" />
+                      {t('onWarehouse')}: {formatNumber(onWarehouse)}
+                    </span>
+                  )}
+                </div>
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{material.unit}</td>
+              <td className="px-4 py-2 whitespace-nowrap">
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${matStatus.class}`}>
+                  {matStatus.icon && <matStatus.icon className="w-3 h-3" aria-hidden="true" />}
+                  {matStatus.text}
+                </span>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
 )}
 </div>
 
