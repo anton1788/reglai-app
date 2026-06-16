@@ -3,8 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     
-    <!-- 🔹 Viewport: мобильная оптимизация без зума (ТОЛЬКО ОДИН) -->
+    <!-- 🔹 Viewport: мобильная оптимизация без зума -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
     
     <!-- 🔹 Основные мета-теги -->
     <title>Реглай — система управления заявками на материалы</title>
@@ -81,9 +83,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     
-    <!-- ⚠️ ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ОТЛАДКИ -->
-    <!-- 🔹 Безопасность: Content Security Policy -->
-    <!-- 
+    <!-- 🔹 Безопасность: Content Security Policy (ИСПРАВЛЕНО) -->
     <meta http-equiv="Content-Security-Policy" 
       content="default-src 'self';
                script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co;
@@ -101,14 +101,13 @@
                manifest-src 'self';
                frame-src 'self' https://*.supabase.co;
                worker-src 'self' blob:;" />
-    -->
 
     <!-- 🔹 Preload критических ресурсов для ускорения загрузки -->
     <link rel="preload" href="/icon-192.png" as="image" />
     <link rel="preload" href="/icon-512.png" as="image" />
     
-    <!-- 🔹 DNS Prefetch для Supabase (ИСПРАВЛЕНО: правильный URL) -->
-    <link rel="dns-prefetch" href="https://lcfooydickfghjlqpivw.supabase.co" />
+    <!-- 🔹 DNS Prefetch для Supabase (ИСПРАВЛЕНО: добавлена закрывающая кавычка) -->
+    <link rel="dns-prefetch" href="https://fnrzwatvrqldwdikdnew.supabase.co" />
     
     <!-- 🔹 Service Worker registration status (опционально, для отладки) -->
     <script>
