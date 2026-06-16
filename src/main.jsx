@@ -1,3 +1,4 @@
+// src/main.jsx
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
@@ -8,7 +9,7 @@ import UpdateModal from './components/UpdateModal.jsx'
 import { initOfflineModule, checkOfflineSupport } from './utils/offlineStorage'
 
 // ✅ Версия приложения
-const APP_VERSION = '1.1.9-beta';
+const APP_VERSION = '1.1.10-beta';
 
 // ─────────────────────────────────────────────────────────
 // 🔹 Глобальные переменные для модального окна обновлений
@@ -60,7 +61,6 @@ const showUpdateModal = (updateInfo) => {
 // ─────────────────────────────────────────────────────────
 // 🔹 Регистрация Service Worker
 // ─────────────────────────────────────────────────────────
-// Добавьте проверку после регистрации
 const registerServiceWorker = async () => {
   if ('serviceWorker' in navigator) {
     try {
@@ -100,13 +100,12 @@ const registerServiceWorker = async () => {
 };
 
 // ─────────────────────────────────────────────────────────
-// 🔹 Слушатель обновлений PWA (ЕДИНАЯ ВЕРСИЯ)
+// 🔹 Слушатель обновлений PWA
 // ─────────────────────────────────────────────────────────
 const setupPWAUpdateListener = () => {
   let updatePrompted = false;
   const PROMPT_COOLDOWN = 24 * 60 * 60 * 1000; // 24 часа
   
-  // Загружаем информацию о версиях
   const checkVersionManifest = async () => {
     try {
       const response = await fetch('/version.json?v=' + Date.now());
@@ -151,13 +150,9 @@ const setupPWAUpdateListener = () => {
     }
   };
   
-  // Проверяем при загрузке
   checkVersionManifest();
-  
-  // Проверяем каждые 6 часов
   const interval = setInterval(checkVersionManifest, 6 * 60 * 60 * 1000);
   
-  // Слушаем обновления от Service Worker (исправлено: убрана неиспользуемая registration)
   const handleUpdate = (event) => {
     const { version } = event.detail;
     if (version && version !== APP_VERSION && !updatePrompted) {
@@ -261,9 +256,10 @@ const initToastManager = () => {
 };
 
 // ─────────────────────────────────────────────────────────
-// 🔹 Инициализация оффлайн-функций
+// 🔹 Инициализация оффлайн-функций (ИСПРАВЛЕНО)
 // ─────────────────────────────────────────────────────────
 const initOfflineFeatures = async () => {
+  // ✅ Проверяем поддержку
   const support = checkOfflineSupport();
   console.log('[App] Offline support:', support);
   
@@ -273,6 +269,7 @@ const initOfflineFeatures = async () => {
   }
 
   try {
+    // ✅ Инициализируем с обработкой ошибок
     const result = await initOfflineModule({
       enableAutoSync: true,
       onSyncSuccess: (payload) => {
@@ -293,48 +290,111 @@ const initOfflineFeatures = async () => {
       console.log('[App] ✅ Offline module initialized');
     }
   } catch (error) {
+    // ✅ Ловим любые ошибки, чтобы не блокировать приложение
     console.error('[App] Offline init error:', error);
   }
 };
 
 // ─────────────────────────────────────────────────────────
-// 🔹 Точка входа
+// 🔹 Точка входа (ИСПРАВЛЕНО)
 // ─────────────────────────────────────────────────────────
 const renderApp = () => {
-  createRoot(document.getElementById('root')).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  );
-};
-
-// ✅ Запуск
-const bootstrap = async () => {
-  // 0. Инициализируем toast-менеджер (для уведомлений)
-  initToastManager();
-  
-  // 1. Регистрируем Service Worker
-  await registerServiceWorker();
-  
-  // 2. Инициализируем оффлайн-модуль
-  await initOfflineFeatures();
-  
-  // 3. Настраиваем мониторинг сети
-  const cleanupNetwork = setupNetworkMonitor();
-  
-  // 4. Настраиваем слушатель обновлений PWA
-  const cleanupPWA = setupPWAUpdateListener();
-  
-  // Сохраняем функции очистки для HMR (если используете Vite)
-  if (import.meta.hot) {
-    import.meta.hot.dispose(() => {
-      cleanupNetwork?.();
-      cleanupPWA?.();
-    });
+  // ✅ Убеждаемся, что корневой элемент существует
+  const rootElement = document.getElementById('root');
+  if (!rootElement) {
+    console.error('[App] Root element not found!');
+    return;
   }
   
-  // 5. Рендерим приложение
-  renderApp();
+  try {
+    createRoot(rootElement).render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    console.log('[App] ✅ Application rendered successfully');
+  } catch (error) {
+    console.error('[App] ❌ Failed to render application:', error);
+    // Показываем сообщение об ошибке
+    rootElement.innerHTML = `
+      <div style="display:flex;justify-content:center;align-items:center;min-height:100vh;padding:20px;background:#f9fafb;font-family:system-ui,sans-serif;text-align:center;">
+        <div style="max-width:400px;">
+          <h2 style="color:#dc2626;font-size:24px;margin-bottom:16px;">⚠️ Ошибка загрузки приложения</h2>
+          <p style="color:#6b7280;margin-bottom:24px;">Пожалуйста, обновите страницу или попробуйте позже.</p>
+          <button onclick="window.location.reload()" style="background:#3b82f6;color:white;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:16px;font-weight:500;">
+            🔄 Обновить страницу
+          </button>
+          <p style="color:#9ca3af;font-size:12px;margin-top:16px;">Ошибка: ${error.message}</p>
+        </div>
+      </div>
+    `;
+  }
+};
+
+// ─────────────────────────────────────────────────────────
+// 🚀 ЗАПУСК (ИСПРАВЛЕНО — последовательный, с обработкой ошибок)
+// ─────────────────────────────────────────────────────────
+const bootstrap = async () => {
+  console.log('[App] 🚀 Starting application...');
+  
+  try {
+    // 0. Инициализируем toast-менеджер (для уведомлений)
+    initToastManager();
+    console.log('[App] ✅ Toast manager initialized');
+    
+    // 1. Регистрируем Service Worker (не блокируем приложение)
+    try {
+      await registerServiceWorker();
+      console.log('[App] ✅ Service Worker registered');
+    } catch (swError) {
+      console.warn('[App] ⚠️ Service Worker registration failed:', swError);
+    }
+    
+    // 2. Инициализируем оффлайн-модуль (не блокируем приложение)
+    try {
+      await initOfflineFeatures();
+      console.log('[App] ✅ Offline features initialized');
+    } catch (offlineError) {
+      console.warn('[App] ⚠️ Offline features init failed:', offlineError);
+    }
+    
+    // 3. Настраиваем мониторинг сети
+    const cleanupNetwork = setupNetworkMonitor();
+    console.log('[App] ✅ Network monitor initialized');
+    
+    // 4. Настраиваем слушатель обновлений PWA
+    const cleanupPWA = setupPWAUpdateListener();
+    console.log('[App] ✅ PWA update listener initialized');
+    
+    // Сохраняем функции очистки для HMR
+    if (import.meta.hot) {
+      import.meta.hot.dispose(() => {
+        cleanupNetwork?.();
+        cleanupPWA?.();
+      });
+    }
+    
+    // 5. Рендерим приложение
+    renderApp();
+    
+  } catch (error) {
+    console.error('[App] ❌ Bootstrap failed:', error);
+    // Показываем сообщение об ошибке
+    const rootElement = document.getElementById('root');
+    if (rootElement) {
+      rootElement.innerHTML = `
+        <div style="display:flex;justify-content:center;align-items:center;min-height:100vh;padding:20px;background:#f9fafb;font-family:system-ui,sans-serif;text-align:center;">
+          <div style="max-width:400px;">
+            <h2 style="color:#dc2626;font-size:24px;margin-bottom:16px;">⚠️ Ошибка загрузки</h2>
+            <p style="color:#6b7280;margin-bottom:24px;">Не удалось запустить приложение. Попробуйте обновить страницу.</p>
+            <button onclick="window.location.reload()" style="background:#3b82f6;color:white;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:16px;font-weight:500;">
+              🔄 Обновить страницу
+            </button>
+          </div>
+        </div>
+      `;
+    }
+  }
 };
 
 // Запускаем после загрузки страницы
