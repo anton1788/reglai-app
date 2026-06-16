@@ -71,7 +71,8 @@ const styles = `
 
 const sanitizeInput = (text, maxLength = MAX_INPUT_LENGTH) => {
   if (typeof text !== 'string') return '';
-  return text.replace(/[<>]/g, '').slice(0, maxLength).trim();
+  // Удаляем только опасные символы, НЕ удаляем пробелы
+  return text.replace(/[<>]/g, '').slice(0, maxLength);
 };
 
 const clamp = (value, min = 1, max = 10000) => {
@@ -412,7 +413,12 @@ const MaterialRow = memo(({
             ref={inputRef}
             type="text"
             value={material.description}
-            onChange={(e) => onUpdate(index, 'description', sanitizeInput(e.target.value))}
+            onChange={(e) => {
+  const value = e.target.value;
+  // Только удаляем опасные символы, сохраняем все пробелы
+  const sanitized = value.replace(/[<>]/g, '').slice(0, MAX_INPUT_LENGTH);
+  onUpdate(index, 'description', sanitized);
+}}
             onFocus={() => setLocalSuggestions(localSuggestions.length > 0 ? localSuggestions : [])}
             onKeyDown={handleKeyDown}
             autoCorrect="off"
@@ -576,7 +582,7 @@ const TemplateSelector = memo(({ templates, onLoad, t }) => {
             <option value="" disabled>{t('selectTemplate')}</option>
             {templates.map(template => (
               <option key={template.id} value={template.id}>
-                {sanitizeInput(template.template_name)}
+                {template.template_name}
               </option>
             ))}
           </select>
