@@ -296,6 +296,19 @@ const Navbar = ({
           {/* Правая часть */}
           <div className="flex items-center gap-1 flex-shrink-0">
             {!isOnline && (
+  <div className="flex items-center gap-2 px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 rounded-lg text-xs">
+    <WifiOff className="w-4 h-4" />
+    <span className="hidden sm:inline">Офлайн</span>
+  </div>
+)}
+
+{isOnline && offlineDraftsCount > 0 && (
+  <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-300 rounded-lg text-xs">
+    <Loader2 className="w-4 h-4 animate-spin" />
+    <span className="hidden sm:inline">{offlineDraftsCount} черновиков</span>
+  </div>
+)}
+            {!isOnline && (
               <div className="flex items-center px-1.5 sm:px-2 py-1 sm:py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-lg text-xs font-medium">
                 <WifiOff className="w-3 h-3 mr-1" />
                 <span className="hidden sm:inline">Офлайн</span>

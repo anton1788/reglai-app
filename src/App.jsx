@@ -24,6 +24,15 @@ import CRMSalesManager from './components/CRMSales/CRMSalesManager';
 import ObjectMaterialsMerger from './components/ObjectMaterialsMerger';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import { useInView } from 'react-intersection-observer';
+// src/App.jsx — добавить в блок импортов
+import { cacheAuthData, getCachedAuth, clearAuthCache } from './utils/authCache';
+import { useOfflineAuth } from './hooks/useOfflineAuth';
+import { 
+  cacheApplications, 
+  loadOfflineApplications,
+  cacheComments,
+  loadOfflineComments
+} from './utils/offlineStorage';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -1484,167 +1493,133 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   // ─────────────────────────────────────────────────────────
   // 🔐 AUTH SESSION CHECK
   // ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const metadata = session.user.user_metadata;
-        const role = metadata?.role || 'master';
-        const company_id = metadata?.company_id;
-        const company_name = metadata?.company_name?.trim();
-        if (company_id) {
-          try {
-            const { data: companyData } = await supabase
-              .from('companies')
-              .select('is_blocked')
-              .eq('id', company_id)
-              .single();
-            if (companyData?.is_blocked) {
-              showNotification(t('companyBlockedAlert'), 'error');
-              await supabase.auth.signOut();
-              window.location.href = '/login?blocked=1';
-              return;
-            }
-          } catch (err) {
-            console.error('Ошибка проверки блокировки компании:', err);
-          }
-        }
-        if (!company_id || !company_name) {
-          showNotification('Ваш аккаунт не привязан к компании. Обратитесь к администратору.', 'error');
-          await supabase.auth.signOut();
-          return;
-        }
-        setUser(session.user);
-        setUserRole(role);
-        setUserCompany(company_name);
-        setUserCompanyId(company_id);
-        if (company_id && session?.user?.id) {
-          const { data: companyData, error: ownerError } = await supabase
-            .from('companies')
-            .select('is_company_owner')
-            .eq('id', company_id)
-            .single();
-          if (!ownerError && companyData?.is_company_owner === session.user.id) {
-            setIsCompanyOwner(true);
-          } else {
-            setIsCompanyOwner(false);
-          }
-        } else {
-          setIsCompanyOwner(false);
-        }
-        setProfileDataForHeader({
-          fullName: metadata.full_name || '',
-          phone: metadata.phone || ''
-        });
-        const savedLang = metadata.language || 'ru';
-        const savedTheme = metadata.theme || 'system';
-        setLanguage(savedLang);
-        setTheme(savedTheme);
-      } else {
-        const urlParams = new URLSearchParams(window.location.search);
-        const accessToken = urlParams.get('access_token');
-        const refreshToken = urlParams.get('refresh_token');
-        if (accessToken && refreshToken) {
-          window.history.replaceState({}, document.title, window.location.pathname);
-          try {
-            const { data: { session: newSession }, error } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken
-            });
-            if (error) throw error;
-            if (newSession?.user) {
-              const metadata = newSession.user.user_metadata;
-              const role = metadata?.role || 'master';
-              const company_id = metadata?.company_id;
-              const company_name = metadata?.company_name?.trim();
-              if (!company_id || !company_name) {
-                showNotification('Ваш аккаунт не привязан к компании. Обратитесь к администратору.', 'error');
-                await supabase.auth.signOut();
-                return;
-              }
-              setUser(newSession.user);
-              setUserRole(role);
-              setUserCompany(company_name);
-              setUserCompanyId(company_id);
-              if (company_id && newSession?.user?.id) {
-                const { data: companyData, error: ownerError } = await supabase
-                  .from('companies')
-                  .select('is_company_owner')
-                  .eq('id', company_id)
-                  .single();
-                if (!ownerError && companyData?.is_company_owner === newSession.user.id) {
-                  setIsCompanyOwner(true);
-                } else {
-                  setIsCompanyOwner(false);
-                }
-              } else {
-                setIsCompanyOwner(false);
-              }
-              setProfileDataForHeader({
-                fullName: metadata.full_name || '',
-                phone: metadata.phone || ''
-              });
-              const savedLang = metadata.language || 'ru';
-              const savedTheme = metadata.theme || 'system';
-              setLanguage(savedLang);
-              setTheme(savedTheme);
-              showNotification('Добро пожаловать! Ваш аккаунт успешно подтвержден.', 'success');
-            }
-          } catch (err) {
-            console.error('Ошибка при установке сессии:', err);
-            showNotification('Ошибка при входе. Попробуйте войти вручную.', 'error');
-          }
-        } else {
-          setUser(null);
-          setUserRole('foreman');
-          setUserCompany(null);
-          setUserCompanyId(null);
-          setProfileDataForHeader({ fullName: '', phone: '' });
-          setLanguage('ru');
-          setTheme('system');
-        }
-      }
-      setIsLoading(false);
-    };
-    checkSession();
+  // src/App.jsx — ЗАМЕНИТЬ существующий useEffect с checkSession
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        const metadata = session.user.user_metadata;
-        const role = metadata?.role || 'master';
-        const company_id = metadata?.company_id;
-        const company_name = metadata?.company_name?.trim();
-        if (!company_id || !company_name) {
-          showNotification('Ваш аккаунт не привязан к компании. Обратитесь к администратору.', 'error');
-          supabase.auth.signOut();
-          return;
-        }
-        setUser(session.user);
-        setUserRole(role);
-        setUserCompany(company_name);
-        setUserCompanyId(company_id);
-        setProfileDataForHeader({
-          fullName: metadata.full_name || '',
-          phone: metadata.phone || ''
-        });
-        const savedLang = metadata.language || 'ru';
-        const savedTheme = metadata.theme || 'system';
-        setLanguage(savedLang);
-        setTheme(savedTheme);
-      } else {
-        setUser(null);
-        setUserRole('foreman');
-        setUserCompany(null);
-        setUserCompanyId(null);
-        setProfileDataForHeader({ fullName: '', phone: '' });
-        setLanguage('ru');
-        setTheme('system');
+useEffect(() => {
+  const checkSession = async () => {
+    // 1️⃣ Сначала проверяем реальную сессию
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session?.user) {
+      // ✅ Есть интернет и сессия активна — кэшируем
+      const metadata = session.user.user_metadata;
+      cacheAuthData(session, session.user, {
+        id: metadata.company_id,
+        name: metadata.company_name,
+        role: metadata.role
+      });
+      
+      // Применяем сессию
+      const role = metadata?.role || 'master';
+      const company_id = metadata?.company_id;
+      const company_name = metadata?.company_name?.trim();
+      
+      if (!company_id || !company_name) {
+        showNotification('Ваш аккаунт не привязан к компании.', 'error');
+        await supabase.auth.signOut();
+        return;
       }
+      
+      setUser(session.user);
+      setUserRole(role);
+      setUserCompany(company_name);
+      setUserCompanyId(company_id);
+      setProfileDataForHeader({
+        fullName: metadata.full_name || '',
+        phone: metadata.phone || ''
+      });
       setIsLoading(false);
-    });
+      return;
+    }
+    
+    // 2️⃣ Если нет интернета или сессии — пробуем кэш
+    const cached = getCachedAuth();
+    if (cached && !cached.expired && cached.user) {
+      console.log('📱 [Offline] Восстановление сессии из кэша');
+      
+      const metadata = cached.user.user_metadata || {};
+      const company_id = metadata.company_id;
+      const company_name = metadata.company_name;
+      
+      if (!company_id || !company_name) {
+        showNotification('Кэш повреждён. Войдите заново.', 'error');
+        clearAuthCache();
+        setIsLoading(false);
+        return;
+      }
+      
+      // Устанавливаем состояние из кэша
+      setUser(cached.user);
+      setUserRole(metadata.role || 'master');
+      setUserCompany(company_name);
+      setUserCompanyId(company_id);
+      setProfileDataForHeader({
+        fullName: metadata.full_name || '',
+        phone: metadata.phone || ''
+      });
+      
+      showNotification('📱 Офлайн-режим. Данные загружены из кэша.', 'warning');
+      
+      // Загружаем офлайн-данные
+      loadOfflineData();
+      setIsLoading(false);
+      return;
+    }
+    
+    // 3️⃣ Нет ни сессии, ни кэша — показываем страницу входа
+    setUser(null);
+    setUserRole('foreman');
+    setUserCompany(null);
+    setUserCompanyId(null);
+    setProfileDataForHeader({ fullName: '', phone: '' });
+    setIsLoading(false);
+  };
+  
+  checkSession();
 
-    return () => subscription.unsubscribe();
-  }, []);
+  // Подписка на изменения auth
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (session?.user) {
+      const metadata = session.user.user_metadata;
+      const role = metadata?.role || 'master';
+      const company_id = metadata?.company_id;
+      const company_name = metadata?.company_name?.trim();
+      
+      if (!company_id || !company_name) {
+        showNotification('Ваш аккаунт не привязан к компании.', 'error');
+        supabase.auth.signOut();
+        return;
+      }
+      
+      // Кэшируем новую сессию
+      cacheAuthData(session, session.user, {
+        id: company_id,
+        name: company_name,
+        role: role
+      });
+      
+      setUser(session.user);
+      setUserRole(role);
+      setUserCompany(company_name);
+      setUserCompanyId(company_id);
+      setProfileDataForHeader({
+        fullName: metadata.full_name || '',
+        phone: metadata.phone || ''
+      });
+    } else {
+      // Выход — очищаем кэш
+      clearAuthCache();
+      setUser(null);
+      setUserRole('foreman');
+      setUserCompany(null);
+      setUserCompanyId(null);
+      setProfileDataForHeader({ fullName: '', phone: '' });
+    }
+    setIsLoading(false);
+  });
+
+  return () => subscription.unsubscribe();
+}, [supabase, showNotification]);
 
   // ─────────────────────────────────────────────────────────
   // 🚫 BLOCKED PARAM CHECK
@@ -3134,6 +3109,9 @@ const totalAmount = validMaterials.reduce((sum, m) =>
   };
 
   const [showObjectSuggestions, setShowObjectSuggestions] = useState(false);
+  // src/App.jsx — разместить ПОСЛЕ ВСЕХ useState и ДО useEffect
+
+const { hasCachedSession, syncOfflineData } = useOfflineAuth(supabase);
 
   const objectHistory = useMemo(() => {
     const objects = new Set();
@@ -4240,6 +4218,10 @@ useEffect(() => {
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
     setApplications(userApps);
+
+    if (userCompanyId && userApps && userApps.length > 0) {
+  await cacheApplications(userCompanyId, userApps);
+}
     
     // Загрузка пользователей для метрик активации
     const { data: usersData } = await supabase
@@ -4265,6 +4247,9 @@ useEffect(() => {
         commentsMap[comment.application_id].push(comment);
       });
       setComments(commentsMap);
+      if (userCompanyId && commentsMap && Object.keys(commentsMap).length > 0) {
+  await cacheComments(userCompanyId, commentsMap);
+}
     } else {
       setComments({});
     }
@@ -4628,6 +4613,39 @@ useEffect(() => {
   
   return cleanup;
 }, [user, userCompanyId, page, loadApplications, showNotification]);
+
+// src/App.jsx — добавить после loadApplications
+
+const loadOfflineData = useCallback(async () => {
+  if (!userCompanyId) return;
+  
+  console.log('📱 [Offline] Загрузка офлайн-данных...');
+  
+  try {
+    // 1. Загружаем кэшированные заявки
+    const cachedApps = await loadOfflineApplications(userCompanyId);
+    if (cachedApps && cachedApps.length > 0) {
+      setApplications(cachedApps);
+      console.log(`📱 [Offline] Загружено ${cachedApps.length} заявок из кэша`);
+    }
+    
+    // 2. Загружаем кэшированные комментарии
+    const cachedComments = await loadOfflineComments(userCompanyId);
+    if (cachedComments) {
+      setComments(cachedComments);
+      console.log('📱 [Offline] Загружены комментарии из кэша');
+    }
+    
+    // 3. Загружаем офлайн-черновики
+    const drafts = await loadDraftsFromDB();
+    setOfflineDrafts(drafts);
+    console.log(`📱 [Offline] Загружено ${drafts.length} черновиков`);
+    
+    showNotification('📱 Данные загружены из офлайн-кэша', 'info');
+  } catch (err) {
+    console.warn('[Offline] Ошибка загрузки данных:', err);
+  }
+}, [userCompanyId, showNotification]);
 
 // 🛡️ Глобальный перехватчик ошибок material_prices (временное решение)
 useEffect(() => {
