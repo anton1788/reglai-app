@@ -86,52 +86,75 @@ const copyToClipboard = async (text) => {
 
 /**
  * Форматирование ошибки для отчёта
+ * ✅ ИСПРАВЛЕНО: соответствует схеме таблицы error_logs
  */
 const formatErrorReport = (error, errorInfo, userAgent, url, timestamp) => {
   return {
-    message: error?.message || 'Unknown error',
-    stack: error?.stack?.slice(0, MAX_STACK_LENGTH) || 'No stack',
-    componentStack: errorInfo?.componentStack?.slice(0, MAX_STACK_LENGTH) || 'No component stack',
-    userAgent,
-    url,
-    timestamp,
-    environment: import.meta.env?.MODE || 'development'
+    error: error?.message || 'Unknown error',
+    error_info: error?.stack?.slice(0, MAX_STACK_LENGTH) || 'No stack',
+    component_stack: errorInfo?.componentStack?.slice(0, MAX_STACK_LENGTH) || 'No component stack',
+    user_agent: userAgent,
+    url: url,
+    created_at: timestamp
+    // ❌ УДАЛЕНО: environment — этой колонки нет в таблице
   };
 };
 
 /**
- * Отправка ошибки в сервис мониторинга
+ * Отправка ошибки в Supabase
+ * ✅ ИСПРАВЛЕНО: правильные имена колонок
  */
-const reportErrorToService = async (errorReport, supabase, companyId) => {
+const reportErrorToService = async (errorReport, supabase, companyId, userId) => {
   try {
     // Отправка в Supabase
     if (supabase && companyId) {
-      await supabase
+      // ✅ Проверяем существование таблицы
+      const { error: tableCheck } = await supabase
         .from('error_logs')
-        .insert([{
-          company_id: companyId,
-          error_message: errorReport.message,
-          error_stack: errorReport.stack,
-          component_stack: errorReport.componentStack,
-          user_agent: errorReport.userAgent,
-          url: errorReport.url,
-          environment: errorReport.environment,
-          created_at: errorReport.timestamp
-        }]);
+        .select('id')
+        .limit(1);
+      
+      // Если таблица не существует — не логируем
+      if (tableCheck?.code === '42P01') {
+        console.warn('[ErrorBoundary] Table error_logs does not exist');
+        return;
+      }
+      
+      // ✅ Используем правильные имена колонок
+      const logData = {
+        company_id: companyId,
+        user_id: userId || null,
+        error: errorReport.error,
+        error_info: errorReport.error_info,
+        component_stack: errorReport.component_stack,
+        user_agent: errorReport.user_agent,
+        url: errorReport.url,
+        created_at: errorReport.created_at
+      };
+      
+      const { error: insertError } = await supabase
+        .from('error_logs')
+        .insert([logData]);
+      
+      if (insertError) {
+        console.warn('[ErrorBoundary] Failed to insert error log:', insertError);
+      } else {
+        console.log('[ErrorBoundary] Error logged successfully');
+      }
     }
 
     // Отправка в Sentry (если используется)
     if (window.Sentry) {
-      window.Sentry.captureException(new Error(errorReport.message), {
+      window.Sentry.captureException(new Error(errorReport.error), {
         extra: {
-          componentStack: errorReport.componentStack,
+          componentStack: errorReport.component_stack,
           url: errorReport.url,
-          userAgent: errorReport.userAgent
+          userAgent: errorReport.user_agent
         }
       });
     }
   } catch (err) {
-    console.error('Failed to report error:', err);
+    console.warn('[ErrorBoundary] Failed to report error:', err);
   }
 };
 
@@ -157,7 +180,7 @@ export class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    const { supabase, companyId, onError } = this.props;
+    const { supabase, companyId, userId, onError } = this.props;
     
     this.setState({ errorInfo });
     
@@ -180,7 +203,7 @@ export class ErrorBoundary extends Component {
     );
 
     // Отправка в мониторинг
-    reportErrorToService(errorReport, supabase, companyId);
+    reportErrorToService(errorReport, supabase, companyId, userId);
 
     // Вызов колбэка
     onError?.(error, errorInfo);
@@ -301,7 +324,6 @@ URL: ${window.location.href}
 User Agent: ${navigator.userAgent}
     `.trim();
 
-    // Открыть email клиент или форму поддержки
     const subject = encodeURIComponent('Ошибка в приложении');
     const body = encodeURIComponent(errorText);
     window.location.href = `mailto:support@example.com?subject=${subject}&body=${body}`;

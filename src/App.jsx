@@ -5906,6 +5906,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   <ErrorBoundary 
     supabase={supabase}
     companyId={userCompanyId}
+    userId={user?.id}
     onError={(error, errorInfo) => {
       console.error('[Global Error]', error, errorInfo);
     }}
