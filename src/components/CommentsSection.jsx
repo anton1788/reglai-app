@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { MessageCircle, X, User, ChevronDown, Loader2, AlertCircle, CheckCircle, Send } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
-// 🔧 ХЕЛПЕРЫ (вынесены — не пересоздаются)
+// 🔧 ХЕЛПЕРЫ
 // ─────────────────────────────────────────────────────────────
 
 const formatDate = (dateString, language) => {
@@ -80,7 +80,6 @@ const CharacterCounter = ({ current, limit, warningThreshold }) => {
 const CommentsSection = React.memo(({
   application,
   comments = {},
-  // ✅ ИСПРАВЛЕНИЕ 1: Используем showComments для контроля видимости
   showComments = {},
   onToggleComments,
   onAddComment,
@@ -89,7 +88,12 @@ const CommentsSection = React.memo(({
   getRoleLabel = (role) => role,
   escapeHtml = (str) => str,
   isLoading = false,
-  user = null
+  user = null,
+  // ✅ ДОБАВЛЕННЫЕ ПРОПСЫ ДЛЯ АВТОСОХРАНЕНИЯ
+  draftValue = undefined,
+  onDraftChange = undefined,
+  onClearDraft = undefined,
+  onOpen = undefined
 }) => {
   // ─────────────────────────────────────────────────────────
   // 📊 STATE & REFS
@@ -102,20 +106,22 @@ const CommentsSection = React.memo(({
   
   const textareaRef = useRef(null);
   const commentValueRef = useRef('');
+
+  // ✅ Используем draftValue если передан, иначе localComment
+  const commentText = draftValue !== undefined ? draftValue : localComment;
   
   useEffect(() => {
-    commentValueRef.current = localComment;
-  }, [localComment]);
+    commentValueRef.current = commentText;
+  }, [commentText]);
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
-  }, [localComment]);
+  }, [commentText]);
 
   useEffect(() => {
-    // Сбрасываем локальные состояния при закрытии комментариев извне
     const isVisible = showComments[application?.id];
     if (!isVisible) {
       setError(null);
@@ -124,7 +130,7 @@ const CommentsSection = React.memo(({
   }, [showComments, application?.id]);
 
   // ─────────────────────────────────────────────────────────
-  // 📋 ВЫЧИСЛЯЕМЫЕ ЗНАЧЕНИЯ (memoized)
+  // 📋 ВЫЧИСЛЯЕМЫЕ ЗНАЧЕНИЯ
   // ─────────────────────────────────────────────────────────
   
   const appComments = useMemo(() => {
@@ -132,13 +138,12 @@ const CommentsSection = React.memo(({
     return Array.isArray(list) ? list : [];
   }, [comments, application?.id]);
 
-  // ✅ ИСПРАВЛЕНИЕ 1: Используем showComments напрямую
   const isExpanded = !!showComments[application?.id];
   
-  const characterCount = localComment.length;
+  const characterCount = commentText.length;
   const isOverLimit = characterCount > CHARACTER_LIMIT;
-  const isNearLimit = characterCount >= CHARACTER_WARNING_THRESHOLD;
-  const canSubmit = localComment.trim() && !isSubmitting && !isLoading && user && !isOverLimit;
+  // ❌ УДАЛЕНА НЕИСПОЛЬЗУЕМАЯ ПЕРЕМЕННАЯ isNearLimit
+  const canSubmit = commentText.trim() && !isSubmitting && !isLoading && user && !isOverLimit;
 
   // ─────────────────────────────────────────────────────────
   // 🎛️ ОБРАБОТЧИКИ
@@ -149,26 +154,19 @@ const CommentsSection = React.memo(({
     
     if (!content || !application?.id || isSubmitting) return;
     
-    // ✅ ИСПРАВЛЕНИЕ 2: Безопасная проверка без process
-    try {
-      // eslint-disable-next-line no-undef
-      if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
-        console.log('📤 Sending comment:', {
-          applicationId: application?.id,
-          contentLength: content.length,
-          preview: content.slice(0, 100)
-        });
-      }
-    } catch {
-      // Игнорируем ошибки доступа к process
-    }
-    
     setIsSubmitting(true);
     setError(null);
     
     try {
       await onAddComment(content, application.id);
-      setLocalComment('');
+      
+      // Очищаем черновик после отправки
+      if (onClearDraft) {
+        onClearDraft();
+      }
+      if (draftValue === undefined) {
+        setLocalComment('');
+      }
       setSuccess(true);
       
       setTimeout(() => setSuccess(false), 2000);
@@ -180,13 +178,17 @@ const CommentsSection = React.memo(({
       setIsSubmitting(false);
       textareaRef.current?.focus();
     }
-  }, [application?.id, onAddComment, isSubmitting, t]);
+  }, [application?.id, onAddComment, isSubmitting, t, onClearDraft, draftValue]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Escape') {
-      if (localComment.trim()) {
+      if (commentText.trim()) {
         e.preventDefault();
-        setLocalComment('');
+        if (onClearDraft) {
+          onClearDraft();
+        } else {
+          setLocalComment('');
+        }
       }
       return;
     }
@@ -198,23 +200,32 @@ const CommentsSection = React.memo(({
       }
       return;
     }
-    
-    if (e.key === 'Enter' && e.shiftKey) {
-      return;
-    }
-  }, [localComment, canSubmit, submitComment]);
+  }, [commentText, canSubmit, submitComment, onClearDraft]);
 
-  const handleSubmitClick = useCallback(() => {
-    if (canSubmit) {
-      submitComment();
+  const handleTextChange = useCallback((e) => {
+    const value = e.target.value;
+    if (draftValue !== undefined && onDraftChange) {
+      onDraftChange(value);
+    } else {
+      setLocalComment(value);
     }
-  }, [canSubmit, submitComment]);
+  }, [draftValue, onDraftChange]);
+
+  const handleFocus = useCallback(() => {
+    if (onOpen) {
+      onOpen();
+    }
+  }, [onOpen]);
 
   const handleClear = useCallback(() => {
-    setLocalComment('');
+    if (onClearDraft) {
+      onClearDraft();
+    } else {
+      setLocalComment('');
+    }
     setError(null);
     textareaRef.current?.focus();
-  }, []);
+  }, [onClearDraft]);
 
   // ─────────────────────────────────────────────────────────
   // 📋 РЕНДЕРИНГ
@@ -330,37 +341,26 @@ const CommentsSection = React.memo(({
               <textarea
                 id={`comment-input-${application?.id}`}
                 ref={textareaRef}
-                value={localComment}
-                onChange={(e) => {
-                  const value = e.target.value.slice(0, CHARACTER_LIMIT + 10);
-                  setLocalComment(value);
-                  if (error) setError(null);
-                  if (success) setSuccess(false);
-                }}
+                value={commentText}
+                onChange={handleTextChange}
+                onFocus={handleFocus}
                 onKeyDown={handleKeyDown}
-                placeholder={t('commentPlaceholder') || 'Напишите комментарий...'}
-                className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none transition-all ${
-                  isOverLimit 
-                    ? 'border-red-500 focus:ring-red-500' 
-                    : isNearLimit 
-                      ? 'border-amber-500' 
-                      : 'border-gray-300 dark:border-gray-600'
-                }`}
-                rows={2}
+                placeholder={t('writeComment') || 'Напишите комментарий...'}
+                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white text-sm min-h-[60px] resize-y"
+                rows={3}
+                disabled={isSubmitting}
                 aria-describedby={`comment-hint-${application?.id}`}
-                disabled={isSubmitting || isLoading || !user}
-                maxLength={CHARACTER_LIMIT + 10}
               />
               
               {/* Controls: Counter + Clear */}
               <div className="absolute bottom-2 right-2 flex items-center gap-2">
-                {localComment && !isSubmitting && (
+                {commentText && !isSubmitting && (
                   <button
                     type="button"
                     onClick={handleClear}
                     className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
-                    aria-label={t('clearComment')}
-                    title={t('clearComment')}
+                    aria-label={t('clearComment') || 'Очистить'}
+                    title={t('clearComment') || 'Очистить'}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -408,14 +408,14 @@ const CommentsSection = React.memo(({
               )}
               
               <button
-                onClick={handleSubmitClick}
+                onClick={submitComment}
                 disabled={!canSubmit}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 min-w-[90px] justify-center ${
                   canSubmit
                     ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow'
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                 }`}
-                aria-label={t('sendComment')}
+                aria-label={t('sendComment') || 'Отправить'}
                 type="button"
               >
                 {isSubmitting ? (

@@ -23,6 +23,7 @@ import LoadingOverlay from './components/LoadingOverlay';
 import CRMSalesManager from './components/CRMSales/CRMSalesManager';
 import ObjectMaterialsMerger from './components/ObjectMaterialsMerger';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
+import { useInView } from 'react-intersection-observer';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -297,6 +298,70 @@ const GLOBAL_STYLES = `
   .touch-target {
     min-height: 44px;
     min-width: 44px;
+  }
+}
+  /* Мобильные стили для ApplicationList */
+@media (max-width: 640px) {
+  .touch-target {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+  
+  .scrollable-content {
+    -webkit-overflow-scrolling: touch;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  .application-card {
+    padding: 12px !important;
+    margin-bottom: 8px !important;
+    border-radius: 12px !important;
+  }
+  
+  .action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  
+  .action-grid button {
+    font-size: 12px;
+    padding: 10px 8px;
+    min-height: 44px;
+  }
+  
+  .mobile-status-tabs {
+    display: flex;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 4px 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .mobile-status-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .mobile-status-tab {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    font-size: 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+    min-height: 36px;
+  }
+  
+  .mobile-material-item {
+    padding: 10px 12px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .application-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
 }
 `;
