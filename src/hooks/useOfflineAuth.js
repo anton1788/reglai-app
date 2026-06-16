@@ -38,8 +38,14 @@ export const useOfflineAuth = (supabase) => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
-    const cached = getCachedAuth();
-    setHasCachedSession(!!cached && !cached.expired);
+    // ✅ Безопасная проверка кэша
+    try {
+      const cached = getCachedAuth();
+      setHasCachedSession(!!cached && !cached?.expired);
+    } catch (e) {
+      console.warn('[useOfflineAuth] Ошибка проверки кэша:', e);
+      setHasCachedSession(false);
+    }
     
     return () => {
       window.removeEventListener('online', handleOnline);

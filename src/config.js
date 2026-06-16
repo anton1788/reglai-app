@@ -1,7 +1,7 @@
 // src/config.js
 // ✅ Единая точка управления версией приложения
 
-export const APP_VERSION = '1.1.10-beta';
+export const APP_VERSION = '1.1.11-beta';
 
 export const APP_CONFIG = {
   version: APP_VERSION,
