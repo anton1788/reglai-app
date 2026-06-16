@@ -60,10 +60,10 @@
   "handle_links": "preferred",
   "launch_handler": { "client_mode": ["navigate-existing", "auto"] },
 
-  "id": "reglai-pro-v1.1.11-beta",
+  "id": "reglai-pro-v1.1.12-beta",
 
   "serviceworker": {
-    "src": "/sw.js?v=1.1.11-beta",
+    "src": "/sw.js?v=1.1.12-beta",
     "scope": "/",
     "update_via_cache": "none"
   }
