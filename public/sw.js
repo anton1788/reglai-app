@@ -8,7 +8,7 @@ let lastUpdateCheck = 0;
 const UPDATE_COOLDOWN = 60000; // 60 секунд
 
 // ✅ Версия приложения (синхронизирована с config)
-const APP_VERSION = '1.1.9-beta';
+const APP_VERSION = '1.1.10-beta';
 const CACHE_NAME = `reglai-system-${APP_VERSION}`;
 const DATA_CACHE_NAME = `reglai-data-${APP_VERSION}`;
 const OFFLINE_CACHE_NAME = `reglai-offline-${APP_VERSION}`;

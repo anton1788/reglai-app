@@ -5,7 +5,7 @@ import './index.css'
 import App from './App.jsx'
 
 // ✅ Версия приложения
-const APP_VERSION = '1.1.9-beta';
+const APP_VERSION = '1.1.10-beta';
 
 // ─────────────────────────────────────────────────────────
 // 🔹 Менеджер уведомлений (Toast) — упрощённая версия

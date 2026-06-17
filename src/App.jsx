@@ -172,14 +172,19 @@ import { useApproval } from './hooks/useApproval';
 import approvalEngine from './utils/approvalEngine'; 
 // src/App.jsx — в блок импортов (после других импортов)
 
-import { cacheAuthData, getCachedAuth, clearAuthCache } from './utils/authCache';
-import { useOfflineAuth } from './hooks/useOfflineAuth';
+// ✅ ИСПОЛЬЗУЙТЕ ВРАППЕР:
 import { 
+  cacheAuthData, 
+  getCachedAuth, 
+  clearAuthCache,
   cacheApplications, 
-  loadOfflineApplications,
-  cacheComments,
-  loadOfflineComments
-} from './utils/offlineStorage';
+  loadOfflineApplications, 
+  cacheComments, 
+  loadOfflineComments,
+  loadOfflineData,        // ✅ ДОБАВИТЬ
+  isOfflineMode,          // ✅ ДОБАВИТЬ (для проверки режима)
+  getOfflineStatus        // ✅ ДОБАВИТЬ (получение статуса)
+} from './utils/offlineWrapper';
 
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
@@ -1494,7 +1499,8 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   // ─────────────────────────────────────────────────────────
   // 🔐 AUTH SESSION CHECK
   // ─────────────────────────────────────────────────────────
-  useEffect(() => {
+  // 🔐 AUTH SESSION CHECK — С ИСПОЛЬЗОВАНИЕМ ВРАППЕРА
+useEffect(() => {
   const checkSession = async () => {
     try {
       // 1️⃣ Сначала проверяем реальную сессию
@@ -1512,7 +1518,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
           return;
         }
         
-        // Кэшируем сессию
+        // ✅ Кэшируем сессию через враппер
         cacheAuthData(session, session.user, {
           id: company_id,
           name: company_name,
@@ -1531,47 +1537,47 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
         return;
       }
       
-      // 2️⃣ Пробуем восстановить из кэша
-      try {
-        const cached = getCachedAuth();
+      // 2️⃣ Пробуем восстановить из кэша (через враппер)
+      const cached = await getCachedAuth();
+      
+      if (cached && cached.user && !cached.expired) {
+        console.log('📱 [Offline] Восстановление сессии из кэша');
         
-        if (cached && cached.user && !cached.expired) {
-          console.log('📱 [Offline] Восстановление сессии из кэша');
-          
-          const metadata = cached.user?.user_metadata || {};
-          const company_id = metadata?.company_id || cached.company?.id;
-          const company_name = metadata?.company_name || cached.company?.name;
-          
-          if (!company_id || !company_name) {
-            console.warn('⚠️ [Offline] Кэш повреждён, очищаем');
-            clearAuthCache();
-            setIsLoading(false);
-            return;
-          }
-          
-          setUser(cached.user);
-          setUserRole(metadata?.role || 'master');
-          setUserCompany(company_name);
-          setUserCompanyId(company_id);
-          setProfileDataForHeader({
-            fullName: metadata?.full_name || '',
-            phone: metadata?.phone || ''
-          });
-          
-          showNotification('📱 Офлайн-режим. Данные загружены из кэша.', 'warning');
-          
-          try {
-            await loadOfflineData();
-          } catch (offlineErr) {
-            console.warn('[Offline] Ошибка загрузки данных:', offlineErr);
-          }
-          
+        const metadata = cached.user?.user_metadata || {};
+        const company_id = metadata?.company_id || cached.company?.id;
+        const company_name = metadata?.company_name || cached.company?.name;
+        
+        if (!company_id || !company_name) {
+          console.warn('⚠️ [Offline] Кэш повреждён, очищаем');
+          await clearAuthCache();
           setIsLoading(false);
           return;
         }
-      } catch (cacheErr) {
-        console.warn('[Offline] Ошибка чтения кэша:', cacheErr);
-        clearAuthCache();
+        
+        setUser(cached.user);
+        setUserRole(metadata?.role || 'master');
+        setUserCompany(company_name);
+        setUserCompanyId(company_id);
+        setProfileDataForHeader({
+          fullName: metadata?.full_name || '',
+          phone: metadata?.phone || ''
+        });
+        
+        showNotification('📱 Офлайн-режим. Данные загружены из кэша.', 'warning');
+        
+        // ✅ Загружаем офлайн-данные через враппер
+        try {
+          const offlineData = await loadOfflineData(company_id);
+          if (offlineData) {
+            setApplications(offlineData.applications || []);
+            setComments(offlineData.comments || {});
+          }
+        } catch (offlineErr) {
+          console.warn('[Offline] Ошибка загрузки данных:', offlineErr);
+        }
+        
+        setIsLoading(false);
+        return;
       }
       
       // 3️⃣ Нет сессии — показываем страницу входа
@@ -1638,7 +1644,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   });
 
   return () => subscription.unsubscribe();
-}, [supabase, showNotification, loadOfflineData]);
+}, [supabase, showNotification]);
 
   // ─────────────────────────────────────────────────────────
   // 🚫 BLOCKED PARAM CHECK
@@ -1656,70 +1662,74 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   // ─────────────────────────────────────────────────────────
   // 📥 LOAD OFFLINE DRAFTS
   // ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    const loadInitialData = async () => {
-      if (!hasLoadedDrafts) {
-        const drafts = await loadDraftsFromDB();
-        setOfflineDrafts(drafts);
-        const formDraft = drafts.find(d => d.id === 'current_form_draft');
-        if (formDraft) {
-          setFormData({
-            objectName: formDraft.objectName || '',
-            foremanName: formDraft.foremanName || '',
-            foremanPhone: formDraft.foremanPhone || '',
-            materials: Array.isArray(formDraft.materials) ? [...formDraft.materials] : [{ description: '', quantity: 1, unit: 'шт' }],
-            cart: Array.isArray(formDraft.cart) ? [...formDraft.cart] : []
-          });
-        }
-        setHasLoadedDrafts(true);
-      }
-    };
-    loadInitialData();
-  }, [hasLoadedDrafts]);
+  // 📥 ЗАГРУЗКА ДАННЫХ — С ПОДДЕРЖКОЙ ОФЛАЙН-РЕЖИМА
+useEffect(() => {
+  const loadInitialData = async () => {
+    if (!user || !userCompanyId) return;
+    
+    // Если есть интернет — загружаем свежие данные
+    if (navigator.onLine) {
+      await loadApplications(page);
+    } else {
+      // Офлайн-режим — загружаем из кэша
+      await loadOfflineDataWrapper();
+      showNotification('📱 Офлайн-режим. Данные из кэша.', 'warning');
+    }
+  };
+  
+  loadInitialData();
+}, [user, userCompanyId, page, loadApplications, loadOfflineDataWrapper]);
 
-  // ─────────────────────────────────────────────────────────
-  // 🌐 NETWORK STATUS
-  // ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    const handleOnline = async () => {
-      setIsOnline(true);
-      showNotification(t('backOnline'), 'success');
-      if (offlineDrafts.length > 0) {
-        setSyncProgress({ current: 0, total: offlineDrafts.length });
-        showNotification(`${t('sendingDrafts')} (${offlineDrafts.length})`, 'info');
-        for (let i = 0; i < offlineDrafts.length; i++) {
-          try {
-            const draft = offlineDrafts[i];
-            await sendWithRetry(draft);
-            const success = await deleteDraftFromDB(draft.id);
-            if (!success) {
-              console.warn(`Не удалось удалить черновик из IndexedDB: ${draft.id}`);
-              showNotification(`⚠️ Не удалось удалить черновик из IndexedDB: ${draft.objectName}`, 'warning');
-            }
-            setSyncProgress(prev => ({ ...prev, current: i + 1 }));
-            showNotification(`📤 Отправлено: ${draft.objectName}`, 'info');
-          } catch (error) {
-            console.error(`Ошибка удаления черновика из IndexedDB: ${offlineDrafts[i]?.id}`, error);
-            showNotification(`⚠️ Ошибка удаления черновика: ${offlineDrafts[i]?.objectName}`, 'warning');
+  // 🌐 NETWORK STATUS — С СИНХРОНИЗАЦИЕЙ
+useEffect(() => {
+  const handleOnline = async () => {
+    setIsOnline(true);
+    showNotification(t('backOnline'), 'success');
+    
+    // ✅ Синхронизируем данные при восстановлении сети
+    if (user && userCompanyId) {
+      await loadApplications(page);
+      showNotification('🔄 Данные синхронизированы', 'success');
+    }
+    
+    if (offlineDrafts.length > 0) {
+      setSyncProgress({ current: 0, total: offlineDrafts.length });
+      showNotification(`${t('sendingDrafts')} (${offlineDrafts.length})`, 'info');
+      for (let i = 0; i < offlineDrafts.length; i++) {
+        try {
+          const draft = offlineDrafts[i];
+          await sendWithRetry(draft);
+          const success = await deleteDraftFromDB(draft.id);
+          if (!success) {
+            console.warn(`Не удалось удалить черновик из IndexedDB: ${draft.id}`);
+            showNotification(`⚠️ Не удалось удалить черновик: ${draft.objectName}`, 'warning');
           }
+          setSyncProgress(prev => ({ ...prev, current: i + 1 }));
+          showNotification(`📤 Отправлено: ${draft.objectName}`, 'info');
+        } catch (error) {
+          console.error(`Ошибка удаления черновика: ${offlineDrafts[i]?.id}`, error);
+          showNotification(`⚠️ Ошибка удаления черновика: ${offlineDrafts[i]?.objectName}`, 'warning');
         }
-        setTimeout(() => {
-          setSyncProgress({ current: 0, total: 0 });
-          showNotification('✅ Все черновики отправлены!', 'success');
-        }, 1000);
       }
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-      showNotification(t('offlineMode'), 'warning');
-    };
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [offlineDrafts, t, showNotification]);
+      setTimeout(() => {
+        setSyncProgress({ current: 0, total: 0 });
+        showNotification('✅ Все черновики отправлены!', 'success');
+      }, 1000);
+    }
+  };
+  
+  const handleOffline = () => {
+    setIsOnline(false);
+    showNotification(t('offlineMode'), 'warning');
+  };
+  
+  window.addEventListener('online', handleOnline);
+  window.addEventListener('offline', handleOffline);
+  return () => {
+    window.removeEventListener('online', handleOnline);
+    window.removeEventListener('offline', handleOffline);
+  };
+}, [offlineDrafts, t, showNotification, user, userCompanyId, page, loadApplications]);
 
   // ─────────────────────────────────────────────────────────
   // 💾 OPTIMIZED DRAFT SAVE
@@ -2200,8 +2210,8 @@ const checkForUpdates = useCallback(async () => {
   };
 
   const handleLogout = async () => {
-  // ✅ Очистить кэш
-  cacheManager.clear();
+  // ✅ Очистить кэш через враппер
+  await clearAuthCache();
   await supabase.auth.signOut();
   setUser(null);
   setUserRole('foreman');
@@ -4200,20 +4210,9 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
-  const loadApplications = useCallback(async (pageNumber = 1) => {
+  // 📊 LOAD APPLICATIONS — С КЭШИРОВАНИЕМ ЧЕРЕЗ ВРАППЕР
+const loadApplications = useCallback(async (pageNumber = 1) => {
   if (!user || !userCompanyId) return;
-  
-  // ✅ Проверить кэш
-  const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
-  const cached = cacheManager.get('applications', cacheKey);
-  if (cached) {
-    setApplications(cached.userApps);
-    setTotalPages(cached.totalPages);
-    setCompanyUsers(cached.usersData || []);
-    setComments(cached.commentsMap || {});
-    setIsLoading(false);
-    return;
-  }
   
   setIsLoading(true);
   try {
@@ -4223,20 +4222,26 @@ useEffect(() => {
       .eq('company_id', userCompanyId);
     const totalPages = Math.ceil(count / ITEMS_PER_PAGE);
     setTotalPages(totalPages);
+    
     let query = supabase
       .from('applications')
       .select('*')
       .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false })
       .range((pageNumber - 1) * ITEMS_PER_PAGE, pageNumber * ITEMS_PER_PAGE - 1);
+    
     if (userRole === 'master') query = query.eq('user_id', user?.id);
     if (userRole === 'accountant') query = query.eq('status', 'received');
+    
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
+    
     setApplications(userApps);
+    
+    // ✅ КЭШИРУЕМ ЗАЯВКИ ЧЕРЕЗ ВРАППЕР
     if (userCompanyId && userApps && userApps.length > 0) {
-  await cacheApplications(userCompanyId, userApps);
-}
+      await cacheApplications(userCompanyId, userApps);
+    }
     
     // Загрузка пользователей для метрик активации
     const { data: usersData } = await supabase
@@ -4248,6 +4253,7 @@ useEffect(() => {
     if (usersData) {
       setCompanyUsers(usersData);
     }
+    
     if (userApps.length > 0) {
       const appIds = userApps.map(app => app.id);
       const { data: allComments = [] } = await supabase
@@ -4255,6 +4261,7 @@ useEffect(() => {
         .select('*')
         .in('application_id', appIds)
         .order('created_at', { ascending: true });
+      
       allComments.forEach(comment => {
         if (!commentsMap[comment.application_id]) {
           commentsMap[comment.application_id] = [];
@@ -4262,12 +4269,15 @@ useEffect(() => {
         commentsMap[comment.application_id].push(comment);
       });
       setComments(commentsMap);
+      
+      // ✅ КЭШИРУЕМ КОММЕНТАРИИ ЧЕРЕЗ ВРАППЕР
       if (userCompanyId && commentsMap && Object.keys(commentsMap).length > 0) {
-  await cacheComments(userCompanyId, commentsMap);
-}
+        await cacheComments(userCompanyId, commentsMap);
+      }
     } else {
       setComments({});
     }
+    
     if (isAdminMode) {
       const { data: allApps = [] } = await supabase
         .from('applications')
@@ -4279,13 +4289,6 @@ useEffect(() => {
       else setAllApplications(allApps);
     }
     
-    // ✅ Сохранить в кэш после загрузки
-    cacheManager.set('applications', cacheKey, {
-      userApps,
-      totalPages,
-      usersData,
-      commentsMap
-    });
   } catch (err) {
     console.error('Ошибка загрузки заявок:', err);
     showNotification('Ошибка загрузки данных', 'error');
@@ -4628,8 +4631,8 @@ useEffect(() => {
   
   return cleanup;
 }, [user, userCompanyId, page, loadApplications, showNotification]);
-
-const loadOfflineData = useCallback(async () => {
+// 📱 ЗАГРУЗКА ОФЛАЙН-ДАННЫХ
+const loadOfflineDataWrapper = useCallback(async () => {
   if (!userCompanyId) return;
   
   console.log('📱 [Offline] Загрузка офлайн-данных...');
@@ -4659,6 +4662,7 @@ const loadOfflineData = useCallback(async () => {
     console.warn('[Offline] Ошибка загрузки данных:', err);
   }
 }, [userCompanyId, showNotification]);
+
 
 // 🛡️ Глобальный перехватчик ошибок material_prices (временное решение)
 useEffect(() => {
