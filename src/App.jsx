@@ -170,21 +170,6 @@ import ApprovalModal from './components/ApprovalWorkflow/ApprovalModal';
 import { useApproval } from './hooks/useApproval';
 // eslint-disable-next-line no-unused-vars
 import approvalEngine from './utils/approvalEngine'; 
-// src/App.jsx — в блок импортов (после других импортов)
-
-// ✅ ИСПОЛЬЗУЙТЕ ВРАППЕР:
-import { 
-  cacheAuthData, 
-  getCachedAuth, 
-  clearAuthCache,
-  cacheApplications, 
-  loadOfflineApplications, 
-  cacheComments, 
-  loadOfflineComments,
-  loadOfflineData,        // ✅ ДОБАВИТЬ
-  isOfflineMode,          // ✅ ДОБАВИТЬ (для проверки режима)
-  getOfflineStatus        // ✅ ДОБАВИТЬ (получение статуса)
-} from './utils/offlineWrapper';
 
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
@@ -1499,152 +1484,167 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   // ─────────────────────────────────────────────────────────
   // 🔐 AUTH SESSION CHECK
   // ─────────────────────────────────────────────────────────
-  // 🔐 AUTH SESSION CHECK — С ИСПОЛЬЗОВАНИЕМ ВРАППЕРА
-useEffect(() => {
-  const checkSession = async () => {
-    try {
-      // 1️⃣ Сначала проверяем реальную сессию
+  useEffect(() => {
+    const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (session?.user) {
-        const metadata = session.user.user_metadata || {};
+        const metadata = session.user.user_metadata;
+        const role = metadata?.role || 'master';
         const company_id = metadata?.company_id;
         const company_name = metadata?.company_name?.trim();
-        
-        if (!company_id || !company_name) {
-          showNotification('Ваш аккаунт не привязан к компании.', 'error');
-          await supabase.auth.signOut();
-          setIsLoading(false);
-          return;
-        }
-        
-        // ✅ Кэшируем сессию через враппер
-        cacheAuthData(session, session.user, {
-          id: company_id,
-          name: company_name,
-          role: metadata?.role || 'master'
-        });
-        
-        setUser(session.user);
-        setUserRole(metadata?.role || 'master');
-        setUserCompany(company_name);
-        setUserCompanyId(company_id);
-        setProfileDataForHeader({
-          fullName: metadata?.full_name || '',
-          phone: metadata?.phone || ''
-        });
-        setIsLoading(false);
-        return;
-      }
-      
-      // 2️⃣ Пробуем восстановить из кэша (через враппер)
-      const cached = await getCachedAuth();
-      
-      if (cached && cached.user && !cached.expired) {
-        console.log('📱 [Offline] Восстановление сессии из кэша');
-        
-        const metadata = cached.user?.user_metadata || {};
-        const company_id = metadata?.company_id || cached.company?.id;
-        const company_name = metadata?.company_name || cached.company?.name;
-        
-        if (!company_id || !company_name) {
-          console.warn('⚠️ [Offline] Кэш повреждён, очищаем');
-          await clearAuthCache();
-          setIsLoading(false);
-          return;
-        }
-        
-        setUser(cached.user);
-        setUserRole(metadata?.role || 'master');
-        setUserCompany(company_name);
-        setUserCompanyId(company_id);
-        setProfileDataForHeader({
-          fullName: metadata?.full_name || '',
-          phone: metadata?.phone || ''
-        });
-        
-        showNotification('📱 Офлайн-режим. Данные загружены из кэша.', 'warning');
-        
-        // ✅ Загружаем офлайн-данные через враппер
-        try {
-          const offlineData = await loadOfflineData(company_id);
-          if (offlineData) {
-            setApplications(offlineData.applications || []);
-            setComments(offlineData.comments || {});
+        if (company_id) {
+          try {
+            const { data: companyData } = await supabase
+              .from('companies')
+              .select('is_blocked')
+              .eq('id', company_id)
+              .single();
+            if (companyData?.is_blocked) {
+              showNotification(t('companyBlockedAlert'), 'error');
+              await supabase.auth.signOut();
+              window.location.href = '/login?blocked=1';
+              return;
+            }
+          } catch (err) {
+            console.error('Ошибка проверки блокировки компании:', err);
           }
-        } catch (offlineErr) {
-          console.warn('[Offline] Ошибка загрузки данных:', offlineErr);
         }
-        
-        setIsLoading(false);
-        return;
+        if (!company_id || !company_name) {
+          showNotification('Ваш аккаунт не привязан к компании. Обратитесь к администратору.', 'error');
+          await supabase.auth.signOut();
+          return;
+        }
+        setUser(session.user);
+        setUserRole(role);
+        setUserCompany(company_name);
+        setUserCompanyId(company_id);
+        if (company_id && session?.user?.id) {
+          const { data: companyData, error: ownerError } = await supabase
+            .from('companies')
+            .select('is_company_owner')
+            .eq('id', company_id)
+            .single();
+          if (!ownerError && companyData?.is_company_owner === session.user.id) {
+            setIsCompanyOwner(true);
+          } else {
+            setIsCompanyOwner(false);
+          }
+        } else {
+          setIsCompanyOwner(false);
+        }
+        setProfileDataForHeader({
+          fullName: metadata.full_name || '',
+          phone: metadata.phone || ''
+        });
+        const savedLang = metadata.language || 'ru';
+        const savedTheme = metadata.theme || 'system';
+        setLanguage(savedLang);
+        setTheme(savedTheme);
+      } else {
+        const urlParams = new URLSearchParams(window.location.search);
+        const accessToken = urlParams.get('access_token');
+        const refreshToken = urlParams.get('refresh_token');
+        if (accessToken && refreshToken) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+          try {
+            const { data: { session: newSession }, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken
+            });
+            if (error) throw error;
+            if (newSession?.user) {
+              const metadata = newSession.user.user_metadata;
+              const role = metadata?.role || 'master';
+              const company_id = metadata?.company_id;
+              const company_name = metadata?.company_name?.trim();
+              if (!company_id || !company_name) {
+                showNotification('Ваш аккаунт не привязан к компании. Обратитесь к администратору.', 'error');
+                await supabase.auth.signOut();
+                return;
+              }
+              setUser(newSession.user);
+              setUserRole(role);
+              setUserCompany(company_name);
+              setUserCompanyId(company_id);
+              if (company_id && newSession?.user?.id) {
+                const { data: companyData, error: ownerError } = await supabase
+                  .from('companies')
+                  .select('is_company_owner')
+                  .eq('id', company_id)
+                  .single();
+                if (!ownerError && companyData?.is_company_owner === newSession.user.id) {
+                  setIsCompanyOwner(true);
+                } else {
+                  setIsCompanyOwner(false);
+                }
+              } else {
+                setIsCompanyOwner(false);
+              }
+              setProfileDataForHeader({
+                fullName: metadata.full_name || '',
+                phone: metadata.phone || ''
+              });
+              const savedLang = metadata.language || 'ru';
+              const savedTheme = metadata.theme || 'system';
+              setLanguage(savedLang);
+              setTheme(savedTheme);
+              showNotification('Добро пожаловать! Ваш аккаунт успешно подтвержден.', 'success');
+            }
+          } catch (err) {
+            console.error('Ошибка при установке сессии:', err);
+            showNotification('Ошибка при входе. Попробуйте войти вручную.', 'error');
+          }
+        } else {
+          setUser(null);
+          setUserRole('foreman');
+          setUserCompany(null);
+          setUserCompanyId(null);
+          setProfileDataForHeader({ fullName: '', phone: '' });
+          setLanguage('ru');
+          setTheme('system');
+        }
       }
-      
-      // 3️⃣ Нет сессии — показываем страницу входа
-      setUser(null);
-      setUserRole('foreman');
-      setUserCompany(null);
-      setUserCompanyId(null);
-      setProfileDataForHeader({ fullName: '', phone: '' });
       setIsLoading(false);
-      
-    } catch (error) {
-      console.error('[App] Session error:', error);
-      setUser(null);
-      setUserRole('foreman');
-      setUserCompany(null);
-      setUserCompanyId(null);
-      setProfileDataForHeader({ fullName: '', phone: '' });
-      setIsLoading(false);
-    }
-  };
-  
-  checkSession();
+    };
+    checkSession();
 
-  // Подписка на изменения auth
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-    try {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        const metadata = session.user.user_metadata || {};
+        const metadata = session.user.user_metadata;
+        const role = metadata?.role || 'master';
         const company_id = metadata?.company_id;
         const company_name = metadata?.company_name?.trim();
-        
         if (!company_id || !company_name) {
-          showNotification('Ваш аккаунт не привязан к компании.', 'error');
+          showNotification('Ваш аккаунт не привязан к компании. Обратитесь к администратору.', 'error');
           supabase.auth.signOut();
           return;
         }
-        
-        cacheAuthData(session, session.user, {
-          id: company_id,
-          name: company_name,
-          role: metadata?.role || 'master'
-        });
-        
         setUser(session.user);
-        setUserRole(metadata?.role || 'master');
+        setUserRole(role);
         setUserCompany(company_name);
         setUserCompanyId(company_id);
         setProfileDataForHeader({
-          fullName: metadata?.full_name || '',
-          phone: metadata?.phone || ''
+          fullName: metadata.full_name || '',
+          phone: metadata.phone || ''
         });
+        const savedLang = metadata.language || 'ru';
+        const savedTheme = metadata.theme || 'system';
+        setLanguage(savedLang);
+        setTheme(savedTheme);
       } else {
-        clearAuthCache();
         setUser(null);
         setUserRole('foreman');
         setUserCompany(null);
         setUserCompanyId(null);
         setProfileDataForHeader({ fullName: '', phone: '' });
+        setLanguage('ru');
+        setTheme('system');
       }
-    } catch (err) {
-      console.error('[Auth] Error:', err);
-    }
-    setIsLoading(false);
-  });
+      setIsLoading(false);
+    });
 
-  return () => subscription.unsubscribe();
-}, [supabase, showNotification]);
+    return () => subscription.unsubscribe();
+  }, []);
 
   // ─────────────────────────────────────────────────────────
   // 🚫 BLOCKED PARAM CHECK
@@ -1662,74 +1662,70 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 📥 LOAD OFFLINE DRAFTS
   // ─────────────────────────────────────────────────────────
-  // 📥 ЗАГРУЗКА ДАННЫХ — С ПОДДЕРЖКОЙ ОФЛАЙН-РЕЖИМА
-useEffect(() => {
-  const loadInitialData = async () => {
-    if (!user || !userCompanyId) return;
-    
-    // Если есть интернет — загружаем свежие данные
-    if (navigator.onLine) {
-      await loadApplications(page);
-    } else {
-      // Офлайн-режим — загружаем из кэша
-      await loadOfflineDataWrapper();
-      showNotification('📱 Офлайн-режим. Данные из кэша.', 'warning');
-    }
-  };
-  
-  loadInitialData();
-}, [user, userCompanyId, page, loadApplications, loadOfflineDataWrapper]);
-
-  // 🌐 NETWORK STATUS — С СИНХРОНИЗАЦИЕЙ
-useEffect(() => {
-  const handleOnline = async () => {
-    setIsOnline(true);
-    showNotification(t('backOnline'), 'success');
-    
-    // ✅ Синхронизируем данные при восстановлении сети
-    if (user && userCompanyId) {
-      await loadApplications(page);
-      showNotification('🔄 Данные синхронизированы', 'success');
-    }
-    
-    if (offlineDrafts.length > 0) {
-      setSyncProgress({ current: 0, total: offlineDrafts.length });
-      showNotification(`${t('sendingDrafts')} (${offlineDrafts.length})`, 'info');
-      for (let i = 0; i < offlineDrafts.length; i++) {
-        try {
-          const draft = offlineDrafts[i];
-          await sendWithRetry(draft);
-          const success = await deleteDraftFromDB(draft.id);
-          if (!success) {
-            console.warn(`Не удалось удалить черновик из IndexedDB: ${draft.id}`);
-            showNotification(`⚠️ Не удалось удалить черновик: ${draft.objectName}`, 'warning');
-          }
-          setSyncProgress(prev => ({ ...prev, current: i + 1 }));
-          showNotification(`📤 Отправлено: ${draft.objectName}`, 'info');
-        } catch (error) {
-          console.error(`Ошибка удаления черновика: ${offlineDrafts[i]?.id}`, error);
-          showNotification(`⚠️ Ошибка удаления черновика: ${offlineDrafts[i]?.objectName}`, 'warning');
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (!hasLoadedDrafts) {
+        const drafts = await loadDraftsFromDB();
+        setOfflineDrafts(drafts);
+        const formDraft = drafts.find(d => d.id === 'current_form_draft');
+        if (formDraft) {
+          setFormData({
+            objectName: formDraft.objectName || '',
+            foremanName: formDraft.foremanName || '',
+            foremanPhone: formDraft.foremanPhone || '',
+            materials: Array.isArray(formDraft.materials) ? [...formDraft.materials] : [{ description: '', quantity: 1, unit: 'шт' }],
+            cart: Array.isArray(formDraft.cart) ? [...formDraft.cart] : []
+          });
         }
+        setHasLoadedDrafts(true);
       }
-      setTimeout(() => {
-        setSyncProgress({ current: 0, total: 0 });
-        showNotification('✅ Все черновики отправлены!', 'success');
-      }, 1000);
-    }
-  };
-  
-  const handleOffline = () => {
-    setIsOnline(false);
-    showNotification(t('offlineMode'), 'warning');
-  };
-  
-  window.addEventListener('online', handleOnline);
-  window.addEventListener('offline', handleOffline);
-  return () => {
-    window.removeEventListener('online', handleOnline);
-    window.removeEventListener('offline', handleOffline);
-  };
-}, [offlineDrafts, t, showNotification, user, userCompanyId, page, loadApplications]);
+    };
+    loadInitialData();
+  }, [hasLoadedDrafts]);
+
+  // ─────────────────────────────────────────────────────────
+  // 🌐 NETWORK STATUS
+  // ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOnline(true);
+      showNotification(t('backOnline'), 'success');
+      if (offlineDrafts.length > 0) {
+        setSyncProgress({ current: 0, total: offlineDrafts.length });
+        showNotification(`${t('sendingDrafts')} (${offlineDrafts.length})`, 'info');
+        for (let i = 0; i < offlineDrafts.length; i++) {
+          try {
+            const draft = offlineDrafts[i];
+            await sendWithRetry(draft);
+            const success = await deleteDraftFromDB(draft.id);
+            if (!success) {
+              console.warn(`Не удалось удалить черновик из IndexedDB: ${draft.id}`);
+              showNotification(`⚠️ Не удалось удалить черновик из IndexedDB: ${draft.objectName}`, 'warning');
+            }
+            setSyncProgress(prev => ({ ...prev, current: i + 1 }));
+            showNotification(`📤 Отправлено: ${draft.objectName}`, 'info');
+          } catch (error) {
+            console.error(`Ошибка удаления черновика из IndexedDB: ${offlineDrafts[i]?.id}`, error);
+            showNotification(`⚠️ Ошибка удаления черновика: ${offlineDrafts[i]?.objectName}`, 'warning');
+          }
+        }
+        setTimeout(() => {
+          setSyncProgress({ current: 0, total: 0 });
+          showNotification('✅ Все черновики отправлены!', 'success');
+        }, 1000);
+      }
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      showNotification(t('offlineMode'), 'warning');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [offlineDrafts, t, showNotification]);
 
   // ─────────────────────────────────────────────────────────
   // 💾 OPTIMIZED DRAFT SAVE
@@ -2210,8 +2206,8 @@ const checkForUpdates = useCallback(async () => {
   };
 
   const handleLogout = async () => {
-  // ✅ Очистить кэш через враппер
-  await clearAuthCache();
+  // ✅ Очистить кэш
+  cacheManager.clear();
   await supabase.auth.signOut();
   setUser(null);
   setUserRole('foreman');
@@ -4210,9 +4206,20 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
-  // 📊 LOAD APPLICATIONS — С КЭШИРОВАНИЕМ ЧЕРЕЗ ВРАППЕР
-const loadApplications = useCallback(async (pageNumber = 1) => {
+  const loadApplications = useCallback(async (pageNumber = 1) => {
   if (!user || !userCompanyId) return;
+  
+  // ✅ Проверить кэш
+  const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
+  const cached = cacheManager.get('applications', cacheKey);
+  if (cached) {
+    setApplications(cached.userApps);
+    setTotalPages(cached.totalPages);
+    setCompanyUsers(cached.usersData || []);
+    setComments(cached.commentsMap || {});
+    setIsLoading(false);
+    return;
+  }
   
   setIsLoading(true);
   try {
@@ -4222,26 +4229,17 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
       .eq('company_id', userCompanyId);
     const totalPages = Math.ceil(count / ITEMS_PER_PAGE);
     setTotalPages(totalPages);
-    
     let query = supabase
       .from('applications')
       .select('*')
       .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false })
       .range((pageNumber - 1) * ITEMS_PER_PAGE, pageNumber * ITEMS_PER_PAGE - 1);
-    
     if (userRole === 'master') query = query.eq('user_id', user?.id);
     if (userRole === 'accountant') query = query.eq('status', 'received');
-    
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
-    
     setApplications(userApps);
-    
-    // ✅ КЭШИРУЕМ ЗАЯВКИ ЧЕРЕЗ ВРАППЕР
-    if (userCompanyId && userApps && userApps.length > 0) {
-      await cacheApplications(userCompanyId, userApps);
-    }
     
     // Загрузка пользователей для метрик активации
     const { data: usersData } = await supabase
@@ -4253,7 +4251,6 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
     if (usersData) {
       setCompanyUsers(usersData);
     }
-    
     if (userApps.length > 0) {
       const appIds = userApps.map(app => app.id);
       const { data: allComments = [] } = await supabase
@@ -4261,7 +4258,6 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
         .select('*')
         .in('application_id', appIds)
         .order('created_at', { ascending: true });
-      
       allComments.forEach(comment => {
         if (!commentsMap[comment.application_id]) {
           commentsMap[comment.application_id] = [];
@@ -4269,15 +4265,9 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
         commentsMap[comment.application_id].push(comment);
       });
       setComments(commentsMap);
-      
-      // ✅ КЭШИРУЕМ КОММЕНТАРИИ ЧЕРЕЗ ВРАППЕР
-      if (userCompanyId && commentsMap && Object.keys(commentsMap).length > 0) {
-        await cacheComments(userCompanyId, commentsMap);
-      }
     } else {
       setComments({});
     }
-    
     if (isAdminMode) {
       const { data: allApps = [] } = await supabase
         .from('applications')
@@ -4289,6 +4279,13 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
       else setAllApplications(allApps);
     }
     
+    // ✅ Сохранить в кэш после загрузки
+    cacheManager.set('applications', cacheKey, {
+      userApps,
+      totalPages,
+      usersData,
+      commentsMap
+    });
   } catch (err) {
     console.error('Ошибка загрузки заявок:', err);
     showNotification('Ошибка загрузки данных', 'error');
@@ -4631,38 +4628,6 @@ useEffect(() => {
   
   return cleanup;
 }, [user, userCompanyId, page, loadApplications, showNotification]);
-// 📱 ЗАГРУЗКА ОФЛАЙН-ДАННЫХ
-const loadOfflineDataWrapper = useCallback(async () => {
-  if (!userCompanyId) return;
-  
-  console.log('📱 [Offline] Загрузка офлайн-данных...');
-  
-  try {
-    // 1. Загружаем кэшированные заявки
-    const cachedApps = await loadOfflineApplications(userCompanyId);
-    if (cachedApps && cachedApps.length > 0) {
-      setApplications(cachedApps);
-      console.log(`📱 [Offline] Загружено ${cachedApps.length} заявок из кэша`);
-    }
-    
-    // 2. Загружаем кэшированные комментарии
-    const cachedComments = await loadOfflineComments(userCompanyId);
-    if (cachedComments) {
-      setComments(cachedComments);
-      console.log('📱 [Offline] Загружены комментарии из кэша');
-    }
-    
-    // 3. Загружаем офлайн-черновики
-    const drafts = await loadDraftsFromDB();
-    setOfflineDrafts(drafts);
-    console.log(`📱 [Offline] Загружено ${drafts.length} черновиков`);
-    
-    showNotification('📱 Данные загружены из офлайн-кэша', 'info');
-  } catch (err) {
-    console.warn('[Offline] Ошибка загрузки данных:', err);
-  }
-}, [userCompanyId, showNotification]);
-
 
 // 🛡️ Глобальный перехватчик ошибок material_prices (временное решение)
 useEffect(() => {
@@ -5923,7 +5888,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   <ErrorBoundary 
     supabase={supabase}
     companyId={userCompanyId}
-    userId={user?.id}
     onError={(error, errorInfo) => {
       console.error('[Global Error]', error, errorInfo);
     }}

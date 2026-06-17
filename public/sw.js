@@ -1,24 +1,42 @@
 /* eslint-disable */
 // ✅ Service Worker для PWA приложения Reglai
-// Версия: 10 — полноценный офлайн-режим
+// Версия: 9
 
 // ✅ Защита от циклических обновлений
 let isUpdating = false;
 let lastUpdateCheck = 0;
 const UPDATE_COOLDOWN = 60000; // 60 секунд
 
-// ✅ Версия приложения (синхронизирована с config)
-const APP_VERSION = '1.1.10-beta';
-const CACHE_NAME = `reglai-system-${APP_VERSION}`;
-const DATA_CACHE_NAME = `reglai-data-${APP_VERSION}`;
-const OFFLINE_CACHE_NAME = `reglai-offline-${APP_VERSION}`;
+const APP_VERSION = '1.1.8-beta';
+const CACHE_NAME = `reglai-system-v${APP_VERSION}`;
+const DATA_CACHE_NAME = `reglai-data-v${APP_VERSION}`;
+const OFFLINE_CACHE_NAME = `reglai-offline-v${APP_VERSION}`;
 
-// ✅ Конфигурация кэширования
-const CACHE_CONFIG = {
-  MAX_DATA_CACHE_ENTRIES: 50,
-  DATA_CACHE_TTL_MINUTES: 30,
-  MAX_OFFLINE_CACHE_ENTRIES: 100,
-  OFFLINE_REQUEST_MAX_AGE_HOURS: 24
+const checkAndUpdate = async () => {
+  const now = Date.now();
+  if (isUpdating || (now - lastUpdateCheck) < UPDATE_COOLDOWN) {
+    console.log('[SW] Update skipped (cooldown)');
+    return false;
+  }
+  
+  isUpdating = true;
+  lastUpdateCheck = now;
+  
+  try {
+    const response = await fetch('/version.json?v=' + now);
+    const data = await response.json();
+    
+    if (data.version && data.version !== APP_VERSION) {
+      console.log('[SW] New version detected:', data.version);
+      return true;
+    }
+  } catch (err) {
+    console.warn('[SW] Version check failed:', err);
+  } finally {
+    isUpdating = false;
+  }
+  
+  return false;
 };
 
 // ✅ Ресурсы для предзагрузки (App Shell)
@@ -39,8 +57,16 @@ const urlsToCache = [
   '/icon-512.png'
 ];
 
+// ✅ Конфигурация кэширования
+const CACHE_CONFIG = {
+  MAX_DATA_CACHE_ENTRIES: 50,
+  DATA_CACHE_TTL_MINUTES: 30,
+  MAX_OFFLINE_CACHE_ENTRIES: 100,
+  OFFLINE_REQUEST_MAX_AGE_HOURS: 24
+};
+
 // ─────────────────────────────────────────────────────────
-// 🔧 Вспомогательные функции
+// 🎯 Вспомогательные функции
 // ─────────────────────────────────────────────────────────
 
 const isSupabaseUrl = (url) => {
@@ -78,33 +104,6 @@ const notifyClients = (type, payload) => {
       }
     });
   });
-};
-
-const checkAndUpdate = async () => {
-  const now = Date.now();
-  if (isUpdating || (now - lastUpdateCheck) < UPDATE_COOLDOWN) {
-    console.log('[SW] Update skipped (cooldown)');
-    return false;
-  }
-  
-  isUpdating = true;
-  lastUpdateCheck = now;
-  
-  try {
-    const response = await fetch('/version.json?v=' + now);
-    const data = await response.json();
-    
-    if (data.version && data.version !== APP_VERSION) {
-      console.log('[SW] New version detected:', data.version);
-      return true;
-    }
-  } catch (err) {
-    console.warn('[SW] Version check failed:', err);
-  } finally {
-    isUpdating = false;
-  }
-  
-  return false;
 };
 
 // ─────────────────────────────────────────────────────────
@@ -213,32 +212,20 @@ async function syncOfflineQueue() {
 }
 
 // ─────────────────────────────────────────────────────────
-// 🌐 FETCH — ИСПРАВЛЕНО
+// 🌐 FETCH
 // ─────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  
-  // ✅ Для не-GET запросов — только сеть
-  if (request.method !== 'GET') {
-    event.respondWith(fetch(request));
-    return;
-  }
+  if (request.method !== 'GET') return;
   
   try {
     const url = new URL(request.url);
     
-    // ✅ Игнорируем chrome-extension и другие системные запросы
-    if (url.protocol === 'chrome-extension:' || url.protocol === 'chrome:') {
-      event.respondWith(fetch(request));
-      return;
-    }
-    
-    // ✅ Статические ресурсы (с кэшированием)
+    // Статические ресурсы
     if (isStaticResource(url.href) && !isApiRequest(url.href)) {
       event.respondWith(
         caches.match(request).then(async (cached) => {
           if (cached) {
-            // Обновляем кэш в фоне
             fetch(request).then(async (response) => {
               if (response.ok) {
                 const cache = await caches.open(CACHE_NAME);
@@ -259,7 +246,7 @@ self.addEventListener('fetch', (event) => {
       return;
     }
     
-    // ✅ API-запросы (с кэшированием данных)
+    // API-запросы
     if (isApiRequest(url.href)) {
       event.respondWith(
         (async () => {
@@ -267,8 +254,15 @@ self.addEventListener('fetch', (event) => {
             const networkResponse = await fetch(request);
             if (networkResponse.ok) {
               const clone = networkResponse.clone();
+              const headers = new Headers(clone.headers);
+              headers.set('x-cached-at', new Date().toUTCString());
+              const responseWithHeaders = new Response(clone.body, {
+                status: clone.status,
+                statusText: clone.statusText,
+                headers
+              });
               const cache = await caches.open(DATA_CACHE_NAME);
-              await cache.put(request, clone);
+              await cache.put(request, responseWithHeaders);
             }
             return networkResponse;
           } catch (error) {
@@ -285,10 +279,11 @@ self.addEventListener('fetch', (event) => {
       return;
     }
     
-    // ✅ HTML-навигация (с offline fallback)
+    // HTML-навигация
     if (request.mode === 'navigate') {
       event.respondWith(
         (async () => {
+          const cached = await caches.match(request);
           try {
             const networkResponse = await fetch(request);
             if (networkResponse.ok) {
@@ -297,23 +292,17 @@ self.addEventListener('fetch', (event) => {
             }
             return networkResponse;
           } catch {
-            const cached = await caches.match(request);
             return cached || caches.match('/offline.html') || new Response('Offline', { status: 503 });
           }
         })()
       );
       return;
     }
-    
-    // ✅ Все остальные запросы
-    event.respondWith(
-      fetch(request).catch(() => caches.match(request))
-    );
-    
   } catch (error) {
     console.warn('[SW] Fetch handler error:', error);
-    event.respondWith(fetch(request).catch(() => caches.match(request)));
   }
+  
+  event.respondWith(fetch(request).catch(() => caches.match(request)));
 });
 
 // ─────────────────────────────────────────────────────────
@@ -424,9 +413,7 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
-// 🔔 Push Notifications
-// ─────────────────────────────────────────────────────────
+// Push Notifications
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   try {
@@ -435,31 +422,10 @@ self.addEventListener('push', (event) => {
       self.registration.showNotification(data.title || 'Реглай', {
         body: data.body || '',
         icon: '/icon-192.png',
-        badge: '/icon-48.png',
-        data: data.data || {}
+        badge: '/icon-48.png'
       })
     );
   } catch (error) {
     console.warn('[SW] Push error:', error);
   }
-});
-
-// ─────────────────────────────────────────────────────────
-// 🖱️ Notification Click
-// ─────────────────────────────────────────────────────────
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const urlToOpen = event.notification.data?.url || '/';
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then((clients) => {
-      for (const client of clients) {
-        if (client.url === urlToOpen && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(urlToOpen);
-      }
-    })
-  );
 });
