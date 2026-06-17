@@ -1,6 +1,6 @@
 // src/utils/offlineStorage.js
 // ✅ Офлайн-хранилище черновиков и очередь запросов на основе IndexedDB
-// Версия: 2.5.5
+// Версия: 2.5.6
 
 // ============================================================================
 // ⚙️ КОНСТАНТЫ И НАСТРОЙКИ
@@ -8,6 +8,7 @@
 const DB_NAME = 'ReglaiDB';
 const STORE_NAME = 'offlineDrafts';
 const QUEUE_STORE_NAME = 'offlineQueue';
+const CACHE_STORE_NAME = 'offline_cache';  // ✅ ДОБАВЛЕНО!
 const DB_VERSION = 2;
 
 const DB_CONFIG = {
@@ -69,6 +70,13 @@ export const openDB = () => {
         queueStore.createIndex('status', 'status', { unique: false });
         queueStore.createIndex('url', 'url', { unique: false });
         console.log('[IndexedDB] Created store:', QUEUE_STORE_NAME);
+      }
+      
+      // ✅ Хранилище кэша для офлайн-доступа
+      if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) {
+        const cacheStore = db.createObjectStore(CACHE_STORE_NAME, { keyPath: 'id' });
+        cacheStore.createIndex('timestamp', 'timestamp', { unique: false });
+        console.log('[IndexedDB] Created store:', CACHE_STORE_NAME);
       }
       
       // Миграция данных
@@ -788,6 +796,98 @@ export const initOfflineModule = async (options = {}) => {
 };
 
 // ============================================================================
+// 📦 ФУНКЦИИ КЭШИРОВАНИЯ ДЛЯ ОФЛАЙН-ДОСТУПА
+// ============================================================================
+
+/**
+ * Кэширует заявки для офлайн-доступа
+ * @param {string} companyId - ID компании
+ * @param {Array} applications - Массив заявок
+ * @returns {Promise<boolean>}
+ */
+export const cacheApplications = async (companyId, applications) => {
+  try {
+    const db = await openDB();
+    const tx = db.transaction([CACHE_STORE_NAME], 'readwrite');
+    const store = tx.objectStore(CACHE_STORE_NAME);
+    
+    await store.put({
+      id: `applications_${companyId}`,
+      data: applications,
+      timestamp: Date.now()
+    });
+    
+    return true;
+  } catch (e) {
+    console.warn('Failed to cache applications:', e);
+    return false;
+  }
+};
+
+/**
+ * Загружает кэшированные заявки
+ * @param {string} companyId - ID компании
+ * @returns {Promise<Array|null>}
+ */
+export const loadOfflineApplications = async (companyId) => {
+  try {
+    const db = await openDB();
+    const tx = db.transaction([CACHE_STORE_NAME], 'readonly');
+    const store = tx.objectStore(CACHE_STORE_NAME);
+    
+    const result = await store.get(`applications_${companyId}`);
+    return result?.data || null;
+  } catch (e) {
+    console.warn('Failed to load offline applications:', e);
+    return null;
+  }
+};
+
+/**
+ * Кэширует комментарии для офлайн-доступа
+ * @param {string} companyId - ID компании
+ * @param {Object} comments - Объект с комментариями
+ * @returns {Promise<boolean>}
+ */
+export const cacheComments = async (companyId, comments) => {
+  try {
+    const db = await openDB();
+    const tx = db.transaction([CACHE_STORE_NAME], 'readwrite');
+    const store = tx.objectStore(CACHE_STORE_NAME);
+    
+    await store.put({
+      id: `comments_${companyId}`,
+      data: comments,
+      timestamp: Date.now()
+    });
+    
+    return true;
+  } catch (e) {
+    console.warn('Failed to cache comments:', e);
+    return false;
+  }
+};
+
+/**
+ * Загружает кэшированные комментарии
+ * @param {string} companyId - ID компании
+ * @returns {Promise<Object|null>}
+ */
+export const loadOfflineComments = async (companyId) => {
+  try {
+    const db = await openDB();
+    const tx = db.transaction([CACHE_STORE_NAME], 'readonly');
+    const store = tx.objectStore(CACHE_STORE_NAME);
+    
+    const result = await store.get(`comments_${companyId}`);
+    return result?.data || null;
+  } catch (e) {
+    console.warn('Failed to load offline comments:', e);
+    return null;
+  }
+};
+
+// ============================================================================
 // 📦 DEFAULT EXPORT
 // ============================================================================
 export default {
@@ -815,6 +915,12 @@ export default {
   triggerManualSync,
   setupSyncListener,
   setupAutoSync,
+  
+  // Cache
+  cacheApplications,
+  loadOfflineApplications,
+  cacheComments,
+  loadOfflineComments,
   
   // Utils
   getStorageStats,
