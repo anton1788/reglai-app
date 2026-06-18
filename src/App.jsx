@@ -77,6 +77,7 @@ import {
   getSavedABTestResult,
 } from './utils/abTesting';
 import OnboardingTour from './components/OnboardingTour';
+import OnboardingProgress from './components/Onboarding/OnboardingProgress';
 import {
   logAuditAction,
   logApplicationCreated,
@@ -973,6 +974,8 @@ const App = () => {
   const [templateName, setTemplateName] = useState('');
   const [showTutorial, setShowTutorial] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingProgress, setOnboardingProgress] = useState(0);
+const [onboardingTasksComplete, setOnboardingTasksComplete] = useState(false);
 const [onboardingStep, setOnboardingStep] = useState(0);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -4669,12 +4672,76 @@ useEffect(() => {
   checkOnboarding();
 }, [user, userCompanyId, userRole]);
 
+// 📊 ЗАГРУЗКА ПРОГРЕССА ОНБОРДИНГА
+useEffect(() => {
+  const loadProgress = async () => {
+    if (!user || !userCompanyId) return;
+    if (isSuperAdmin(userRole, user?.user_metadata)) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('onboarding_progress')
+        .select('completed_tasks')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.debug('Onboarding progress error:', error);
+        return;
+      }
+      
+      if (data?.completed_tasks) {
+        const allTasks = ['profile', 'first_application', 'invite_team', 'analytics', 'complete'];
+        const completedCount = allTasks.filter(task => data.completed_tasks.includes(task)).length;
+        const progress = Math.round((completedCount / allTasks.length) * 100);
+        
+        setOnboardingProgress(progress);
+        setOnboardingTasksComplete(progress === 100);
+      } else {
+        // Создаем запись, если её нет
+        await supabase
+          .from('onboarding_progress')
+          .insert({
+            user_id: user.id,
+            company_id: userCompanyId,
+            completed_tasks: [],
+            updated_at: new Date()
+          });
+        setOnboardingProgress(0);
+        setOnboardingTasksComplete(false);
+      }
+    } catch (err) {
+      console.debug('Load progress error:', err);
+    }
+  };
+  
+  loadProgress();
+}, [user, userCompanyId, userRole, supabase]);
+
 const handleOnboardingComplete = async () => {
   setShowOnboarding(false);
   if (userCompanyId && userRole) {
-    // Ключ зависит от роли!
     localStorage.setItem(`onboarding_${userCompanyId}_${userRole}`, 'true');
   }
+  
+  // ✅ Сохраняем прогресс в БД
+  try {
+    const allTasks = ['profile', 'first_application', 'invite_team', 'analytics', 'complete'];
+    await supabase
+      .from('onboarding_progress')
+      .upsert({
+        user_id: user?.id,
+        company_id: userCompanyId,
+        completed_tasks: allTasks,
+        updated_at: new Date()
+      });
+    
+    setOnboardingProgress(100);
+    setOnboardingTasksComplete(true);
+  } catch (err) {
+    console.debug('Error saving onboarding progress:', err);
+  }
+  
   showNotification('🎉 Onboarding завершён! Теперь вы готовы к работе', 'success');
 };
 
@@ -5980,6 +6047,21 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         isAdminMode={isAdminMode}
         onToggleAdminMode={() => setIsAdminMode(false)}
       />
+      {/* 📊 ПРОГРЕСС ОНБОРДИНГА - ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ НЕ ЗАВЕРШЕН */}
+{user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (
+  <div className="max-w-7xl mx-auto px-4 pt-2">
+    <OnboardingProgress
+      supabase={supabase}
+      userId={user.id}
+      companyId={userCompanyId}
+      onTaskComplete={() => {
+        setOnboardingTasksComplete(true);
+        setOnboardingProgress(100);
+        showNotification('🎉 Вы выполнили все задачи онбординга!', 'success');
+      }}
+    />
+  </div>
+)}
       <main className="py-6">
                 {/* Умный поиск - показываем не всем */}
         {user && (userRole === 'manager' || userRole === 'director' || userRole === 'accountant' || userRole === 'supply_admin') && (
