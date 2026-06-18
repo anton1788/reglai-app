@@ -6059,6 +6059,21 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         setOnboardingProgress(100);
         showNotification('🎉 Вы выполнили все задачи онбординга!', 'success');
       }}
+      onNavigate={(path) => {
+        const viewMap = {
+          '/profile': 'profile',
+          '/applications/new': 'create',
+          '/employees': 'employees',
+          '/analytics': 'analytics'
+        };
+        
+        const view = viewMap[path];
+        if (view) {
+          setCurrentView(view);
+        } else {
+          console.warn('Unknown path:', path);
+        }
+      }}
     />
   </div>
 )}
