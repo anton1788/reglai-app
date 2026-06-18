@@ -77,7 +77,11 @@ import {
   getSavedABTestResult,
 } from './utils/abTesting';
 import OnboardingTour from './components/OnboardingTour';
+// === ИНТЕРАКТИВНЫЙ ТУР ===
+import InteractiveTour from './components/Onboarding/InteractiveTour';
 import OnboardingProgress from './components/Onboarding/OnboardingProgress';
+// === АНАЛИТИКА ОНБОРДИНГА ===
+import { AnalyticsTracker } from './utils/analyticsTracker';
 import {
   logAuditAction,
   logApplicationCreated,
@@ -977,6 +981,8 @@ const App = () => {
   const [onboardingProgress, setOnboardingProgress] = useState(0);
 const [onboardingTasksComplete, setOnboardingTasksComplete] = useState(false);
 const [onboardingStep, setOnboardingStep] = useState(0);
+// 🎯 Интерактивный тур
+const [showInteractiveTour, setShowInteractiveTour] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -2821,6 +2827,29 @@ const totalAmount = validMaterials.reduce((sum, m) =>
     }
     
     setApplications([data[0], ...applications.slice(0, ITEMS_PER_PAGE - 1)]);
+    // ✅ ДОБАВИТЬ: Отслеживаем первую заявку
+if (user?.id && userCompanyId) {
+  const { data: existingApps } = await supabase
+    .from('applications')
+    .select('id')
+    .eq('user_id', user.id)
+    .limit(2);
+  
+  if (!existingApps || existingApps.length <= 1) {
+    await AnalyticsTracker.trackTimeToFirstApplication(
+      user.id,
+      data[0].id
+    );
+    
+    await AnalyticsTracker.trackOnboardingStep(
+      user.id,
+      userCompanyId,
+      'first_application',
+      'created',
+      { applicationId: data[0].id }
+    );
+  }
+}
     
     try {
       sendApplication(data[0], settings, t, userCompany, language, copyApplicationText, showNotification);
@@ -4672,6 +4701,30 @@ useEffect(() => {
   checkOnboarding();
 }, [user, userCompanyId, userRole]);
 
+// 🎯 ИНТЕРАКТИВНЫЙ ТУР - ПОКАЗЫВАЕМ ПРИ ПЕРВОМ ВХОДЕ
+useEffect(() => {
+  const checkInteractiveTour = async () => {
+    if (!user || !userCompanyId) return;
+    if (isSuperAdmin(userRole, user?.user_metadata)) return;
+    
+    const key = `interactive_tour_${userCompanyId}_${userRole}`;
+    const completed = localStorage.getItem(key);
+    const hasApplications = applications.length > 0;
+    
+    if (!completed && !hasApplications && !showOnboarding) {
+      setTimeout(() => {
+        setShowInteractiveTour(true);
+      }, 2000);
+    } else if (!completed && hasApplications && !showOnboarding) {
+      setTimeout(() => {
+        setShowInteractiveTour(true);
+      }, 3000);
+    }
+  };
+  
+  checkInteractiveTour();
+}, [user, userCompanyId, userRole, applications.length, showOnboarding, isSuperAdmin]);
+
 // 📊 ЗАГРУЗКА ПРОГРЕССА ОНБОРДИНГА
 useEffect(() => {
   const loadProgress = async () => {
@@ -4697,6 +4750,16 @@ useEffect(() => {
         
         setOnboardingProgress(progress);
         setOnboardingTasksComplete(progress === 100);
+        
+        // ✅ ДОБАВИТЬ: Отслеживаем прогресс онбординга
+        await AnalyticsTracker.trackOnboardingStep(
+          user.id,
+          userCompanyId,
+          'progress_check',
+          'loaded',
+          { progress }
+        );
+        
       } else {
         // Создаем запись, если её нет
         await supabase
@@ -4709,6 +4772,14 @@ useEffect(() => {
           });
         setOnboardingProgress(0);
         setOnboardingTasksComplete(false);
+        
+        // ✅ ДОБАВИТЬ: Отслеживаем старт онбординга
+        await AnalyticsTracker.trackOnboardingStep(
+          user.id,
+          userCompanyId,
+          'start',
+          'onboarding_started'
+        );
       }
     } catch (err) {
       console.debug('Load progress error:', err);
@@ -4724,7 +4795,6 @@ const handleOnboardingComplete = async () => {
     localStorage.setItem(`onboarding_${userCompanyId}_${userRole}`, 'true');
   }
   
-  // ✅ Сохраняем прогресс в БД
   try {
     const allTasks = ['profile', 'first_application', 'invite_team', 'analytics', 'complete'];
     await supabase
@@ -4738,6 +4808,26 @@ const handleOnboardingComplete = async () => {
     
     setOnboardingProgress(100);
     setOnboardingTasksComplete(true);
+    
+    // ✅ ДОБАВИТЬ: Отслеживаем завершение онбординга
+    if (user?.id && userCompanyId) {
+      await AnalyticsTracker.trackOnboardingStep(
+        user.id,
+        userCompanyId,
+        'complete',
+        'onboarding_completed',
+        { allTasks }
+      );
+      
+      // ✅ ДОБАВИТЬ: Отслеживаем время до завершения
+      await AnalyticsTracker.trackOnboardingStep(
+        user.id,
+        userCompanyId,
+        'time_to_complete',
+        'measured'
+      );
+    }
+    
   } catch (err) {
     console.debug('Error saving onboarding progress:', err);
   }
@@ -6815,6 +6905,41 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           highlights={currentOnboardingHighlights}
         />
       )}
+
+      {/* 🆕 ИНТЕРАКТИВНЫЙ ТУР */}
+{showInteractiveTour && (
+  <InteractiveTour
+    isOpen={showInteractiveTour}
+    onComplete={() => {
+      setShowInteractiveTour(false);
+      localStorage.setItem(`interactive_tour_${userCompanyId}_${userRole}`, 'true');
+      showNotification('🎉 Отлично! Вы познакомились с основными функциями!', 'success');
+      
+      if (user?.id && userCompanyId) {
+        AnalyticsTracker.trackOnboardingStep(
+          user.id,
+          userCompanyId,
+          'interactive_tour',
+          'completed'
+        );
+      }
+    }}
+    onSkip={() => {
+      setShowInteractiveTour(false);
+      localStorage.setItem(`interactive_tour_${userCompanyId}_${userRole}`, 'skipped');
+      showNotification('Вы всегда можете вернуться к туру в настройках', 'info');
+      
+      if (user?.id && userCompanyId) {
+        AnalyticsTracker.trackOnboardingStep(
+          user.id,
+          userCompanyId,
+          'interactive_tour',
+          'skipped'
+        );
+      }
+    }}
+  />
+)}
       
       {/* Approval Modal */}
       {showApprovalModal && (
