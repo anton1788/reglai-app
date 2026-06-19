@@ -6726,14 +6726,15 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
               </div>
               
               {userCompanyId && !planLoading && (
-                <div className="mb-6">
-                  <QuotaUsage 
-                    userCompanyId={userCompanyId} 
-                    supabase={supabase} 
-                    quotaStatus={quotaStatus} 
-                  />
-                </div>
-              )}
+  <div className="mb-6">
+    <QuotaUsage 
+      userCompanyId={userCompanyId} 
+      supabase={supabase}
+      currentPlan={currentPlan}
+      onUpgradeClick={() => setShowTariffModal(true)}
+    />
+  </div>
+)}
               
               <TariffSelector
                 currentPlan={currentPlan?.id || 'basic'}
@@ -7168,47 +7169,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           t={t}
         />
       )}
-      {/* Модальное окно выбора тарифа */}
-{showTariffModal && (
-  <div 
-    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter"
-    onClick={(e) => e.target === e.currentTarget && setShowTariffModal(false)}
-  >
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-      <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 rounded-t-2xl">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {currentPlan?.id === 'basic' ? '🚀 Увеличьте лимиты' : 'Выберите тариф'}
-        </h2>
-        <button
-          onClick={() => setShowTariffModal(false)}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          aria-label="Закрыть"
-        >
-          <X className="w-6 h-6 text-gray-500" />
-        </button>
-      </div>
-      
-      <div className="p-4">
-        <TariffSelector
-          currentPlan={currentPlan?.id || 'basic'}
-          billingPeriod={billingPeriod}
-          onBillingPeriodChange={setBillingPeriod}
-          onSelectPlan={handleSelectPlan}
-          isLoading={planLoading}
-          t={t}
-          onPromoClick={() => {
-            setShowTariffModal(false);
-            setShowPromoModal(true);
-          }}
-          currentPlanDetails={currentPlanDetails}
-          promoCodeInfo={promoCodeInfo}
-          quotaStatus={quotaStatus}
-          onUpgradeClick={() => {}}
-        />
-      </div>
-    </div>
-  </div>
-)}
     </div>
 
     {/* Privacy Policy Modal */}
