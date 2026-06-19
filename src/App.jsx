@@ -29,6 +29,9 @@ import {
   getCompanyPlan,
   checkFeatureAccess,
   checkQuota,
+  checkMaterialsLimit,
+  incrementApplicationUsage,
+  resetCompanyLimits,
   logApiUsage,
 } from './utils/tariffPlans';
 // Добавить импорты
@@ -1025,10 +1028,10 @@ const [capturedPhotos, setCapturedPhotos] = useState({}); // { [appId-materialId
 const [auditLogs, setAuditLogs] = useState([]);  // ← ВСТАВИТЬ ЗДЕСЬ
 // 💰 Tariff & Quota State
 const [currentPlan, setCurrentPlan] = useState(null);
-const [currentPlanDetails, setCurrentPlanDetails] = useState(null); // 🆕 ДОБАВИТЬ ЭТУ СТРОКУ
+const [currentPlanDetails, setCurrentPlanDetails] = useState(null);
 const [promoCodeInfo, setPromoCodeInfo] = useState(null);   
 const [planLoading, setPlanLoading] = useState(true);
-const [_showTariffModal, setShowTariffModal] = useState(false);
+const [showTariffModal, setShowTariffModal] = useState(false);  // ← ИСПРАВЛЕНО!
 const [quotaStatus, setQuotaStatus] = useState(null);
 const [billingPeriod, setBillingPeriod] = useState('monthly');
 // 🎁 Promo States
@@ -2709,6 +2712,51 @@ const handleSubmit = async (e) => {
     showNotification(t('fillAllMaterials') || 'Заполните хотя бы один материал', 'error');
     return;
   }
+
+  // ============================================================
+// 🔐 ПРОВЕРКА ЛИМИТОВ ДЛЯ БЕСПЛАТНОГО ТАРИФА
+// ============================================================
+
+if (currentPlan?.id === 'basic' || !currentPlan) {
+  try {
+    // 1. Проверка лимита заявок
+    const quota = await checkQuota(supabase, userCompanyId);
+    
+    if (!quota.allowed) {
+      showNotification(
+        `⚠️ Лимит заявок исчерпан (${quota.used}/${quota.limit}). Обновите тариф для продолжения работы.`,
+        'warning'
+      );
+      setShowTariffModal(true);
+      return;
+    }
+    
+    // 2. Проверка лимита материалов
+    const materialCheck = await checkMaterialsLimit(supabase, userCompanyId, validMaterials.length);
+    
+    if (!materialCheck.allowed) {
+      showNotification(
+        `⚠️ В бесплатном тарифе максимум ${materialCheck.limit} материалов в заявке.`,
+        'warning'
+      );
+      return;
+    }
+    
+    // Предупреждение о скором исчерпании (если осталось 2 или меньше заявок)
+    if (quota.remaining <= 2 && quota.remaining > 0) {
+      showNotification(
+        `⚠️ Осталось ${quota.remaining} заявок. Скоро лимит будет исчерпан.`,
+        'warning',
+        false,
+        () => setShowTariffModal(true)
+      );
+    }
+    
+  } catch (err) {
+    console.error('Ошибка проверки лимитов:', err);
+    // Продолжаем выполнение, если проверка не удалась
+  }
+}
   
   const materialsWithTracking = validMaterials.map(m => ({
     ...m,
@@ -2848,6 +2896,21 @@ if (user?.id && userCompanyId) {
       'created',
       { applicationId: data[0].id }
     );
+  }
+}
+
+// 🆕 Увеличиваем счётчик заявок для бесплатного тарифа
+if (currentPlan?.id === 'basic' || !currentPlan) {
+  try {
+    await incrementApplicationUsage(supabase, userCompanyId);
+    
+    // Обновляем квоту в UI
+    const updatedQuota = await checkQuota(supabase, userCompanyId);
+    setQuotaStatus(updatedQuota);
+    
+    console.log('📈 Счётчик заявок увеличен');
+  } catch (err) {
+    console.warn('Не удалось увеличить счётчик:', err);
   }
 }
     
@@ -6182,53 +6245,69 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         )}
         {/* Весь существующий контент main остается без изменений */}
         {currentView === 'create' && (
-          <CreateApplicationForm
-            formData={formData}
-            setFormData={setFormData}
-            templates={templates}
-            showTemplateModal={showTemplateModal}
-            setShowTemplateModal={setShowTemplateModal}
-            templateName={templateName}
-            setTemplateName={setTemplateName}
-            selectedClientId={selectedClientId}
-            onClientSelect={setSelectedClientId}
-            companyId={userCompanyId}
-            t={t}
-            language={language}
-            showNotification={showNotification}
-            handleSubmit={handleSubmit}
-            onAddPhoto={(materialIndex) => {
-              setActiveMaterialIndex(materialIndex);
-              setShowPhotoCapture(true);
-            }}
-            handleObjectInput={handleObjectInput}
-            handlePhoneChange={handlePhoneChange}
-            addMaterial={addMaterial}
-            removeMaterial={removeMaterial}
-            updateMaterial={updateMaterial}
-            moveToCart={moveToCart}
-            restoreFromCart={restoreFromCart}
-            removeFromCartPermanently={removeFromCartPermanently}
-            selectMaterial={selectMaterial}
-            selectObject={selectObject}
-            saveTemplate={saveTemplate}
-            loadTemplate={loadTemplate}
-            filteredObjects={filteredObjects}
-            showObjectSuggestions={showObjectSuggestions}
-            setShowObjectSuggestions={setShowObjectSuggestions}
-            objectInputRef={objectInputRef}
-            materialHistory={materialHistory}
-            showMaterialSuggestions={showMaterialSuggestions}
-            setShowMaterialSuggestions={setShowMaterialSuggestions}
-            unitOptions={unitOptions}
-            isLoading={isLoading}
-            onExcelImport={handleExcelImport}
-            onCloneLast={cloneLastApplication}
-            onDownloadTemplate={downloadExcelTemplate}
-            fileInputRef={fileInputRef}
-            capturedPhotos={capturedPhotos}
-          />
-        )}
+  <div className="max-w-7xl mx-auto px-4">
+    {/* 🆕 Отображение лимитов */}
+    {userCompanyId && currentPlan && (
+      <div className="mb-4 max-w-2xl">
+        <QuotaUsage
+          userCompanyId={userCompanyId}
+          supabase={supabase}
+          currentPlan={currentPlan}
+          quotaStatus={quotaStatus}
+          onUpgradeClick={() => setShowTariffModal(true)}
+          showDetailed={true}
+        />
+      </div>
+    )}
+
+    <CreateApplicationForm
+      formData={formData}
+      setFormData={setFormData}
+      templates={templates}
+      showTemplateModal={showTemplateModal}
+      setShowTemplateModal={setShowTemplateModal}
+      templateName={templateName}
+      setTemplateName={setTemplateName}
+      selectedClientId={selectedClientId}
+      onClientSelect={setSelectedClientId}
+      companyId={userCompanyId}
+      t={t}
+      language={language}
+      showNotification={showNotification}
+      handleSubmit={handleSubmit}
+      onAddPhoto={(materialIndex) => {
+        setActiveMaterialIndex(materialIndex);
+        setShowPhotoCapture(true);
+      }}
+      handleObjectInput={handleObjectInput}
+      handlePhoneChange={handlePhoneChange}
+      addMaterial={addMaterial}
+      removeMaterial={removeMaterial}
+      updateMaterial={updateMaterial}
+      moveToCart={moveToCart}
+      restoreFromCart={restoreFromCart}
+      removeFromCartPermanently={removeFromCartPermanently}
+      selectMaterial={selectMaterial}
+      selectObject={selectObject}
+      saveTemplate={saveTemplate}
+      loadTemplate={loadTemplate}
+      filteredObjects={filteredObjects}
+      showObjectSuggestions={showObjectSuggestions}
+      setShowObjectSuggestions={setShowObjectSuggestions}
+      objectInputRef={objectInputRef}
+      materialHistory={materialHistory}
+      showMaterialSuggestions={showMaterialSuggestions}
+      setShowMaterialSuggestions={setShowMaterialSuggestions}
+      unitOptions={unitOptions}
+      isLoading={isLoading}
+      onExcelImport={handleExcelImport}
+      onCloneLast={cloneLastApplication}
+      onDownloadTemplate={downloadExcelTemplate}
+      fileInputRef={fileInputRef}
+      capturedPhotos={capturedPhotos}
+    />
+  </div>
+)}
 
         {currentView === 'crm-sales' && (
   <CRMSalesManager
@@ -6958,29 +7037,47 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         />
       )}
       
-      {/* Tariff Modal */}
-      {_showTariffModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-xl font-bold">Выберите тариф</h3>
-              <button onClick={() => setShowTariffModal(false)} className="p-2">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-4">
-              <TariffSelector
-                currentPlan={currentPlan?.id || 'basic'}
-                billingPeriod={billingPeriod}
-                onBillingPeriodChange={setBillingPeriod}
-                onSelectPlan={handleSelectPlan}
-                isLoading={planLoading}
-                t={t}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Модальное окно выбора тарифа */}
+{showTariffModal && (
+  <div 
+    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter"
+    onClick={(e) => e.target === e.currentTarget && setShowTariffModal(false)}
+  >
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 rounded-t-2xl">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {currentPlan?.id === 'basic' ? '🚀 Увеличьте лимиты' : 'Выберите тариф'}
+        </h2>
+        <button
+          onClick={() => setShowTariffModal(false)}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          aria-label="Закрыть"
+        >
+          <X className="w-6 h-6 text-gray-500" />
+        </button>
+      </div>
+      
+      <div className="p-4">
+        <TariffSelector
+          currentPlan={currentPlan?.id || 'basic'}
+          billingPeriod={billingPeriod}
+          onBillingPeriodChange={setBillingPeriod}
+          onSelectPlan={handleSelectPlan}
+          isLoading={planLoading}
+          t={t}
+          onPromoClick={() => {
+            setShowTariffModal(false);
+            setShowPromoModal(true);
+          }}
+          currentPlanDetails={currentPlanDetails}
+          promoCodeInfo={promoCodeInfo}
+          quotaStatus={quotaStatus}
+          onUpgradeClick={() => {}}
+        />
+      </div>
+    </div>
+  </div>
+)}
       
       {/* Photo Capture Modal */}
       {showPhotoCapture && (
@@ -7071,6 +7168,47 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           t={t}
         />
       )}
+      {/* Модальное окно выбора тарифа */}
+{showTariffModal && (
+  <div 
+    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter"
+    onClick={(e) => e.target === e.currentTarget && setShowTariffModal(false)}
+  >
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 rounded-t-2xl">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {currentPlan?.id === 'basic' ? '🚀 Увеличьте лимиты' : 'Выберите тариф'}
+        </h2>
+        <button
+          onClick={() => setShowTariffModal(false)}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          aria-label="Закрыть"
+        >
+          <X className="w-6 h-6 text-gray-500" />
+        </button>
+      </div>
+      
+      <div className="p-4">
+        <TariffSelector
+          currentPlan={currentPlan?.id || 'basic'}
+          billingPeriod={billingPeriod}
+          onBillingPeriodChange={setBillingPeriod}
+          onSelectPlan={handleSelectPlan}
+          isLoading={planLoading}
+          t={t}
+          onPromoClick={() => {
+            setShowTariffModal(false);
+            setShowPromoModal(true);
+          }}
+          currentPlanDetails={currentPlanDetails}
+          promoCodeInfo={promoCodeInfo}
+          quotaStatus={quotaStatus}
+          onUpgradeClick={() => {}}
+        />
+      </div>
+    </div>
+  </div>
+)}
     </div>
 
     {/* Privacy Policy Modal */}
