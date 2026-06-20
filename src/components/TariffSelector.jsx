@@ -1,4 +1,3 @@
-// src/components/TariffSelector.jsx
 import React, { useState } from 'react';
 import { Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles, Shield, Headphones, TrendingUp, Package } from 'lucide-react';
 import { TARIFF_PLANS, calculateSavings } from '../utils/tariffPlans';
@@ -53,6 +52,12 @@ const TariffSelector = ({
   const quotaPercent = quotaStatus?.limit > 0 
     ? Math.round((quotaStatus.used / quotaStatus.limit) * 100) 
     : 0;
+
+  // Безопасное форматирование числа
+  const safeFormatNumber = (num) => {
+    if (num === undefined || num === null || isNaN(num)) return '0';
+    return num.toLocaleString('ru-RU');
+  };
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
@@ -180,7 +185,7 @@ const TariffSelector = ({
           )}
           
           <button
-            onClick={() => onSelectPlan(currentPlan)}
+            onClick={() => onSelectPlan && onSelectPlan(currentPlan)}
             className="mt-4 w-full py-2 bg-[#4A6572]/20 text-[#4A6572] dark:text-[#F9AA33] rounded-lg text-sm font-medium hover:bg-[#4A6572]/30 transition-colors"
           >
             {translate('extendPlan', 'Продлить тариф')}
@@ -258,7 +263,7 @@ const TariffSelector = ({
                   </h3>
                   <div className="flex items-baseline justify-center gap-1">
                     <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                      {price === 0 ? 'Бесплатно' : price.toLocaleString('ru-RU') + ' ₽'}
+                      {price === 0 ? 'Бесплатно' : safeFormatNumber(price) + ' ₽'}
                     </span>
                     {price > 0 && (
                       <span className="text-gray-500 dark:text-gray-400">
@@ -269,10 +274,10 @@ const TariffSelector = ({
                     )}
                   </div>
                   {billingPeriod === 'annual' && price > 0 && savings && savings.savingsPercent !== undefined && (
-  <p className="text-sm text-green-600 mt-2">
-    {translate('tariffSelector.savings', 'Экономия')} {savings.savingsPercent}% ({savings.savings.toLocaleString()} ₽)
-  </p>
-)}
+                    <p className="text-sm text-green-600 mt-2">
+                      {translate('tariffSelector.savings', 'Экономия')} {savings.savingsPercent}% ({safeFormatNumber(savings.savings)} ₽)
+                    </p>
+                  )}
                 </div>
 
                 {/* Квоты и лимиты */}
@@ -344,7 +349,7 @@ const TariffSelector = ({
 
                 {/* Кнопка */}
                 <button
-                  onClick={() => onSelectPlan(plan.id)}
+                  onClick={() => onSelectPlan && onSelectPlan(plan.id)}
                   disabled={isCurrent || isLoading}
                   className={`w-full py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
                     isCurrent
