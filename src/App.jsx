@@ -6708,65 +6708,87 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           />
         )}
         
-        {currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && 
-          (isCompanyOwner || userRole === 'manager' || userRole === 'director') && (
-            <div className="max-w-7xl mx-auto p-4 page-enter">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {t('tariffSelector.title', 'Управление тарифом')}
-                </h2>
-                {isAdminMode && (
-                  <button
-                    onClick={handleAdminLogout}
-                    className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    {t('exitAdminMode', 'Выйти из режима админа')}
-                  </button>
-                )}
-              </div>
-              
-              {userCompanyId && !planLoading && (
-                <div className="mb-6">
-                  <QuotaUsage 
-                    userCompanyId={userCompanyId} 
-                    supabase={supabase} 
-                    quotaStatus={quotaStatus} 
-                  />
-                </div>
-              )}
-              
-              <TariffSelector
-                currentPlan={currentPlan?.id || 'basic'}
-                billingPeriod={billingPeriod}
-                onBillingPeriodChange={setBillingPeriod}
-                onSelectPlan={handleSelectPlan}
-                isLoading={planLoading}
-                t={t}
-                onPromoClick={() => setShowPromoModal(true)}
-                currentPlanDetails={currentPlanDetails}
-                promoCodeInfo={promoCodeInfo}
-              />
-              
-              {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
-                <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
-                    {t('currentPlan', 'Ваш текущий план')}:
-                  </h4>
-                  <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
-                    <span>📦 {currentPlan.name}</span>
-                    <span>💰 {billingPeriod === 'monthly' 
-                      ? `${currentPlan.monthlyPrice} ₽/мес` 
-                      : `${currentPlan.annualPrice} ₽/год`}</span>
-                    <span>🔑 {currentPlan.maxApiKeys} API ключей</span>
-                    <span>👥 {currentPlan.maxUsers} пользователей</span>
-                    {currentPlan.isActive && (
-                      <span className="text-green-600">✅ Активен</span>
-                    )}
-                  </div>
-                </div>
+        {currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && (
+  <div className="max-w-7xl mx-auto p-4 page-enter">
+    <div className="flex items-center justify-between mb-6">
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+        {t('tariffSelector.title', 'Управление тарифом')}
+      </h2>
+      {isAdminMode && (
+        <button
+          onClick={handleAdminLogout}
+          className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+        >
+          {t('exitAdminMode', 'Выйти из режима админа')}
+        </button>
+      )}
+    </div>
+    
+    {(isCompanyOwner || userRole === 'manager' || userRole === 'director') ? (
+      <>
+        {userCompanyId && !planLoading && (
+          <div className="mb-6">
+            <QuotaUsage 
+              userCompanyId={userCompanyId} 
+              supabase={supabase} 
+              quotaStatus={quotaStatus}
+              currentPlan={currentPlan}
+            />
+          </div>
+        )}
+        
+        <TariffSelector
+          currentPlan={currentPlan?.id || 'basic'}
+          billingPeriod={billingPeriod}
+          onBillingPeriodChange={setBillingPeriod}
+          onSelectPlan={handleSelectPlan}
+          isLoading={planLoading}
+          t={t}
+          onPromoClick={() => setShowPromoModal(true)}
+          currentPlanDetails={currentPlanDetails}
+          promoCodeInfo={promoCodeInfo}
+          quotaStatus={quotaStatus}
+          onUpgradeClick={() => {}}
+        />
+        
+        {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
+          <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+            <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+              {t('currentPlan', 'Ваш текущий план')}:
+            </h4>
+            <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <span>📦 {currentPlan.name}</span>
+              <span>💰 {billingPeriod === 'monthly' 
+                ? `${currentPlan.monthlyPrice} ₽/мес` 
+                : `${currentPlan.annualPrice} ₽/год`}</span>
+              <span>🔑 {currentPlan.maxApiKeys} API ключей</span>
+              <span>👥 {currentPlan.maxUsers} пользователей</span>
+              {currentPlan.isActive && (
+                <span className="text-green-600">✅ Активен</span>
               )}
             </div>
-          )}
+          </div>
+        )}
+      </>
+    ) : (
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-8 text-center">
+        <Sparkles className="w-16 h-16 text-[#4A6572] dark:text-[#F9AA33] mx-auto mb-4 opacity-50" />
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+          Доступ к тарифам ограничен
+        </h3>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">
+          Управление тарифами доступно только руководителям и владельцам компании.
+        </p>
+        <button
+          onClick={() => setCurrentView('create')}
+          className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors"
+        >
+          Вернуться к работе
+        </button>
+      </div>
+    )}
+  </div>
+)}
         
         {/* Вкладки для заказчика */}
         {currentView === 'clientDashboard' && userRole === 'client' && (
