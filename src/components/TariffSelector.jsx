@@ -268,11 +268,11 @@ const TariffSelector = ({
                       </span>
                     )}
                   </div>
-                  {billingPeriod === 'annual' && price > 0 && (
-                    <p className="text-sm text-green-600 mt-2">
-                      {translate('tariffSelector.savings', 'Экономия')} {savings.savingsPercent}% ({savings.savings.toLocaleString()} ₽)
-                    </p>
-                  )}
+                  {billingPeriod === 'annual' && price > 0 && savings && savings.savingsPercent !== undefined && (
+  <p className="text-sm text-green-600 mt-2">
+    {translate('tariffSelector.savings', 'Экономия')} {savings.savingsPercent}% ({savings.savings.toLocaleString()} ₽)
+  </p>
+)}
                 </div>
 
                 {/* Квоты и лимиты */}
