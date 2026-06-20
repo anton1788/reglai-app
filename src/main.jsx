@@ -8,7 +8,7 @@ import UpdateModal from './components/UpdateModal.jsx'
 import { initOfflineModule, checkOfflineSupport } from './utils/offlineStorage'
 
 // ✅ Версия приложения
-const APP_VERSION = '1.1.14-beta';
+const APP_VERSION = '1.1.15-beta';
 
 // ─────────────────────────────────────────────────────────
 // 🔹 Глобальные переменные для модального окна обновлений

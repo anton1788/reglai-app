@@ -1,8 +1,8 @@
 // src/components/TariffSelector.jsx
 import React, { useState, useCallback } from 'react';
 import { 
-  Calendar, Clock, Gift, Zap, CheckCircle, Check, X, 
-  Sparkles, Shield, Headphones, TrendingUp, Package 
+  Calendar, Clock, Gift, CheckCircle, Check, X, 
+  TrendingUp, Package 
 } from 'lucide-react';
 import { TARIFF_PLANS, calculateSavings } from '../utils/tariffPlans';
 
@@ -20,26 +20,24 @@ const TariffSelector = ({
   onUpgradeClick
 }) => {
   // ============================================================
-  // 🔥 УНИВЕРСАЛЬНАЯ ЗАЩИТА ОТ ОШИБОК
+  // 🔥 ЗАЩИТА ОТ ОШИБОК
   // ============================================================
 
-  // 1. БЕЗОПАСНАЯ ФУНКЦИЯ ПЕРЕВОДА
+  // БЕЗОПАСНАЯ ФУНКЦИЯ ПЕРЕВОДА — ЕСЛИ t НЕ ФУНКЦИЯ, ВОЗВРАЩАЕМ FALLBACK
   const translate = useCallback((key, fallback) => {
-    // Если t не функция — возвращаем fallback
     if (typeof t !== 'function') {
       return fallback || key;
     }
     try {
       const result = t(key);
-      // Если результат равен ключу или пустой — возвращаем fallback
       return (result === key || !result) ? (fallback || key) : result;
-    } catch (error) {
-      console.warn('[TariffSelector] Translation error:', error);
+    } catch {
+      // Игнорируем ошибку перевода
       return fallback || key;
     }
   }, [t]);
 
-  // 2. БЕЗОПАСНОЕ ФОРМАТИРОВАНИЕ ДАТЫ
+  // БЕЗОПАСНОЕ ФОРМАТИРОВАНИЕ ДАТЫ
   const formatDate = useCallback((dateString) => {
     if (!dateString) return '—';
     try {
@@ -50,38 +48,32 @@ const TariffSelector = ({
         month: 'long',
         year: 'numeric'
       });
-    } catch (error) {
-      console.warn('[TariffSelector] Date formatting error:', error);
+    } catch {
       return '—';
     }
   }, []);
 
-  // 3. БЕЗОПАСНЫЙ РАСЧЁТ ДНЕЙ
+  // БЕЗОПАСНЫЙ РАСЧЁТ ДНЕЙ
   const getDaysLeft = useCallback((expiresAt) => {
     if (!expiresAt) return null;
     try {
       const diff = new Date(expiresAt) - new Date();
       if (isNaN(diff)) return null;
-      const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-      return days;
-    } catch (error) {
-      console.warn('[TariffSelector] Days calculation error:', error);
+      return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    } catch {
       return null;
     }
   }, []);
 
-  // 4. ЗАЩИТА ОТ ПУСТЫХ ПЛАНОВ
   const plans = TARIFF_PLANS || {};
   const hasPlans = Object.keys(plans).length > 0;
 
-  // 5. БЕЗОПАСНАЯ ПРОВЕРКА quotaStatus
   const isBasicPlan = currentPlan === 'basic';
   const safeQuota = quotaStatus || { allowed: true, used: 0, limit: 5, remaining: 5 };
   const quotaPercent = safeQuota.limit > 0 
     ? Math.round((safeQuota.used / safeQuota.limit) * 100) 
     : 0;
 
-  // 6. ВНУТРЕННИЙ СОСТОЯНИЕ ДЛЯ ПЕРИОДА
   const [internalBillingPeriod, setInternalBillingPeriod] = useState('monthly');
   const billingPeriod = externalBillingPeriod !== undefined ? externalBillingPeriod : internalBillingPeriod;
   
@@ -93,47 +85,41 @@ const TariffSelector = ({
     }
   }, [onBillingPeriodChange]);
 
-  // 7. ЗАЩИТА: если нет планов — показываем загрузку
+  // ЕСЛИ НЕТ ПЛАНОВ — ПОКАЗЫВАЕМ ЗАГРУЗКУ
   if (!hasPlans) {
     return (
       <div className="max-w-7xl mx-auto p-4 text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4A6572] mx-auto"></div>
-        <p className="mt-4 text-gray-500 dark:text-gray-400">
-          {translate('tariffSelector.loading', 'Загрузка тарифов...')}
-        </p>
+        <p className="mt-4 text-gray-500 dark:text-gray-400">Загрузка тарифов...</p>
       </div>
     );
   }
 
-  // 8. ОСНОВНОЙ РЕНДЕР
+  // ============================================================
+  // ОСНОВНОЙ РЕНДЕР
+  // ============================================================
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-      {/* Блок статуса лимитов для бесплатного тарифа */}
+      {/* Блок статуса лимитов */}
       {isBasicPlan && safeQuota && (
         <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5 text-yellow-600" />
               <h4 className="font-semibold text-yellow-800 dark:text-yellow-200">
-                📋 {translate('tariffSelector.limits', 'Использование лимитов')}
+                📋 Использование лимитов
               </h4>
             </div>
             {safeQuota.allowed ? (
-              <span className="text-xs text-green-600 dark:text-green-400">
-                ✅ {translate('tariffSelector.hasSpace', 'Есть место')}
-              </span>
+              <span className="text-xs text-green-600 dark:text-green-400">✅ Есть место</span>
             ) : (
-              <span className="text-xs text-red-600 dark:text-red-400">
-                ⚠️ {translate('tariffSelector.exhausted', 'Лимит исчерпан')}
-              </span>
+              <span className="text-xs text-red-600 dark:text-red-400">⚠️ Лимит исчерпан</span>
             )}
           </div>
           
           <div className="mb-2">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">
-                {translate('tariffSelector.applications', 'Заявки')}
-              </span>
+              <span className="text-gray-600 dark:text-gray-400">Заявки</span>
               <span className="font-medium text-gray-900 dark:text-white">
                 {safeQuota.used} / {safeQuota.limit}
               </span>
@@ -149,8 +135,8 @@ const TariffSelector = ({
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {!safeQuota.allowed 
-                ? translate('tariffSelector.limitExhausted', '⚠️ Лимит исчерпан. Обновите тариф.')
-                : translate('tariffSelector.remaining', `Осталось ${safeQuota.remaining} заявок`)}
+                ? '⚠️ Лимит исчерпан. Обновите тариф.'
+                : `Осталось ${safeQuota.remaining} заявок`}
             </p>
           </div>
           
@@ -160,7 +146,7 @@ const TariffSelector = ({
               className="w-full mt-2 py-2 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white font-medium rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
             >
               <TrendingUp className="w-4 h-4" />
-              🚀 {translate('tariffSelector.upgrade', 'Увеличить лимиты')}
+              🚀 Увеличить лимиты
             </button>
           )}
         </div>
@@ -204,7 +190,7 @@ const TariffSelector = ({
                   {formatDate(currentPlanDetails.expires_at)}
                   {getDaysLeft(currentPlanDetails.expires_at) !== null && (
                     <span className="text-xs ml-2 text-gray-500">
-                      ({translate('tariffSelector.daysLeft', 'осталось')} {getDaysLeft(currentPlanDetails.expires_at)} {translate('tariffSelector.days', 'дн.')})
+                      (осталось {getDaysLeft(currentPlanDetails.expires_at)} дн.)
                     </span>
                   )}
                 </p>
@@ -223,7 +209,7 @@ const TariffSelector = ({
                   {promoCodeInfo.code}
                   {promoCodeInfo.discount_percent && (
                     <span className="text-green-600 text-sm ml-2">
-                      ({translate('tariffSelector.discount', 'скидка')} {promoCodeInfo.discount_percent}%)
+                      (скидка {promoCodeInfo.discount_percent}%)
                     </span>
                   )}
                 </p>
@@ -243,7 +229,7 @@ const TariffSelector = ({
         </div>
       )}
       
-      {/* Заголовок и переключатель периода оплаты */}
+      {/* Заголовок */}
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
           {translate('tariffSelector.title', 'Выберите подходящий тариф')}
@@ -282,10 +268,9 @@ const TariffSelector = ({
       {/* Карточки тарифов */}
       <div className="grid md:grid-cols-3 gap-6">
         {Object.values(plans).map((plan) => {
-          // Безопасная проверка плана
           if (!plan || !plan.id) return null;
           
-          const price = billingPeriod === 'monthly' ? plan.monthlyPrice || 0 : plan.annualPrice || 0;
+          const price = billingPeriod === 'monthly' ? (plan.monthlyPrice || 0) : (plan.annualPrice || 0);
           const savings = calculateSavings(plan) || { monthlyTotal: 0, savings: 0, savingsPercent: 0 };
           const isCurrent = currentPlan === plan.id;
           const isPopular = plan.popular || false;
@@ -309,82 +294,67 @@ const TariffSelector = ({
               )}
 
               <div className="p-6">
-                {/* Заголовок */}
                 <div className="text-center mb-6">
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                     {translate(`tariff.plans.${plan.id}.name`, plan.name || 'Тариф')}
                   </h3>
                   <div className="flex items-baseline justify-center gap-1">
                     <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                      {price === 0 ? translate('tariffSelector.free', 'Бесплатно') : price.toLocaleString('ru-RU') + ' ₽'}
+                      {price === 0 ? 'Бесплатно' : price.toLocaleString('ru-RU') + ' ₽'}
                     </span>
                     {price > 0 && (
                       <span className="text-gray-500 dark:text-gray-400">
-                        /{billingPeriod === 'monthly' 
-                          ? translate('tariffSelector.perMonth', 'мес') 
-                          : translate('tariffSelector.perYear', 'год')}
+                        /{billingPeriod === 'monthly' ? 'мес' : 'год'}
                       </span>
                     )}
                   </div>
                   {billingPeriod === 'annual' && price > 0 && savings.savingsPercent > 0 && (
                     <p className="text-sm text-green-600 mt-2">
-                      {translate('tariffSelector.savings', 'Экономия')} {savings.savingsPercent}% ({savings.savings.toLocaleString()} ₽)
+                      Экономия {savings.savingsPercent}% ({savings.savings.toLocaleString()} ₽)
                     </p>
                   )}
                 </div>
 
-                {/* Квоты и лимиты */}
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      📋 {translate('tariffSelector.applications', 'Заявки')}
-                    </span>
+                    <span className="text-gray-600 dark:text-gray-400">📋 Заявки</span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {isUnlimited ? '∞ ' + translate('tariffSelector.unlimited', 'Безлимит') : `${plan.maxApplications || 0} ${translate('tariffSelector.perDay', 'в день')}`}
+                      {isUnlimited ? '∞ Безлимит' : `${plan.maxApplications || 0} в день`}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      📦 {translate('tariffSelector.materials', 'Материалов в заявке')}
-                    </span>
+                    <span className="text-gray-600 dark:text-gray-400">📦 Материалов в заявке</span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {isUnlimited ? '∞ ' + translate('tariffSelector.unlimited', 'Безлимит') : `${translate('tariffSelector.upTo', 'до')} ${plan.maxMaterialsPerApp || 20}`}
+                      {isUnlimited ? '∞ Безлимит' : `до ${plan.maxMaterialsPerApp || 20}`}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      👥 {translate('tariffSelector.users', 'Пользователей')}
-                    </span>
+                    <span className="text-gray-600 dark:text-gray-400">👥 Пользователей</span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {plan.maxUsers === -1 ? '∞ ' + translate('tariffSelector.unlimited', 'Безлимит') : plan.maxUsers || 0}
+                      {plan.maxUsers === -1 ? '∞ Безлимит' : plan.maxUsers || 0}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      🔑 {translate('tariffSelector.apiKeys', 'API ключей')}
-                    </span>
+                    <span className="text-gray-600 dark:text-gray-400">🔑 API ключей</span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {plan.maxApiKeys === -1 ? '∞ ' + translate('tariffSelector.unlimited', 'Безлимит') : plan.maxApiKeys || 0}
+                      {plan.maxApiKeys === -1 ? '∞ Безлимит' : plan.maxApiKeys || 0}
                     </span>
                   </div>
                 </div>
 
-                {/* Функции */}
                 <div className="space-y-2 mb-6">
                   {plan.features && Object.entries(plan.features).map(([feature, value]) => {
                     const enabled = value === true || typeof value === 'string';
-                    
                     const featureLabels = {
-                      warehouse: '📦 ' + translate('tariffSelector.warehouse', 'Склад'),
-                      analytics: '📊 ' + translate('tariffSelector.analytics', 'Аналитика'),
-                      api: '🔌 ' + translate('tariffSelector.apiAccess', 'API доступ'),
-                      webhooks: '🔔 ' + translate('tariffSelector.webhooks', 'Webhooks'),
-                      support: `💬 ${translate('tariffSelector.support', 'Поддержка')} (${value === true ? 'email' : value || 'email'})`,
-                      priority: '⚡ ' + translate('tariffSelector.priority', 'Приоритетная обработка'),
-                      sla: '🛡️ ' + translate('tariffSelector.sla', 'SLA гарантия'),
-                      customIntegration: '🔧 ' + translate('tariffSelector.customIntegration', 'Кастомная интеграция')
+                      warehouse: '📦 Склад',
+                      analytics: '📊 Аналитика',
+                      api: '🔌 API доступ',
+                      webhooks: '🔔 Webhooks',
+                      support: `💬 Поддержка (${value === true ? 'email' : value || 'email'})`,
+                      priority: '⚡ Приоритетная обработка',
+                      sla: '🛡️ SLA гарантия',
+                      customIntegration: '🔧 Кастомная интеграция'
                     };
-                    
                     return (
                       <div key={`${plan.id}-${feature}`} className="flex items-center gap-3 text-sm">
                         {enabled ? (
@@ -400,7 +370,6 @@ const TariffSelector = ({
                   })}
                 </div>
 
-                {/* Кнопка */}
                 <button
                   onClick={() => onSelectPlan && onSelectPlan(plan.id)}
                   disabled={isCurrent || isLoading}
@@ -415,14 +384,14 @@ const TariffSelector = ({
                   {isCurrent ? (
                     <>
                       <Check className="w-4 h-4" />
-                      {translate('tariffSelector.currentPlan', 'Текущий тариф')}
+                      Текущий тариф
                     </>
                   ) : plan.id === 'basic' && isBasicPlan ? (
-                    translate('tariffSelector.currentPlan', 'Текущий тариф')
+                    'Текущий тариф'
                   ) : plan.id === 'basic' ? (
-                    translate('tariffSelector.downgrade', 'Переключиться')
+                    'Переключиться'
                   ) : (
-                    translate('tariffSelector.selectPlan', 'Выбрать тариф')
+                    'Выбрать тариф'
                   )}
                 </button>
               </div>
@@ -431,7 +400,6 @@ const TariffSelector = ({
         })}
       </div>
 
-      {/* Кнопка промокода */}
       <div className="mt-8 text-center">
         <button
           onClick={() => {
