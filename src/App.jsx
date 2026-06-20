@@ -6104,103 +6104,105 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     return renderLoginForm();
   }
 
-  return (
-  <ErrorBoundary 
-    supabase={supabase}
-    companyId={userCompanyId}
-    onError={(error, errorInfo) => {
-      console.error('[Global Error]', error, errorInfo);
-    }}
-    autoRedirect={true}
-    redirectUrl="/"
-    showDetails={import.meta.env.MODE === 'development'}
-  >
-    <LoadingOverlay 
-      isLoading={isLoading && !user} 
-      message="Загрузка приложения..." 
-      fullScreen 
-    />
-    
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#F5F7FA] via-white to-[#E4EDF5] dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 page-enter">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-bl from-[#F9AA33]/5 to-transparent rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-[#4A6572]/5 to-transparent rounded-full blur-3xl"></div>
-      </div>
-      <Navbar
-        user={user}
-        companyName={userCompany}
-        userRole={userRole}
-        onLogout={handleLogout}
-        onNavigate={(path) => {
-  console.log('🔍 Навигация:', path);
-  
-  // 🏠 ГЛАВНАЯ - умное перенаправление по ролям
-  if (path === '/') {
-    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-      setCurrentView('managerDashboard');
-    } else if (userRole === 'accountant') {
-      setCurrentView('accountantDashboard');
-    } else if (userRole === 'client') {
-      setCurrentView('clientDashboard');
-    } else {
-      setCurrentView('create');
-    }
-    return;
-  }
-  
-  // Остальные маршруты
-  if (path === '/applications') setCurrentView('inwork');
-  else if (path === '/applications/new') setCurrentView('create');
-  else if (path === '/warehouse') setCurrentView('warehouse');
-  else if (path === '/clients') setCurrentView('clients');
-  else if (path === '/analytics') setCurrentView('analytics');
-  else if (path === '/profile') setCurrentView('profile');
-  else if (path === '/documents') setCurrentView('documents');
-  else if (path === '/chat') setCurrentView('chat');
-  else if (path === '/calendar') setCurrentView('calendar');
-  else if (path === '/settings') setCurrentView('settings');
-  else if (path === '/tariffs') setCurrentView('tariffs');
-  else if (path === '/companyProfile') setCurrentView('companyProfile');
-  else if (path === '/inwork') setCurrentView('inwork');
-  else if (path === '/history') setCurrentView('history');
-  else if (path === '/approvals') setCurrentView('approvals');
-  else if (path === '/employees') setCurrentView('employees');
-  else if (path === '/api') setCurrentView('api');
-  else if (path === '/audit') setCurrentView('audit');
-  else if (path === '/tasks') setCurrentView('tasks');
-  else if (path === '/help') setCurrentView('help');
-  else if (path === '/superAdmin') setCurrentView('superAdmin');
-  else if (path === '/crm-sales') setCurrentView('crm-sales');
-  else if (path === '/merge') setCurrentView('merge');
-  else if (path === '/search') {
-    const params = new URLSearchParams(path.split('?')[1]);
-    const query = params.get('q');
-    if (query) {
-      setSearchTerm(query);
-      setCurrentView('inwork');
-    }
-  }
-  // Для заказчика
-  else if (path === '/client') setCurrentView('clientDashboard');
-  else if (path === '/client/documents') setCurrentView('clientDocuments');
-  else if (path === '/client/chat') setCurrentView('clientChat');
-}}
-        currentPage={currentView}
-        onInvite={() => setShowInviteModal(true)}
-        onOpenTariffs={() => setCurrentView('tariffs')}
-        onOpenCompanyProfile={() => setCurrentView('companyProfile')}
-        isOnline={isOnline}
-        offlineDraftsCount={offlineDrafts.length}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        onToggleLanguage={handleLanguageChange}
-        notifications={[]}
-        pendingApprovalsCount={pendingApprovals?.length || 0}
-        cartItemsCount={formData.cart?.length || 0}
-        isAdminMode={isAdminMode}
-        onToggleAdminMode={() => setIsAdminMode(false)}
+ return (
+  // ⚠️ ВРЕМЕННО ОТКЛЮЧАЕМ ErrorBoundary ДЛЯ ОТЛАДКИ
+  // <ErrorBoundary 
+  //   supabase={supabase}
+  //   companyId={userCompanyId}
+  //   onError={(error, errorInfo) => {
+  //     console.error('[Global Error]', error, errorInfo);
+  //   }}
+  //   autoRedirect={true}
+  //   redirectUrl="/"
+  //   showDetails={import.meta.env.MODE === 'development'}
+  // >
+    <>
+      <LoadingOverlay 
+        isLoading={isLoading && !user} 
+        message="Загрузка приложения..." 
+        fullScreen 
       />
-      {/* 📊 ПРОГРЕСС ОНБОРДИНГА - ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ НЕ ЗАВЕРШЕН */}
+      
+      <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#F5F7FA] via-white to-[#E4EDF5] dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 page-enter">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-bl from-[#F9AA33]/5 to-transparent rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-[#4A6572]/5 to-transparent rounded-full blur-3xl"></div>
+        </div>
+        <Navbar
+          user={user}
+          companyName={userCompany}
+          userRole={userRole}
+          onLogout={handleLogout}
+          onNavigate={(path) => {
+    console.log('🔍 Навигация:', path);
+    
+    // 🏠 ГЛАВНАЯ - умное перенаправление по ролям
+    if (path === '/') {
+      if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+        setCurrentView('managerDashboard');
+      } else if (userRole === 'accountant') {
+        setCurrentView('accountantDashboard');
+      } else if (userRole === 'client') {
+        setCurrentView('clientDashboard');
+      } else {
+        setCurrentView('create');
+      }
+      return;
+    }
+    
+    // Остальные маршруты
+    if (path === '/applications') setCurrentView('inwork');
+    else if (path === '/applications/new') setCurrentView('create');
+    else if (path === '/warehouse') setCurrentView('warehouse');
+    else if (path === '/clients') setCurrentView('clients');
+    else if (path === '/analytics') setCurrentView('analytics');
+    else if (path === '/profile') setCurrentView('profile');
+    else if (path === '/documents') setCurrentView('documents');
+    else if (path === '/chat') setCurrentView('chat');
+    else if (path === '/calendar') setCurrentView('calendar');
+    else if (path === '/settings') setCurrentView('settings');
+    else if (path === '/tariffs') setCurrentView('tariffs');
+    else if (path === '/companyProfile') setCurrentView('companyProfile');
+    else if (path === '/inwork') setCurrentView('inwork');
+    else if (path === '/history') setCurrentView('history');
+    else if (path === '/approvals') setCurrentView('approvals');
+    else if (path === '/employees') setCurrentView('employees');
+    else if (path === '/api') setCurrentView('api');
+    else if (path === '/audit') setCurrentView('audit');
+    else if (path === '/tasks') setCurrentView('tasks');
+    else if (path === '/help') setCurrentView('help');
+    else if (path === '/superAdmin') setCurrentView('superAdmin');
+    else if (path === '/crm-sales') setCurrentView('crm-sales');
+    else if (path === '/merge') setCurrentView('merge');
+    else if (path === '/search') {
+      const params = new URLSearchParams(path.split('?')[1]);
+      const query = params.get('q');
+      if (query) {
+        setSearchTerm(query);
+        setCurrentView('inwork');
+      }
+    }
+    // Для заказчика
+    else if (path === '/client') setCurrentView('clientDashboard');
+    else if (path === '/client/documents') setCurrentView('clientDocuments');
+    else if (path === '/client/chat') setCurrentView('clientChat');
+  }}
+          currentPage={currentView}
+          onInvite={() => setShowInviteModal(true)}
+          onOpenTariffs={() => setCurrentView('tariffs')}
+          onOpenCompanyProfile={() => setCurrentView('companyProfile')}
+          isOnline={isOnline}
+          offlineDraftsCount={offlineDrafts.length}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onToggleLanguage={handleLanguageChange}
+          notifications={[]}
+          pendingApprovalsCount={pendingApprovals?.length || 0}
+          cartItemsCount={formData.cart?.length || 0}
+          isAdminMode={isAdminMode}
+          onToggleAdminMode={() => setIsAdminMode(false)}
+        />
+        {/* 📊 ПРОГРЕСС ОНБОРДИНГА - ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ НЕ ЗАВЕРШЕН */}
 {user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (
   <div className="max-w-7xl mx-auto px-4 pt-2">
     <OnboardingProgress
@@ -6708,87 +6710,65 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           />
         )}
         
-        {currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && (
-  <div className="max-w-7xl mx-auto p-4 page-enter">
-    <div className="flex items-center justify-between mb-6">
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-        {t('tariffSelector.title', 'Управление тарифом')}
-      </h2>
-      {isAdminMode && (
-        <button
-          onClick={handleAdminLogout}
-          className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
-        >
-          {t('exitAdminMode', 'Выйти из режима админа')}
-        </button>
-      )}
-    </div>
-    
-    {(isCompanyOwner || userRole === 'manager' || userRole === 'director') ? (
-      <>
-        {userCompanyId && !planLoading && (
-          <div className="mb-6">
-            <QuotaUsage 
-              userCompanyId={userCompanyId} 
-              supabase={supabase} 
-              quotaStatus={quotaStatus}
-              currentPlan={currentPlan}
-            />
-          </div>
-        )}
-        
-        <TariffSelector
-          currentPlan={currentPlan?.id || 'basic'}
-          billingPeriod={billingPeriod}
-          onBillingPeriodChange={setBillingPeriod}
-          onSelectPlan={handleSelectPlan}
-          isLoading={planLoading}
-          t={t}
-          onPromoClick={() => setShowPromoModal(true)}
-          currentPlanDetails={currentPlanDetails}
-          promoCodeInfo={promoCodeInfo}
-          quotaStatus={quotaStatus}
-          onUpgradeClick={() => {}}
-        />
-        
-        {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
-          <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
-            <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
-              {t('currentPlan', 'Ваш текущий план')}:
-            </h4>
-            <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
-              <span>📦 {currentPlan.name}</span>
-              <span>💰 {billingPeriod === 'monthly' 
-                ? `${currentPlan.monthlyPrice} ₽/мес` 
-                : `${currentPlan.annualPrice} ₽/год`}</span>
-              <span>🔑 {currentPlan.maxApiKeys} API ключей</span>
-              <span>👥 {currentPlan.maxUsers} пользователей</span>
-              {currentPlan.isActive && (
-                <span className="text-green-600">✅ Активен</span>
+        {currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && 
+          (isCompanyOwner || userRole === 'manager' || userRole === 'director') && (
+            <div className="max-w-7xl mx-auto p-4 page-enter">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {t('tariffSelector.title', 'Управление тарифом')}
+                </h2>
+                {isAdminMode && (
+                  <button
+                    onClick={handleAdminLogout}
+                    className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  >
+                    {t('exitAdminMode', 'Выйти из режима админа')}
+                  </button>
+                )}
+              </div>
+              
+              {userCompanyId && !planLoading && (
+                <div className="mb-6">
+                  <QuotaUsage 
+                    userCompanyId={userCompanyId} 
+                    supabase={supabase} 
+                    quotaStatus={quotaStatus} 
+                  />
+                </div>
+              )}
+              
+              <TariffSelector
+                currentPlan={currentPlan?.id || 'basic'}
+                billingPeriod={billingPeriod}
+                onBillingPeriodChange={setBillingPeriod}
+                onSelectPlan={handleSelectPlan}
+                isLoading={planLoading}
+                t={t}
+                onPromoClick={() => setShowPromoModal(true)}
+                currentPlanDetails={currentPlanDetails}
+                promoCodeInfo={promoCodeInfo}
+              />
+              
+              {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
+                <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                    {t('currentPlan', 'Ваш текущий план')}:
+                  </h4>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
+                    <span>📦 {currentPlan.name}</span>
+                    <span>💰 {billingPeriod === 'monthly' 
+                      ? `${currentPlan.monthlyPrice} ₽/мес` 
+                      : `${currentPlan.annualPrice} ₽/год`}</span>
+                    <span>🔑 {currentPlan.maxApiKeys} API ключей</span>
+                    <span>👥 {currentPlan.maxUsers} пользователей</span>
+                    {currentPlan.isActive && (
+                      <span className="text-green-600">✅ Активен</span>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
-          </div>
-        )}
-      </>
-    ) : (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-8 text-center">
-        <Sparkles className="w-16 h-16 text-[#4A6572] dark:text-[#F9AA33] mx-auto mb-4 opacity-50" />
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-          Доступ к тарифам ограничен
-        </h3>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Управление тарифами доступно только руководителям и владельцам компании.
-        </p>
-        <button
-          onClick={() => setCurrentView('create')}
-          className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors"
-        >
-          Вернуться к работе
-        </button>
-      </div>
-    )}
-  </div>
-)}
+          )}
         
         {/* Вкладки для заказчика */}
         {currentView === 'clientDashboard' && userRole === 'client' && (
@@ -7238,7 +7218,8 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   isOpen={showPrivacyPolicyModal}
   onClose={() => setShowPrivacyPolicyModal(false)}
 />
-  </ErrorBoundary>
+    </>
+  // </ErrorBoundary>
 );
-};
+}
 export default memo(App);
