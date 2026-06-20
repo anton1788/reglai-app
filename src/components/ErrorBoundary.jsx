@@ -1,4 +1,3 @@
-// src/components/ErrorBoundary.jsx
 import { Component } from 'react';
 
 // ─────────────────────────────────────────────────────────────
@@ -84,9 +83,6 @@ const copyToClipboard = async (text) => {
   }
 };
 
-/**
- * Форматирование ошибки для отчёта
- */
 const formatErrorReport = (error, errorInfo, userAgent, url, timestamp) => {
   return {
     message: error?.message || 'Unknown error',
@@ -99,44 +95,8 @@ const formatErrorReport = (error, errorInfo, userAgent, url, timestamp) => {
   };
 };
 
-/**
- * Отправка ошибки в сервис мониторинга
- */
-const reportErrorToService = async (errorReport, supabase, companyId) => {
-  try {
-    // Отправка в Supabase
-    if (supabase && companyId) {
-      await supabase
-        .from('error_logs')
-        .insert([{
-          company_id: companyId,
-          error_message: errorReport.message,
-          error_stack: errorReport.stack,
-          component_stack: errorReport.componentStack,
-          user_agent: errorReport.userAgent,
-          url: errorReport.url,
-          environment: errorReport.environment,
-          created_at: errorReport.timestamp
-        }]);
-    }
-
-    // Отправка в Sentry (если используется)
-    if (window.Sentry) {
-      window.Sentry.captureException(new Error(errorReport.message), {
-        extra: {
-          componentStack: errorReport.componentStack,
-          url: errorReport.url,
-          userAgent: errorReport.userAgent
-        }
-      });
-    }
-  } catch (err) {
-    console.error('Failed to report error:', err);
-  }
-};
-
 // ─────────────────────────────────────────────────────────────
-// 🧩 КОМПОНЕНТ
+// 🧩 КОМПОНЕНТ ERROR BOUNDARY
 // ─────────────────────────────────────────────────────────────
 
 export class ErrorBoundary extends Component {
@@ -179,8 +139,8 @@ export class ErrorBoundary extends Component {
       new Date().toISOString()
     );
 
-    // Отправка в мониторинг
-    reportErrorToService(errorReport, supabase, companyId);
+    // 🔧 ИСПРАВЛЕНО: передаём supabase в функцию
+    this.reportErrorToService(errorReport, supabase, companyId);
 
     // Вызов колбэка
     onError?.(error, errorInfo);
@@ -188,6 +148,29 @@ export class ErrorBoundary extends Component {
     // Запуск таймера
     this.startRedirectTimer();
   }
+
+  // 🔧 ИСПРАВЛЕНО: метод теперь внутри класса
+  reportErrorToService = async (errorReport, supabase, companyId) => {
+    try {
+      if (supabase && companyId) {
+        await supabase
+          .from('error_logs')
+          .insert([{
+            company_id: companyId,
+            error_message: errorReport.message,
+            error_stack: errorReport.stack,
+            component_stack: errorReport.componentStack,
+            user_agent: errorReport.userAgent,
+            url: errorReport.url,
+            environment: errorReport.environment,
+            created_at: errorReport.timestamp
+          }]);
+        console.log('✅ Error logged to Supabase');
+      }
+    } catch (err) {
+      console.error('❌ Failed to report error:', err);
+    }
+  };
 
   componentDidMount() {
     document.addEventListener('keydown', this.handleKeyDown);
@@ -291,22 +274,6 @@ ${errorInfo?.componentStack?.slice(0, MAX_STACK_LENGTH) || 'No component stack'}
     }, 3000);
   };
 
-  handleReportToSupport = () => {
-    const { error, errorInfo } = this.state;
-    const errorText = `
-Error: ${error?.message}
-Stack: ${error?.stack}
-Component Stack: ${errorInfo?.componentStack}
-URL: ${window.location.href}
-User Agent: ${navigator.userAgent}
-    `.trim();
-
-    // Открыть email клиент или форму поддержки
-    const subject = encodeURIComponent('Ошибка в приложении');
-    const body = encodeURIComponent(errorText);
-    window.location.href = `mailto:support@example.com?subject=${subject}&body=${body}`;
-  };
-
   render() {
     if (!this.state.hasError) {
       return this.props.children;
@@ -318,7 +285,7 @@ User Agent: ${navigator.userAgent}
     const { showDetails: showDetailsProp = false } = this.props;
     
     const showDevDetails = showDetails || showDetailsProp;
-    const isDev = import.meta.env?.DEV;
+    const isDev = import.meta.env?.MODE === 'development';
     const errorMessage = sanitizeText(error?.message || 'Unknown error');
     const componentStack = errorInfo?.componentStack 
       ? sanitizeText(errorInfo.componentStack).slice(0, MAX_STACK_LENGTH)
