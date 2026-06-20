@@ -6708,67 +6708,65 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           />
         )}
         
-        // src/App.jsx - исправленный рендеринг
-{currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && 
-  (isCompanyOwner || userRole === 'manager' || userRole === 'director') && (
-    <div className="max-w-7xl mx-auto p-4 page-enter">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {t('tariffSelector.title', 'Управление тарифом')}
-        </h2>
-        {isAdminMode && (
-          <button
-            onClick={handleAdminLogout}
-            className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
-          >
-            {t('exitAdminMode', 'Выйти из режима админа')}
-          </button>
-        )}
-      </div>
-      
-      {userCompanyId && !planLoading && (
-        <div className="mb-6">
-          <QuotaUsage 
-            userCompanyId={userCompanyId} 
-            supabase={supabase}
-            currentPlan={currentPlan}
-            onUpgradeClick={() => setShowTariffModal(true)}
-          />
-        </div>
-      )}
-      
-      <TariffSelector
-        currentPlan={currentPlan?.id || 'basic'}
-        billingPeriod={billingPeriod}
-        onBillingPeriodChange={setBillingPeriod}
-        onSelectPlan={handleSelectPlan}
-        isLoading={planLoading}
-        t={t}
-        onPromoClick={() => setShowPromoModal(true)}
-        currentPlanDetails={currentPlanDetails}
-        promoCodeInfo={promoCodeInfo}
-      />
-      
-      {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
-        <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
-          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
-            {t('currentPlan', 'Ваш текущий план')}:
-          </h4>
-          <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
-            <span>📦 {currentPlan.name}</span>
-            <span>💰 {billingPeriod === 'monthly' 
-              ? `${currentPlan.monthlyPrice} ₽/мес` 
-              : `${currentPlan.annualPrice} ₽/год`}</span>
-            <span>🔑 {currentPlan.maxApiKeys} API ключей</span>
-            <span>👥 {currentPlan.maxUsers} пользователей</span>
-            {currentPlan.isActive && (
-              <span className="text-green-600">✅ Активен</span>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  )}
+        {currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && 
+          (isCompanyOwner || userRole === 'manager' || userRole === 'director') && (
+            <div className="max-w-7xl mx-auto p-4 page-enter">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {t('tariffSelector.title', 'Управление тарифом')}
+                </h2>
+                {isAdminMode && (
+                  <button
+                    onClick={handleAdminLogout}
+                    className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  >
+                    {t('exitAdminMode', 'Выйти из режима админа')}
+                  </button>
+                )}
+              </div>
+              
+              {userCompanyId && !planLoading && (
+                <div className="mb-6">
+                  <QuotaUsage 
+                    userCompanyId={userCompanyId} 
+                    supabase={supabase} 
+                    quotaStatus={quotaStatus} 
+                  />
+                </div>
+              )}
+              
+              <TariffSelector
+                currentPlan={currentPlan?.id || 'basic'}
+                billingPeriod={billingPeriod}
+                onBillingPeriodChange={setBillingPeriod}
+                onSelectPlan={handleSelectPlan}
+                isLoading={planLoading}
+                t={t}
+                onPromoClick={() => setShowPromoModal(true)}
+                currentPlanDetails={currentPlanDetails}
+                promoCodeInfo={promoCodeInfo}
+              />
+              
+              {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
+                <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                    {t('currentPlan', 'Ваш текущий план')}:
+                  </h4>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
+                    <span>📦 {currentPlan.name}</span>
+                    <span>💰 {billingPeriod === 'monthly' 
+                      ? `${currentPlan.monthlyPrice} ₽/мес` 
+                      : `${currentPlan.annualPrice} ₽/год`}</span>
+                    <span>🔑 {currentPlan.maxApiKeys} API ключей</span>
+                    <span>👥 {currentPlan.maxUsers} пользователей</span>
+                    {currentPlan.isActive && (
+                      <span className="text-green-600">✅ Активен</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         
         {/* Вкладки для заказчика */}
         {currentView === 'clientDashboard' && userRole === 'client' && (
@@ -7039,7 +7037,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         />
       )}
       
-{/* Модальное окно выбора тарифа - ИСПРАВЛЕННОЕ */}
+      {/* Модальное окно выбора тарифа */}
 {showTariffModal && (
   <div 
     className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter"
@@ -7074,11 +7072,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           currentPlanDetails={currentPlanDetails}
           promoCodeInfo={promoCodeInfo}
           quotaStatus={quotaStatus}
-          onUpgradeClick={() => {
-            // Просто закрываем модалку с лимитами, тарифы уже открыты
-            setShowTariffModal(false);
-            setCurrentView('tariffs');
-          }}
+          onUpgradeClick={() => {}}
         />
       </div>
     </div>
@@ -7174,6 +7168,47 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           t={t}
         />
       )}
+      {/* Модальное окно выбора тарифа */}
+{showTariffModal && (
+  <div 
+    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter"
+    onClick={(e) => e.target === e.currentTarget && setShowTariffModal(false)}
+  >
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 rounded-t-2xl">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {currentPlan?.id === 'basic' ? '🚀 Увеличьте лимиты' : 'Выберите тариф'}
+        </h2>
+        <button
+          onClick={() => setShowTariffModal(false)}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          aria-label="Закрыть"
+        >
+          <X className="w-6 h-6 text-gray-500" />
+        </button>
+      </div>
+      
+      <div className="p-4">
+        <TariffSelector
+          currentPlan={currentPlan?.id || 'basic'}
+          billingPeriod={billingPeriod}
+          onBillingPeriodChange={setBillingPeriod}
+          onSelectPlan={handleSelectPlan}
+          isLoading={planLoading}
+          t={t}
+          onPromoClick={() => {
+            setShowTariffModal(false);
+            setShowPromoModal(true);
+          }}
+          currentPlanDetails={currentPlanDetails}
+          promoCodeInfo={promoCodeInfo}
+          quotaStatus={quotaStatus}
+          onUpgradeClick={() => {}}
+        />
+      </div>
+    </div>
+  </div>
+)}
     </div>
 
     {/* Privacy Policy Modal */}

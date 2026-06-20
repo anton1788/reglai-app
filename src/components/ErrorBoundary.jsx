@@ -104,43 +104,20 @@ const formatErrorReport = (error, errorInfo, userAgent, url, timestamp) => {
  */
 const reportErrorToService = async (errorReport, supabase, companyId) => {
   try {
-    // Проверяем наличие необходимых данных
-    if (!supabase || !companyId) {
-      console.warn('[ErrorBoundary] Skipping error report: no supabase or companyId');
-      return;
-    }
-
-    // Проверяем, существует ли таблица error_logs
-    const { error: checkError } = await supabase
-      .from('error_logs')
-      .select('id')
-      .limit(1);
-
-    if (checkError && checkError.code === '42P01') {
-      console.warn('[ErrorBoundary] Table error_logs does not exist, skipping report');
-      return;
-    }
-
-    // Подготавливаем данные с усечением длинных строк
-    const errorData = {
-      company_id: companyId,
-      error_message: errorReport.message?.slice(0, 1000) || 'Unknown error',
-      error_stack: errorReport.stack?.slice(0, 2000) || null,
-      component_stack: errorReport.componentStack?.slice(0, 2000) || null,
-      user_agent: errorReport.userAgent?.slice(0, 500) || null,
-      url: errorReport.url?.slice(0, 500) || null,
-      environment: errorReport.environment || 'development',
-      created_at: errorReport.timestamp || new Date().toISOString()
-    };
-
     // Отправка в Supabase
-    const { error: insertError } = await supabase
-      .from('error_logs')
-      .insert([errorData]);
-
-    if (insertError) {
-      // Не выводим ошибку в консоль, чтобы не засорять логи
-      console.debug('[ErrorBoundary] Failed to insert error log:', insertError.message);
+    if (supabase && companyId) {
+      await supabase
+        .from('error_logs')
+        .insert([{
+          company_id: companyId,
+          error_message: errorReport.message,
+          error_stack: errorReport.stack,
+          component_stack: errorReport.componentStack,
+          user_agent: errorReport.userAgent,
+          url: errorReport.url,
+          environment: errorReport.environment,
+          created_at: errorReport.timestamp
+        }]);
     }
 
     // Отправка в Sentry (если используется)
@@ -154,8 +131,7 @@ const reportErrorToService = async (errorReport, supabase, companyId) => {
       });
     }
   } catch (err) {
-    // Подавляем ошибки, чтобы не создавать бесконечный цикл
-    console.debug('[ErrorBoundary] Error reporting failed:', err?.message);
+    console.error('Failed to report error:', err);
   }
 };
 
@@ -325,6 +301,7 @@ URL: ${window.location.href}
 User Agent: ${navigator.userAgent}
     `.trim();
 
+    // Открыть email клиент или форму поддержки
     const subject = encodeURIComponent('Ошибка в приложении');
     const body = encodeURIComponent(errorText);
     window.location.href = `mailto:support@example.com?subject=${subject}&body=${body}`;

@@ -1,9 +1,6 @@
-// src/components/TariffSelector.jsx — ПОЛНОСТЬЮ ЗАМЕНИТЕ
+// src/components/TariffSelector.jsx
 import React, { useState } from 'react';
-import { 
-  Calendar, Clock, Gift, CheckCircle, Check, X, 
-  TrendingUp, Package 
-} from 'lucide-react';
+import { Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles, Shield, Headphones, TrendingUp, Package } from 'lucide-react';
 import { TARIFF_PLANS, calculateSavings } from '../utils/tariffPlans';
 
 const TariffSelector = ({ 
@@ -12,15 +9,13 @@ const TariffSelector = ({
   onBillingPeriodChange,
   onSelectPlan, 
   isLoading = false,
+  t,
   onPromoClick,
   currentPlanDetails,
   promoCodeInfo,
   quotaStatus,
   onUpgradeClick
 }) => {
-  // ВНУТРЕННЯЯ ФУНКЦИЯ ПЕРЕВОДА — ВСЕГДА ВОЗВРАЩАЕТ FALLBACK
-  const t = (key, fallback) => fallback || key;
-
   const [internalBillingPeriod, setInternalBillingPeriod] = useState('monthly');
   const billingPeriod = externalBillingPeriod !== undefined ? externalBillingPeriod : internalBillingPeriod;
   
@@ -34,53 +29,35 @@ const TariffSelector = ({
 
   const formatDate = (dateString) => {
     if (!dateString) return '—';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '—';
-      return date.toLocaleDateString('ru-RU', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
-    } catch {
-      return '—';
-    }
+    return new Date(dateString).toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
   };
 
   const getDaysLeft = (expiresAt) => {
     if (!expiresAt) return null;
-    try {
-      const diff = new Date(expiresAt) - new Date();
-      if (isNaN(diff)) return null;
-      return Math.ceil(diff / (1000 * 60 * 60 * 24));
-    } catch {
-      return null;
-    }
+    const diff = new Date(expiresAt) - new Date();
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return days;
   };
 
-  const plans = TARIFF_PLANS || {};
-  const hasPlans = Object.keys(plans).length > 0;
+  const translate = (key, fallback) => {
+    if (typeof t !== 'function') return fallback;
+    const result = t(key);
+    return result === key ? fallback : result;
+  };
 
   const isBasicPlan = currentPlan === 'basic';
-  const safeQuota = quotaStatus || { allowed: true, used: 0, limit: 5, remaining: 5 };
-  const quotaPercent = safeQuota.limit > 0 
-    ? Math.round((safeQuota.used / safeQuota.limit) * 100) 
+  const quotaPercent = quotaStatus?.limit > 0 
+    ? Math.round((quotaStatus.used / quotaStatus.limit) * 100) 
     : 0;
-
-  // ЕСЛИ НЕТ ПЛАНОВ — ЗАГРУЗКА
-  if (!hasPlans) {
-    return (
-      <div className="max-w-7xl mx-auto p-4 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4A6572] mx-auto"></div>
-        <p className="mt-4 text-gray-500 dark:text-gray-400">Загрузка тарифов...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-      {/* Блок статуса лимитов */}
-      {isBasicPlan && safeQuota && (
+      {/* Блок статуса лимитов для бесплатного тарифа */}
+      {isBasicPlan && quotaStatus && (
         <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -89,10 +66,14 @@ const TariffSelector = ({
                 📋 Использование лимитов
               </h4>
             </div>
-            {safeQuota.allowed ? (
-              <span className="text-xs text-green-600 dark:text-green-400">✅ Есть место</span>
+            {quotaStatus.allowed ? (
+              <span className="text-xs text-green-600 dark:text-green-400">
+                ✅ Есть место
+              </span>
             ) : (
-              <span className="text-xs text-red-600 dark:text-red-400">⚠️ Лимит исчерпан</span>
+              <span className="text-xs text-red-600 dark:text-red-400">
+                ⚠️ Лимит исчерпан
+              </span>
             )}
           </div>
           
@@ -100,26 +81,26 @@ const TariffSelector = ({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600 dark:text-gray-400">Заявки</span>
               <span className="font-medium text-gray-900 dark:text-white">
-                {safeQuota.used} / {safeQuota.limit}
+                {quotaStatus.used} / {quotaStatus.limit}
               </span>
             </div>
             <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mt-1">
               <div 
                 className={`h-full transition-all duration-500 ${
-                  !safeQuota.allowed ? 'bg-red-500' : 
+                  !quotaStatus.allowed ? 'bg-red-500' : 
                   quotaPercent >= 80 ? 'bg-orange-500' : 'bg-yellow-500'
                 }`}
                 style={{ width: `${Math.min(100, quotaPercent)}%` }}
               />
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {!safeQuota.allowed 
-                ? '⚠️ Лимит исчерпан. Обновите тариф.'
-                : `Осталось ${safeQuota.remaining} заявок`}
+              {!quotaStatus.allowed 
+                ? '⚠️ Лимит исчерпан. Обновите тариф.' 
+                : `Осталось ${quotaStatus.remaining} заявок`}
             </p>
           </div>
           
-          {!safeQuota.allowed && onUpgradeClick && (
+          {!quotaStatus.allowed && onUpgradeClick && (
             <button
               onClick={onUpgradeClick}
               className="w-full mt-2 py-2 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white font-medium rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
@@ -132,12 +113,12 @@ const TariffSelector = ({
       )}
       
       {/* Блок информации о текущем тарифе */}
-      {currentPlanDetails && currentPlanDetails.activated_at && (
+      {currentPlanDetails && (
         <div className="mb-8 bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 rounded-xl p-5 border border-[#4A6572]/20">
           <div className="flex items-center gap-2 mb-3">
             <CheckCircle className="w-5 h-5 text-green-600" />
             <h3 className="font-semibold text-gray-900 dark:text-white">
-              {t('currentPlanInfo', 'Информация о текущем тарифе')}
+              {translate('currentPlanInfo', 'Информация о текущем тарифе')}
             </h3>
           </div>
           
@@ -146,7 +127,7 @@ const TariffSelector = ({
               <Calendar className="w-4 h-4 text-gray-500 mt-0.5" />
               <div>
                 <p className="text-gray-500 dark:text-gray-400">
-                  {t('activationDate', 'Дата активации')}:
+                  {translate('activationDate', 'Дата активации')}:
                 </p>
                 <p className="font-medium text-gray-900 dark:text-white">
                   {formatDate(currentPlanDetails.activated_at)}
@@ -158,10 +139,9 @@ const TariffSelector = ({
               <Clock className="w-4 h-4 text-gray-500 mt-0.5" />
               <div>
                 <p className="text-gray-500 dark:text-gray-400">
-                  {t('expirationDate', 'Дата окончания')}:
+                  {translate('expirationDate', 'Дата окончания')}:
                 </p>
                 <p className={`font-medium ${
-                  getDaysLeft(currentPlanDetails.expires_at) !== null &&
                   getDaysLeft(currentPlanDetails.expires_at) <= 7 
                     ? 'text-orange-600 dark:text-orange-400' 
                     : 'text-gray-900 dark:text-white'
@@ -177,12 +157,12 @@ const TariffSelector = ({
             </div>
           </div>
           
-          {promoCodeInfo && promoCodeInfo.code && (
+          {promoCodeInfo && (
             <div className="mt-3 pt-3 border-t border-[#4A6572]/20 flex items-start gap-2">
               <Gift className="w-4 h-4 text-[#F9AA33] mt-0.5" />
               <div>
                 <p className="text-gray-500 dark:text-gray-400">
-                  {t('promoCodeApplied', 'Активирован промокод')}:
+                  {translate('promoCodeApplied', 'Активирован промокод')}:
                 </p>
                 <p className="font-medium text-gray-900 dark:text-white">
                   {promoCodeInfo.code}
@@ -193,28 +173,28 @@ const TariffSelector = ({
                   )}
                 </p>
                 <p className="text-xs text-gray-400">
-                  {t('appliedAt', 'Активирован')}: {formatDate(promoCodeInfo.applied_at)}
+                  {translate('appliedAt', 'Активирован')}: {formatDate(promoCodeInfo.applied_at)}
                 </p>
               </div>
             </div>
           )}
           
           <button
-            onClick={() => onSelectPlan && onSelectPlan(currentPlan)}
+            onClick={() => onSelectPlan(currentPlan)}
             className="mt-4 w-full py-2 bg-[#4A6572]/20 text-[#4A6572] dark:text-[#F9AA33] rounded-lg text-sm font-medium hover:bg-[#4A6572]/30 transition-colors"
           >
-            {t('extendPlan', 'Продлить тариф')}
+            {translate('extendPlan', 'Продлить тариф')}
           </button>
         </div>
       )}
       
-      {/* Заголовок */}
+      {/* Заголовок и переключатель периода оплаты */}
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-          {t('tariffSelector.title', 'Выберите подходящий тариф')}
+          {translate('tariffSelector.title', 'Выберите подходящий тариф')}
         </h2>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
-          {t('tariffSelector.trial', 'Все тарифы включают 14 дней бесплатного пробного периода')}
+          {translate('tariffSelector.trial', 'Все тарифы включают 14 дней бесплатного пробного периода')}
         </p>
         
         <div className="inline-flex items-center gap-4 bg-gray-100 dark:bg-gray-800 rounded-xl p-2">
@@ -226,7 +206,7 @@ const TariffSelector = ({
                 : 'text-gray-600 dark:text-gray-400'
             }`}
           >
-            {t('tariffSelector.monthly', 'Ежемесячно')}
+            {translate('tariffSelector.monthly', 'Ежемесячно')}
           </button>
           <button
             onClick={() => setBillingPeriod('annual')}
@@ -236,7 +216,7 @@ const TariffSelector = ({
                 : 'text-gray-600 dark:text-gray-400'
             }`}
           >
-            {t('tariffSelector.annual', 'Ежегодно')}
+            {translate('tariffSelector.annual', 'Ежегодно')}
             <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
               -17%
             </span>
@@ -246,13 +226,11 @@ const TariffSelector = ({
 
       {/* Карточки тарифов */}
       <div className="grid md:grid-cols-3 gap-6">
-        {Object.values(plans).map((plan) => {
-          if (!plan || !plan.id) return null;
-          
-          const price = billingPeriod === 'monthly' ? (plan.monthlyPrice || 0) : (plan.annualPrice || 0);
-          const savings = calculateSavings(plan) || { monthlyTotal: 0, savings: 0, savingsPercent: 0 };
+        {Object.values(TARIFF_PLANS).map((plan) => {
+          const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.annualPrice;
+          const savings = calculateSavings(plan);
           const isCurrent = currentPlan === plan.id;
-          const isPopular = plan.popular || false;
+          const isPopular = plan.popular;
           const isUnlimited = plan.maxApplications === -1;
 
           return (
@@ -268,14 +246,15 @@ const TariffSelector = ({
             >
               {isPopular && !isCurrent && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F9AA33] text-white text-sm font-bold rounded-full">
-                  {t('tariffSelector.popular', 'Популярный')}
+                  {translate('tariffSelector.popular', 'Популярный')}
                 </div>
               )}
 
               <div className="p-6">
+                {/* Заголовок */}
                 <div className="text-center mb-6">
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                    {t(`tariff.plans.${plan.id}.name`, plan.name || 'Тариф')}
+                    {translate(`tariff.plans.${plan.id}.name`, plan.name)}
                   </h3>
                   <div className="flex items-baseline justify-center gap-1">
                     <span className="text-4xl font-bold text-gray-900 dark:text-white">
@@ -283,47 +262,60 @@ const TariffSelector = ({
                     </span>
                     {price > 0 && (
                       <span className="text-gray-500 dark:text-gray-400">
-                        /{billingPeriod === 'monthly' ? 'мес' : 'год'}
+                        /{billingPeriod === 'monthly' 
+                          ? translate('tariffSelector.perMonth', 'мес') 
+                          : translate('tariffSelector.perYear', 'год')}
                       </span>
                     )}
                   </div>
-                  {billingPeriod === 'annual' && price > 0 && savings.savingsPercent > 0 && (
+                  {billingPeriod === 'annual' && price > 0 && (
                     <p className="text-sm text-green-600 mt-2">
-                      Экономия {savings.savingsPercent}% ({savings.savings.toLocaleString()} ₽)
+                      {translate('tariffSelector.savings', 'Экономия')} {savings.savingsPercent}% ({savings.savings.toLocaleString()} ₽)
                     </p>
                   )}
                 </div>
 
+                {/* Квоты и лимиты */}
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">📋 Заявки</span>
+                    <span className="text-gray-600 dark:text-gray-400">
+                      📋 Заявки
+                    </span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {isUnlimited ? '∞ Безлимит' : `${plan.maxApplications || 0} в день`}
+                      {isUnlimited ? '∞ Безлимит' : `${plan.maxApplications} в день`}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">📦 Материалов в заявке</span>
+                    <span className="text-gray-600 dark:text-gray-400">
+                      📦 Материалов в заявке
+                    </span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {isUnlimited ? '∞ Безлимит' : `до ${plan.maxMaterialsPerApp || 20}`}
+                      {isUnlimited ? '∞ Безлимит' : `до ${plan.maxMaterialsPerApp}`}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">👥 Пользователей</span>
+                    <span className="text-gray-600 dark:text-gray-400">
+                      👥 Пользователей
+                    </span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {plan.maxUsers === -1 ? '∞ Безлимит' : plan.maxUsers || 0}
+                      {plan.maxUsers === -1 ? '∞ Безлимит' : plan.maxUsers}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">🔑 API ключей</span>
+                    <span className="text-gray-600 dark:text-gray-400">
+                      🔑 API ключей
+                    </span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {plan.maxApiKeys === -1 ? '∞ Безлимит' : plan.maxApiKeys || 0}
+                      {plan.maxApiKeys === -1 ? '∞ Безлимит' : plan.maxApiKeys}
                     </span>
                   </div>
                 </div>
 
+                {/* Функции */}
                 <div className="space-y-2 mb-6">
-                  {plan.features && Object.entries(plan.features).map(([feature, value]) => {
+                  {Object.entries(plan.features).map(([feature, value]) => {
                     const enabled = value === true || typeof value === 'string';
+                    
                     const featureLabels = {
                       warehouse: '📦 Склад',
                       analytics: '📊 Аналитика',
@@ -334,6 +326,7 @@ const TariffSelector = ({
                       sla: '🛡️ SLA гарантия',
                       customIntegration: '🔧 Кастомная интеграция'
                     };
+                    
                     return (
                       <div key={`${plan.id}-${feature}`} className="flex items-center gap-3 text-sm">
                         {enabled ? (
@@ -349,8 +342,9 @@ const TariffSelector = ({
                   })}
                 </div>
 
+                {/* Кнопка */}
                 <button
-                  onClick={() => onSelectPlan && onSelectPlan(plan.id)}
+                  onClick={() => onSelectPlan(plan.id)}
                   disabled={isCurrent || isLoading}
                   className={`w-full py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
                     isCurrent
@@ -363,14 +357,14 @@ const TariffSelector = ({
                   {isCurrent ? (
                     <>
                       <Check className="w-4 h-4" />
-                      Текущий тариф
+                      {translate('tariffSelector.currentPlan', 'Текущий тариф')}
                     </>
                   ) : plan.id === 'basic' && isBasicPlan ? (
-                    'Текущий тариф'
+                    translate('tariffSelector.currentPlan', 'Текущий тариф')
                   ) : plan.id === 'basic' ? (
-                    'Переключиться'
+                    translate('tariffSelector.downgrade', 'Переключиться')
                   ) : (
-                    'Выбрать тариф'
+                    translate('tariffSelector.selectPlan', 'Выбрать тариф')
                   )}
                 </button>
               </div>
@@ -379,6 +373,7 @@ const TariffSelector = ({
         })}
       </div>
 
+      {/* Кнопка промокода */}
       <div className="mt-8 text-center">
         <button
           onClick={() => {
@@ -389,7 +384,7 @@ const TariffSelector = ({
           className="text-sm text-[#4A6572] hover:text-[#F9AA33] transition-colors flex items-center gap-2 mx-auto"
         >
           <Gift className="w-4 h-4" />
-          {t('havePromoCode', 'Есть промокод?')}
+          {translate('havePromoCode', 'Есть промокод?')}
         </button>
       </div>
     </div>
