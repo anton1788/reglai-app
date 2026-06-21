@@ -274,8 +274,8 @@ const TariffSelector = ({
                   </h3>
                   <div className="flex items-baseline justify-center gap-1">
                     <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                      {price === 0 ? 'Бесплатно' : safeFormatNumber(price) + ' ₽'}
-                    </span>
+  {price !== undefined && price !== null ? price.toLocaleString('ru-RU') : '0'} ₽
+</span>
                     {price > 0 && (
                       <span className="text-gray-500 dark:text-gray-400">
                         /{billingPeriod === 'monthly' 

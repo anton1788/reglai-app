@@ -7092,8 +7092,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           }}
           currentPlanDetails={currentPlanDetails}
           promoCodeInfo={promoCodeInfo}
-          quotaStatus={quotaStatus}
-          onUpgradeClick={() => {}}
         />
       </div>
     </div>
