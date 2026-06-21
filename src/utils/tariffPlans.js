@@ -509,4 +509,95 @@ export const getPreviousTier = (currentPlanId) => {
   };
 };
 
+// ============================================================
+// 🔽 НОВАЯ ФУНКЦИЯ: getTariffUpgradeBenefits
+// ============================================================
+
+// 📈 Получение преимуществ апгрейда тарифа
+export const getTariffUpgradeBenefits = (currentPlanId) => {
+  const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
+  const currentIndex = tiers.indexOf(currentPlanId);
+  
+  if (currentIndex === -1 || currentIndex === tiers.length - 1) {
+    return null;
+  }
+  
+  const nextPlanId = tiers[currentIndex + 1];
+  const currentPlan = TARIFF_PLANS[currentPlanId];
+  const nextPlan = TARIFF_PLANS[nextPlanId];
+  
+  if (!currentPlan || !nextPlan) {
+    return null;
+  }
+  
+  // Безопасное вычисление процентов (избегаем деления на 0)
+  const safePercent = (from, to) => {
+    if (from === 0) return 0;
+    return Math.round(((to - from) / from) * 100);
+  };
+  
+  return {
+    planId: nextPlanId,
+    name: nextPlan.name,
+    benefits: {
+      users: {
+        from: currentPlan.maxUsers,
+        to: nextPlan.maxUsers,
+        increase: nextPlan.maxUsers - currentPlan.maxUsers,
+        percent: safePercent(currentPlan.maxUsers, nextPlan.maxUsers)
+      },
+      apiQuotaMonthly: {
+        from: currentPlan.apiQuotaMonthly,
+        to: nextPlan.apiQuotaMonthly,
+        increase: nextPlan.apiQuotaMonthly - currentPlan.apiQuotaMonthly,
+        percent: safePercent(currentPlan.apiQuotaMonthly, nextPlan.apiQuotaMonthly)
+      },
+      apiKeys: {
+        from: currentPlan.maxApiKeys,
+        to: nextPlan.maxApiKeys,
+        increase: nextPlan.maxApiKeys - currentPlan.maxApiKeys,
+        percent: safePercent(currentPlan.maxApiKeys, nextPlan.maxApiKeys)
+      },
+      newFeatures: Object.keys(nextPlan.features).filter(
+        feature => nextPlan.features[feature] === true && 
+                   (currentPlan.features[feature] === false || currentPlan.features[feature] === undefined)
+      ),
+      supportUpgrade: nextPlan.features.support !== currentPlan.features.support,
+      prioritySupport: nextPlan.features.priority === true && currentPlan.features.priority !== true,
+      hasSla: nextPlan.features.sla === true && currentPlan.features.sla !== true,
+    }
+  };
+};
+
+// ============================================================
+// 🔽 НОВАЯ ФУНКЦИЯ: checkTariffLimit
+// ============================================================
+
+// 📊 Проверка лимитов по тарифу
+export const checkTariffLimit = (planId, limitType, currentValue) => {
+  const plan = TARIFF_PLANS[planId];
+  if (!plan) return { allowed: false, limit: 0 };
+  
+  const limits = {
+    users: plan.maxUsers,
+    apiKeys: plan.maxApiKeys,
+    apiQuotaMonthly: plan.apiQuotaMonthly,
+    apiQuotaDaily: plan.apiQuotaDaily,
+  };
+  
+  const limit = limits[limitType];
+  if (limit === undefined) return { allowed: true, limit: Infinity };
+  
+  return {
+    allowed: currentValue <= limit,
+    limit: limit,
+    remaining: Math.max(0, limit - currentValue),
+    usagePercent: limit > 0 ? Math.round((currentValue / limit) * 100) : 0
+  };
+};
+
+// ============================================================
+// 🔽 ЭКСПОРТ ПО УМОЛЧАНИЮ
+// ============================================================
+
 export default TARIFF_PLANS;
