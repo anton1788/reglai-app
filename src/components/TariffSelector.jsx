@@ -1,7 +1,7 @@
 // src/components/TariffSelector.jsx
 import React, { useState } from 'react';
-import { Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles, Shield, Headphones } from 'lucide-react';
-import { TARIFF_PLANS, calculateSavings } from '../utils/tariffPlans';
+import { Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles, Shield, Headphones, Users, Key, Database, BarChart3, Webhook, Mail, MessageSquare, Phone, Star, Crown, Rocket } from 'lucide-react';
+import { TARIFF_PLANS, calculateSavings, getNextTier, getPreviousTier } from '../utils/tariffPlans';
 
 const TariffSelector = ({ 
   currentPlan = 'basic', 
@@ -11,11 +11,11 @@ const TariffSelector = ({
   isLoading = false,
   t,
   onPromoClick,
-  // 🆕 НОВЫЕ ПРОПСЫ
-  currentPlanDetails,     // { activated_at, expires_at, promo_code_used }
-  promoCodeInfo           // { code, discount_percent, applied_at }
+  currentPlanDetails,
+  promoCodeInfo,
+  onExtendPlan,
+  showUpgradePrompt = true
 }) => {
-  // Внутреннее состояние для периода, если не передан внешний контроллер
   const [internalBillingPeriod, setInternalBillingPeriod] = useState('monthly');
   const billingPeriod = externalBillingPeriod !== undefined ? externalBillingPeriod : internalBillingPeriod;
   
@@ -25,13 +25,6 @@ const TariffSelector = ({
     } else {
       setInternalBillingPeriod(period);
     }
-  };
-
-  const featureIcons = {
-    warehouse: Zap,
-    analytics: Sparkles,
-    webhooks: Shield,
-    support: Headphones
   };
 
   const formatDate = (dateString) => {
@@ -50,32 +43,76 @@ const TariffSelector = ({
     return days;
   };
 
-  // 🔹 Хелпер для безопасного перевода с фоллбэком
   const translate = (key, fallback) => {
     if (typeof t !== 'function') return fallback;
     const result = t(key);
     return result === key ? fallback : result;
   };
 
+  const getPlanDisplayName = (planId) => {
+    const names = {
+      basic: 'Базовый',
+      starter: 'Старт',
+      pro: 'Профессиональный',
+      business: 'Бизнес',
+      enterprise: 'Корпоративный'
+    };
+    return names[planId] || planId;
+  };
+
+  const getPlanIcon = (planId) => {
+    const icons = {
+      basic: '🆓',
+      starter: '🚀',
+      pro: '💼',
+      business: '🏢',
+      enterprise: '👑'
+    };
+    return icons[planId] || '📦';
+  };
+
+  const getPlanLevel = (planId) => {
+    const levels = ['basic', 'starter', 'pro', 'business', 'enterprise'];
+    return levels.indexOf(planId) + 1;
+  };
+
+  const renderSupportLabel = (supportType) => {
+    const labels = {
+      email: '📧 Email',
+      chat: '💬 Чат',
+      '24/7': '📞 24/7'
+    };
+    return labels[supportType] || supportType;
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-      {/* 🆕 БЛОК ИНФОРМАЦИИ О ТЕКУЩЕМ ТАРИФЕ */}
+      {/* Информация о текущем тарифе */}
       {currentPlanDetails && (
         <div className="mb-8 bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 rounded-xl p-5 border border-[#4A6572]/20">
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle className="w-5 h-5 text-green-600" />
-            <h3 className="font-semibold text-gray-900 dark:text-white">
-              {translate('currentPlanInfo', 'Информация о текущем тарифе')}
-            </h3>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">
+                {translate('currentPlanInfo', 'Текущий тариф')}: {getPlanIcon(currentPlan)} {getPlanDisplayName(currentPlan)}
+              </h3>
+              {currentPlan !== 'basic' && (
+                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+                  {translate('active', 'Активен')}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <span>Уровень {getPlanLevel(currentPlan)} из 5</span>
+            </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            {/* Дата активации */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 text-sm">
             <div className="flex items-start gap-2">
               <Calendar className="w-4 h-4 text-gray-500 mt-0.5" />
               <div>
                 <p className="text-gray-500 dark:text-gray-400">
-                  {translate('activationDate', 'Дата активации')}:
+                  {translate('activationDate', 'Активирован')}:
                 </p>
                 <p className="font-medium text-gray-900 dark:text-white">
                   {formatDate(currentPlanDetails.activated_at)}
@@ -83,12 +120,11 @@ const TariffSelector = ({
               </div>
             </div>
             
-            {/* Дата окончания */}
             <div className="flex items-start gap-2">
               <Clock className="w-4 h-4 text-gray-500 mt-0.5" />
               <div>
                 <p className="text-gray-500 dark:text-gray-400">
-                  {translate('expirationDate', 'Дата окончания')}:
+                  {translate('expirationDate', 'Действует до')}:
                 </p>
                 <p className={`font-medium ${
                   getDaysLeft(currentPlanDetails.expires_at) <= 7 
@@ -98,54 +134,63 @@ const TariffSelector = ({
                   {formatDate(currentPlanDetails.expires_at)}
                   {getDaysLeft(currentPlanDetails.expires_at) !== null && (
                     <span className="text-xs ml-2 text-gray-500">
-                      (осталось {getDaysLeft(currentPlanDetails.expires_at)} дн.)
+                      ({getDaysLeft(currentPlanDetails.expires_at)} дн.)
                     </span>
                   )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <Users className="w-4 h-4 text-gray-500 mt-0.5" />
+              <div>
+                <p className="text-gray-500 dark:text-gray-400">
+                  {translate('currentUsage', 'Использование')}:
+                </p>
+                <p className="font-medium text-gray-900 dark:text-white">
+                  {currentPlanDetails.usageCurrent || 0} / {TARIFF_PLANS[currentPlan]?.apiQuotaMonthly || 0}
                 </p>
               </div>
             </div>
           </div>
           
-          {/* 🆕 ИНФОРМАЦИЯ О ПРОМОКОДЕ */}
           {promoCodeInfo && (
             <div className="mt-3 pt-3 border-t border-[#4A6572]/20 flex items-start gap-2">
               <Gift className="w-4 h-4 text-[#F9AA33] mt-0.5" />
               <div>
                 <p className="text-gray-500 dark:text-gray-400">
-                  {translate('promoCodeApplied', 'Активирован промокод')}:
+                  {translate('promoCodeApplied', 'Промокод')}:
                 </p>
                 <p className="font-medium text-gray-900 dark:text-white">
                   {promoCodeInfo.code}
                   {promoCodeInfo.discount_percent && (
                     <span className="text-green-600 text-sm ml-2">
-                      (скидка {promoCodeInfo.discount_percent}%)
+                      (-{promoCodeInfo.discount_percent}%)
                     </span>
                   )}
-                </p>
-                <p className="text-xs text-gray-400">
-                  {translate('appliedAt', 'Активирован')}: {formatDate(promoCodeInfo.applied_at)}
                 </p>
               </div>
             </div>
           )}
           
-          {/* Кнопка продления/смены тарифа */}
-          <button
-            onClick={() => onSelectPlan(currentPlan)}
-            className="mt-4 w-full py-2 bg-[#4A6572]/20 text-[#4A6572] dark:text-[#F9AA33] rounded-lg text-sm font-medium hover:bg-[#4A6572]/30 transition-colors"
-          >
-            {translate('extendPlan', 'Продлить тариф')}
-          </button>
+          {onExtendPlan && (
+            <button
+              onClick={onExtendPlan}
+              className="mt-4 w-full py-2 bg-[#4A6572]/20 text-[#4A6572] dark:text-[#F9AA33] rounded-lg text-sm font-medium hover:bg-[#4A6572]/30 transition-colors"
+            >
+              {translate('extendPlan', 'Продлить тариф')}
+            </button>
+          )}
         </div>
       )}
-      
-      {/* Заголовок и переключатель периода оплаты */}
+
+      {/* Заголовок и переключатель периода */}
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
           {translate('tariffSelector.title', 'Выберите подходящий тариф')}
         </h2>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
-          {translate('tariffSelector.trial', 'Все тарифы включают 14 дней бесплатного пробного периода')}
+          {translate('tariffSelector.subtitle', 'От старта до корпоративного уровня — найдите идеальный план для вашего бизнеса')}
         </p>
         
         <div className="inline-flex items-center gap-4 bg-gray-100 dark:bg-gray-800 rounded-xl p-2">
@@ -182,69 +227,107 @@ const TariffSelector = ({
           const savings = calculateSavings(plan);
           const isCurrent = currentPlan === plan.id;
           const isPopular = plan.popular;
+          const isFree = plan.monthlyPrice === 0;
+          const isNext = getNextTier(currentPlan)?.id === plan.id;
+
+          // Получаем следующий план для сравнения
+          const nextPlan = getNextTier(plan.id);
+          const prevPlan = getPreviousTier(plan.id);
 
           return (
             <div
               key={plan.id}
-              className={`relative rounded-2xl border-2 transition-all ${
+              className={`relative rounded-2xl border-2 transition-all duration-300 hover:shadow-xl ${
                 isCurrent
-                  ? 'border-[#4A6572] bg-[#4A6572]/5'
+                  ? 'border-[#4A6572] bg-[#4A6572]/5 ring-2 ring-[#4A6572]/20'
                   : isPopular
                   ? 'border-[#F9AA33] bg-[#F9AA33]/5'
                   : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
-              }`}
+              } ${isNext ? 'scale-105 shadow-lg' : ''}`}
             >
+              {/* Badge популярного */}
               {isPopular && !isCurrent && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#F9AA33] text-white text-sm font-bold rounded-full">
-                  {translate('tariffSelector.popular', 'Популярный')}
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-[#F9AA33] to-[#f59e0b] text-white text-sm font-bold rounded-full shadow-lg">
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="w-4 h-4" />
+                    {translate('tariffSelector.popular', 'Популярный')}
+                  </span>
+                </div>
+              )}
+
+              {/* Badge текущего тарифа */}
+              {isCurrent && (
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#4A6572] text-white text-sm font-bold rounded-full shadow-lg">
+                  {translate('tariffSelector.current', 'Текущий')}
+                </div>
+              )}
+
+              {/* Badge бесплатного */}
+              {isFree && !isCurrent && (
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-green-500 text-white text-sm font-bold rounded-full shadow-lg">
+                  🆓 Бесплатно
                 </div>
               )}
 
               <div className="p-6">
                 {/* Заголовок */}
                 <div className="text-center mb-6">
+                  <div className="text-3xl mb-2">{getPlanIcon(plan.id)}</div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                     {translate(`tariff.plans.${plan.id}.name`, plan.name)}
                   </h3>
-                  <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                      {price.toLocaleString('ru-RU')} ₽
-                    </span>
-                    <span className="text-gray-500 dark:text-gray-400">
-                      /{billingPeriod === 'monthly' 
-                        ? translate('tariffSelector.perMonth', 'мес') 
-                        : translate('tariffSelector.perYear', 'год')}
-                    </span>
-                  </div>
-                  {billingPeriod === 'annual' && (
-                    <p className="text-sm text-green-600 mt-2">
-                      {translate('tariffSelector.savings', 'Экономия')} {savings.savingsPercent}% ({savings.savings.toLocaleString()} ₽)
-                    </p>
+                  
+                  {!isFree ? (
+                    <div>
+                      <div className="flex items-baseline justify-center gap-1">
+                        <span className="text-4xl font-bold text-gray-900 dark:text-white">
+                          {price.toLocaleString('ru-RU')} ₽
+                        </span>
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">
+                          /{billingPeriod === 'monthly' 
+                            ? translate('tariffSelector.perMonth', 'мес') 
+                            : translate('tariffSelector.perYear', 'год')}
+                        </span>
+                      </div>
+                      {billingPeriod === 'annual' && savings.savings > 0 && (
+                        <p className="text-sm text-green-600 mt-2">
+                          {translate('tariffSelector.savings', 'Экономия')} {savings.savingsPercent}% ({savings.savings.toLocaleString()} ₽)
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-2xl font-bold text-green-600">
+                      {translate('tariffSelector.free', 'Бесплатно')}
+                    </div>
                   )}
                 </div>
 
                 {/* Квоты */}
-                <div className="space-y-3 mb-6">
+                <div className="space-y-3 mb-6 bg-gray-50 dark:bg-gray-700/30 rounded-xl p-4">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      {translate('tariffSelector.quotaMonthly', 'API запросов/мес')}
+                    <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                      <Database className="w-4 h-4" />
+                      {translate('tariffSelector.quotaMonthly', 'Запросов/мес')}
                     </span>
                     <span className="font-semibold">{plan.apiQuotaMonthly.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      {translate('tariffSelector.quotaDaily', 'API запросов/день')}
+                    <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      {translate('tariffSelector.quotaDaily', 'Запросов/день')}
                     </span>
                     <span className="font-semibold">{plan.apiQuotaDaily.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">
+                    <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                      <Key className="w-4 h-4" />
                       {translate('tariffSelector.maxKeys', 'API ключей')}
                     </span>
                     <span className="font-semibold">{plan.maxApiKeys}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">
+                    <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                      <Users className="w-4 h-4" />
                       {translate('tariffSelector.maxUsers', 'Пользователей')}
                     </span>
                     <span className="font-semibold">{plan.maxUsers}</span>
@@ -252,79 +335,130 @@ const TariffSelector = ({
                 </div>
 
                 {/* Функции */}
-                <div className="space-y-3 mb-6">
+                <div className="space-y-2.5 mb-6">
                   {Object.entries(plan.features).map(([feature, value]) => {
-                    const Icon = featureIcons[feature];
                     const enabled = value === true || typeof value === 'string';
                     
                     const featureLabels = {
-                      warehouse: translate('tariffSelector.features.warehouse', '📦 Склад'),
-                      analytics: translate('tariffSelector.features.analytics', '📊 Аналитика'),
-                      api: translate('tariffSelector.features.api', '🔌 API доступ'),
-                      webhooks: translate('tariffSelector.features.webhooks', '🔔 Webhooks'),
-                      support: (() => {
-                        const supportType = value === true ? 'email' : value;
-                        const label = `💬 Поддержка (${supportType})`;
-                        return translate('tariffSelector.features.support', label);
-                      })(),
-                      priority: translate('tariffSelector.features.priority', '⚡ Приоритетная обработка'),
-                      sla: translate('tariffSelector.features.sla', '🛡️ SLA гарантия'),
-                      customIntegration: translate('tariffSelector.features.customIntegration', '🔧 Кастомная интеграция')
+                      warehouse: '📦 Управление складом',
+                      analytics: '📊 Аналитика и отчёты',
+                      api: '🔌 API доступ',
+                      webhooks: '🔔 Webhooks',
+                      support: `💬 ${renderSupportLabel(value)}`,
+                      priority: '⚡ Приоритетная обработка',
+                      sla: '🛡️ SLA гарантия',
+                      customIntegration: '🔧 Кастомная интеграция'
                     };
                     
                     return (
                       <div key={`${plan.id}-${feature}`} className="flex items-center gap-3 text-sm">
                         {enabled ? (
-                          <Check className="w-5 h-5 text-green-500 flex-shrink-0" aria-hidden="true" />
+                          <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
                         ) : (
-                          <X className="w-5 h-5 text-gray-400 flex-shrink-0" aria-hidden="true" />
+                          <X className="w-4 h-4 text-gray-400 flex-shrink-0" />
                         )}
                         <span className={enabled ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400'}>
-                          {featureLabels[feature] || feature}
+                          {translate(`tariffSelector.features.${feature}`, featureLabels[feature] || feature)}
                         </span>
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Кнопка */}
+                {/* Кнопка действия */}
                 <button
                   onClick={() => onSelectPlan(plan.id)}
                   disabled={isCurrent || isLoading}
                   className={`w-full py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
                     isCurrent
-                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
+                      : isFree
+                      ? 'bg-green-500 hover:bg-green-600 text-white'
+                      : isPopular
+                      ? 'bg-gradient-to-r from-[#F9AA33] to-[#f59e0b] text-white hover:shadow-lg'
                       : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white hover:shadow-lg'
                   }`}
                 >
                   {isCurrent ? (
                     <>
-                      <Check className="w-4 h-4" aria-hidden="true" />
+                      <CheckCircle className="w-4 h-4" />
                       {translate('tariffSelector.currentPlan', 'Текущий тариф')}
                     </>
+                  ) : isFree ? (
+                    translate('tariffSelector.startFree', 'Начать бесплатно')
                   ) : (
-                    translate('tariffSelector.selectPlan', 'Выбрать тариф')
+                    <>
+                      {isPopular && <Sparkles className="w-4 h-4" />}
+                      {translate('tariffSelector.selectPlan', 'Выбрать тариф')}
+                    </>
                   )}
                 </button>
+
+                {/* Сравнение с соседними тарифами */}
+                {showUpgradePrompt && !isCurrent && (
+                  <div className="mt-3 text-center">
+                    {nextPlan && plan.id !== 'enterprise' && (
+                      <p className="text-xs text-gray-400">
+                        Следующий уровень: {getPlanIcon(nextPlan.id)} {getPlanDisplayName(nextPlan.id)}
+                      </p>
+                    )}
+                    {prevPlan && plan.id !== 'basic' && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        От {getPlanIcon(prevPlan.id)} {getPlanDisplayName(prevPlan.id)}: +{((plan.apiQuotaMonthly - prevPlan.plan.apiQuotaMonthly) / prevPlan.plan.apiQuotaMonthly * 100).toFixed(0)}% запросов
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Кнопка промокода */}
-      <div className="mt-8 text-center">
+      {/* Дополнительная информация и промокод */}
+      <div className="mt-10 text-center">
+        <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-gray-500 dark:text-gray-400">
+          <span className="flex items-center gap-1">
+            <Shield className="w-4 h-4" />
+            {translate('tariffSelector.secure', 'Безопасная оплата')}
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="w-4 h-4" />
+            {translate('tariffSelector.trial', '14 дней бесплатно')}
+          </span>
+          <span className="flex items-center gap-1">
+            <Headphones className="w-4 h-4" />
+            {translate('tariffSelector.support', 'Поддержка 24/7')}
+          </span>
+        </div>
+
         <button
           onClick={() => {
             if (typeof onPromoClick === 'function') {
               onPromoClick();
             }
           }}
-          className="text-sm text-[#4A6572] hover:text-[#F9AA33] transition-colors flex items-center gap-2 mx-auto"
+          className="mt-6 text-sm text-[#4A6572] hover:text-[#F9AA33] transition-colors flex items-center gap-2 mx-auto"
         >
           <Gift className="w-4 h-4" />
           {translate('havePromoCode', 'Есть промокод?')}
         </button>
+      </div>
+
+      {/* Градация тарифов */}
+      <div className="mt-6 flex justify-center">
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          {['🆓', '🚀', '💼', '🏢', '👑'].map((icon, index) => (
+            <React.Fragment key={index}>
+              <span className={`px-2 py-1 rounded ${
+                index <= getPlanLevel(currentPlan) - 1 ? 'bg-[#4A6572]/10 text-[#4A6572]' : ''
+              }`}>
+                {icon}
+              </span>
+              {index < 4 && <span className="text-gray-300">→</span>}
+            </React.Fragment>
+          ))}
+        </div>
       </div>
     </div>
   );

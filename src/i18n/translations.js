@@ -342,6 +342,53 @@ clientDashboard: {
   confirmationError: 'Ошибка: '
 },
 
+// Добавить после "tariffs"
+tariffPlans: {
+  basic: 'Базовый',
+  starter: 'Старт',
+  pro: 'Профессиональный',
+  business: 'Бизнес',
+  enterprise: 'Корпоративный'
+},
+tariffSelector: {
+  title: 'Выберите подходящий тариф',
+  subtitle: 'От старта до корпоративного уровня — найдите идеальный план для вашего бизнеса',
+  monthly: 'Ежемесячно',
+  annual: 'Ежегодно',
+  popular: 'Популярный',
+  current: 'Текущий',
+  currentPlan: 'Текущий тариф',
+  selectPlan: 'Выбрать тариф',
+  startFree: 'Начать бесплатно',
+  free: 'Бесплатно',
+  perMonth: 'мес',
+  perYear: 'год',
+  savings: 'Экономия',
+  quotaMonthly: 'Запросов/мес',
+  quotaDaily: 'Запросов/день',
+  maxKeys: 'API ключей',
+  maxUsers: 'Пользователей',
+  features: {
+    warehouse: '📦 Управление складом',
+    analytics: '📊 Аналитика и отчёты',
+    api: '🔌 API доступ',
+    webhooks: '🔔 Webhooks',
+    support: '💬 Поддержка',
+    priority: '⚡ Приоритетная обработка',
+    sla: '🛡️ SLA гарантия',
+    customIntegration: '🔧 Кастомная интеграция'
+  },
+  secure: 'Безопасная оплата',
+  trial: '14 дней бесплатно',
+  support: 'Поддержка 24/7',
+  havePromoCode: 'Есть промокод?'
+},
+promoCodeApplied: 'Активирован промокод',
+activationDate: 'Дата активации',
+expirationDate: 'Дата окончания',
+currentUsage: 'Использование',
+extendPlan: 'Продлить тариф',
+
 // ─── Остальные ключи ─────────────────────────────────────────────────
 warehouse: 'На складе',
 confirmed: 'Подтверждено',
@@ -1680,6 +1727,53 @@ clientDashboard: {
   confirmationSuccess: 'Work confirmed!',
   confirmationError: 'Error: '
 },
+
+// Добавить после "tariffs"
+tariffPlans: {
+  basic: 'Basic',
+  starter: 'Starter',
+  pro: 'Professional',
+  business: 'Business',
+  enterprise: 'Enterprise'
+},
+tariffSelector: {
+  title: 'Choose the right plan',
+  subtitle: 'From startup to enterprise — find the perfect plan for your business',
+  monthly: 'Monthly',
+  annual: 'Annual',
+  popular: 'Popular',
+  current: 'Current',
+  currentPlan: 'Current Plan',
+  selectPlan: 'Select Plan',
+  startFree: 'Start Free',
+  free: 'Free',
+  perMonth: 'mo',
+  perYear: 'yr',
+  savings: 'Savings',
+  quotaMonthly: 'Requests/mo',
+  quotaDaily: 'Requests/day',
+  maxKeys: 'API Keys',
+  maxUsers: 'Users',
+  features: {
+    warehouse: '📦 Warehouse Management',
+    analytics: '📊 Analytics & Reports',
+    api: '🔌 API Access',
+    webhooks: '🔔 Webhooks',
+    support: '💬 Support',
+    priority: '⚡ Priority Processing',
+    sla: '🛡️ SLA Guarantee',
+    customIntegration: '🔧 Custom Integration'
+  },
+  secure: 'Secure Payment',
+  trial: '14 days free',
+  support: '24/7 Support',
+  havePromoCode: 'Have a promo code?'
+},
+promoCodeApplied: 'Promo code applied',
+activationDate: 'Activation date',
+expirationDate: 'Expiration date',
+currentUsage: 'Usage',
+extendPlan: 'Extend plan',
 
 // ─── 🆕 NEW: Churn Modal & Common (added) ───────────────────────────
 churnModal: {

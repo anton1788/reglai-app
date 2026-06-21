@@ -1,6 +1,30 @@
-import React, { useEffect, useState } from 'react';
-import { Activity, AlertTriangle, CheckCircle, Package, TrendingUp, Calendar } from 'lucide-react';
-import { checkQuota, getUsageStats, getCompanyPlan } from '../utils/tariffPlans';
+// src/components/QuotaUsage.jsx
+import React, { useEffect, useState, useCallback } from 'react';
+import { 
+  Activity, 
+  AlertTriangle, 
+  CheckCircle, 
+  Package, 
+  TrendingUp, 
+  Calendar, 
+  Users, 
+  Key, 
+  Database,
+  BarChart3,
+  Clock,
+  Zap,
+  Shield,
+  Crown,
+  ArrowUp,
+  Info
+} from 'lucide-react';
+import { 
+  checkQuota, 
+  getUsageStats, 
+  getCompanyPlan,
+  TARIFF_PLANS,
+  getTariffUpgradeBenefits
+} from '../utils/tariffPlans';
 
 const QuotaUsage = ({ 
   userCompanyId, 
@@ -8,21 +32,19 @@ const QuotaUsage = ({
   currentPlan,
   onUpgradeClick,
   showDetailed = false,
-  className = ''
+  className = '',
+  onRefresh = null
 }) => {
   const [quota, setQuota] = useState(null);
   const [stats, setStats] = useState(null);
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [upgradeBenefits, setUpgradeBenefits] = useState(null);
 
-  useEffect(() => {
-    if (userCompanyId && supabase) {
-      loadQuotaData();
-    }
-  }, [userCompanyId, supabase]);
-
-  const loadQuotaData = async () => {
+  const loadQuotaData = useCallback(async () => {
+    if (!userCompanyId || !supabase) return;
+    
     try {
       setLoading(true);
       setError(null);
@@ -36,16 +58,62 @@ const QuotaUsage = ({
       setQuota(quotaData);
       setStats(statsData);
       setPlan(planData);
+      
+      // Получаем преимущества апгрейда
+      if (planData?.id) {
+        const benefits = getTariffUpgradeBenefits(planData.id);
+        setUpgradeBenefits(benefits);
+      }
+      
     } catch (err) {
       console.error('Failed to load quota:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [userCompanyId, supabase]);
+
+  useEffect(() => {
+    loadQuotaData();
+  }, [loadQuotaData]);
 
   const refresh = () => {
     loadQuotaData();
+    if (onRefresh) onRefresh();
+  };
+
+  const getPlanLevel = (planId) => {
+    const levels = ['basic', 'starter', 'pro', 'business', 'enterprise'];
+    return levels.indexOf(planId) + 1;
+  };
+
+  const getPlanIcon = (planId) => {
+    const icons = {
+      basic: '🆓',
+      starter: '🚀',
+      pro: '💼',
+      business: '🏢',
+      enterprise: '👑'
+    };
+    return icons[planId] || '📦';
+  };
+
+  const getPlanColor = (planId) => {
+    const colors = {
+      basic: 'gray',
+      starter: 'blue',
+      pro: 'yellow',
+      business: 'indigo',
+      enterprise: 'purple'
+    };
+    return colors[planId] || 'gray';
+  };
+
+  const getProgressColor = (percent) => {
+    if (percent >= 100) return 'bg-red-500';
+    if (percent >= 80) return 'bg-orange-500';
+    if (percent >= 60) return 'bg-yellow-500';
+    return 'bg-green-500';
   };
 
   if (loading) {
@@ -73,44 +141,45 @@ const QuotaUsage = ({
     );
   }
 
-  const isBasicPlan = currentPlan?.id === 'basic' || plan?.id === 'basic';
+  const planId = plan?.id || currentPlan || 'basic';
+  const isEnterprisePlan = planId === 'enterprise';
+  const planData = TARIFF_PLANS[planId] || TARIFF_PLANS.basic;
   
-  // Лимиты заявок для бесплатного тарифа
-  const appQuota = quota || { used: 0, limit: 5, remaining: 5, allowed: true };
-  const appPercent = appQuota.limit > 0 ? Math.round((appQuota.used / appQuota.limit) * 100) : 0;
-  const isAppWarning = appPercent > 80 && appPercent < 100;
-  const isAppExceeded = appPercent >= 100;
-
-  // API лимиты
+  // Вычисляем проценты использования
   const dailyPercent = quota?.dailyLimit ? (quota.dailyUsage / quota.dailyLimit) * 100 : 0;
   const monthlyPercent = quota?.monthlyLimit ? (quota.monthlyUsage / quota.monthlyLimit) * 100 : 0;
-  const isApiWarning = dailyPercent > 80 || monthlyPercent > 80;
-  const isApiExceeded = dailyPercent >= 100 || monthlyPercent >= 100;
+  const usersPercent = planData.maxUsers > 0 ? ((stats?.users || 0) / planData.maxUsers) * 100 : 0;
+
+  // Получаем цвет для динамических классов
+  const planColor = getPlanColor(planId);
 
   return (
     <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 ${className}`}>
+      {/* Заголовок */}
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <Activity className="w-5 h-5" />
-          Использование лимитов
-        </h3>
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-xl bg-${planColor}-100 dark:bg-${planColor}-900/20`}>
+            <Activity className={`w-5 h-5 text-${planColor}-600 dark:text-${planColor}-400`} />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+              Использование лимитов
+            </h3>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-500 dark:text-gray-400">
+                {getPlanIcon(planId)} {planData.name}
+              </span>
+              <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-full">
+                Уровень {getPlanLevel(planId)}/5
+              </span>
+            </div>
+          </div>
+        </div>
+        
         <div className="flex items-center gap-2">
-          {isBasicPlan && (
-            appQuota.allowed ? (
-              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium flex items-center gap-1">
-                <CheckCircle className="w-4 h-4" />
-                {appQuota.remaining} заявок
-              </span>
-            ) : (
-              <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium flex items-center gap-1">
-                <AlertTriangle className="w-4 h-4" />
-                Лимит исчерпан
-              </span>
-            )
-          )}
           <button
             onClick={refresh}
-            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             title="Обновить"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -120,166 +189,249 @@ const QuotaUsage = ({
         </div>
       </div>
 
-      {/* БЛОК 1: Лимиты заявок (для бесплатного тарифа) */}
-      {isBasicPlan && (
-        <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-yellow-600" />
-              <span className="font-semibold text-yellow-800 dark:text-yellow-200 text-sm">
-                Лимит заявок (бесплатный тариф)
-              </span>
-            </div>
-            {isAppExceeded ? (
-              <span className="text-xs text-red-600 dark:text-red-400 font-medium">
-                ⚠️ Исчерпан
-              </span>
-            ) : isAppWarning ? (
-              <span className="text-xs text-orange-600 dark:text-orange-400 font-medium">
-                ⚠️ Почти исчерпан
-              </span>
-            ) : (
-              <span className="text-xs text-green-600 dark:text-green-400 font-medium">
-                ✅ Есть место
-              </span>
-            )}
+      {/* Основная статистика */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-500 dark:text-gray-400">Пользователи</span>
+            <Users className="w-4 h-4 text-gray-400" />
           </div>
-          
-          <div className="mb-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">Заявки сегодня</span>
-              <span className="font-medium text-gray-900 dark:text-white">
-                {appQuota.used} / {appQuota.limit}
-              </span>
-            </div>
-            <div className="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mt-1">
-              <div 
-                className={`h-full transition-all duration-500 ${
-                  isAppExceeded ? 'bg-red-500' : 
-                  isAppWarning ? 'bg-orange-500' : 'bg-yellow-500'
-                }`}
-                style={{ width: `${Math.min(100, appPercent)}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              {isAppExceeded 
-                ? '⚠️ Лимит исчерпан. Обновите тариф.' 
-                : `Осталось ${appQuota.remaining} заявок. Сброс в 00:00`}
-            </p>
-          </div>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {stats?.users || 0}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            из {planData.maxUsers}
+          </p>
+        </div>
 
-          {isAppExceeded && onUpgradeClick && (
-            <button
-              onClick={onUpgradeClick}
-              className="w-full mt-2 py-2 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white font-medium rounded-lg hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
-            >
-              <TrendingUp className="w-4 h-4" />
-              🚀 Увеличить лимиты
-            </button>
+        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-500 dark:text-gray-400">API ключи</span>
+            <Key className="w-4 h-4 text-gray-400" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {stats?.apiKeys || 0}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            из {planData.maxApiKeys}
+          </p>
+        </div>
+
+        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-500 dark:text-gray-400">Запросов/мес</span>
+            <Database className="w-4 h-4 text-gray-400" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {quota?.monthlyUsage?.toLocaleString() || 0}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            из {planData.apiQuotaMonthly.toLocaleString()}
+          </p>
+        </div>
+
+        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-500 dark:text-gray-400">Доступно</span>
+            <CheckCircle className="w-4 h-4 text-green-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {quota?.allowed ? '✅ Да' : '❌ Нет'}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {quota?.dailyRemaining?.toLocaleString() || 0} запросов сегодня
+          </p>
+        </div>
+      </div>
+
+      {/* Прогресс-бары */}
+      <div className="space-y-4">
+        {/* API дневной лимит */}
+        <div>
+          <div className="flex justify-between text-sm mb-1">
+            <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+              <Clock className="w-4 h-4" />
+              API дневной лимит
+            </span>
+            <span className="font-medium text-gray-900 dark:text-white">
+              {quota?.dailyUsage?.toLocaleString() || 0} / {planData.apiQuotaDaily.toLocaleString()}
+            </span>
+          </div>
+          <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-500 ${getProgressColor(dailyPercent)}`}
+              style={{ width: `${Math.min(100, dailyPercent)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <span>Осталось: {quota?.dailyRemaining?.toLocaleString() || 0}</span>
+            <span>{Math.round(dailyPercent)}%</span>
+          </div>
+        </div>
+
+        {/* API месячный лимит */}
+        <div>
+          <div className="flex justify-between text-sm mb-1">
+            <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+              <BarChart3 className="w-4 h-4" />
+              API месячный лимит
+            </span>
+            <span className="font-medium text-gray-900 dark:text-white">
+              {quota?.monthlyUsage?.toLocaleString() || 0} / {planData.apiQuotaMonthly.toLocaleString()}
+            </span>
+          </div>
+          <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-500 ${
+                monthlyPercent >= 100 ? 'bg-red-500' :
+                monthlyPercent >= 80 ? 'bg-orange-500' :
+                monthlyPercent >= 60 ? 'bg-yellow-500' : 'bg-blue-500'
+              }`}
+              style={{ width: `${Math.min(100, monthlyPercent)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <span>Осталось: {quota?.monthlyRemaining?.toLocaleString() || 0}</span>
+            <span>{Math.round(monthlyPercent)}%</span>
+          </div>
+          {quota?.resetAt && (
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1">
+              <Calendar className="w-3 h-3" />
+              Сброс: {new Date(quota.resetAt).toLocaleDateString('ru-RU')}
+            </p>
           )}
         </div>
-      )}
 
-      {/* БЛОК 2: API лимиты */}
-      {quota && (
-        <>
-          <div className="mb-4">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-gray-600 dark:text-gray-400">API дневной лимит</span>
-              <span className="font-medium text-gray-900 dark:text-white">
-                {quota.dailyUsage.toLocaleString()} / {quota.dailyLimit.toLocaleString()}
-              </span>
-            </div>
-            <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all ${
-                  isApiExceeded ? 'bg-red-500' : isApiWarning ? 'bg-yellow-500' : 'bg-green-500'
-                }`}
-                style={{ width: `${Math.min(100, dailyPercent)}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Осталось: {quota.dailyRemaining.toLocaleString()} запросов
-            </p>
+        {/* Пользователи */}
+        <div>
+          <div className="flex justify-between text-sm mb-1">
+            <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+              <Users className="w-4 h-4" />
+              Использование пользователей
+            </span>
+            <span className="font-medium text-gray-900 dark:text-white">
+              {stats?.users || 0} / {planData.maxUsers}
+            </span>
           </div>
-
-          <div className="mb-4">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-gray-600 dark:text-gray-400">API месячный лимит</span>
-              <span className="font-medium text-gray-900 dark:text-white">
-                {quota.monthlyUsage.toLocaleString()} / {quota.monthlyLimit.toLocaleString()}
-              </span>
-            </div>
-            <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all ${
-                  monthlyPercent > 80 ? 'bg-yellow-500' : 'bg-blue-500'
-                }`}
-                style={{ width: `${Math.min(100, monthlyPercent)}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Сброс: {quota.resetAt ? new Date(quota.resetAt).toLocaleDateString('ru-RU') : '—'}
-            </p>
+          <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-500 ${getProgressColor(usersPercent)}`}
+              style={{ width: `${Math.min(100, usersPercent)}%` }}
+            />
           </div>
-        </>
-      )}
-
-      {/* БЛОК 3: Статистика использования */}
-      {stats && showDetailed && (
-        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {stats.applications || 0}
-            </p>
-            <p className="text-xs text-gray-500">Заявок за месяц</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {stats.users || 0}
-            </p>
-            <p className="text-xs text-gray-500">Пользователей</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {plan?.maxUsers || 3}
-            </p>
-            <p className="text-xs text-gray-500">Макс. пользователей</p>
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <span>Свободно: {Math.max(0, planData.maxUsers - (stats?.users || 0))}</span>
+            <span>{Math.round(usersPercent)}%</span>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* БЛОК 4: Кнопка апгрейда */}
-      {isBasicPlan && !isAppExceeded && isAppWarning && onUpgradeClick && (
-        <div className="mt-4 p-3 bg-gradient-to-r from-[#F9AA33]/10 to-[#F57C00]/10 rounded-xl border border-[#F9AA33]/20">
-          <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-            ⚠️ Вы близки к исчерпанию лимита заявок ({appQuota.used}/{appQuota.limit}).
-          </p>
-          <button
-            onClick={onUpgradeClick}
-            className="w-full py-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-lg text-sm font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"
-          >
-            <TrendingUp className="w-4 h-4" />
-            Перейти на Профи тариф
-          </button>
-        </div>
-      )}
-
-      {/* БЛОК 5: Информация о тарифе */}
-      {plan && (
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-            <span>📋 Тариф: <span className="font-medium">{plan.name}</span></span>
-            {isBasicPlan && (
-              <>
-                <span>📦 Материалов: до 20 в заявке</span>
-                <span>👥 Пользователей: до {plan.maxUsers}</span>
-              </>
+      {/* Преимущества апгрейда */}
+      {upgradeBenefits && !isEnterprisePlan && (
+        <div className="mt-6 p-4 bg-gradient-to-r from-[#F9AA33]/10 to-[#F57C00]/10 rounded-xl border border-[#F9AA33]/20">
+          <div className="flex items-start gap-3">
+            <div className="p-1.5 bg-[#F9AA33]/20 rounded-lg">
+              <ArrowUp className="w-4 h-4 text-[#F9AA33]" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-gray-900 dark:text-white text-sm">
+                Перейдите на {upgradeBenefits.name}
+              </h4>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {upgradeBenefits.benefits.users.increase > 0 && (
+                  <div className="text-xs text-gray-600 dark:text-gray-300">
+                    👥 +{upgradeBenefits.benefits.users.increase} пользователей
+                  </div>
+                )}
+                {upgradeBenefits.benefits.apiQuotaMonthly.increase > 0 && (
+                  <div className="text-xs text-gray-600 dark:text-gray-300">
+                    📊 +{upgradeBenefits.benefits.apiQuotaMonthly.increase.toLocaleString()} запросов/мес
+                  </div>
+                )}
+                {upgradeBenefits.benefits.apiKeys.increase > 0 && (
+                  <div className="text-xs text-gray-600 dark:text-gray-300">
+                    🔑 +{upgradeBenefits.benefits.apiKeys.increase} API ключей
+                  </div>
+                )}
+                {upgradeBenefits.benefits.prioritySupport && (
+                  <div className="text-xs text-gray-600 dark:text-gray-300">
+                    ⚡ Приоритетная поддержка
+                  </div>
+                )}
+                {upgradeBenefits.benefits.hasSla && (
+                  <div className="text-xs text-gray-600 dark:text-gray-300">
+                    🛡️ SLA гарантия
+                  </div>
+                )}
+                {upgradeBenefits.benefits.newFeatures.length > 0 && (
+                  <div className="text-xs text-gray-600 dark:text-gray-300 col-span-2">
+                    ✨ Новые функции: {upgradeBenefits.benefits.newFeatures.map(f => {
+                      const labels = {
+                        webhooks: 'Webhooks',
+                        customIntegration: 'Кастомная интеграция',
+                        analytics: 'Аналитика'
+                      };
+                      return labels[f] || f;
+                    }).join(', ')}
+                  </div>
+                )}
+              </div>
+            </div>
+            {onUpgradeClick && (
+              <button
+                onClick={onUpgradeClick}
+                className="px-4 py-2 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white text-sm font-medium rounded-lg hover:shadow-lg transition-all whitespace-nowrap"
+              >
+                Апгрейд →
+              </button>
             )}
           </div>
         </div>
       )}
+
+      {/* Детальная информация */}
+      {showDetailed && (
+        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {stats?.applications || 0}
+              </p>
+              <p className="text-xs text-gray-500">Заявок за месяц</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {stats?.materials || 0}
+              </p>
+              <p className="text-xs text-gray-500">Материалов</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {planData.maxUsers}
+              </p>
+              <p className="text-xs text-gray-500">Макс. пользователей</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {planData.maxApiKeys}
+              </p>
+              <p className="text-xs text-gray-500">Макс. API ключей</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Информация о тарифе */}
+      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex flex-wrap justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <span>📋 Тариф: <span className="font-medium text-gray-700 dark:text-gray-300">{planData.name}</span></span>
+          <span>📦 Материалов: до {planData.features.warehouse ? '∞' : '20'} в заявке</span>
+          <span>👥 Пользователей: до {planData.maxUsers}</span>
+          {planData.features.support && (
+            <span>💬 Поддержка: {planData.features.support}</span>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

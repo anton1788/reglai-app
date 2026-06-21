@@ -155,6 +155,8 @@ import {
 // === ПРОМОКОДЫ ===
 import PromoModal from './components/PromoModal';
 import PromoManager from './components/PromoManager';
+import KPIDashboard from './components/KPIDashboard';
+import { runCleanup } from './utils/autoCleanup';
 import { activatePromoPlan, 
   // eslint-disable-next-line no-unused-vars
   getAllPromoCodes } from './utils/promoManager';
@@ -1030,7 +1032,7 @@ const [currentPlan, setCurrentPlan] = useState(null);
 const [currentPlanDetails, setCurrentPlanDetails] = useState(null); // 🆕 ДОБАВИТЬ ЭТУ СТРОКУ
 const [promoCodeInfo, setPromoCodeInfo] = useState(null);   
 const [planLoading, setPlanLoading] = useState(true);
-const [_showTariffModal, setShowTariffModal] = useState(false);
+const [showTariffModal, setShowTariffModal] = useState(false);
 const [quotaStatus, setQuotaStatus] = useState(null);
 const [billingPeriod, setBillingPeriod] = useState('monthly');
 // 🎁 Promo States
@@ -2442,42 +2444,42 @@ const handleInviteUser = async () => {
   }
 
   // ============================================================
-  // 🆕 ПРОВЕРКА ЛИМИТА ПОЛЬЗОВАТЕЛЕЙ (ВСТАВИТЬ СЮДА)
-  // ============================================================
-  if (currentPlan?.id === 'basic' || !currentPlan) {
-    try {
-      // Подсчёт текущих пользователей
-      const { count: currentUsers, error: countError } = await supabase
-        .from('company_users')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', userCompanyId)
-        .eq('is_active', true);
-      
-      if (countError) throw countError;
-      
-      const maxUsers = currentPlan?.maxUsers || 10;
-      
-      if (currentUsers >= maxUsers) {
-        showNotification(
-          `⚠️ Лимит пользователей исчерпан (${currentUsers}/${maxUsers}). Обновите тариф для добавления новых сотрудников.`,
-          'warning'
-        );
-        setCurrentView('tariffs');
-        return;
-      }
-      
-      // Предупреждение если осталось 1 место
-      if (currentUsers >= maxUsers - 1) {
-        showNotification(
-          `⚠️ Осталось ${maxUsers - currentUsers} место. Скоро лимит будет исчерпан.`,
-          'warning'
-        );
-      }
-      
-    } catch (err) {
-      console.error('Ошибка проверки лимита пользователей:', err);
+// 🆕 ПРОВЕРКА ЛИМИТА ПОЛЬЗОВАТЕЛЕЙ
+// ============================================================
+if (currentPlan?.id === 'basic' || !currentPlan) {
+  try {
+    // Подсчёт текущих пользователей
+    const { count: currentUsers, error: countError } = await supabase
+      .from('company_users')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', userCompanyId)
+      .eq('is_active', true);
+    
+    if (countError) throw countError;
+    
+    const maxUsers = currentPlan?.maxUsers || 10;
+    
+    if (currentUsers >= maxUsers) {
+      showNotification(
+        `⚠️ Лимит пользователей исчерпан (${currentUsers}/${maxUsers}). Обновите тариф для добавления новых сотрудников.`,
+        'warning'
+      );
+      setCurrentView('tariffs');
+      return;
     }
+    
+    // Предупреждение если осталось 1 место
+    if (currentUsers >= maxUsers - 1) {
+      showNotification(
+        `⚠️ Осталось ${maxUsers - currentUsers} место. Скоро лимит будет исчерпан.`,
+        'warning'
+      );
+    }
+    
+  } catch (err) {
+    console.error('Ошибка проверки лимита пользователей:', err);
   }
+}
 
   if (!userCompanyId) {
     showNotification('Ошибка: компания не указана', 'error');
@@ -2894,15 +2896,6 @@ if (currentPlan?.id === 'basic' || !currentPlan) {
         console.warn('⚠️ Ошибка увеличения счётчика:', err);
       }
     }
-    
-    await logApplicationCreated(supabase, {
-      id: realApplicationId,
-      object_name: formData.objectName.trim(),
-      foreman_name: formData.foremanName.trim(),
-      foreman_phone: formData.foremanPhone,
-      materials: materialsWithTracking,
-      status: initialStatus
-    }, userContext);
     
     
     await logApplicationCreated(supabase, {
@@ -4993,10 +4986,6 @@ const handleSelectPlan = async (planId) => {
     showNotification('Ошибка: компания не указана', 'error');
     return;
   }
-  if (!userCompanyId) {
-    showNotification('Ошибка: компания не указана', 'error');
-    return;
-  }
   try {
     // 🔍 ОТЛАДКА: логируем изменение тарифа
     console.log('🔍 [TARIFF] Changing plan:', {
@@ -5008,18 +4997,22 @@ const handleSelectPlan = async (planId) => {
     });
     
     const { error } = await supabase
-      .from('companies')
-      .update({
-        plan_tier: planId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', userCompanyId);
-    
-    if (error) throw error;
-    
-    setCurrentPlan(TARIFF_PLANS[planId]);
-    setShowTariffModal(false);
-    showNotification(`✅ Тариф "${TARIFF_PLANS[planId].name}" активирован`, 'success');
+  .from('companies')
+  .update({
+    plan_tier: planId,
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', userCompanyId);
+
+if (error) throw error;
+
+// 🆕 ОЧИСТКА КЭША ПОСЛЕ СМЕНЫ ТАРИФА
+cacheManager.clear();
+console.log('🗑️ Кэш очищен после смены тарифа');
+
+setCurrentPlan(TARIFF_PLANS[planId]);
+setShowTariffModal(false);
+showNotification(`✅ Тариф "${TARIFF_PLANS[planId].name}" активирован`, 'success');
     
     // 🔍 ОТЛАДКА АУДИТА
     console.log('📝 [AUDIT] Calling logAuditAction...');
@@ -5355,10 +5348,8 @@ useEffect(() => {
   );
 
  const renderAnalyticsDashboard = () => {
-  // 👑 ПРЯМАЯ ПРОВЕРКА ДЛЯ СУПЕР-АДМИНА
-  const isSuper = userRole === 'super_admin' || 
-                  user?.email === 'aksyanov.2014@yandex.ru' ||
-                  user?.email?.includes('admin');
+  // 👑 ПРОВЕРКА ДЛЯ СУПЕР-АДМИНА
+  const isSuper = isSuperAdmin(userRole, user?.user_metadata);
   
   console.log('🔥 renderAnalyticsDashboard:', { 
     userRole, 
@@ -6790,7 +6781,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         )}
         
         {currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && 
-          (isCompanyOwner || userRole === 'manager' || userRole === 'director') && (
+  (isCompanyOwner || userRole === 'manager' || userRole === 'director' || userRole === 'client_manager') && (
             <div className="max-w-7xl mx-auto p-4 page-enter">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -7119,7 +7110,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       )}
       
       {/* Tariff Modal */}
-      {_showTariffModal && (
+      {showTariffModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center p-4 border-b">
@@ -7210,14 +7201,14 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       )}
       
       {showPromoManager && isSuperAdmin(userRole, user?.user_metadata) && (
-        <PromoManager
-          isOpen={showPromoManager}
-          onClose={() => setShowPromoManager(false)}
-          supabase={supabase}
-          showNotification={showNotification}
-          t={t}
-        />
-      )}
+  <PromoManager
+    isOpen={showPromoManager}
+    onClose={() => setShowPromoManager(false)}
+    supabase={supabase}
+    showNotification={showNotification}
+    t={t}
+  />
+)}
       
       {/* Client Invite Modal */}
       {showClientInviteModal && (

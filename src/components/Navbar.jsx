@@ -1,5 +1,5 @@
 // src/components/Navbar.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Menu, X, Search, User, LogOut, Settings, HelpCircle, 
   Bell, ChevronDown, Home, Package, ClipboardList, 
@@ -8,8 +8,10 @@ import {
   Plus, UserPlus, Briefcase,
   CheckCircle, ShoppingCart, Code, Shield, Sparkles,
   Globe, WifiOff, History, Eye, Clock,
-  Target, ChevronLeft, ChevronRight, Merge
+  Target, ChevronLeft, ChevronRight, Merge,
+  Crown, Rocket, Database, Key, Zap, Gift, TrendingUp
 } from 'lucide-react';
+import { getCompanyPlan } from '../utils/tariffPlans';
 
 const Navbar = ({ 
   user, 
@@ -33,7 +35,9 @@ const Navbar = ({
   cartItemsCount = 0,
   isAdminMode = false,
   onToggleAdminMode,
-  isCompanyOwner = false
+  isCompanyOwner = false,
+  companyId = null,
+  supabase = null
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -41,10 +45,30 @@ const Navbar = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showLeftScroll, setShowLeftScroll] = useState(false);
   const [showRightScroll, setShowRightScroll] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState(null);
+  const [planLoading, setPlanLoading] = useState(false);
   const profileRef = useRef(null);
   const notificationsRef = useRef(null);
   const searchRef = useRef(null);
   const navScrollRef = useRef(null);
+
+  // Загрузка текущего тарифа
+  const loadCompanyPlan = useCallback(async () => {
+    if (!companyId || !supabase) return;
+    try {
+      setPlanLoading(true);
+      const planData = await getCompanyPlan(supabase, companyId);
+      setCurrentPlan(planData);
+    } catch (error) {
+      console.error('Failed to load company plan:', error);
+    } finally {
+      setPlanLoading(false);
+    }
+  }, [companyId, supabase]);
+
+  useEffect(() => {
+    loadCompanyPlan();
+  }, [loadCompanyPlan]);
 
   // Закрытие меню при клике вне
   useEffect(() => {
@@ -123,56 +147,68 @@ const Navbar = ({
     return roles[userRole] || userRole;
   };
 
+  const getPlanIcon = (planId) => {
+    const icons = {
+      basic: '🆓',
+      starter: '🚀',
+      pro: '💼',
+      business: '🏢',
+      enterprise: '👑'
+    };
+    return icons[planId] || '📦';
+  };
+
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Все пункты навигации в зависимости от роли
+  // Все пункты навигации в зависимости от роли и тарифа
   const getNavItems = () => {
     const items = [];
 
+    // Базовые пункты для всех
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
 
-    // ✅ CRM Sales - Лиды (только для manager и supply_admin)
+    // CRM Sales - Лиды (для manager и supply_admin)
     if (userRole === 'manager' || userRole === 'supply_admin') {
       items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
     }
 
-    // ✅ Объединение заявок (только для manager и supply_admin)
+    // Объединение заявок (для manager и supply_admin)
     if (userRole === 'manager' || userRole === 'supply_admin') {
       items.push({ id: 'merge', label: 'Объединение заявок', icon: Merge, path: '/merge' });
     }
 
-    // ✅ Для мастера и прораба - только заявки (свои), история
+    // Для мастера и прораба - только заявки (свои), история
     if (userRole === 'master' || userRole === 'foreman') {
       items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
       items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
     }
 
-    // ✅ Склад (для manager, supply_admin, foreman)
+    // Склад (для manager, supply_admin, foreman)
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman') {
       items.push({ id: 'warehouse', label: 'Склад', icon: Package, path: '/warehouse' });
     }
 
-    // ✅ Клиенты (для manager и client_manager)
+    // Клиенты (для manager и client_manager)
     if (userRole === 'manager' || userRole === 'client_manager') {
       items.push({ id: 'clients', label: 'Клиенты', icon: Users, path: '/clients' });
     }
 
-    // ✅ АНАЛИТИКА - ТОЛЬКО для manager, supply_admin, director, владельца компании
+    // АНАЛИТИКА - для manager, supply_admin, director, владельца компании
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
       items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
     }
 
-    // ✅ Документы - для всех, кроме client (у клиента отдельный раздел)
+    // Документы - для всех, кроме client
     if (userRole !== 'client') {
       items.push({ id: 'documents', label: 'Документы', icon: FileText, path: '/documents' });
     }
 
-    // ✅ Чат - для всех
+    // Чат - для всех
     items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
     items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
 
-    // ✅ Согласование (только для manager и director)
+    // Согласование (только для manager и director)
     if (userRole === 'manager' || userRole === 'director') {
       items.push({ 
         id: 'approvals', 
@@ -182,32 +218,32 @@ const Navbar = ({
       });
     }
 
-    // ✅ Сотрудники (только для manager)
+    // Сотрудники (только для manager)
     if (userRole === 'manager') {
       items.push({ id: 'employees', label: 'Сотрудники', icon: Users, path: '/employees' });
     }
 
-    // ✅ Корзина
+    // Корзина
     if (cartItemsCount > 0) {
       items.push({ id: 'cart', label: `Корзина (${cartItemsCount})`, icon: ShoppingCart, path: '/cart' });
     }
 
-    // ✅ API (только для manager)
-    if (userRole === 'manager') {
+    // API (только для manager и если тариф позволяет)
+    if (userRole === 'manager' && currentPlan?.features?.api) {
       items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
     }
 
-    // ✅ АУДИТ - ТОЛЬКО для manager и director
+    // АУДИТ - для manager, director и владельца
     if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
       items.push({ id: 'audit', label: 'Аудит', icon: Eye, path: '/audit' });
     }
 
-    // ✅ Задачи
+    // Задачи
     if (userRole !== 'client') {
       items.push({ id: 'tasks', label: 'Задачи', icon: Target, path: '/tasks' });
     }
 
-    // ✅ Для заказчика - отдельные пункты
+    // Для заказчика - отдельные пункты
     if (userRole === 'client') {
       items.push({ id: 'clientDashboard', label: 'Мой объект', icon: Home, path: '/client' });
       items.push({ id: 'clientDocuments', label: 'Мои документы', icon: FileText, path: '/client/documents' });
@@ -295,6 +331,24 @@ const Navbar = ({
 
           {/* Правая часть */}
           <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Индикатор тарифа */}
+            {currentPlan && !planLoading && (
+              <div className="hidden lg:flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <span className="text-sm">{getPlanIcon(currentPlan.id)}</span>
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                  {currentPlan.name}
+                </span>
+                {currentPlan.id !== 'enterprise' && (
+                  <button
+                    onClick={onOpenTariffs}
+                    className="ml-1 text-xs text-[#F9AA33] hover:underline"
+                  >
+                    ↑
+                  </button>
+                )}
+              </div>
+            )}
+
             {!isOnline && (
               <div className="flex items-center px-1.5 sm:px-2 py-1 sm:py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-lg text-xs font-medium">
                 <WifiOff className="w-3 h-3 mr-1" />
@@ -459,6 +513,12 @@ const Navbar = ({
                       <Briefcase className="w-3 h-3" />
                       {getRoleLabel()}
                     </p>
+                    {currentPlan && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
+                        <Crown className="w-3 h-3 text-yellow-500" />
+                        Тариф: {currentPlan.name} {getPlanIcon(currentPlan.id)}
+                      </p>
+                    )}
                   </div>
                   <div className="p-2">
                     <button 
@@ -480,7 +540,12 @@ const Navbar = ({
                       className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                     >
                       <Sparkles className="w-4 h-4 text-yellow-500" />
-                      Тарифы
+                      {currentPlan ? 'Сменить тариф' : 'Тарифы'}
+                      {currentPlan && (
+                        <span className="ml-auto text-xs text-gray-400">
+                          {getPlanIcon(currentPlan.id)} {currentPlan.name}
+                        </span>
+                      )}
                     </button>
                     {userRole === 'super_admin' && (
                       <button 
@@ -522,7 +587,7 @@ const Navbar = ({
         </div>
       </div>
 
-      {/* Планшетная навигация - иконки с подписями (видна на sm и md) */}
+      {/* Планшетная навигация - иконки с подписями */}
       {navItems.length > 0 && (
         <div className="hidden sm:flex lg:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 overflow-x-auto no-scrollbar">
           <div className="flex gap-1 p-2">
@@ -549,7 +614,7 @@ const Navbar = ({
         </div>
       )}
 
-      {/* Десктопная навигация - горизонтальное меню с прокруткой (только lg и выше) */}
+      {/* Десктопная навигация - горизонтальное меню с прокруткой */}
       {navItems.length > 0 && (
         <div className="hidden lg:block border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
           <div className="w-full px-4 relative">
@@ -636,6 +701,27 @@ const Navbar = ({
           </form>
           
           <div className="p-2">
+            {/* Информация о тарифе в мобильном меню */}
+            {currentPlan && (
+              <div className="mx-3 mb-2 p-2 bg-gradient-to-r from-[#F9AA33]/10 to-[#F57C00]/10 rounded-lg border border-[#F9AA33]/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{getPlanIcon(currentPlan.id)}</span>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {currentPlan.name}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
+                    className="text-xs text-[#F9AA33] font-medium hover:underline flex items-center gap-1"
+                  >
+                    <TrendingUp className="w-3 h-3" />
+                    Апгрейд
+                  </button>
+                </div>
+              </div>
+            )}
+
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id ||
@@ -687,7 +773,7 @@ const Navbar = ({
               className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
             >
               <Sparkles className="w-5 h-5 text-yellow-500" />
-              Тарифы
+              {currentPlan ? 'Сменить тариф' : 'Тарифы'}
             </button>
             <button
               onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }}

@@ -16,6 +16,7 @@ import PromoModal from './PromoModal';
 import PromoManager from './PromoManager';
 import KPIDashboard from './KPIDashboard';
 import { runCleanup } from '../utils/autoCleanup';
+import { TARIFF_PLANS } from '../utils/tariffPlans';
 
 // ============================================================================
 // UTILS & CONSTANTS
@@ -306,6 +307,16 @@ UserTable.displayName = 'UserTable';
 const CompaniesTable = React.memo(({ 
   companies, isLoading, t, onEdit, onSave, onCancel, onDelete, onToggleBlock, showNotification 
 }) => {
+  const getPlanIcon = (planId) => {
+    const icons = {
+      basic: '🆓',
+      starter: '🚀',
+      pro: '💼',
+      business: '🏢',
+      enterprise: '👑'
+    };
+    return icons[planId] || '📦';
+  };
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
 
@@ -333,94 +344,108 @@ const CompaniesTable = React.memo(({
     <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" role="table">
         <thead className="bg-gray-50 dark:bg-gray-700/50">
-          <tr>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
-              {t('name')}
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
-              {t('actions')}
-            </th>
-          </tr>
-        </thead>
+  <tr>
+    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+      {t('name')}
+    </th>
+    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+      Тариф
+    </th>
+    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+      {t('actions')}
+    </th>
+  </tr>
+</thead>
         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-          {companies.map((comp) => (
-            <tr key={comp.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-              <td className="px-4 py-3">
-                {editingId === comp.id ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
-                               bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSave(comp);
-                        if (e.key === 'Escape') {
-                          setEditingId(null);
-                          onCancel?.();
-                        }
-                      }}
-                      aria-label={t('editCompanyName')}
-                    />
-                    <button
-                      onClick={() => handleSave(comp)}
-                      className="p-1.5 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 rounded-lg"
-                      aria-label={t('save')}
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => { setEditingId(null); onCancel?.(); }}
-                      className="p-1.5 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 rounded-lg"
-                      aria-label={t('cancel')}
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {sanitizeInput(comp.name)}
-                    </span>
-                    <button
-                      onClick={() => handleStartEdit(comp)}
-                      className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded"
-                      aria-label={`${t('edit')}: ${comp.name}`}
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => onToggleBlock?.(comp.id, comp.is_blocked, comp.name)}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                      comp.is_blocked
-                        ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300'
-                        : 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300'
-                    }`}
-                    aria-label={comp.is_blocked ? t('unblockCompany', { name: comp.name }) : t('blockCompany', { name: comp.name })}
-                  >
-                    {comp.is_blocked ? <CheckCircle className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
-                    <span className="hidden sm:inline">{comp.is_blocked ? t('unblock') : t('block')}</span>
-                  </button>
-                  
-                  <button
-                    onClick={() => onDelete?.(comp.id, comp.name)}
-                    className="p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                    aria-label={`${t('delete')}: ${comp.name}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
+  {companies.map((comp) => (
+    <tr key={comp.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+      {/* Ячейка с названием */}
+      <td className="px-4 py-3">
+        {editingId === comp.id ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
+                       bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSave(comp);
+                if (e.key === 'Escape') {
+                  setEditingId(null);
+                  onCancel?.();
+                }
+              }}
+              aria-label={t('editCompanyName')}
+            />
+            <button
+              onClick={() => handleSave(comp)}
+              className="p-1.5 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 rounded-lg"
+              aria-label={t('save')}
+            >
+              <CheckCircle className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => { setEditingId(null); onCancel?.(); }}
+              className="p-1.5 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 rounded-lg"
+              aria-label={t('cancel')}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-900 dark:text-white">
+              {sanitizeInput(comp.name)}
+            </span>
+            <button
+              onClick={() => handleStartEdit(comp)}
+              className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded"
+              aria-label={`${t('edit')}: ${comp.name}`}
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </td>
+
+      {/* 👇 НОВАЯ ЯЧЕЙКА С ТАРИФОМ */}
+      <td className="px-4 py-3">
+        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-700">
+          {getPlanIcon(comp.plan_tier || 'basic')} 
+          {TARIFF_PLANS[comp.plan_tier || 'basic']?.name || 'Базовый'}
+        </span>
+      </td>
+
+      {/* Ячейка с действиями */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => onToggleBlock?.(comp.id, comp.is_blocked, comp.name)}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+              comp.is_blocked
+                ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300'
+                : 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300'
+            }`}
+            aria-label={comp.is_blocked ? t('unblockCompany', { name: comp.name }) : t('blockCompany', { name: comp.name })}
+          >
+            {comp.is_blocked ? <CheckCircle className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">{comp.is_blocked ? t('unblock') : t('block')}</span>
+          </button>
+          
+          <button
+            onClick={() => onDelete?.(comp.id, comp.name)}
+            className="p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+            aria-label={`${t('delete')}: ${comp.name}`}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  ))}
+</tbody>
       </table>
     </div>
   );
@@ -440,9 +465,10 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
   const [userCompanyId, setUserCompanyId] = useState(null);
   
   // Промокод состояния
-  const [showPromoModal, setShowPromoModal] = useState(false);
-  const [showPromoManager, setShowPromoManager] = useState(false);
-  const [activatingPromo, setActivatingPromo] = useState(false);
+ const [showPromoModal, setShowPromoModal] = useState(false);
+const [showPromoManager, setShowPromoManager] = useState(false);
+const [activatingPromo, setActivatingPromo] = useState(false);
+const [tariffStats, setTariffStats] = useState(null);
   
   const mainRef = useRef(null);
   
@@ -489,7 +515,8 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
   }, [employees, companies]);
 
   // Handle promo activation
-  const handleActivatePromo = useCallback(async (promoCode) => {
+  // Handle promo activation
+const handleActivatePromo = useCallback(async (promoCode) => {
   console.log('🔍 1. Введённый промокод (оригинал):', promoCode);
   console.log('🔍 2. Длина промокода:', promoCode?.length);
   console.log('🔍 3. Код символов:', [...(promoCode || '')].map(c => c.charCodeAt(0)));
@@ -571,9 +598,16 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
       return;
     }
     
-    // Определяем ID тарифа
+    // Определяем ID тарифа (поддержка всех 5 тарифов)
     const tariffPlanId = promoData.tariff_plan_id || promoData.plan_id || 'pro';
     console.log('📊 Тариф для активации:', tariffPlanId);
+    
+    // Проверяем, существует ли такой тариф
+    if (!TARIFF_PLANS[tariffPlanId]) {
+      showNotification(`Тариф "${tariffPlanId}" не найден`, 'error');
+      setActivatingPromo(false);
+      return;
+    }
     
     // Обновляем компанию
     const { error: updateCompanyError } = await supabase
@@ -615,6 +649,28 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
     // Перезагружаем данные
     loadData();
     
+    // Обновляем статистику тарифов
+    const { data: companies } = await supabase
+      .from('companies')
+      .select('plan_tier');
+    
+    if (companies) {
+      const stats = {
+        total: companies.length,
+        byPlan: {}
+      };
+      Object.keys(TARIFF_PLANS).forEach(planId => {
+        stats.byPlan[planId] = 0;
+      });
+      companies.forEach(company => {
+        const plan = company.plan_tier || 'basic';
+        if (stats.byPlan[plan] !== undefined) {
+          stats.byPlan[plan]++;
+        }
+      });
+      setTariffStats(stats);
+    }
+    
   } catch (err) {
     console.error('❌ Критическая ошибка активации промокода:', err);
     showNotification('Ошибка активации промокода: ' + err.message, 'error');
@@ -640,74 +696,74 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
   }, []);
 
     // UPDATED: Navigation items with Tariffs and Promo Manager
-  const renderNavigation = () => {
-    const navItems = [
-      { id: 'overview', label: t('overview'), icon: BarChart3 },
-      { id: 'users', label: t('users'), icon: Users },
-      { id: 'companies', label: t('companies'), icon: Building2 },
-      { id: 'tariffs', label: t('tariffs') || 'Тарифы', icon: DollarSign },
-      { id: 'analytics', label: t('analytics'), icon: TrendingUp },
-      { id: 'kpi', label: 'KPI Дашборд', icon: Target }
-    ];
+const renderNavigation = () => {
+  const navItems = [
+    { id: 'overview', label: t('overview'), icon: BarChart3 },
+    { id: 'users', label: t('users'), icon: Users },
+    { id: 'companies', label: t('companies'), icon: Building2 },
+    { id: 'tariffs', label: 'Тарифы', icon: DollarSign },
+    { id: 'analytics', label: t('analytics'), icon: TrendingUp },
+    { id: 'kpi', label: 'KPI Дашборд', icon: Target }
+  ];
 
-    return (
-      <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-200 dark:border-gray-700 pb-4">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = 
-            (item.id === 'users' && (activeView === 'all-users' || activeView === 'active-users' || activeView === 'blocked-users')) ||
-            (item.id === activeView);
-          
-          return (
-            <button
-              key={item.id}
-              onClick={() => {
-                if (item.id === 'overview') goToOverview();
-                else if (item.id === 'users') navigateTo('all-users', t('allUsers'));
-                else if (item.id === 'companies') navigateTo('companies', t('companies'));
-                else if (item.id === 'tariffs') navigateTo('tariffs', t('tariffs') || 'Тарифы');
-                else if (item.id === 'analytics') navigateTo('analytics', t('analytics'));
-                else if (item.id === 'kpi') navigateTo('kpi', 'KPI Дашборд');
-              }}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                isActive
-                  ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {item.label}
-            </button>
-          );
-        })}
+  return (
+    <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-200 dark:border-gray-700 pb-4">
+      {navItems.map((item) => {
+        const Icon = item.icon;
+        const isActive = 
+          (item.id === 'users' && (activeView === 'all-users' || activeView === 'active-users' || activeView === 'blocked-users')) ||
+          (item.id === activeView);
         
-        {/* Кнопка управления промокодами (только для супер-админа) */}
-        <button
-          onClick={() => setShowPromoManager(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
-                   text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-        >
-          <Gift className="w-4 h-4" />
-          Управление промокодами
-        </button>
+        return (
+          <button
+            key={item.id}
+            onClick={() => {
+              if (item.id === 'overview') goToOverview();
+              else if (item.id === 'users') navigateTo('all-users', t('allUsers'));
+              else if (item.id === 'companies') navigateTo('companies', t('companies'));
+              else if (item.id === 'tariffs') navigateTo('tariffs', 'Тарифы');
+              else if (item.id === 'analytics') navigateTo('analytics', t('analytics'));
+              else if (item.id === 'kpi') navigateTo('kpi', 'KPI Дашборд');
+            }}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              isActive
+                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            {item.label}
+          </button>
+        );
+      })}
+      
+      {/* Кнопка управления промокодами (только для супер-админа) */}
+      <button
+        onClick={() => setShowPromoManager(true)}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+      >
+        <Gift className="w-4 h-4" />
+        Управление промокодами
+      </button>
 
-        {/* 🔥 КНОПКА ОЧИСТКИ СТАРЫХ ДАННЫХ - ТЕПЕРЬ ЗДЕСЬ ПРАВИЛЬНО 🔥 */}
-        <button
-          onClick={async () => {
-            if (window.confirm('Вы уверены, что хотите очистить старые данные? Это действие необратимо.')) {
-              await runCleanup(showNotification);
-              loadData(); // Перезагружаем данные после очистки
-            }
-          }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
-                   text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-        >
-          <Trash2 className="w-4 h-4" />
-          Очистить старые данные
-        </button>
-      </div>
-    );
-  };
+      {/* 🔥 КНОПКА ОЧИСТКИ СТАРЫХ ДАННЫХ */}
+      <button
+        onClick={async () => {
+          if (window.confirm('Вы уверены, что хотите очистить старые данные? Это действие необратимо.')) {
+            await runCleanup(showNotification);
+            loadData();
+          }
+        }}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+      >
+        <Trash2 className="w-4 h-4" />
+        Очистить старые данные
+      </button>
+    </div>
+  );
+};
 
   // Actions
   const handleToggleUserStatus = useCallback(async (id, currentStatus) => {
@@ -864,6 +920,65 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
                 title="totalUsers" value={analytics.total} Icon={Users} color="amber"
                 onClick={() => navigateTo('all-users', t('allUsers'))} t={t}
               />
+              {/* Tariff Distribution Cards */}
+{tariffStats && (
+  <div className="mt-6">
+    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+      <Crown className="w-5 h-5 text-amber-500" />
+      Распределение по тарифам
+    </h3>
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {Object.entries(TARIFF_PLANS).map(([planId, plan]) => {
+        const count = tariffStats.byPlan[planId] || 0;
+        const percent = tariffStats.total > 0 ? Math.round((count / tariffStats.total) * 100) : 0;
+        const planIcons = {
+          basic: '🆓',
+          starter: '🚀',
+          pro: '💼',
+          business: '🏢',
+          enterprise: '👑'
+        };
+        const planColors = {
+          basic: 'gray',
+          starter: 'blue',
+          pro: 'yellow',
+          business: 'indigo',
+          enterprise: 'purple'
+        };
+        const color = planColors[planId] || 'gray';
+        
+        return (
+          <div
+            key={planId}
+            className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-xl hover:shadow-md transition-shadow cursor-pointer"
+            onClick={() => navigateTo('tariffs', 'Тарифы')}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">{planIcons[planId] || '📦'}</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{plan.name}</span>
+            </div>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{count}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {percent}% от всех компаний
+            </p>
+            <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full transition-all duration-500 bg-${color}-500`}
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+    <button
+      onClick={() => navigateTo('tariffs', 'Тарифы')}
+      className="mt-3 text-sm text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+    >
+      Управлять тарифами →
+    </button>
+  </div>
+)}
               <AnalyticsCard 
                 title="activeUsers" value={analytics.active} Icon={CheckCircle} color="green"
                 onClick={() => navigateTo('active-users', t('activeUsers'))} t={t}
@@ -1042,19 +1157,21 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
         
         {/* Модалка ввода промокода */}
         <PromoModal
-          isOpen={showPromoModal}
-          onClose={() => setShowPromoModal(false)}
-          onActivate={handleActivatePromo}
-          isLoading={activatingPromo}
-        />
-        
-        {/* Панель управления промокодами (только для супер-админа) */}
-        {showPromoManager && (
+  isOpen={showPromoModal}
+  onClose={() => setShowPromoModal(false)}
+  onActivate={handleActivatePromo}
+  isLoading={activatingPromo}
+  t={t}
+/>
+
+{/* Панель управления промокодами */}
+{showPromoManager && (
   <PromoManager
     isOpen={showPromoManager}
     onClose={() => setShowPromoManager(false)}
     supabase={supabase}
     showNotification={showNotification}
+    t={t}
   />
 )}
       </>
@@ -1125,20 +1242,21 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
         
         {/* Модалка ввода промокода */}
         <PromoModal
-          isOpen={showPromoModal}
-          onClose={() => setShowPromoModal(false)}
-          onActivate={handleActivatePromo}
-          isLoading={activatingPromo}
-          t={t}
-        />
-        
-        {/* Панель управления промокодами */}
-        {showPromoManager && (
+  isOpen={showPromoModal}
+  onClose={() => setShowPromoModal(false)}
+  onActivate={handleActivatePromo}
+  isLoading={activatingPromo}
+  t={t}
+/>
+
+{/* Панель управления промокодами */}
+{showPromoManager && (
   <PromoManager
     isOpen={showPromoManager}
     onClose={() => setShowPromoManager(false)}
     supabase={supabase}
     showNotification={showNotification}
+    t={t}
   />
 )}
       </>
@@ -1195,21 +1313,23 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
       
       {/* Promo Modals */}
       <PromoModal
-        isOpen={showPromoModal}
-        onClose={() => setShowPromoModal(false)}
-        onActivate={handleActivatePromo}
-        isLoading={activatingPromo}
-        t={t}
-      />
-      
-      {showPromoManager && (
-        <PromoManager
-          isOpen={showPromoManager}
-          onClose={() => setShowPromoManager(false)}
-          supabase={supabase}
-          showNotification={showNotification}
-        />
-      )}
+  isOpen={showPromoModal}
+  onClose={() => setShowPromoModal(false)}
+  onActivate={handleActivatePromo}
+  isLoading={activatingPromo}
+  t={t}
+/>
+
+{/* Панель управления промокодами */}
+{showPromoManager && (
+  <PromoManager
+    isOpen={showPromoManager}
+    onClose={() => setShowPromoManager(false)}
+    supabase={supabase}
+    showNotification={showNotification}
+    t={t}
+  />
+)}
     </>
   );
 }
@@ -1374,20 +1494,21 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
       
       {/* Модалка ввода промокода */}
       <PromoModal
-        isOpen={showPromoModal}
-        onClose={() => setShowPromoModal(false)}
-        onActivate={handleActivatePromo}
-        isLoading={activatingPromo}
-        t={t}
-      />
-      
-      {/* Панель управления промокодами */}
-      {showPromoManager && (
+  isOpen={showPromoModal}
+  onClose={() => setShowPromoModal(false)}
+  onActivate={handleActivatePromo}
+  isLoading={activatingPromo}
+  t={t}
+/>
+
+{/* Панель управления промокодами */}
+{showPromoManager && (
   <PromoManager
     isOpen={showPromoManager}
     onClose={() => setShowPromoManager(false)}
     supabase={supabase}
     showNotification={showNotification}
+    t={t}
   />
 )}
     </>

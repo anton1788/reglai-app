@@ -30,16 +30,41 @@ export const getUsageStats = async (companyId) => {
   }
 };
 
-// 📦 Конфигурация тарифных планов
+// 📦 КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ (ОБНОВЛЕННАЯ)
 export const TARIFF_PLANS = {
+  // БЕСПЛАТНЫЙ - для знакомства с продуктом
   basic: {
     id: 'basic',
     name: 'Базовый',
-    monthlyPrice: 990,
-    annualPrice: 9900,
-    apiQuotaMonthly: 1000,
-    apiQuotaDaily: 100,
+    monthlyPrice: 0,
+    annualPrice: 0,
+    apiQuotaMonthly: 200,
+    apiQuotaDaily: 20,
     maxApiKeys: 1,
+    maxUsers: 2,
+    features: {
+      warehouse: true,
+      analytics: false,
+      api: true,
+      webhooks: false,
+      support: 'email',
+      priority: false,
+      sla: false,
+      customIntegration: false
+    },
+    popular: false,
+    color: '#4A6572'
+  },
+
+  // СТАРТ - для малого бизнеса
+  starter: {
+    id: 'starter',
+    name: 'Старт',
+    monthlyPrice: 790,
+    annualPrice: 7900,
+    apiQuotaMonthly: 2500,
+    apiQuotaDaily: 250,
+    maxApiKeys: 3,
     maxUsers: 10,
     features: {
       warehouse: true,
@@ -52,16 +77,18 @@ export const TARIFF_PLANS = {
       customIntegration: false
     },
     popular: false,
-    color: '#4A6572'
+    color: '#6B8FA3'
   },
+
+  // ПРО - самый популярный
   pro: {
     id: 'pro',
     name: 'Профессиональный',
-    monthlyPrice: 4990,
-    annualPrice: 49900,
+    monthlyPrice: 1990,
+    annualPrice: 19900,
     apiQuotaMonthly: 10000,
     apiQuotaDaily: 1000,
-    maxApiKeys: 5,
+    maxApiKeys: 10,
     maxUsers: 50,
     features: {
       warehouse: true,
@@ -76,15 +103,17 @@ export const TARIFF_PLANS = {
     popular: true,
     color: '#F9AA33'
   },
-  enterprise: {
-    id: 'enterprise',
-    name: 'Корпоративный',
-    monthlyPrice: 19990,
-    annualPrice: 199900,
-    apiQuotaMonthly: 100000,
-    apiQuotaDaily: 10000,
-    maxApiKeys: 50,
-    maxUsers: 500,
+
+  // БИЗНЕС - для растущих компаний
+  business: {
+    id: 'business',
+    name: 'Бизнес',
+    monthlyPrice: 4990,
+    annualPrice: 49900,
+    apiQuotaMonthly: 50000,
+    apiQuotaDaily: 5000,
+    maxApiKeys: 25,
+    maxUsers: 200,
     features: {
       warehouse: true,
       analytics: true,
@@ -97,6 +126,30 @@ export const TARIFF_PLANS = {
     },
     popular: false,
     color: '#3b82f6'
+  },
+
+  // КОРПОРАТИВНЫЙ - для крупных клиентов
+  enterprise: {
+    id: 'enterprise',
+    name: 'Корпоративный',
+    monthlyPrice: 9990,
+    annualPrice: 99900,
+    apiQuotaMonthly: 200000,
+    apiQuotaDaily: 20000,
+    maxApiKeys: 100,
+    maxUsers: 1000,
+    features: {
+      warehouse: true,
+      analytics: true,
+      api: true,
+      webhooks: true,
+      support: '24/7',
+      priority: true,
+      sla: true,
+      customIntegration: true
+    },
+    popular: false,
+    color: '#7c3aed'
   }
 };
 
@@ -139,13 +192,52 @@ export const checkFeatureAccess = (plan, feature) => {
 export const calculateSavings = (plan) => {
   const monthlyTotal = plan.monthlyPrice * 12;
   const savings = monthlyTotal - plan.annualPrice;
-  const savingsPercent = Math.round((savings / monthlyTotal) * 100);
+  const savingsPercent = monthlyTotal > 0 ? Math.round((savings / monthlyTotal) * 100) : 0;
   
   return {
     monthlyTotal,
     savings,
     savingsPercent
   };
+};
+
+// 📊 Сравнение тарифов
+export const comparePlans = (planIds) => {
+  const result = {};
+  planIds.forEach(id => {
+    const plan = TARIFF_PLANS[id];
+    if (plan) {
+      const savings = calculateSavings(plan);
+      result[id] = {
+        name: plan.name,
+        price: plan.monthlyPrice,
+        annualPrice: plan.annualPrice,
+        savings: savings.savings,
+        savingsPercent: savings.savingsPercent,
+        features: plan.features,
+        limits: {
+          users: plan.maxUsers,
+          apiKeys: plan.maxApiKeys,
+          monthlyQuota: plan.apiQuotaMonthly,
+          dailyQuota: plan.apiQuotaDaily
+        },
+        popular: plan.popular,
+        color: plan.color
+      };
+    }
+  });
+  return result;
+};
+
+// 🎯 Рекомендация тарифа на основе использования
+export const recommendPlan = (stats) => {
+  const { users, applications } = stats;
+  
+  if (users <= 2 && applications <= 200) return 'basic';
+  if (users <= 10 && applications <= 2500) return 'starter';
+  if (users <= 50 && applications <= 10000) return 'pro';
+  if (users <= 200 && applications <= 50000) return 'business';
+  return 'enterprise';
 };
 
 // 📊 Проверка квоты API (с поддержкой фильтрации по apiKeyId)
@@ -282,10 +374,6 @@ export const getKeyUsageStats = async (supabaseClient, apiKeyId, period = 'day')
   return stats;
 };
 
-// ============================================
-// 🔽 НОВЫЕ ДОБАВЛЕННЫЕ ФУНКЦИИ
-// ============================================
-
 // 📊 Проверка лимита материалов
 export const checkMaterialsLimit = async (supabase, companyId, materialsCount) => {
   try {
@@ -369,6 +457,56 @@ export const logApiUsageViaRPC = async (supabase, params) => {
     console.error('logApiUsageViaRPC error:', err);
     return null;
   }
+};
+
+// 📊 Получить все доступные тарифы с дополнительной информацией
+export const getAllPlans = () => {
+  const planIds = Object.keys(TARIFF_PLANS);
+  return planIds.map(id => {
+    const plan = TARIFF_PLANS[id];
+    const savings = calculateSavings(plan);
+    return {
+      ...plan,
+      savings: savings.savings,
+      savingsPercent: savings.savingsPercent,
+      id: id
+    };
+  });
+};
+
+// 🔍 Найти тариф по ID
+export const findPlanById = (planId) => {
+  return TARIFF_PLANS[planId] || null;
+};
+
+// 📈 Получить следующий уровень тарифа
+export const getNextTier = (currentPlanId) => {
+  const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
+  const currentIndex = tiers.indexOf(currentPlanId);
+  
+  if (currentIndex === -1 || currentIndex === tiers.length - 1) {
+    return null;
+  }
+  
+  return {
+    id: tiers[currentIndex + 1],
+    plan: TARIFF_PLANS[tiers[currentIndex + 1]]
+  };
+};
+
+// 📉 Получить предыдущий уровень тарифа
+export const getPreviousTier = (currentPlanId) => {
+  const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
+  const currentIndex = tiers.indexOf(currentPlanId);
+  
+  if (currentIndex <= 0) {
+    return null;
+  }
+  
+  return {
+    id: tiers[currentIndex - 1],
+    plan: TARIFF_PLANS[tiers[currentIndex - 1]]
+  };
 };
 
 export default TARIFF_PLANS;
