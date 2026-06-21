@@ -2441,6 +2441,44 @@ const handleInviteUser = async () => {
     return;
   }
 
+  // ============================================================
+  // 🆕 ПРОВЕРКА ЛИМИТА ПОЛЬЗОВАТЕЛЕЙ (ВСТАВИТЬ СЮДА)
+  // ============================================================
+  if (currentPlan?.id === 'basic' || !currentPlan) {
+    try {
+      // Подсчёт текущих пользователей
+      const { count: currentUsers, error: countError } = await supabase
+        .from('company_users')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', userCompanyId)
+        .eq('is_active', true);
+      
+      if (countError) throw countError;
+      
+      const maxUsers = currentPlan?.maxUsers || 10;
+      
+      if (currentUsers >= maxUsers) {
+        showNotification(
+          `⚠️ Лимит пользователей исчерпан (${currentUsers}/${maxUsers}). Обновите тариф для добавления новых сотрудников.`,
+          'warning'
+        );
+        setCurrentView('tariffs');
+        return;
+      }
+      
+      // Предупреждение если осталось 1 место
+      if (currentUsers >= maxUsers - 1) {
+        showNotification(
+          `⚠️ Осталось ${maxUsers - currentUsers} место. Скоро лимит будет исчерпан.`,
+          'warning'
+        );
+      }
+      
+    } catch (err) {
+      console.error('Ошибка проверки лимита пользователей:', err);
+    }
+  }
+
   if (!userCompanyId) {
     showNotification('Ошибка: компания не указана', 'error');
     return;
@@ -2844,6 +2882,27 @@ if (currentPlan?.id === 'basic' || !currentPlan) {
     if (error) throw error;
     
     const realApplicationId = data[0].id;
+
+    // ============================================================
+    // 🆕 УВЕЛИЧЕНИЕ СЧЁТЧИКА ЗАЯВОК (ВСТАВИТЬ СЮДА)
+    // ============================================================
+    if (currentPlan?.id === 'basic' || !currentPlan) {
+      try {
+        // Увеличиваем счётчик использования
+        await incrementApplicationUsage(supabase, userCompanyId);
+      } catch (err) {
+        console.warn('⚠️ Ошибка увеличения счётчика:', err);
+      }
+    }
+    
+    await logApplicationCreated(supabase, {
+      id: realApplicationId,
+      object_name: formData.objectName.trim(),
+      foreman_name: formData.foremanName.trim(),
+      foreman_phone: formData.foremanPhone,
+      materials: materialsWithTracking,
+      status: initialStatus
+    }, userContext);
     
     
     await logApplicationCreated(supabase, {
@@ -4462,6 +4521,48 @@ useEffect(() => {
   
   syncPromos();
 }, [user, userRole, supabase]);
+
+// ============================================================
+// 🆕 АВТОМАТИЧЕСКИЙ СБРОС ЛИМИТОВ (ВСТАВИТЬ СЮДА)
+// ============================================================
+useEffect(() => {
+  const resetDailyLimits = async () => {
+    if (!userCompanyId) return;
+    
+    try {
+      // Проверяем, нужно ли сбрасывать
+      const lastReset = localStorage.getItem(`quota_reset_${userCompanyId}`);
+      const today = new Date().toDateString();
+      
+      if (lastReset !== today) {
+        // Вызываем RPC функцию для сброса
+        const { error } = await supabase.rpc('reset_company_limits', {
+          p_company_id: userCompanyId
+        });
+        
+        if (error) {
+          console.warn('⚠️ Ошибка сброса лимитов:', error);
+          return;
+        }
+        
+        // Обновляем квоту в UI
+        const quota = await checkQuota(supabase, userCompanyId);
+        setQuotaStatus(quota);
+        
+        localStorage.setItem(`quota_reset_${userCompanyId}`, today);
+        console.log('✅ Лимиты сброшены для компании:', userCompanyId);
+      }
+    } catch (err) {
+      console.debug('Reset limits error (non-critical):', err);
+    }
+  };
+  
+  // Сбрасываем при загрузке и каждый час
+  resetDailyLimits();
+  const interval = setInterval(resetDailyLimits, 60 * 60 * 1000);
+  
+  return () => clearInterval(interval);
+}, [userCompanyId, supabase]);
 
   useEffect(() => {
   const loadAuditLogs = async () => {
