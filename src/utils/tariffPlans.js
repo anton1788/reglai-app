@@ -1,54 +1,3 @@
-// ============================================
-// 1. ДОБАВИТЬ В utils/tariffPlans.js
-// ============================================
-
-// Функция для проверки квот через RPC
-export const checkQuotaViaRPC = async (supabase, companyId, apiKeyId = null) => {
-  try {
-    const { data, error } = await supabase.rpc('check_quota', {
-      p_company_id: companyId,
-      p_api_key_id: apiKeyId
-    });
-    
-    if (error) throw error;
-    return {
-      allowed: data.allowed,
-      dailyUsage: data.daily_usage,
-      dailyLimit: data.daily_limit,
-      monthlyUsage: data.monthly_usage,
-      monthlyLimit: data.monthly_limit,
-      remaining: data.remaining
-    };
-  } catch (err) {
-    console.error('checkQuotaViaRPC error:', err);
-    return { allowed: false, error: err.message };
-  }
-};
-
-// Функция для логирования API использования через RPC
-export const logApiUsageViaRPC = async (supabase, params) => {
-  try {
-    const { data, error } = await supabase.rpc('log_api_usage', {
-      p_api_key_id: params.apiKeyId,
-      p_company_id: params.companyId,
-      p_endpoint: params.endpoint,
-      p_method: params.method,
-      p_status_code: params.statusCode,
-      p_response_time_ms: params.responseTimeMs,
-      p_request_size_bytes: params.requestSizeBytes,
-      p_response_size_bytes: params.responseSizeBytes,
-      p_ip_address: params.ipAddress,
-      p_user_agent: params.userAgent
-    });
-    
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    console.error('logApiUsageViaRPC error:', err);
-    return null;
-  }
-};
-
 // src/utils/tariffPlans.js
 
 // 🔧 ИМПОРТЫ
@@ -331,6 +280,95 @@ export const getKeyUsageStats = async (supabaseClient, apiKeyId, period = 'day')
   });
   
   return stats;
+};
+
+// ============================================
+// 🔽 НОВЫЕ ДОБАВЛЕННЫЕ ФУНКЦИИ
+// ============================================
+
+// 📊 Проверка лимита материалов
+export const checkMaterialsLimit = async (supabase, companyId, materialsCount) => {
+  try {
+    const { data, error } = await supabase
+      .rpc('check_materials_limit', {
+        p_company_id: companyId,
+        p_materials_count: materialsCount
+      });
+    
+    if (error) throw error;
+    
+    const result = data?.[0] || {};
+    return {
+      allowed: result.allowed || false,
+      limit: result.limit_value || 20,
+      isUnlimited: result.limit_value === -1
+    };
+  } catch (err) {
+    console.error('Ошибка проверки лимита материалов:', err);
+    return { allowed: true, limit: 20, isUnlimited: true };
+  }
+};
+
+// 📈 Увеличение счётчика заявок
+export const incrementApplicationUsage = async (supabase, companyId) => {
+  try {
+    const { error } = await supabase
+      .rpc('increment_application_usage', { p_company_id: companyId });
+    
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('Ошибка увеличения счётчика:', err);
+    return { success: false, error: err };
+  }
+};
+
+// 🔍 Функция для проверки квот через RPC
+export const checkQuotaViaRPC = async (supabase, companyId, apiKeyId = null) => {
+  try {
+    const { data, error } = await supabase.rpc('check_quota', {
+      p_company_id: companyId,
+      p_api_key_id: apiKeyId
+    });
+    
+    if (error) throw error;
+    
+    return {
+      allowed: data.allowed,
+      dailyUsage: data.daily_usage,
+      dailyLimit: data.daily_limit,
+      monthlyUsage: data.monthly_usage,
+      monthlyLimit: data.monthly_limit,
+      remaining: data.remaining
+    };
+  } catch (err) {
+    console.error('checkQuotaViaRPC error:', err);
+    return { allowed: false, error: err.message };
+  }
+};
+
+// 📝 Функция для логирования API использования через RPC
+export const logApiUsageViaRPC = async (supabase, params) => {
+  try {
+    const { data, error } = await supabase.rpc('log_api_usage', {
+      p_api_key_id: params.apiKeyId,
+      p_company_id: params.companyId,
+      p_endpoint: params.endpoint,
+      p_method: params.method,
+      p_status_code: params.statusCode,
+      p_response_time_ms: params.responseTimeMs,
+      p_request_size_bytes: params.requestSizeBytes,
+      p_response_size_bytes: params.responseSizeBytes,
+      p_ip_address: params.ipAddress,
+      p_user_agent: params.userAgent
+    });
+    
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('logApiUsageViaRPC error:', err);
+    return null;
+  }
 };
 
 export default TARIFF_PLANS;

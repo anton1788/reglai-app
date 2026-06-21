@@ -30,6 +30,8 @@ import {
   checkFeatureAccess,
   checkQuota,
   logApiUsage,
+  checkMaterialsLimit,        
+  incrementApplicationUsage,
 } from './utils/tariffPlans';
 // Добавить импорты
 import { WarehouseBalance } from './components/WarehouseView';
@@ -2735,6 +2737,48 @@ const totalAmount = validMaterials.reduce((sum, m) =>
       return;
     }
   }
+
+  // ============================================================
+// 🔐 ПРОВЕРКА ЛИМИТОВ ДЛЯ БЕСПЛАТНОГО ТАРИФА
+// ============================================================
+
+if (currentPlan?.id === 'basic' || !currentPlan) {
+  try {
+    // 1. Проверка лимита заявок
+    const quota = await checkQuota(supabase, userCompanyId);
+    
+    if (!quota.allowed) {
+      showNotification(
+        `⚠️ Лимит заявок исчерпан (${quota.dailyUsage}/${quota.dailyLimit}). Обновите тариф для продолжения работы.`,
+        'warning'
+      );
+      setCurrentView('tariffs');
+      return;
+    }
+    
+    // 2. Проверка лимита материалов
+    const materialCheck = await checkMaterialsLimit(supabase, userCompanyId, validMaterials.length);
+    
+    if (!materialCheck.allowed) {
+      showNotification(
+        `⚠️ В бесплатном тарифе максимум ${materialCheck.limit} материалов в заявке.`,
+        'warning'
+      );
+      return;
+    }
+    
+    // Предупреждение о скором исчерпании (если осталось 2 или меньше заявок)
+    if (quota.dailyRemaining <= 2 && quota.dailyRemaining > 0) {
+      showNotification(
+        `⚠️ Осталось ${quota.dailyRemaining} заявок. Скоро лимит будет исчерпан.`,
+        'warning'
+      );
+    }
+    
+  } catch (err) {
+    console.error('Ошибка проверки лимитов:', err);
+  }
+}
   
   const startTime = Date.now();
   
@@ -6182,53 +6226,68 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         )}
         {/* Весь существующий контент main остается без изменений */}
         {currentView === 'create' && (
-          <CreateApplicationForm
-            formData={formData}
-            setFormData={setFormData}
-            templates={templates}
-            showTemplateModal={showTemplateModal}
-            setShowTemplateModal={setShowTemplateModal}
-            templateName={templateName}
-            setTemplateName={setTemplateName}
-            selectedClientId={selectedClientId}
-            onClientSelect={setSelectedClientId}
-            companyId={userCompanyId}
-            t={t}
-            language={language}
-            showNotification={showNotification}
-            handleSubmit={handleSubmit}
-            onAddPhoto={(materialIndex) => {
-              setActiveMaterialIndex(materialIndex);
-              setShowPhotoCapture(true);
-            }}
-            handleObjectInput={handleObjectInput}
-            handlePhoneChange={handlePhoneChange}
-            addMaterial={addMaterial}
-            removeMaterial={removeMaterial}
-            updateMaterial={updateMaterial}
-            moveToCart={moveToCart}
-            restoreFromCart={restoreFromCart}
-            removeFromCartPermanently={removeFromCartPermanently}
-            selectMaterial={selectMaterial}
-            selectObject={selectObject}
-            saveTemplate={saveTemplate}
-            loadTemplate={loadTemplate}
-            filteredObjects={filteredObjects}
-            showObjectSuggestions={showObjectSuggestions}
-            setShowObjectSuggestions={setShowObjectSuggestions}
-            objectInputRef={objectInputRef}
-            materialHistory={materialHistory}
-            showMaterialSuggestions={showMaterialSuggestions}
-            setShowMaterialSuggestions={setShowMaterialSuggestions}
-            unitOptions={unitOptions}
-            isLoading={isLoading}
-            onExcelImport={handleExcelImport}
-            onCloneLast={cloneLastApplication}
-            onDownloadTemplate={downloadExcelTemplate}
-            fileInputRef={fileInputRef}
-            capturedPhotos={capturedPhotos}
-          />
-        )}
+  <div className="max-w-7xl mx-auto px-4">
+    {/* 🆕 Отображение лимитов */}
+    {userCompanyId && currentPlan && (
+      <div className="mb-4 max-w-2xl">
+        <QuotaUsage
+          userCompanyId={userCompanyId}
+          supabase={supabase}
+          currentPlan={currentPlan}
+          onUpgradeClick={() => setCurrentView('tariffs')}
+          showDetailed={true}
+        />
+      </div>
+    )}
+
+    <CreateApplicationForm
+      formData={formData}
+      setFormData={setFormData}
+      templates={templates}
+      showTemplateModal={showTemplateModal}
+      setShowTemplateModal={setShowTemplateModal}
+      templateName={templateName}
+      setTemplateName={setTemplateName}
+      selectedClientId={selectedClientId}
+      onClientSelect={setSelectedClientId}
+      companyId={userCompanyId}
+      t={t}
+      language={language}
+      showNotification={showNotification}
+      handleSubmit={handleSubmit}
+      onAddPhoto={(materialIndex) => {
+        setActiveMaterialIndex(materialIndex);
+        setShowPhotoCapture(true);
+      }}
+      handleObjectInput={handleObjectInput}
+      handlePhoneChange={handlePhoneChange}
+      addMaterial={addMaterial}
+      removeMaterial={removeMaterial}
+      updateMaterial={updateMaterial}
+      moveToCart={moveToCart}
+      restoreFromCart={restoreFromCart}
+      removeFromCartPermanently={removeFromCartPermanently}
+      selectMaterial={selectMaterial}
+      selectObject={selectObject}
+      saveTemplate={saveTemplate}
+      loadTemplate={loadTemplate}
+      filteredObjects={filteredObjects}
+      showObjectSuggestions={showObjectSuggestions}
+      setShowObjectSuggestions={setShowObjectSuggestions}
+      objectInputRef={objectInputRef}
+      materialHistory={materialHistory}
+      showMaterialSuggestions={showMaterialSuggestions}
+      setShowMaterialSuggestions={setShowMaterialSuggestions}
+      unitOptions={unitOptions}
+      isLoading={isLoading}
+      onExcelImport={handleExcelImport}
+      onCloneLast={cloneLastApplication}
+      onDownloadTemplate={downloadExcelTemplate}
+      fileInputRef={fileInputRef}
+      capturedPhotos={capturedPhotos}
+    />
+  </div>
+)}
 
         {currentView === 'crm-sales' && (
   <CRMSalesManager
