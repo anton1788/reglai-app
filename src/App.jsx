@@ -6729,11 +6729,10 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         {userCompanyId && !planLoading && (
           <div className="mb-6">
             <QuotaUsage 
-              userCompanyId={userCompanyId} 
-              supabase={supabase} 
-              quotaStatus={quotaStatus}
-              currentPlan={currentPlan}
-            />
+  userCompanyId={userCompanyId} 
+  supabase={supabase} 
+  currentPlan={currentPlan}
+/>
           </div>
         )}
         
