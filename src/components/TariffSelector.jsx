@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles, Shield, Headphones, TrendingUp, Package } from 'lucide-react';
+import { Calendar, Clock, Gift, CheckCircle, Check, X, Sparkles, TrendingUp, Package } from 'lucide-react';
 import { TARIFF_PLANS, calculateSavings } from '../utils/tariffPlans';
 
 const TariffSelector = ({ 
@@ -53,10 +53,21 @@ const TariffSelector = ({
     ? Math.round((quotaStatus.used / quotaStatus.limit) * 100) 
     : 0;
 
-  // Безопасное форматирование числа
+  // 🔧 ИСПРАВЛЕННАЯ безопасная функция форматирования
   const safeFormatNumber = (num) => {
-    if (num === undefined || num === null || isNaN(num)) return '0';
-    return num.toLocaleString('ru-RU');
+    if (num === undefined || num === null || num === '') return '0';
+    const parsed = Number(num);
+    if (isNaN(parsed)) return '0';
+    return parsed.toLocaleString('ru-RU');
+  };
+
+  // Безопасный вызов onSelectPlan
+  const handleSelectPlan = (planId) => {
+    if (typeof onSelectPlan === 'function') {
+      onSelectPlan(planId);
+    } else {
+      console.warn('onSelectPlan не является функцией');
+    }
   };
 
   return (
@@ -86,7 +97,7 @@ const TariffSelector = ({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600 dark:text-gray-400">Заявки</span>
               <span className="font-medium text-gray-900 dark:text-white">
-                {quotaStatus.used} / {quotaStatus.limit}
+                {safeFormatNumber(quotaStatus.used)} / {safeFormatNumber(quotaStatus.limit)}
               </span>
             </div>
             <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mt-1">
@@ -101,7 +112,7 @@ const TariffSelector = ({
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {!quotaStatus.allowed 
                 ? '⚠️ Лимит исчерпан. Обновите тариф.' 
-                : `Осталось ${quotaStatus.remaining} заявок`}
+                : `Осталось ${safeFormatNumber(quotaStatus.remaining)} заявок`}
             </p>
           </div>
           
@@ -185,7 +196,7 @@ const TariffSelector = ({
           )}
           
           <button
-            onClick={() => onSelectPlan && onSelectPlan(currentPlan)}
+            onClick={() => handleSelectPlan(currentPlan)}
             className="mt-4 w-full py-2 bg-[#4A6572]/20 text-[#4A6572] dark:text-[#F9AA33] rounded-lg text-sm font-medium hover:bg-[#4A6572]/30 transition-colors"
           >
             {translate('extendPlan', 'Продлить тариф')}
@@ -275,7 +286,7 @@ const TariffSelector = ({
                   </div>
                   {billingPeriod === 'annual' && price > 0 && savings && savings.savingsPercent !== undefined && (
                     <p className="text-sm text-green-600 mt-2">
-                      {translate('tariffSelector.savings', 'Экономия')} {savings.savingsPercent}% ({safeFormatNumber(savings.savings)} ₽)
+                      {translate('tariffSelector.savings', 'Экономия')} {safeFormatNumber(savings.savingsPercent)}% ({safeFormatNumber(savings.savings)} ₽)
                     </p>
                   )}
                 </div>
@@ -287,7 +298,7 @@ const TariffSelector = ({
                       📋 Заявки
                     </span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {isUnlimited ? '∞ Безлимит' : `${plan.maxApplications} в день`}
+                      {isUnlimited ? '∞ Безлимит' : `${safeFormatNumber(plan.maxApplications)} в день`}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -295,7 +306,7 @@ const TariffSelector = ({
                       📦 Материалов в заявке
                     </span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {isUnlimited ? '∞ Безлимит' : `до ${plan.maxMaterialsPerApp}`}
+                      {isUnlimited ? '∞ Безлимит' : `до ${safeFormatNumber(plan.maxMaterialsPerApp)}`}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -303,7 +314,7 @@ const TariffSelector = ({
                       👥 Пользователей
                     </span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {plan.maxUsers === -1 ? '∞ Безлимит' : plan.maxUsers}
+                      {plan.maxUsers === -1 ? '∞ Безлимит' : safeFormatNumber(plan.maxUsers)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -311,7 +322,7 @@ const TariffSelector = ({
                       🔑 API ключей
                     </span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {plan.maxApiKeys === -1 ? '∞ Безлимит' : plan.maxApiKeys}
+                      {plan.maxApiKeys === -1 ? '∞ Безлимит' : safeFormatNumber(plan.maxApiKeys)}
                     </span>
                   </div>
                 </div>
@@ -349,7 +360,7 @@ const TariffSelector = ({
 
                 {/* Кнопка */}
                 <button
-                  onClick={() => onSelectPlan && onSelectPlan(plan.id)}
+                  onClick={() => handleSelectPlan(plan.id)}
                   disabled={isCurrent || isLoading}
                   className={`w-full py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
                     isCurrent
