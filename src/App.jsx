@@ -4338,10 +4338,7 @@ useEffect(() => {
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
-  if (!user || !userCompanyId) {
-    console.log('⛔ loadApplications: нет user или companyId');
-    return;
-  }
+  if (!user || !userCompanyId) return;
   
   // ✅ Проверить кэш
   const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
@@ -4357,45 +4354,22 @@ useEffect(() => {
   
   setIsLoading(true);
   try {
-    // 📊 Получить количество заявок
-    const { count, error: countError } = await supabase
+    const { count } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', userCompanyId);
-    
-    if (countError) {
-      console.error('❌ Ошибка подсчёта заявок:', countError);
-      throw countError;
-    }
-    
     const totalPages = Math.ceil(count / ITEMS_PER_PAGE);
     setTotalPages(totalPages);
-    
-    // 📋 Основной запрос - ИСПРАВЛЕННЫЙ
     let query = supabase
       .from('applications')
-      .select('*') // ✅ Убираем columns, используем select *
+      .select('*')
       .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false })
       .range((pageNumber - 1) * ITEMS_PER_PAGE, pageNumber * ITEMS_PER_PAGE - 1);
-    
-    // Фильтр по роли
-    if (userRole === 'master') {
-      query = query.eq('user_id', user?.id);
-    }
-    if (userRole === 'accountant') {
-      query = query.eq('status', 'received');
-    }
-    
+    if (userRole === 'master') query = query.eq('user_id', user?.id);
+    if (userRole === 'accountant') query = query.eq('status', 'received');
     const { data: userApps = [], error: userError } = await query;
-    
-    if (userError) {
-      console.error('❌ Ошибка загрузки заявок:', userError);
-      throw userError;
-    }
-    
-    console.log('✅ Загружено заявок:', userApps?.length);
-    
+    if (userError) throw userError;
     setApplications(userApps);
     
     // Загрузка пользователей для метрик активации
@@ -4408,7 +4382,6 @@ useEffect(() => {
     if (usersData) {
       setCompanyUsers(usersData);
     }
-    
     if (userApps.length > 0) {
       const appIds = userApps.map(app => app.id);
       const { data: allComments = [] } = await supabase
@@ -4416,7 +4389,6 @@ useEffect(() => {
         .select('*')
         .in('application_id', appIds)
         .order('created_at', { ascending: true });
-      
       allComments.forEach(comment => {
         if (!commentsMap[comment.application_id]) {
           commentsMap[comment.application_id] = [];
@@ -4427,7 +4399,6 @@ useEffect(() => {
     } else {
       setComments({});
     }
-    
     if (isAdminMode) {
       const { data: allApps = [] } = await supabase
         .from('applications')
@@ -4435,7 +4406,8 @@ useEffect(() => {
         .eq('company_id', userCompanyId)
         .order('created_at', { ascending: false })
         .limit(500);
-      setAllApplications(allApps);
+      if (!allApps) setAllApplications([]);
+      else setAllApplications(allApps);
     }
     
     // ✅ Сохранить в кэш после загрузки
@@ -4445,14 +4417,89 @@ useEffect(() => {
       usersData,
       commentsMap
     });
-    
   } catch (err) {
-    console.error('❌ Ошибка загрузки заявок:', err);
-    showNotification('Ошибка загрузки данных: ' + err.message, 'error');
+    console.error('Ошибка загрузки заявок:', err);
+    showNotification('Ошибка загрузки данных', 'error');
   } finally {
     setIsLoading(false);
   }
 }, [user, userCompanyId, userRole, isAdminMode, showNotification]);
+
+  useEffect(() => {
+    loadApplications(page);
+  }, [user, userCompanyId, userRole, isAdminMode, page, loadApplications]);
+  // 💰 Load company plan & quota
+useEffect(() => {
+  const loadPlan = async () => {
+    // 🔒 Супер-админ: не загружаем тариф компании
+    if (isSuperAdmin(userRole, user?.user_metadata)) {
+      setCurrentPlan(null);
+      setPlanLoading(false);
+      return;
+    }
+    
+    if (!userCompanyId || !supabase) {
+      setPlanLoading(false);
+      return;
+    }
+    
+    try {
+      setPlanLoading(true);
+      
+      // Добавляем таймаут 10 секунд
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      );
+      
+      const planPromise = getCompanyPlan(supabase, userCompanyId);
+      const plan = await Promise.race([planPromise, timeoutPromise]);
+      setCurrentPlan(plan);
+      
+      // 🆕 ЗАГРУЗКА ДЕТАЛЕЙ ТАРИФА (тоже с таймаутом)
+      const companyPromise = supabase
+        .from('companies')
+        .select('plan_activated_at, plan_expires_at, promo_code_used, promo_applied_at, promo_discount_percent')
+        .eq('id', userCompanyId)
+        .single();
+      
+      const companyData = await Promise.race([companyPromise, timeoutPromise]);
+      
+      if (companyData?.data) {
+        setCurrentPlanDetails({
+          activated_at: companyData.data.plan_activated_at,
+          expires_at: companyData.data.plan_expires_at
+        });
+        
+        if (companyData.data.promo_code_used) {
+          setPromoCodeInfo({
+            code: companyData.data.promo_code_used,
+            applied_at: companyData.data.promo_applied_at,
+            discount_percent: companyData.data.promo_discount_percent
+          });
+        }
+      }
+      
+      // Проверка квоты (опционально, с таймаутом)
+      try {
+        const quota = await Promise.race([checkQuota(supabase, userCompanyId), timeoutPromise]);
+        setQuotaStatus(quota);
+      } catch (quotaErr) {
+        console.debug('Quota check failed (non-critical):', quotaErr.message);
+        setQuotaStatus({ dailyUsage: 0, dailyLimit: 100, allowed: true });
+      }
+      
+    } catch (err) {
+      console.warn('Failed to load plan (using default):', err.message);
+      setCurrentPlan(TARIFF_PLANS.basic);
+      setCurrentPlanDetails(null);
+      setQuotaStatus({ dailyUsage: 0, dailyLimit: 100, allowed: true });
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+  
+  loadPlan();
+}, [userCompanyId, supabase, userRole, user, isSuperAdmin]);
 
 // ✅ ДОБАВИТЬ СИНХРОНИЗАЦИЮ ПРОМОКОДОВ СЮДА (ПОСЛЕ загрузки тарифа)
 useEffect(() => {
