@@ -6895,10 +6895,14 @@ else if (path === '/integration') setCurrentView('integration');
     companyId={userCompanyId}
     applications={applications}
     showNotification={showNotification}
-    userRole={userRole}
-   onMergeComplete={async () => {
-      // ✅ Обновляем список заявок без перезагрузки страницы
+     user={user}
+    setApplications={setApplications} // <-- НОВЫЙ ПРОП
+    onMergeComplete={async () => {
+      // Загружаем свежие данные из БД
       await loadApplications(page);
+      // Обновляем кэш
+      const cacheKey = `applications_${userCompanyId}_page_${page}`;
+      cacheManager.delete('applications', cacheKey);
       showNotification('🔄 Данные обновлены', 'success');
     }}
   />
