@@ -686,6 +686,7 @@ const Navbar = ({
                   (item.id === 'reports' && currentPage === 'reports') ||
                   (item.id === 'integration' && currentPage === 'integration') ||
                   (item.id === 'api' && currentPage === 'api');
+                  (item.id === 'merge' && currentPage === 'merge');
                 
                 return (
                   <button
@@ -777,6 +778,7 @@ const Navbar = ({
                 (item.id === 'reports' && currentPage === 'reports') ||
                 (item.id === 'integration' && currentPage === 'integration') ||
                 (item.id === 'api' && currentPage === 'api');
+                (item.id === 'merge' && currentPage === 'merge');
               
               return (
                 <button
