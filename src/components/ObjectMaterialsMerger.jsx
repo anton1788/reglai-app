@@ -10,7 +10,9 @@ const ObjectMaterialsMerger = ({
   supabase, 
   companyId, 
   applications, 
-  showNotification 
+  showNotification,
+  onMergeComplete,
+  user
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [mergedData, setMergedData] = useState(null);
@@ -174,6 +176,14 @@ const ObjectMaterialsMerger = ({
     setIsLoading(true);
     
     try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const userId = currentUser?.id || user?.id;
+      
+      if (!userId) {
+        showNotification('Пользователь не авторизован', 'error');
+        return;
+      }
+
       // Создаём новую заявку со статусом "сводная"
       const consolidatedApp = {
         object_name: mergedData.objectName,
@@ -188,13 +198,14 @@ const ObjectMaterialsMerger = ({
           original_applications: m.applications.map(a => a.id)
         })),
         status: 'pending',
-        user_id: (await supabase.auth.getUser()).data.user?.id,
+        user_id: userId,
         company_id: companyId,
         created_at: new Date().toISOString(),
         is_consolidated: true,
         consolidated_from: mergedData.applications.map(a => a.id),
         status_history: [{
           action: 'created_consolidated',
+          user_id: userId,
           timestamp: new Date().toISOString(),
           details: `Объединено ${mergedData.applications.length} заявок`
         }]
@@ -218,6 +229,7 @@ const ObjectMaterialsMerger = ({
               ...(app.status_history || []),
               {
                 action: 'consolidated',
+                user_id: userId,
                 timestamp: new Date().toISOString(),
                 details: `Объединено в сводную заявку #${data[0].id}`
               }
@@ -230,8 +242,10 @@ const ObjectMaterialsMerger = ({
       setShowMergeModal(false);
       setMergedData(null);
       
-      // Перезагружаем данные
-      window.location.reload();
+      // Обновляем данные через колбэк
+      if (onMergeComplete) {
+        await onMergeComplete();
+      }
       
     } catch (err) {
       console.error('Ошибка создания сводной заявки:', err);
@@ -244,6 +258,7 @@ const ObjectMaterialsMerger = ({
   // Рендер карточки объекта
   const ObjectCard = ({ obj }) => {
     const duplicateCount = duplicates.filter(d => d.objectName === obj.name).length;
+    const hasConsolidated = obj.applications.some(a => a.status === 'consolidated');
     
     return (
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200/60 dark:border-gray-700/60 p-5 hover:shadow-lg transition-all">
@@ -279,25 +294,37 @@ const ObjectMaterialsMerger = ({
           </div>
         </div>
         
-        {duplicateCount > 0 && (
+        {duplicateCount > 0 && !hasConsolidated && (
           <div className="mb-3 p-2 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg">
             <p className="text-xs text-yellow-700 dark:text-yellow-300">
               ⚠️ Обнаружены повторяющиеся материалы в разных заявках
             </p>
           </div>
         )}
+
+        {hasConsolidated && (
+          <div className="mb-3 p-2 bg-green-50 dark:bg-green-900/10 rounded-lg">
+            <p className="text-xs text-green-700 dark:text-green-300">
+              ✅ Заявки объединены в сводную
+            </p>
+          </div>
+        )}
         
         <button
           onClick={() => mergeObjectMaterials(obj.name, obj.applications)}
-          disabled={isLoading || obj.applications.length < 2}
+          disabled={isLoading || obj.applications.length < 2 || hasConsolidated}
           className={`w-full mt-2 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-            obj.applications.length >= 2
+            obj.applications.length >= 2 && !hasConsolidated
               ? 'bg-indigo-600 text-white hover:bg-indigo-700'
               : 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
           }`}
         >
           <Merge className="w-4 h-4" />
-          {obj.applications.length >= 2 ? 'Объединить заявки' : 'Нет заявок для объединения'}
+          {hasConsolidated 
+            ? 'Уже объединено' 
+            : obj.applications.length >= 2 
+              ? 'Объединить заявки' 
+              : 'Нет заявок для объединения'}
         </button>
       </div>
     );
@@ -315,7 +342,7 @@ const ObjectMaterialsMerger = ({
               <Layers className="w-5 h-5 text-indigo-600" />
               <h3 className="text-lg font-bold">Объединение заявок</h3>
             </div>
-            <button onClick={() => setShowMergeModal(false)} className="p-1">
+            <button onClick={() => setShowMergeModal(false)} className="p-1 hover:bg-gray-100 rounded-lg">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -370,9 +397,13 @@ const ObjectMaterialsMerger = ({
             <button
               onClick={createConsolidatedApplication}
               disabled={isLoading}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50"
             >
-              <CheckCircle className="w-4 h-4" />
+              {isLoading ? (
+                <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+              ) : (
+                <CheckCircle className="w-4 h-4" />
+              )}
               Создать сводную заявку
             </button>
           </div>

@@ -6896,6 +6896,11 @@ else if (path === '/integration') setCurrentView('integration');
     applications={applications}
     showNotification={showNotification}
     userRole={userRole}
+   onMergeComplete={async () => {
+      // ✅ Обновляем список заявок без перезагрузки страницы
+      await loadApplications(page);
+      showNotification('🔄 Данные обновлены', 'success');
+    }}
   />
 )}
 {currentView === 'estimates' && (
