@@ -4337,10 +4337,13 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
-  const loadApplications = useCallback(async (pageNumber = 1) => {
+ const loadApplications = useCallback(async (pageNumber = 1) => {
   if (!user || !userCompanyId) return;
   
-  // ✅ Проверить кэш
+  // ✅ Защита от множественных вызовов
+  if (isLoading) return;
+  
+  // ✅ Проверка кэша
   const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
@@ -4360,14 +4363,17 @@ useEffect(() => {
       .eq('company_id', userCompanyId);
     const totalPages = Math.ceil(count / ITEMS_PER_PAGE);
     setTotalPages(totalPages);
+    
     let query = supabase
       .from('applications')
       .select('*')
       .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false })
       .range((pageNumber - 1) * ITEMS_PER_PAGE, pageNumber * ITEMS_PER_PAGE - 1);
+    
     if (userRole === 'master') query = query.eq('user_id', user?.id);
     if (userRole === 'accountant') query = query.eq('status', 'received');
+    
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
     setApplications(userApps);
@@ -4423,7 +4429,7 @@ useEffect(() => {
   } finally {
     setIsLoading(false);
   }
-}, [user, userCompanyId, userRole, isAdminMode, showNotification]);
+}, [user, userCompanyId, userRole, isAdminMode, showNotification, isLoading]); // ✅ ДОБАВЛЕН isLoading
 
   useEffect(() => {
     loadApplications(page);
@@ -6897,15 +6903,13 @@ else if (path === '/integration') setCurrentView('integration');
     showNotification={showNotification}
       user={user}
     setApplications={setApplications}
-    loadApplications={loadApplications} // <-- ПЕРЕДАЁМ ФУНКЦИЮ
+    loadApplications={loadApplications}
+    page={page}
     onMergeComplete={async () => {
-      // Загружаем свежие данные из БД с задержкой
-      setTimeout(async () => {
-        await loadApplications(page);
-        const cacheKey = `applications_${userCompanyId}_page_${page}`;
-        cacheManager.delete('applications', cacheKey);
-        showNotification('🔄 Данные обновлены', 'success');
-      }, 3000);
+      // Просто обновляем кэш, но НЕ перезагружаем данные сразу
+      const cacheKey = `applications_${userCompanyId}_page_${page}`;
+      cacheManager.delete('applications', cacheKey);
+      // Не вызываем loadApplications здесь, чтобы избежать конфликта
     }}
   />
 )}

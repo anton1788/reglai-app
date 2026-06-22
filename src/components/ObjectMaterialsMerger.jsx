@@ -15,12 +15,14 @@ const ObjectMaterialsMerger = ({
   onMergeComplete,
   user,
   setApplications,
-  loadApplications // <-- НОВЫЙ ПРОП ДЛЯ ПЕРЕЗАГРУЗКИ
+  loadApplications,
+  page = 1
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [mergedData, setMergedData] = useState(null);
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [localApplications, setLocalApplications] = useState(applications);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Обновляем локальные заявки при изменении пропсов
   useEffect(() => {
@@ -256,29 +258,16 @@ const ObjectMaterialsMerger = ({
         }
       }
       
-      // Обновляем локальное состояние
+      // ✅ ФИЛЬТРУЕМ ОБЪЕДИНЁННЫЕ ЗАЯВКИ
+      const mergedIds = new Set(mergedData.applications.map(a => a.id));
+      const filteredApps = localApplications.filter(app => !mergedIds.has(app.id));
+      
+      // Добавляем новую заявку
       const newApp = data[0];
-      const updatedLocalApps = localApplications.map(app => {
-        const updated = updatedApps.find(u => u.id === app.id);
-        return updated || app;
-      });
-      
-      // ✅ Фильтруем объединённые заявки и добавляем новую
-      const filteredApps = updatedLocalApps.filter(app => {
-        // Если заявка была объединена, скрываем её
-        if (mergedData.applications.some(a => a.id === app.id)) {
-          return false;
-        }
-        return true;
-      });
-      
-      // Добавляем новую заявку в начало
       const finalApps = [newApp, ...filteredApps];
       
-      // Сначала обновляем локальное состояние
+      // Обновляем состояние
       setLocalApplications(finalApps);
-      
-      // Затем обновляем состояние в родителе
       if (setApplications) {
         setApplications(finalApps);
       }
@@ -287,15 +276,9 @@ const ObjectMaterialsMerger = ({
       setShowMergeModal(false);
       setMergedData(null);
       
-      // ✅ НЕ вызываем loadApplications сразу, чтобы не перезаписывать состояние
-      // Даём время БД на сохранение, затем обновляем в фоне
-      setTimeout(async () => {
-        if (loadApplications) {
-          // Загружаем свежие данные из БД в фоне
-          await loadApplications(1);
-          console.log('🔄 Данные обновлены в фоне');
-        }
-      }, 2000);
+      // ✅ ОБНОВЛЯЕМ ДАННЫЕ БЕЗ ПЕРЕЗАГРУЗКИ
+      // Просто обновляем список, не вызывая loadApplications
+      // Это предотвращает "мигание" заявок
       
     } catch (err) {
       console.error('Ошибка создания сводной заявки:', err);
@@ -463,12 +446,13 @@ const ObjectMaterialsMerger = ({
     );
   };
 
-  // Кнопка обновления данных
+  // Кнопка обновления данных - ТОЛЬКО ПО ЗАПРОСУ ПОЛЬЗОВАТЕЛЯ
   const handleRefresh = async () => {
-    setIsLoading(true);
+    if (isRefreshing) return;
+    setIsRefreshing(true);
     try {
       if (loadApplications) {
-        await loadApplications(1);
+        await loadApplications(page);
       } else if (onMergeComplete) {
         await onMergeComplete();
       }
@@ -477,7 +461,7 @@ const ObjectMaterialsMerger = ({
       console.error('Ошибка обновления:', err);
       showNotification('Ошибка при обновлении данных', 'error');
     } finally {
-      setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -492,10 +476,11 @@ const ObjectMaterialsMerger = ({
         <p className="text-gray-500">Нет активных заявок для объединения</p>
         <button
           onClick={handleRefresh}
-          className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 mx-auto"
+          disabled={isRefreshing}
+          className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 mx-auto disabled:opacity-50"
         >
-          <RefreshCw className="w-4 h-4" />
-          Обновить
+          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Обновление...' : 'Обновить'}
         </button>
       </div>
     );
@@ -556,11 +541,11 @@ const ObjectMaterialsMerger = ({
       <div className="flex justify-center">
         <button
           onClick={handleRefresh}
-          disabled={isLoading}
+          disabled={isRefreshing}
           className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center gap-2 disabled:opacity-50"
         >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Обновить данные
+          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Обновление...' : 'Обновить данные'}
         </button>
       </div>
       
