@@ -10,9 +10,9 @@ import {
   Globe, WifiOff, History, Eye, Clock,
   Target, ChevronLeft, ChevronRight, Merge,
   Crown, Rocket, Database, Key, Zap, Gift, TrendingUp,
-  Calculator, // Иконка для смет
-  FileText,   // Иконка для отчётов и документов
-  Settings    // Иконка для интеграции и настроек
+  Calculator,
+  FileText,
+  Settings
 } from 'lucide-react';
 import { getCompanyPlan } from '../utils/tariffPlans';
 
@@ -187,8 +187,8 @@ const Navbar = ({
       items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
     }
 
-    // Склад (для manager, supply_admin, foreman)
-    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman') {
+    // Склад (для manager, supply_admin, foreman, accountant)
+    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || userRole === 'accountant') {
       items.push({ id: 'warehouse', label: 'Склад', icon: Package, path: '/warehouse' });
     }
 
@@ -197,23 +197,33 @@ const Navbar = ({
       items.push({ id: 'clients', label: 'Клиенты', icon: Users, path: '/clients' });
     }
 
-    // АНАЛИТИКА - для manager, supply_admin, director, владельца компании
-    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
+    // АНАЛИТИКА - для manager, supply_admin, director, accountant, владельца компании
+    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
       items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
     }
 
-    // СМЕТЫ - для manager, director, владельца компании
-    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+    // ============================================
+    // 🆕 ИСПРАВЛЕННЫЕ ПУНКТЫ - доступны для:
+    // Бухгалтер, Руководитель, Администратор снабжения
+    // ============================================
+
+    // ✅ API - для бухгалтера, руководителя, администратора снабжения
+    if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
+      items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
+    }
+
+    // ✅ СМЕТЫ - для бухгалтера, руководителя, администратора снабжения
+    if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'estimates', label: 'Сметы', icon: Calculator, path: '/estimates' });
     }
 
-    // ОТЧЁТЫ - для manager, director, владельца компании
-    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+    // ✅ ОТЧЁТЫ - для бухгалтера, руководителя, администратора снабжения
+    if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'reports', label: 'Отчёты', icon: FileText, path: '/reports' });
     }
 
-    // ИНТЕГРАЦИЯ - для manager, director, владельца компании
-    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+    // ✅ ИНТЕГРАЦИЯ - для руководителя и администратора снабжения
+    if (userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'integration', label: 'Интеграция', icon: Settings, path: '/integration' });
     }
 
@@ -246,13 +256,8 @@ const Navbar = ({
       items.push({ id: 'cart', label: `Корзина (${cartItemsCount})`, icon: ShoppingCart, path: '/cart' });
     }
 
-    // API (только для manager и если тариф позволяет)
-    if (userRole === 'manager' && currentPlan?.features?.api) {
-      items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
-    }
-
-    // АУДИТ - для manager, director и владельца
-    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+    // АУДИТ - для manager, director, accountant, владельца
+    if (userRole === 'manager' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
       items.push({ id: 'audit', label: 'Аудит', icon: Eye, path: '/audit' });
     }
 
@@ -389,8 +394,8 @@ const Navbar = ({
               </div>
             )}
 
-            {/* Быстрые действия */}
-            {(userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'master' || userRole === 'foreman') && (
+            {/* Быстрые действия - обновлены для accountant */}
+            {(userRole === 'accountant' || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'master' || userRole === 'foreman' || isCompanyOwner) && (
               <div className="relative group">
                 <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                   <Plus className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -428,8 +433,8 @@ const Navbar = ({
                       <FileText className="w-4 h-4 text-purple-500" />
                       Создать документ
                     </button>
-                    {/* Добавлены новые быстрые действия для смет и отчётов */}
-                    {(userRole === 'manager' || userRole === 'director' || isCompanyOwner) && (
+                    {/* Быстрые действия для смет и отчётов - обновлены для accountant */}
+                    {(userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) && (
                       <>
                         <button 
                           onClick={() => { onNavigate?.('/estimates'); setIsMobileMenuOpen(false); }}
@@ -679,7 +684,8 @@ const Navbar = ({
                   (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
                   (item.id === 'estimates' && currentPage === 'estimates') ||
                   (item.id === 'reports' && currentPage === 'reports') ||
-                  (item.id === 'integration' && currentPage === 'integration');
+                  (item.id === 'integration' && currentPage === 'integration') ||
+                  (item.id === 'api' && currentPage === 'api');
                 
                 return (
                   <button
@@ -769,7 +775,8 @@ const Navbar = ({
                 (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
                 (item.id === 'estimates' && currentPage === 'estimates') ||
                 (item.id === 'reports' && currentPage === 'reports') ||
-                (item.id === 'integration' && currentPage === 'integration');
+                (item.id === 'integration' && currentPage === 'integration') ||
+                (item.id === 'api' && currentPage === 'api');
               
               return (
                 <button
