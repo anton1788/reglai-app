@@ -1,15 +1,18 @@
 // src/components/Navbar.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Menu, X, Search, User, LogOut, Settings, HelpCircle, 
+  Menu, X, Search, User, LogOut, HelpCircle, 
   Bell, ChevronDown, Home, Package, ClipboardList, 
-  Users, BarChart3, FileText, Moon, Sun,
+  Users, BarChart3, Moon, Sun,
   Building, Calendar, MessageCircle,
   Plus, UserPlus, Briefcase,
   CheckCircle, ShoppingCart, Code, Shield, Sparkles,
   Globe, WifiOff, History, Eye, Clock,
   Target, ChevronLeft, ChevronRight, Merge,
-  Crown, Rocket, Database, Key, Zap, Gift, TrendingUp
+  Crown, Rocket, Database, Key, Zap, Gift, TrendingUp,
+  Calculator, // Иконка для смет
+  FileText,   // Иконка для отчётов и документов
+  Settings    // Иконка для интеграции и настроек
 } from 'lucide-react';
 import { getCompanyPlan } from '../utils/tariffPlans';
 
@@ -197,6 +200,21 @@ const Navbar = ({
     // АНАЛИТИКА - для manager, supply_admin, director, владельца компании
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
       items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
+    }
+
+    // СМЕТЫ - для manager, director, владельца компании
+    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+      items.push({ id: 'estimates', label: 'Сметы', icon: Calculator, path: '/estimates' });
+    }
+
+    // ОТЧЁТЫ - для manager, director, владельца компании
+    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+      items.push({ id: 'reports', label: 'Отчёты', icon: FileText, path: '/reports' });
+    }
+
+    // ИНТЕГРАЦИЯ - для manager, director, владельца компании
+    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+      items.push({ id: 'integration', label: 'Интеграция', icon: Settings, path: '/integration' });
     }
 
     // Документы - для всех, кроме client
@@ -410,6 +428,25 @@ const Navbar = ({
                       <FileText className="w-4 h-4 text-purple-500" />
                       Создать документ
                     </button>
+                    {/* Добавлены новые быстрые действия для смет и отчётов */}
+                    {(userRole === 'manager' || userRole === 'director' || isCompanyOwner) && (
+                      <>
+                        <button 
+                          onClick={() => { onNavigate?.('/estimates'); setIsMobileMenuOpen(false); }}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                        >
+                          <Calculator className="w-4 h-4 text-[#4A6572]" />
+                          Сметный калькулятор
+                        </button>
+                        <button 
+                          onClick={() => { onNavigate?.('/reports'); setIsMobileMenuOpen(false); }}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                        >
+                          <BarChart3 className="w-4 h-4 text-blue-500" />
+                          Конструктор отчётов
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -639,7 +676,10 @@ const Navbar = ({
                 const isActive = currentPage === item.id || 
                   (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
                   (item.id === 'clients' && currentPage === 'clientDashboard') ||
-                  (item.id === 'crm-sales' && currentPage === 'crm-sales');
+                  (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
+                  (item.id === 'estimates' && currentPage === 'estimates') ||
+                  (item.id === 'reports' && currentPage === 'reports') ||
+                  (item.id === 'integration' && currentPage === 'integration');
                 
                 return (
                   <button
@@ -726,7 +766,10 @@ const Navbar = ({
               const Icon = item.icon;
               const isActive = currentPage === item.id ||
                 (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
-                (item.id === 'crm-sales' && currentPage === 'crm-sales');
+                (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
+                (item.id === 'estimates' && currentPage === 'estimates') ||
+                (item.id === 'reports' && currentPage === 'reports') ||
+                (item.id === 'integration' && currentPage === 'integration');
               
               return (
                 <button

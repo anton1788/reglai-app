@@ -179,6 +179,9 @@ import ApprovalModal from './components/ApprovalWorkflow/ApprovalModal';
 import { useApproval } from './hooks/useApproval';
 // eslint-disable-next-line no-unused-vars
 import approvalEngine from './utils/approvalEngine'; 
+import EstimateCalculator from './components/EstimateCalculator';
+import ReportBuilder from './components/ReportBuilder';
+import OneCIntegration from './components/OneCIntegration';
 
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
@@ -6220,6 +6223,9 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     }
     return;
   }
+  else if (path === '/estimates') setCurrentView('estimates');
+else if (path === '/reports') setCurrentView('reports');
+else if (path === '/integration') setCurrentView('integration');
   
   // Остальные маршруты
   if (path === '/applications') setCurrentView('inwork');
@@ -6890,6 +6896,37 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     applications={applications}
     showNotification={showNotification}
     userRole={userRole}
+  />
+)}
+{currentView === 'estimates' && (
+  <EstimateCalculator
+    supabase={supabase}
+    companyId={userCompanyId}
+    onSave={(estimate) => {
+      showNotification(`✅ Смета "${estimate.name}" сохранена!`, 'success');
+    }}
+    showNotification={showNotification}
+    t={t}
+  />
+)}
+
+{currentView === 'reports' && (
+  <ReportBuilder
+    applications={isAdminMode ? allApplications : applications}
+    companyUsers={companyUsers}
+    supabase={supabase}
+    companyId={userCompanyId}
+    showNotification={showNotification}
+    t={t}
+  />
+)}
+
+{currentView === 'integration' && (
+  <OneCIntegration
+    supabase={supabase}
+    companyId={userCompanyId}
+    showNotification={showNotification}
+    t={t}
   />
 )}
       </main>
