@@ -14,7 +14,8 @@ const ObjectMaterialsMerger = ({
   showNotification,
   onMergeComplete,
   user,
-  setApplications // <-- НОВЫЙ ПРОП ДЛЯ ПРЯМОГО ОБНОВЛЕНИЯ
+  setApplications,
+  loadApplications // <-- НОВЫЙ ПРОП ДЛЯ ПЕРЕЗАГРУЗКИ
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [mergedData, setMergedData] = useState(null);
@@ -82,7 +83,6 @@ const ObjectMaterialsMerger = ({
       objects[objName].totalMaterials += app.materials?.length || 0;
     });
     
-    // Конвертируем Map в массив
     return Object.values(objects).map(obj => ({
       ...obj,
       uniqueMaterialsArray: Array.from(obj.uniqueMaterials.values()),
@@ -263,25 +263,39 @@ const ObjectMaterialsMerger = ({
         return updated || app;
       });
       
-      // Добавляем новую заявку в начало списка
-      const finalApps = [newApp, ...updatedLocalApps.filter(app => app.id !== newApp.id)];
+      // ✅ Фильтруем объединённые заявки и добавляем новую
+      const filteredApps = updatedLocalApps.filter(app => {
+        // Если заявка была объединена, скрываем её
+        if (mergedData.applications.some(a => a.id === app.id)) {
+          return false;
+        }
+        return true;
+      });
       
-      // Обновляем состояние через пропс
+      // Добавляем новую заявку в начало
+      const finalApps = [newApp, ...filteredApps];
+      
+      // Сначала обновляем локальное состояние
+      setLocalApplications(finalApps);
+      
+      // Затем обновляем состояние в родителе
       if (setApplications) {
         setApplications(finalApps);
       }
-      
-      // Обновляем локальное состояние
-      setLocalApplications(finalApps);
       
       showNotification(`✅ Создана сводная заявка для объекта "${mergedData.objectName}"`, 'success');
       setShowMergeModal(false);
       setMergedData(null);
       
-      // Вызываем колбэк для дополнительного обновления
-      if (onMergeComplete) {
-        await onMergeComplete();
-      }
+      // ✅ НЕ вызываем loadApplications сразу, чтобы не перезаписывать состояние
+      // Даём время БД на сохранение, затем обновляем в фоне
+      setTimeout(async () => {
+        if (loadApplications) {
+          // Загружаем свежие данные из БД в фоне
+          await loadApplications(1);
+          console.log('🔄 Данные обновлены в фоне');
+        }
+      }, 2000);
       
     } catch (err) {
       console.error('Ошибка создания сводной заявки:', err);
@@ -453,7 +467,9 @@ const ObjectMaterialsMerger = ({
   const handleRefresh = async () => {
     setIsLoading(true);
     try {
-      if (onMergeComplete) {
+      if (loadApplications) {
+        await loadApplications(1);
+      } else if (onMergeComplete) {
         await onMergeComplete();
       }
       showNotification('🔄 Данные обновлены', 'success');

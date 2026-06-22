@@ -6895,15 +6895,17 @@ else if (path === '/integration') setCurrentView('integration');
     companyId={userCompanyId}
     applications={applications}
     showNotification={showNotification}
-     user={user}
-    setApplications={setApplications} // <-- НОВЫЙ ПРОП
+      user={user}
+    setApplications={setApplications}
+    loadApplications={loadApplications} // <-- ПЕРЕДАЁМ ФУНКЦИЮ
     onMergeComplete={async () => {
-      // Загружаем свежие данные из БД
-      await loadApplications(page);
-      // Обновляем кэш
-      const cacheKey = `applications_${userCompanyId}_page_${page}`;
-      cacheManager.delete('applications', cacheKey);
-      showNotification('🔄 Данные обновлены', 'success');
+      // Загружаем свежие данные из БД с задержкой
+      setTimeout(async () => {
+        await loadApplications(page);
+        const cacheKey = `applications_${userCompanyId}_page_${page}`;
+        cacheManager.delete('applications', cacheKey);
+        showNotification('🔄 Данные обновлены', 'success');
+      }, 3000);
     }}
   />
 )}
