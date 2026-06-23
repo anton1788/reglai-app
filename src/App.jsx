@@ -4424,17 +4424,38 @@ useEffect(() => {
       usersData,
       commentsMap
     });
-  } catch (err) {
+ } catch (err) {
     console.error('Ошибка загрузки заявок:', err);
     showNotification('Ошибка загрузки данных', 'error');
   } finally {
     setIsLoading(false);
   }
-}, [user, userCompanyId, userRole, isAdminMode, showNotification, isLoading]); // ✅ ДОБАВЛЕН isLoading
+}, [user, userCompanyId, userRole, isAdminMode, showNotification]);
 
   useEffect(() => {
-    loadApplications(page);
-  }, [user, userCompanyId, userRole, isAdminMode, page, loadApplications]);
+  // ✅ Добавляем флаг, чтобы избежать повторных загрузок
+  let isMounted = true;
+  let loadTimeout = null;
+  
+  const loadData = async () => {
+    if (!user || !userCompanyId) return;
+    
+    // ✅ Если страница только что перезагрузилась, даём время на стабилизацию
+    clearTimeout(loadTimeout);
+    loadTimeout = setTimeout(() => {
+      if (isMounted) {
+        loadApplications(page);
+      }
+    }, 100);
+  };
+  
+  loadData();
+  
+  return () => {
+    isMounted = false;
+    clearTimeout(loadTimeout);
+  };
+}, [user, userCompanyId, userRole, isAdminMode, page, loadApplications]);
   // 💰 Load company plan & quota
 useEffect(() => {
   const loadPlan = async () => {
@@ -6516,7 +6537,7 @@ else if (path === '/integration') setCurrentView('integration');
         
         {currentView === 'inwork' && (
           <ApplicationList
-          key={`inwork-${page}-${statusFilter}-${searchTerm}`}
+          key={`inwork-${page}-${statusFilter}-${searchTerm}-${applications.length}`}
             applications={filteredApplications.filter(app => {
               return isApplicationActive(app.status) &&
                 (userRole !== 'master' || app.user_id === user?.id);
@@ -6907,11 +6928,21 @@ else if (path === '/integration') setCurrentView('integration');
     setApplications={setApplications}
     loadApplications={loadApplications}
     page={page}
-    onMergeComplete={async () => {
-      // Просто обновляем кэш, но НЕ перезагружаем данные сразу
+    onMergeComplete={async ({ skipReload } = {}) => {
+      // ✅ Если skipReload === true - не перезагружаем данные
+      if (skipReload) {
+        console.log('📦 Объединение завершено, данные уже обновлены локально');
+        return;
+      }
+      
+      // ✅ Иначе - обновляем кэш и перезагружаем
       const cacheKey = `applications_${userCompanyId}_page_${page}`;
       cacheManager.delete('applications', cacheKey);
-      // Не вызываем loadApplications здесь, чтобы избежать конфликта
+      
+      // ✅ Перезагружаем данные с задержкой, чтобы БД успела обновиться
+      setTimeout(() => {
+        loadApplications(page);
+      }, 300);
     }}
   />
 )}
