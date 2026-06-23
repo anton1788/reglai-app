@@ -4357,7 +4357,9 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
- const loadApplications = useCallback(async (pageNumber = 1) => {
+ // App.jsx - функция loadApplications (примерно строка 2150-2250)
+
+const loadApplications = useCallback(async (pageNumber = 1) => {
   if (!user || !userCompanyId) return;
   
   // ✅ Защита от множественных вызовов
@@ -4371,6 +4373,13 @@ useEffect(() => {
     setTotalPages(cached.totalPages);
     setCompanyUsers(cached.usersData || []);
     setComments(cached.commentsMap || {});
+    
+    // ✅ КОРРЕКТИРОВКА: если текущая страница больше общего количества страниц
+    if (pageNumber > cached.totalPages) {
+      console.log('🔄 Корректировка страницы (кэш):', pageNumber, '->', Math.max(1, cached.totalPages));
+      setPage(Math.max(1, cached.totalPages));
+    }
+    
     setIsLoading(false);
     return;
   }
@@ -4383,6 +4392,12 @@ useEffect(() => {
       .eq('company_id', userCompanyId);
     const totalPages = Math.ceil(count / ITEMS_PER_PAGE);
     setTotalPages(totalPages);
+    
+    // ✅ КОРРЕКТИРОВКА: если текущая страница больше общего количества страниц
+    if (pageNumber > totalPages) {
+      console.log('🔄 Корректировка страницы (БД):', pageNumber, '->', Math.max(1, totalPages));
+      setPage(Math.max(1, totalPages));
+    }
     
     let query = supabase
       .from('applications')
@@ -4443,13 +4458,22 @@ useEffect(() => {
       usersData,
       commentsMap
     });
- } catch (err) {
+  } catch (err) {
     console.error('Ошибка загрузки заявок:', err);
     showNotification('Ошибка загрузки данных', 'error');
   } finally {
     setIsLoading(false);
   }
 }, [user, userCompanyId, userRole, isAdminMode, showNotification]);
+// App.jsx - добавьте этот useEffect ПОСЛЕ loadApplications
+
+// ✅ Синхронизация page при изменении totalPages
+useEffect(() => {
+  if (totalPages > 0 && page > totalPages) {
+    console.log('🔄 Синхронизация страницы (useEffect):', page, '->', Math.max(1, totalPages));
+    setPage(Math.max(1, totalPages));
+  }
+}, [totalPages, page]);
 
   useEffect(() => {
   // ✅ Добавляем флаг, чтобы избежать повторных загрузок

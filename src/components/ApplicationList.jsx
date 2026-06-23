@@ -962,31 +962,34 @@ const ApplicationList = memo(({
         )}
 
         {/* ✅ Pagination for desktop с защитой от двойных вызовов */}
-        {!isMobile && totalPages > 1 && (
-          <nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')} role="navigation">
-            <button
-              onClick={handlePrevPage}
-              disabled={page === 1}
-              className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-              aria-label={t('previousPage')}
-            >
-              <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-              {t('prev')}
-            </button>
-            <span className="px-4 py-2.5 text-gray-700 dark:text-gray-300 font-medium bg-gray-100 dark:bg-gray-700 rounded-xl" aria-current="page">
-              {formatNumber(page)} / {formatNumber(totalPages)}
-            </span>
-            <button
-              onClick={handleNextPage}
-              disabled={page === totalPages}
-              className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-              aria-label={t('nextPage')}
-            >
-              {t('next')}
-              <ArrowLeft className="w-4 h-4 rotate-180" aria-hidden="true" />
-            </button>
-          </nav>
-        )}
+       // ApplicationList.jsx - блок пагинации
+
+{/* ✅ Pagination for desktop с защитой от двойных вызовов */}
+{!isMobile && totalPages > 1 && (
+  <nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')} role="navigation">
+    <button
+      onClick={handlePrevPage}
+      disabled={page <= 1}
+      className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+      aria-label={t('previousPage')}
+    >
+      <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+      {t('prev')}
+    </button>
+    <span className="px-4 py-2.5 text-gray-700 dark:text-gray-300 font-medium bg-gray-100 dark:bg-gray-700 rounded-xl" aria-current="page">
+      {formatNumber(Math.min(page, totalPages))} / {formatNumber(totalPages)}
+    </span>
+    <button
+      onClick={handleNextPage}
+      disabled={page >= totalPages}
+      className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+      aria-label={t('nextPage')}
+    >
+      {t('next')}
+      <ArrowLeft className="w-4 h-4 rotate-180" aria-hidden="true" />
+    </button>
+  </nav>
+)}
       </div>
     </div>
   );

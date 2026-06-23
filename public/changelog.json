@@ -1,10 +1,10 @@
 {
-  "currentVersion": "1.6.9-beta",
+  "currentVersion": "1.7.9-beta",
   "releaseDate": "2026-03-26",
   "forceUpdate": false,
   "versions": [
     {
-      "version": "1.6.9-beta",
+      "version": "1.7.9-beta",
       "date": "2026-04-02",
       "title": "изменен KPI дашборд по ролям",
       "changes": [
