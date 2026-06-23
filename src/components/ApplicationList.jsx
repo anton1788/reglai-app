@@ -633,26 +633,31 @@ const ApplicationList = memo(({
   }, [inView, isLoading, page, totalPages, onPageChange]);
 
   // ✅ Обработчик "Назад" с защитой от двойного клика
-  const handlePrevPage = useCallback(() => {
-    if (page <= 1) return;
-    
-    const now = Date.now();
-    if (lastPageCallRef.current && (now - lastPageCallRef.current) < 300) {
-      console.log('🛑 Пропускаем двойной клик "Назад"');
-      return;
-    }
-    lastPageCallRef.current = now;
-    
-    if (pageChangeTimeoutRef.current) {
-      clearTimeout(pageChangeTimeoutRef.current);
-    }
-    
-    pageChangeTimeoutRef.current = setTimeout(() => {
-      console.log('⬅️ Переход на страницу:', page - 1);
-      onPageChange(page - 1);
-      pageChangeTimeoutRef.current = null;
-    }, 50);
-  }, [page, onPageChange]);
+  // ApplicationList.jsx - Обработчик "Назад"
+const handlePrevPage = useCallback(() => {
+  if (page <= 1) {
+    console.log('⏸️ Уже на первой странице');
+    return;
+  }
+  
+  const now = Date.now();
+  if (lastPageCallRef.current && (now - lastPageCallRef.current) < 300) {
+    console.log('🛑 Пропускаем двойной клик "Назад"');
+    return;
+  }
+  lastPageCallRef.current = now;
+  
+  if (pageChangeTimeoutRef.current) {
+    clearTimeout(pageChangeTimeoutRef.current);
+  }
+  
+  pageChangeTimeoutRef.current = setTimeout(() => {
+    const newPage = Math.max(1, page - 1);
+    console.log('⬅️ Переход на страницу:', newPage, '(было:', page, ')');
+    onPageChange(newPage);
+    pageChangeTimeoutRef.current = null;
+  }, 50);
+}, [page, onPageChange]);
 
   // ✅ Обработчик "Вперёд" с защитой от двойного клика
   const handleNextPage = useCallback(() => {

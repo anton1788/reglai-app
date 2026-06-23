@@ -1185,8 +1185,15 @@ const pageChangeThrottleRef = useRef(null);
 
 // ⬇️ ВСТАВИТЬ СЮДА ⬇️
 // App.jsx - функция handlePageChange
+// App.jsx - функция handlePageChange
 const handlePageChange = useCallback((newPage) => {
   console.log('📄 handlePageChange вызван с:', newPage, 'текущий page:', page, 'totalPages:', totalPages);
+  
+  // ✅ Если newPage совпадает с текущим page - ничего не делаем
+  if (newPage === page) {
+    console.log('⏸️ Страница уже', newPage);
+    return;
+  }
   
   if (pageChangeThrottleRef.current) {
     clearTimeout(pageChangeThrottleRef.current);
@@ -1198,6 +1205,12 @@ const handlePageChange = useCallback((newPage) => {
       setPage(newPage);
     } else {
       console.log('⚠️ Страница вне диапазона:', newPage, 'допустимо 1-', totalPages);
+      // ✅ Если страница вне диапазона - переходим на последнюю существующую
+      if (newPage > totalPages) {
+        setPage(totalPages);
+      } else if (newPage < 1) {
+        setPage(1);
+      }
     }
     pageChangeThrottleRef.current = null;
   }, 100);
@@ -4473,9 +4486,15 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
 
 // ✅ Синхронизация page при изменении totalPages
 useEffect(() => {
+  // ✅ Только если страница больше общего количества - корректируем
   if (totalPages > 0 && page > totalPages) {
     console.log('🔄 Синхронизация страницы (useEffect):', page, '->', Math.max(1, totalPages));
     setPage(Math.max(1, totalPages));
+  }
+  // ✅ Если страница меньше 1 - корректируем
+  if (page < 1 && totalPages > 0) {
+    console.log('🔄 Синхронизация страницы (useEffect):', page, '-> 1');
+    setPage(1);
   }
 }, [totalPages, page]);
 
