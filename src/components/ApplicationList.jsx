@@ -841,6 +841,33 @@ const ApplicationList = memo(({
             {[...Array(3)].map((_, i) => <ApplicationCardSkeleton key={i} />)}
           </div>
         )}
+        {/* ✅ ВСТАВИТЬ СЮДА - ЗАЩИТА ОТ ПУСТОЙ СТРАНИЦЫ */}
+{!isLoading && applications.length === 0 && page > 1 && totalPages > 0 && (
+  <div className="text-center py-8">
+    <button
+      onClick={() => onPageChange(1)}
+      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 mx-auto"
+    >
+      <ArrowLeft className="w-4 h-4" />
+      ← Вернуться на первую страницу
+    </button>
+    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+      На странице {page} нет заявок. Попробуйте перейти на первую страницу.
+    </p>
+  </div>
+)}
+
+{!isLoading && applications.length === 0 && (
+  <div className="text-center py-12" role="status" aria-live="polite">
+    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 mb-3">
+      <Package className="w-8 h-8 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+    </div>
+    <p className="text-base font-medium text-gray-900 dark:text-white mb-1">{emptyMessage || t('noApplications')}</p>
+    <p className="text-sm text-gray-500 dark:text-gray-400">
+      {hasActiveFilters ? t('tryClearFilters') || 'Попробуйте сбросить фильтры' : t('createFirstApplication') || 'Создайте первую заявку'}
+    </p>
+  </div>
+)}
 
         {!isLoading && applications.length === 0 && (
           <div className="text-center py-12" role="status" aria-live="polite">
@@ -898,31 +925,32 @@ const ApplicationList = memo(({
         )}
 
         {/* Pagination for desktop */}
-        {!isMobile && totalPages > 1 && (
-          <nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')} role="navigation">
-            <button
-              onClick={() => onPageChange(page - 1)}
-              disabled={page === 1}
-              className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-              aria-label={t('previousPage')}
-            >
-              <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-              {t('prev')}
-            </button>
-            <span className="px-4 py-2.5 text-gray-700 dark:text-gray-300 font-medium bg-gray-100 dark:bg-gray-700 rounded-xl" aria-current="page">
-              {formatNumber(page)} / {formatNumber(totalPages)}
-            </span>
-            <button
-              onClick={() => onPageChange(page + 1)}
-              disabled={page === totalPages}
-              className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-              aria-label={t('nextPage')}
-            >
-              {t('next')}
-              <ArrowLeft className="w-4 h-4 rotate-180" aria-hidden="true" />
-            </button>
-          </nav>
-        )}
+       {/* Pagination for desktop */}
+{!isMobile && totalPages > 1 && (
+  <nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')} role="navigation">
+    <button
+      onClick={() => onPageChange(Math.max(1, page - 1))}
+      disabled={page <= 1}
+      className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+      aria-label={t('previousPage')}
+    >
+      <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+      {t('prev')}
+    </button>
+    <span className="px-4 py-2.5 text-gray-700 dark:text-gray-300 font-medium bg-gray-100 dark:bg-gray-700 rounded-xl" aria-current="page">
+      {formatNumber(Math.min(page, totalPages))} / {formatNumber(totalPages)}
+    </span>
+    <button
+      onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+      disabled={page >= totalPages}
+      className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+      aria-label={t('nextPage')}
+    >
+      {t('next')}
+      <ArrowLeft className="w-4 h-4 rotate-180" aria-hidden="true" />
+    </button>
+  </nav>
+)}
       </div>
     </div>
   );

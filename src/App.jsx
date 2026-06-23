@@ -3740,6 +3740,33 @@ useEffect(() => {
       showNotification('Ошибка при обновлении статуса: ' + err.message, 'error');
     }
   };
+  const handleSearchChange = useCallback((value) => {
+  setSearchTerm(value);
+  setPage(1); // ← УЖЕ ДОБАВЛЕНО
+}, []);
+
+const handleStatusFilterChange = useCallback((value) => {
+  setStatusFilter(value);
+  setPage(1); // ← УЖЕ ДОБАВЛЕНО
+}, []);
+
+const handleDateFilterChange = useCallback((value) => {
+  setDateFilter(value);
+  setPage(1); // ← УЖЕ ДОБАВЛЕНО
+}, []);
+
+const handleViewedFilterChange = useCallback((value) => {
+  setViewedFilter(value);
+  setPage(1); // ← УЖЕ ДОБАВЛЕНО
+}, []);
+
+const handleClearFilters = useCallback(() => {
+  setSearchTerm('');
+  setStatusFilter('all');
+  setDateFilter('');
+  setViewedFilter('all');
+  setPage(1); // ← УЖЕ ДОБАВЛЕНО
+}, []);
 
   const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
   // 🔍 ДОБАВЛЕНО: Логирование начала работы
@@ -4340,7 +4367,7 @@ useEffect(() => {
   const loadApplications = useCallback(async (pageNumber = 1) => {
   if (!user || !userCompanyId) return;
   
-  // ✅ Проверить кэш
+  // Проверка кэша
   const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
@@ -4354,34 +4381,54 @@ useEffect(() => {
   
   setIsLoading(true);
   try {
-    const { count } = await supabase
+    // ✅ 1. Сначала получаем ТОЛЬКО количество
+    const { count, error: countError } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', userCompanyId);
-    const totalPages = Math.ceil(count / ITEMS_PER_PAGE);
-    setTotalPages(totalPages);
+    
+    if (countError) throw countError;
+    
+    // ✅ 2. Вычисляем totalPages
+    const calculatedTotalPages = Math.max(1, Math.ceil(count / ITEMS_PER_PAGE));
+    setTotalPages(calculatedTotalPages);
+    
+    // ✅ 3. Корректируем pageNumber если нужно
+    let safePage = pageNumber;
+    if (safePage > calculatedTotalPages) {
+      safePage = 1;
+      setPage(1);
+    }
+    
+    // ✅ 4. Вычисляем правильный range
+    const from = (safePage - 1) * ITEMS_PER_PAGE;
+    const to = Math.min(safePage * ITEMS_PER_PAGE - 1, count - 1);
+    
+    // ✅ 5. Запрос с правильным range
     let query = supabase
       .from('applications')
       .select('*')
       .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false })
-      .range((pageNumber - 1) * ITEMS_PER_PAGE, pageNumber * ITEMS_PER_PAGE - 1);
+      .range(from, to > 0 ? to : 0);
+    
     if (userRole === 'master') query = query.eq('user_id', user?.id);
     if (userRole === 'accountant') query = query.eq('status', 'received');
+    
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
+    
     setApplications(userApps);
     
-    // Загрузка пользователей для метрик активации
+    // Загрузка пользователей
     const { data: usersData } = await supabase
       .from('company_users')
       .select('user_id, created_at, full_name, role')
       .eq('company_id', userCompanyId);
-
+    
     let commentsMap = {};
-    if (usersData) {
-      setCompanyUsers(usersData);
-    }
+    if (usersData) setCompanyUsers(usersData);
+    
     if (userApps.length > 0) {
       const appIds = userApps.map(app => app.id);
       const { data: allComments = [] } = await supabase
@@ -4389,6 +4436,7 @@ useEffect(() => {
         .select('*')
         .in('application_id', appIds)
         .order('created_at', { ascending: true });
+      
       allComments.forEach(comment => {
         if (!commentsMap[comment.application_id]) {
           commentsMap[comment.application_id] = [];
@@ -4399,6 +4447,7 @@ useEffect(() => {
     } else {
       setComments({});
     }
+    
     if (isAdminMode) {
       const { data: allApps = [] } = await supabase
         .from('applications')
@@ -4406,17 +4455,17 @@ useEffect(() => {
         .eq('company_id', userCompanyId)
         .order('created_at', { ascending: false })
         .limit(500);
-      if (!allApps) setAllApplications([]);
-      else setAllApplications(allApps);
+      setAllApplications(allApps || []);
     }
     
-    // ✅ Сохранить в кэш после загрузки
+    // Сохраняем в кэш
     cacheManager.set('applications', cacheKey, {
       userApps,
-      totalPages,
+      totalPages: calculatedTotalPages,
       usersData,
       commentsMap
     });
+    
   } catch (err) {
     console.error('Ошибка загрузки заявок:', err);
     showNotification('Ошибка загрузки данных', 'error');
@@ -4425,9 +4474,17 @@ useEffect(() => {
   }
 }, [user, userCompanyId, userRole, isAdminMode, showNotification]);
 
-  useEffect(() => {
-    loadApplications(page);
-  }, [user, userCompanyId, userRole, isAdminMode, page, loadApplications]);
+ useEffect(() => {
+  // ✅ Загружаем только если есть пользователь и компания
+  if (user && userCompanyId) {
+    // ✅ Всегда загружаем страницу 1 при монтировании
+    if (page !== 1) {
+      setPage(1);
+    } else {
+      loadApplications(1);
+    }
+  }
+}, [user, userCompanyId, userRole, isAdminMode]); // ✅ Убрали page из зависимостей
   // 💰 Load company plan & quota
 useEffect(() => {
   const loadPlan = async () => {
