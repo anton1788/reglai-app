@@ -1180,6 +1180,25 @@ const [waitingWorker, setWaitingWorker] = useState(null);
   const notifiedOverdueAppIdsRef = useRef(new Set());
   const lastLoggedRef = useRef({});  // ← ДЛЯ ДЕБАУНСА ФИЧЕР-ЛОГОВ
 
+  // ⬇️ ВСТАВИТЬ СЮДА ⬇️
+const pageChangeThrottleRef = useRef(null);
+
+// ⬇️ ВСТАВИТЬ СЮДА ⬇️
+const handlePageChange = useCallback((newPage) => {
+  // ✅ Защита от двойного вызова
+  if (pageChangeThrottleRef.current) {
+    clearTimeout(pageChangeThrottleRef.current);
+  }
+  
+  pageChangeThrottleRef.current = setTimeout(() => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      console.log('📄 Переход на страницу:', newPage);
+      setPage(newPage);
+    }
+    pageChangeThrottleRef.current = null;
+  }, 100);
+}, [totalPages]);
+
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK
 // ─────────────────────────────────────────────────────────
@@ -6483,7 +6502,7 @@ else if (path === '/integration') setCurrentView('integration');
               ...prev,
               [appId]: !(prev[appId] || false)
             }))}
-            onPageChange={setPage}
+            onPageChange={handlePageChange}
             searchTerm={searchTerm}
             statusFilter={statusFilter}
             dateFilter={dateFilter}
@@ -6565,7 +6584,7 @@ else if (path === '/integration') setCurrentView('integration');
               ...prev,
               [appId]: !(prev[appId] || false)
             }))}
-            onPageChange={setPage}
+            onPageChange={handlePageChange}
             searchTerm={searchTerm}
             statusFilter={statusFilter}
             dateFilter={dateFilter}
@@ -6615,7 +6634,7 @@ else if (path === '/integration') setCurrentView('integration');
               ...prev,
               [appId]: !(prev[appId] || false)
             }))}
-            onPageChange={setPage}
+            onPageChange={handlePageChange}
             searchTerm={searchTerm}
             statusFilter={statusFilter}
             dateFilter={dateFilter}
@@ -6665,7 +6684,7 @@ else if (path === '/integration') setCurrentView('integration');
               ...prev,
               [appId]: !(prev[appId] || false)
             }))}
-            onPageChange={setPage}
+            onPageChange={handlePageChange}
             searchTerm={searchTerm}
             statusFilter={statusFilter}
             dateFilter={dateFilter}
