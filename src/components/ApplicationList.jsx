@@ -21,7 +21,6 @@ import {
   STATUS_COLORS,
   STATUS_ICONS,
   STATUS_I18N,
-  // ❌ УДАЛЕНЫ НЕИСПОЛЬЗУЕМЫЕ: getStatusText, isApplicationCompleted
   isApplicationActive,
   requiresMasterConfirmation
 } from '../utils/applicationStatuses';
@@ -135,7 +134,7 @@ const styles = `
 .application-card:hover { transform: translateY(-2px); box-shadow: 0 12px 35px rgba(0,0,0,0.12); }
 .application-card:active { transform: translateY(0); }
 
-/* ✅ МОБИЛЬНЫЕ СТИЛИ — ДОБАВЛЕНЫ */
+/* ✅ МОБИЛЬНЫЕ СТИЛИ */
 @media (max-width: 640px) {
   .touch-target { min-height: 44px; min-width: 44px; }
   .scrollable-content { -webkit-overflow-scrolling: touch; max-height: 200px; overflow-y: auto; }
@@ -270,7 +269,6 @@ const MobileApplicationCard = memo(({
     return hasReceivedUnsentMaterials;
   };
 
-  // ✅ Фильтруем материалы для отображения
   const visibleMaterials = useMemo(() => {
     if (!application.materials) return [];
     let filtered = application.materials.filter(m => m?.description?.trim() && (Number(m.quantity) || 0) > 0);
@@ -285,7 +283,6 @@ const MobileApplicationCard = memo(({
 
   return (
     <article className="app-card-enter application-card bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl border border-gray-200/60 dark:border-gray-700/60 overflow-hidden">
-      {/* ✅ ЗАГОЛОВОК — всегда виден, кликабелен */}
       <div 
         className="p-3 sm:p-4 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 transition-colors"
         onClick={() => setExpanded(!expanded)}
@@ -317,7 +314,6 @@ const MobileApplicationCard = memo(({
             </div>
           </div>
           
-          {/* Индикатор количества материалов */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
               {totalMaterials}
@@ -328,7 +324,6 @@ const MobileApplicationCard = memo(({
           </div>
         </div>
         
-        {/* Компактный прогресс */}
         {totalMaterials > 0 && (
           <div className="mt-2 flex items-center gap-2">
             <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -344,10 +339,8 @@ const MobileApplicationCard = memo(({
         )}
       </div>
       
-      {/* ✅ РАСКРЫВАЮЩАЯСЯ ЧАСТЬ */}
       {expanded && (
         <div className="p-3 pt-0 border-t border-gray-100 dark:border-gray-700">
-          {/* Детали заявки */}
           <div className="grid grid-cols-2 gap-1 text-xs py-2">
             <div>
               <span className="text-gray-400">{t('foremanPhone')}:</span>
@@ -361,7 +354,6 @@ const MobileApplicationCard = memo(({
             </div>
           </div>
           
-          {/* Материалы — вертикальный список */}
           {visibleMaterials.length > 0 && (
             <div className="mt-2">
               <button
@@ -395,7 +387,6 @@ const MobileApplicationCard = memo(({
             </div>
           )}
           
-          {/* ✅ ДЕЙСТВИЯ — КРУПНЫЕ КНОПКИ ДЛЯ МОБИЛЬНЫХ */}
           <div className="action-grid mt-3">
             {canShowReceiveButton(application, userRole) && (
               <button
@@ -442,7 +433,6 @@ const MobileApplicationCard = memo(({
               </button>
             )}
             
-            {/* Кнопка комментариев */}
             <button
               onClick={() => onToggleComments(application.id)}
               className="touch-target px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
@@ -450,7 +440,6 @@ const MobileApplicationCard = memo(({
               💬 {comments[application.id]?.length || 0}
             </button>
             
-            {/* Кнопки экспорта */}
             <button
               onClick={() => onDownloadHTML(application)}
               className="touch-target px-3 py-2 bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
@@ -468,7 +457,6 @@ const MobileApplicationCard = memo(({
             </button>
           </div>
           
-          {/* Comments Section */}
           <CommentsSection
             application={application}
             comments={comments}
@@ -611,6 +599,10 @@ const ApplicationList = memo(({
   const [commentDrafts, setCommentDrafts] = useState({});
   const commentTimerRef = useRef({});
 
+  // ✅ ЗАЩИТА ОТ ДВОЙНЫХ ВЫЗОВОВ ПАГИНАЦИИ
+  const lastPageCallRef = useRef(null);
+  const pageChangeTimeoutRef = useRef(null);
+
   // ✅ Инжект стилей
   useEffect(() => {
     const styleEl = document.createElement('style');
@@ -619,12 +611,79 @@ const ApplicationList = memo(({
     return () => document.head.removeChild(styleEl);
   }, []);
 
-  // ✅ Загрузка следующей страницы при прокрутке
+  // ✅ Загрузка следующей страницы при прокрутке (с защитой)
   useEffect(() => {
     if (inView && !isLoading && page < totalPages) {
-      onPageChange(page + 1);
+      const now = Date.now();
+      if (lastPageCallRef.current && (now - lastPageCallRef.current) < 500) {
+        console.log('🛑 Пропускаем частый вызов infinite scroll');
+        return;
+      }
+      lastPageCallRef.current = now;
+      
+      if (pageChangeTimeoutRef.current) {
+        clearTimeout(pageChangeTimeoutRef.current);
+      }
+      
+      pageChangeTimeoutRef.current = setTimeout(() => {
+        onPageChange(page + 1);
+        pageChangeTimeoutRef.current = null;
+      }, 50);
     }
   }, [inView, isLoading, page, totalPages, onPageChange]);
+
+  // ✅ Обработчик "Назад" с защитой от двойного клика
+  const handlePrevPage = useCallback(() => {
+    if (page <= 1) return;
+    
+    const now = Date.now();
+    if (lastPageCallRef.current && (now - lastPageCallRef.current) < 300) {
+      console.log('🛑 Пропускаем двойной клик "Назад"');
+      return;
+    }
+    lastPageCallRef.current = now;
+    
+    if (pageChangeTimeoutRef.current) {
+      clearTimeout(pageChangeTimeoutRef.current);
+    }
+    
+    pageChangeTimeoutRef.current = setTimeout(() => {
+      console.log('⬅️ Переход на страницу:', page - 1);
+      onPageChange(page - 1);
+      pageChangeTimeoutRef.current = null;
+    }, 50);
+  }, [page, onPageChange]);
+
+  // ✅ Обработчик "Вперёд" с защитой от двойного клика
+  const handleNextPage = useCallback(() => {
+    if (page >= totalPages) return;
+    
+    const now = Date.now();
+    if (lastPageCallRef.current && (now - lastPageCallRef.current) < 300) {
+      console.log('🛑 Пропускаем двойной клик "Вперёд"');
+      return;
+    }
+    lastPageCallRef.current = now;
+    
+    if (pageChangeTimeoutRef.current) {
+      clearTimeout(pageChangeTimeoutRef.current);
+    }
+    
+    pageChangeTimeoutRef.current = setTimeout(() => {
+      console.log('➡️ Переход на страницу:', page + 1);
+      onPageChange(page + 1);
+      pageChangeTimeoutRef.current = null;
+    }, 50);
+  }, [page, totalPages, onPageChange]);
+
+  // ✅ Очистка таймеров
+  useEffect(() => {
+    return () => {
+      if (pageChangeTimeoutRef.current) {
+        clearTimeout(pageChangeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // ✅ Автосохранение комментариев
   const loadCommentDraft = useCallback((applicationId) => {
@@ -659,9 +718,8 @@ const ApplicationList = memo(({
     }
   }, []);
 
-  // ✅ Очистка таймеров
+  // ✅ Очистка таймеров комментариев
   useEffect(() => {
-    // Сохраняем ссылку на текущие таймеры
     const timers = commentTimerRef.current;
     return () => {
       Object.values(timers).forEach(timer => {
@@ -897,11 +955,11 @@ const ApplicationList = memo(({
           </div>
         )}
 
-        {/* Pagination for desktop */}
+        {/* ✅ Pagination for desktop с защитой от двойных вызовов */}
         {!isMobile && totalPages > 1 && (
           <nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')} role="navigation">
             <button
-              onClick={() => onPageChange(page - 1)}
+              onClick={handlePrevPage}
               disabled={page === 1}
               className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
               aria-label={t('previousPage')}
@@ -913,7 +971,7 @@ const ApplicationList = memo(({
               {formatNumber(page)} / {formatNumber(totalPages)}
             </span>
             <button
-              onClick={() => onPageChange(page + 1)}
+              onClick={handleNextPage}
               disabled={page === totalPages}
               className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
               aria-label={t('nextPage')}
