@@ -962,7 +962,6 @@ const ApplicationList = memo(({
         )}
 
         {/* ✅ Pagination for desktop с защитой от двойных вызовов */}
-       // ApplicationList.jsx - блок пагинации
 
 {/* ✅ Pagination for desktop с защитой от двойных вызовов */}
 {!isMobile && totalPages > 1 && (
