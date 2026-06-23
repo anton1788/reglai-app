@@ -219,107 +219,106 @@ const ObjectMaterialsMerger = ({
   };
 
   // Создание сводной заявки из объединённых материалов (улучшена)
-  const createConsolidatedApplication = async () => {
-    if (!mergedData) return;
+  // Создание сводной заявки из объединённых материалов
+const createConsolidatedApplication = async () => {
+  if (!mergedData) return;
+  
+  setIsLoading(true);
+  
+  try {
+    // Проверяем, не была ли уже создана сводная заявка
+    const { data: existing } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('object_name', mergedData.objectName)
+      .eq('is_consolidated', true)
+      .maybeSingle();
     
-    setIsLoading(true);
-    
-    try {
-      // Проверяем, не была ли уже создана сводная заявка
-      const { data: existing } = await supabase
-        .from('applications')
-        .select('id')
-        .eq('object_name', mergedData.objectName)
-        .eq('is_consolidated', true)
-        .maybeSingle();
-      
-      if (existing) {
-        showNotification('⚠️ Для этого объекта уже есть сводная заявка', 'warning');
-        setShowMergeModal(false);
-        setIsLoading(false);
-        return;
-      }
-      
-      // Создаём новую заявку со статусом "сводная"
-      const consolidatedApp = {
-        object_name: mergedData.objectName,
-        foreman_name: `Сводная заявка (${mergedData.foremen.join(', ')})`,
-        foreman_phone: mergedData.applications[0]?.foreman_phone || '',
-        materials: mergedData.materials.map(m => ({
-          description: m.description,
-          quantity: m.totalQuantity,
-          unit: m.unit,
-          received: 0,
-          supplier_received_quantity: 0,
-          status: 'pending',
-          original_applications: m.applications.map(a => a.id),
-          original_quantities: m.applications.map(a => ({
-            applicationId: a.id,
-            quantity: a.quantity,
-            foreman: a.foreman
-          }))
-        })),
-        status: 'pending',
-        user_id: (await supabase.auth.getUser()).data.user?.id,
-        company_id: companyId,
-        created_at: new Date().toISOString(),
-        is_consolidated: true,
-        consolidated_from: mergedData.applications.map(a => a.id),
-        total_amount: mergedData.materials.reduce((sum, m) => sum + (m.totalQuantity * 1000), 0),
-        status_history: [{
-          action: 'created_consolidated',
-          timestamp: new Date().toISOString(),
-          details: `Объединено ${mergedData.applications.length} заявок от ${mergedData.foremen.join(', ')}`
-        }]
-      };
-      
-      const { data, error } = await supabase
-        .from('applications')
-        .insert([consolidatedApp])
-        .select();
-      
-      if (error) throw error;
-      
-      // Помечаем исходные заявки как объединённые
-      for (const app of mergedData.applications) {
-        await supabase
-          .from('applications')
-          .update({
-            status: 'consolidated',
-            consolidated_into: data[0].id,
-            status_history: [
-              ...(app.status_history || []),
-              {
-                action: 'consolidated',
-                timestamp: new Date().toISOString(),
-                details: `Объединено в сводную заявку #${data[0].id}`
-              }
-            ]
-          })
-          .eq('id', app.id);
-      }
-      
-      showNotification(`✅ Создана сводная заявка для объекта "${mergedData.objectName}"`, 'success');
+    if (existing) {
+      showNotification('⚠️ Для этого объекта уже есть сводная заявка', 'warning');
       setShowMergeModal(false);
-      setMergedData(null);
-      
-      // Вызываем callback для обновления списка
-      if (onMerged) {
-        onMerged(data[0]);
-      }
-      
-      // Перезагружаем данные без полного релоада
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
-      
-    } catch (err) {
-      console.error('Ошибка создания сводной заявки:', err);
-      showNotification('Ошибка при создании сводной заявки: ' + err.message, 'error');
-    } finally {
       setIsLoading(false);
+      return;
     }
-  };
+    
+    // Создаём новую заявку со статусом "сводная"
+    const consolidatedApp = {
+      object_name: mergedData.objectName,
+      foreman_name: `Сводная заявка (${mergedData.foremen.join(', ')})`,
+      foreman_phone: mergedData.applications[0]?.foreman_phone || '',
+      materials: mergedData.materials.map(m => ({
+        description: m.description,
+        quantity: m.totalQuantity,
+        unit: m.unit,
+        received: 0,
+        supplier_received_quantity: 0,
+        status: 'pending',
+        original_applications: m.applications.map(a => a.id),
+        original_quantities: m.applications.map(a => ({
+          applicationId: a.id,
+          quantity: a.quantity,
+          foreman: a.foreman
+        }))
+      })),
+      status: 'pending',
+      user_id: (await supabase.auth.getUser()).data.user?.id,
+      company_id: companyId,
+      created_at: new Date().toISOString(),
+      is_consolidated: true,
+      consolidated_from: mergedData.applications.map(a => a.id),
+      total_amount: mergedData.materials.reduce((sum, m) => sum + (m.totalQuantity * 1000), 0),
+      status_history: [{
+        action: 'created_consolidated',
+        timestamp: new Date().toISOString(),
+        details: `Объединено ${mergedData.applications.length} заявок от ${mergedData.foremen.join(', ')}`
+      }]
+    };
+    
+    const { data, error } = await supabase
+      .from('applications')
+      .insert([consolidatedApp])
+      .select();
+    
+    if (error) throw error;
+    
+    // Помечаем исходные заявки как объединённые
+    for (const app of mergedData.applications) {
+      await supabase
+        .from('applications')
+        .update({
+          status: 'consolidated',
+          consolidated_into: data[0].id,
+          status_history: [
+            ...(app.status_history || []),
+            {
+              action: 'consolidated',
+              timestamp: new Date().toISOString(),
+              details: `Объединено в сводную заявку #${data[0].id}`
+            }
+          ]
+        })
+        .eq('id', app.id);
+    }
+    
+    showNotification(`✅ Создана сводная заявка для объекта "${mergedData.objectName}"`, 'success');
+    setShowMergeModal(false);
+    setMergedData(null);
+    
+    // ✅ Вызываем callback для обновления списка
+    if (onMerged) {
+      onMerged(data[0]);
+    }
+    
+    // ✅ УДАЛЯЕМ setTimeout с window.location.reload()
+    // Теперь данные обновляются через onMerged и loadApplications(page)
+    
+  } catch (err) {
+    console.error('Ошибка создания сводной заявки:', err);
+    showNotification('Ошибка при создании сводной заявки: ' + err.message, 'error');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Переключение разворачивания объекта
   const toggleObject = useCallback((objectName) => {
