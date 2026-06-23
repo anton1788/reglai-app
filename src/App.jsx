@@ -6953,6 +6953,12 @@ else if (path === '/integration') setCurrentView('integration');
     applications={applications}
     showNotification={showNotification}
     userRole={userRole}
+    onMerged={(newApp) => {
+      // Обновляем список заявок после объединения
+      setApplications(prev => [newApp, ...prev]);
+      // Можно перезагрузить страницу
+      loadApplications(page);
+    }}
   />
 )}
 {currentView === 'estimates' && (
