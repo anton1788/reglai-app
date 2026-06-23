@@ -1180,23 +1180,6 @@ const [waitingWorker, setWaitingWorker] = useState(null);
   const notifiedOverdueAppIdsRef = useRef(new Set());
   const lastLoggedRef = useRef({});  // ← ДЛЯ ДЕБАУНСА ФИЧЕР-ЛОГОВ
 
-  // ⬇️ ВСТАВИТЬ СЮДА ⬇️
-const pageChangeThrottleRef = useRef(null);
-
-// App.jsx - ЗАМЕНИТЕ ВЕСЬ handlePageChange
-
-const handlePageChange = useCallback((newPage) => {
-  console.log('📄 handlePageChange вызван с:', newPage);
-  
-  // ✅ Просто устанавливаем страницу, без сложной логики
-  if (newPage >= 1 && newPage <= totalPages) {
-    console.log('📄 Установка страницы:', newPage);
-    setPage(newPage);
-  } else {
-    console.log('⚠️ Страница вне диапазона:', newPage);
-  }
-}, [totalPages]);
-
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK
 // ─────────────────────────────────────────────────────────
@@ -3283,12 +3266,6 @@ if (user?.id && userCompanyId) {
 
   const [showObjectSuggestions, setShowObjectSuggestions] = useState(false);
 
-  useEffect(() => {
-  // ✅ Принудительная установка страницы 1 при монтировании
-  console.log('🔧 Принудительная установка страницы 1');
-  setPage(1);
-}, []);
-
   const objectHistory = useMemo(() => {
     const objects = new Set();
     applications.forEach(app => objects.add(app.object_name));
@@ -3477,66 +3454,67 @@ useEffect(() => {
   // 🔍 FILTERING
   // ─────────────────────────────────────────────────────────
     const filteredApplications = useMemo(() => {
-  const apps = isAdminMode ? allApplications : applications;
-  
-  // 🔍 Парсинг умного поиска
-  let smartSearchTerm = searchTerm;
-  let customFilters = {};
-  
-  if (searchTerm.includes(':')) {
-    const parts = searchTerm.split(' ');
-    parts.forEach(part => {
-      if (part.includes(':')) {
-        const [key, value] = part.split(':');
-        customFilters[key] = value;
-      } else {
-        smartSearchTerm = part;
+    const apps = isAdminMode ? allApplications : applications;
+    
+    // 🔍 Парсинг умного поиска
+    let smartSearchTerm = searchTerm;
+    let customFilters = {};
+    
+    if (searchTerm.includes(':')) {
+        // Парсим команды типа "status:pending" или "overdue:true"
+        const parts = searchTerm.split(' ');
+        parts.forEach(part => {
+            if (part.includes(':')) {
+                const [key, value] = part.split(':');
+                customFilters[key] = value;
+            } else {
+                smartSearchTerm = part;
+            }
+        });
+    }
+    
+    return apps.filter(app => {
+      // Обычный поиск
+      let matchesSearch = true;
+      if (smartSearchTerm && !customFilters.object) {
+        matchesSearch = app.object_name.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
+          app.foreman_name.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
+          (app.foreman_phone && app.foreman_phone.includes(smartSearchTerm));
       }
+      
+      // Поиск по объекту
+      if (customFilters.object) {
+        matchesSearch = app.object_name.toLowerCase().includes(customFilters.object.toLowerCase());
+      }
+      
+      // Фильтр по статусу из умного поиска
+      let matchesStatus = statusFilter === 'all' ||
+        app.status === statusFilter ||
+        (statusFilter === 'pending' && [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ADMIN_PROCESSING].includes(app.status));
+      
+      if (customFilters.status) {
+        if (customFilters.status === 'pending') {
+            matchesStatus = [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ADMIN_PROCESSING].includes(app.status);
+        } else if (customFilters.status === 'active') {
+            matchesStatus = ['pending', 'admin_processing', 'partial_received'].includes(app.status);
+        } else if (customFilters.status === 'received') {
+            matchesStatus = app.status === 'received';
+        }
+      }
+      
+      // Фильтр просроченных
+      let matchesOverdue = true;
+      if (customFilters.overdue === 'true') {
+        matchesOverdue = app.status === 'pending' && getDaysSince(app.created_at) > 2;
+      }
+      
+      const matchesDate = !dateFilter || app.created_at.startsWith(dateFilter);
+      const matchesViewed = viewedFilter === 'all' ||
+        (viewedFilter === 'new' && !app.viewed_by_supply_admin);
+      
+      return matchesSearch && matchesStatus && matchesDate && matchesViewed && matchesOverdue;
     });
-  }
-  
-  return apps.filter(app => {
-    // Обычный поиск
-    let matchesSearch = true;
-    if (smartSearchTerm && !customFilters.object) {
-      matchesSearch = app.object_name?.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
-        app.foreman_name?.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
-        (app.foreman_phone && app.foreman_phone.includes(smartSearchTerm));
-    }
-    
-    // Поиск по объекту
-    if (customFilters.object) {
-      matchesSearch = app.object_name?.toLowerCase().includes(customFilters.object.toLowerCase());
-    }
-    
-    // ✅ Фильтр по статусу с учётом admin_processing
-    let matchesStatus = statusFilter === 'all' ||
-      app.status === statusFilter ||
-      (statusFilter === 'pending' && [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ADMIN_PROCESSING].includes(app.status));
-    
-    if (customFilters.status) {
-      if (customFilters.status === 'pending') {
-        matchesStatus = [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ADMIN_PROCESSING].includes(app.status);
-      } else if (customFilters.status === 'active') {
-        matchesStatus = ['pending', 'admin_processing', 'partial_received'].includes(app.status);
-      } else if (customFilters.status === 'received') {
-        matchesStatus = app.status === 'received';
-      }
-    }
-    
-    // Фильтр просроченных
-    let matchesOverdue = true;
-    if (customFilters.overdue === 'true') {
-      matchesOverdue = app.status === 'pending' && getDaysSince(app.created_at) > 2;
-    }
-    
-    const matchesDate = !dateFilter || app.created_at?.startsWith(dateFilter);
-    const matchesViewed = viewedFilter === 'all' ||
-      (viewedFilter === 'new' && !app.viewed_by_supply_admin);
-    
-    return matchesSearch && matchesStatus && matchesDate && matchesViewed && matchesOverdue;
-  });
-}, [applications, allApplications, isAdminMode, searchTerm, statusFilter, dateFilter, viewedFilter]);
+  }, [applications, allApplications, isAdminMode, searchTerm, statusFilter, dateFilter, viewedFilter]);
 
   const uniqueDates = useMemo(() => {
     const apps = isAdminMode ? allApplications : applications;
@@ -4164,9 +4142,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
     setStatusFilter('all');
     setDateFilter('');
     setViewedFilter('all');
-  // ✅ ДОБАВИТЬ: сброс страницы при сбросе фильтров
-  setPage(1);
-};
+  };
 
   // ─────────────────────────────────────────────────────────
   // 🔐 ADMIN FUNCTIONS
@@ -4361,15 +4337,10 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
- // App.jsx - функция loadApplications (примерно строка 2150-2250)
-
-const loadApplications = useCallback(async (pageNumber = 1) => {
+  const loadApplications = useCallback(async (pageNumber = 1) => {
   if (!user || !userCompanyId) return;
   
-  // ✅ Защита от множественных вызовов
-  if (isLoading) return;
-  
-  // ✅ Проверка кэша
+  // ✅ Проверить кэш
   const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
@@ -4377,13 +4348,6 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
     setTotalPages(cached.totalPages);
     setCompanyUsers(cached.usersData || []);
     setComments(cached.commentsMap || {});
-    
-    // ✅ КОРРЕКТИРОВКА: если текущая страница больше общего количества страниц
-    if (pageNumber > cached.totalPages) {
-      console.log('🔄 Корректировка страницы (кэш):', pageNumber, '->', Math.max(1, cached.totalPages));
-      setPage(Math.max(1, cached.totalPages));
-    }
-    
     setIsLoading(false);
     return;
   }
@@ -4396,23 +4360,14 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
       .eq('company_id', userCompanyId);
     const totalPages = Math.ceil(count / ITEMS_PER_PAGE);
     setTotalPages(totalPages);
-    
-    // ✅ КОРРЕКТИРОВКА: если текущая страница больше общего количества страниц
-    if (pageNumber > totalPages) {
-      console.log('🔄 Корректировка страницы (БД):', pageNumber, '->', Math.max(1, totalPages));
-      setPage(Math.max(1, totalPages));
-    }
-    
     let query = supabase
       .from('applications')
       .select('*')
       .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false })
       .range((pageNumber - 1) * ITEMS_PER_PAGE, pageNumber * ITEMS_PER_PAGE - 1);
-    
     if (userRole === 'master') query = query.eq('user_id', user?.id);
     if (userRole === 'accountant') query = query.eq('status', 'received');
-    
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
     setApplications(userApps);
@@ -4469,46 +4424,10 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
     setIsLoading(false);
   }
 }, [user, userCompanyId, userRole, isAdminMode, showNotification]);
-// App.jsx - добавьте этот useEffect ПОСЛЕ loadApplications
-
-// ✅ Синхронизация page при изменении totalPages
-useEffect(() => {
-  // ✅ Только если страница больше общего количества - корректируем
-  if (totalPages > 0 && page > totalPages) {
-    console.log('🔄 Синхронизация страницы (useEffect):', page, '->', Math.max(1, totalPages));
-    setPage(Math.max(1, totalPages));
-  }
-  // ✅ Если страница меньше 1 - корректируем
-  if (page < 1 && totalPages > 0) {
-    console.log('🔄 Синхронизация страницы (useEffect):', page, '-> 1');
-    setPage(1);
-  }
-}, [totalPages, page]);
 
   useEffect(() => {
-  // ✅ Добавляем флаг, чтобы избежать повторных загрузок
-  let isMounted = true;
-  let loadTimeout = null;
-  
-  const loadData = async () => {
-    if (!user || !userCompanyId) return;
-    
-    // ✅ Если страница только что перезагрузилась, даём время на стабилизацию
-    clearTimeout(loadTimeout);
-    loadTimeout = setTimeout(() => {
-      if (isMounted) {
-        loadApplications(page);
-      }
-    }, 100);
-  };
-  
-  loadData();
-  
-  return () => {
-    isMounted = false;
-    clearTimeout(loadTimeout);
-  };
-}, [user, userCompanyId, userRole, isAdminMode, page, loadApplications]);
+    loadApplications(page);
+  }, [user, userCompanyId, userRole, isAdminMode, page, loadApplications]);
   // 💰 Load company plan & quota
 useEffect(() => {
   const loadPlan = async () => {
@@ -6536,7 +6455,7 @@ else if (path === '/integration') setCurrentView('integration');
               ...prev,
               [appId]: !(prev[appId] || false)
             }))}
-            onPageChange={handlePageChange}
+            onPageChange={setPage}
             searchTerm={searchTerm}
             statusFilter={statusFilter}
             dateFilter={dateFilter}
@@ -6590,7 +6509,6 @@ else if (path === '/integration') setCurrentView('integration');
         
         {currentView === 'inwork' && (
           <ApplicationList
-          key={`inwork-${page}-${statusFilter}-${searchTerm}-${applications.length}`}
             applications={filteredApplications.filter(app => {
               return isApplicationActive(app.status) &&
                 (userRole !== 'master' || app.user_id === user?.id);
@@ -6618,7 +6536,7 @@ else if (path === '/integration') setCurrentView('integration');
               ...prev,
               [appId]: !(prev[appId] || false)
             }))}
-            onPageChange={handlePageChange}
+            onPageChange={setPage}
             searchTerm={searchTerm}
             statusFilter={statusFilter}
             dateFilter={dateFilter}
@@ -6668,7 +6586,7 @@ else if (path === '/integration') setCurrentView('integration');
               ...prev,
               [appId]: !(prev[appId] || false)
             }))}
-            onPageChange={handlePageChange}
+            onPageChange={setPage}
             searchTerm={searchTerm}
             statusFilter={statusFilter}
             dateFilter={dateFilter}
@@ -6718,7 +6636,7 @@ else if (path === '/integration') setCurrentView('integration');
               ...prev,
               [appId]: !(prev[appId] || false)
             }))}
-            onPageChange={handlePageChange}
+            onPageChange={setPage}
             searchTerm={searchTerm}
             statusFilter={statusFilter}
             dateFilter={dateFilter}
@@ -6977,26 +6895,7 @@ else if (path === '/integration') setCurrentView('integration');
     companyId={userCompanyId}
     applications={applications}
     showNotification={showNotification}
-      user={user}
-    setApplications={setApplications}
-    loadApplications={loadApplications}
-    page={page}
-    onMergeComplete={async ({ skipReload } = {}) => {
-      // ✅ Если skipReload === true - не перезагружаем данные
-      if (skipReload) {
-        console.log('📦 Объединение завершено, данные уже обновлены локально');
-        return;
-      }
-      
-      // ✅ Иначе - обновляем кэш и перезагружаем
-      const cacheKey = `applications_${userCompanyId}_page_${page}`;
-      cacheManager.delete('applications', cacheKey);
-      
-      // ✅ Перезагружаем данные с задержкой, чтобы БД успела обновиться
-      setTimeout(() => {
-        loadApplications(page);
-      }, 300);
-    }}
+    userRole={userRole}
   />
 )}
 {currentView === 'estimates' && (
