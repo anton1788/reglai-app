@@ -925,8 +925,8 @@ const ApplicationList = memo(({
         )}
 
         {/* Pagination for desktop */}
-       {/* Pagination for desktop */}
-{!isMobile && totalPages > 1 && (
+      {/* Pagination for desktop - ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ ЗАЯВОК БОЛЬШЕ 20 */}
+{!isMobile && !isLoading && applications.length > 0 && totalPages > 1 && applications.length > 20 && (
   <nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')} role="navigation">
     <button
       onClick={() => onPageChange(Math.max(1, page - 1))}
