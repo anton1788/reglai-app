@@ -1184,20 +1184,24 @@ const [waitingWorker, setWaitingWorker] = useState(null);
 const pageChangeThrottleRef = useRef(null);
 
 // ⬇️ ВСТАВИТЬ СЮДА ⬇️
+// App.jsx - функция handlePageChange
 const handlePageChange = useCallback((newPage) => {
-  // ✅ Защита от двойного вызова
+  console.log('📄 handlePageChange вызван с:', newPage, 'текущий page:', page, 'totalPages:', totalPages);
+  
   if (pageChangeThrottleRef.current) {
     clearTimeout(pageChangeThrottleRef.current);
   }
   
   pageChangeThrottleRef.current = setTimeout(() => {
     if (newPage >= 1 && newPage <= totalPages) {
-      console.log('📄 Переход на страницу:', newPage);
+      console.log('📄 Установка страницы:', newPage);
       setPage(newPage);
+    } else {
+      console.log('⚠️ Страница вне диапазона:', newPage, 'допустимо 1-', totalPages);
     }
     pageChangeThrottleRef.current = null;
   }, 100);
-}, [totalPages]);
+}, [totalPages, page]);
 
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK

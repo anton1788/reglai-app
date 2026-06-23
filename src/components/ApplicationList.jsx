@@ -668,12 +668,6 @@ const ApplicationList = memo(({
     if (pageChangeTimeoutRef.current) {
       clearTimeout(pageChangeTimeoutRef.current);
     }
-    console.log('📄 ApplicationList рендер:', {
-  page,
-  totalPages,
-  applicationsCount: applications.length,
-  title
-});
     
     pageChangeTimeoutRef.current = setTimeout(() => {
       console.log('➡️ Переход на страницу:', page + 1);
