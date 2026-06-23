@@ -1183,38 +1183,19 @@ const [waitingWorker, setWaitingWorker] = useState(null);
   // ⬇️ ВСТАВИТЬ СЮДА ⬇️
 const pageChangeThrottleRef = useRef(null);
 
-// ⬇️ ВСТАВИТЬ СЮДА ⬇️
-// App.jsx - функция handlePageChange
-// App.jsx - функция handlePageChange
+// App.jsx - ЗАМЕНИТЕ ВЕСЬ handlePageChange
+
 const handlePageChange = useCallback((newPage) => {
-  console.log('📄 handlePageChange вызван с:', newPage, 'текущий page:', page, 'totalPages:', totalPages);
+  console.log('📄 handlePageChange вызван с:', newPage);
   
-  // ✅ Если newPage совпадает с текущим page - ничего не делаем
-  if (newPage === page) {
-    console.log('⏸️ Страница уже', newPage);
-    return;
+  // ✅ Просто устанавливаем страницу, без сложной логики
+  if (newPage >= 1 && newPage <= totalPages) {
+    console.log('📄 Установка страницы:', newPage);
+    setPage(newPage);
+  } else {
+    console.log('⚠️ Страница вне диапазона:', newPage);
   }
-  
-  if (pageChangeThrottleRef.current) {
-    clearTimeout(pageChangeThrottleRef.current);
-  }
-  
-  pageChangeThrottleRef.current = setTimeout(() => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      console.log('📄 Установка страницы:', newPage);
-      setPage(newPage);
-    } else {
-      console.log('⚠️ Страница вне диапазона:', newPage, 'допустимо 1-', totalPages);
-      // ✅ Если страница вне диапазона - переходим на последнюю существующую
-      if (newPage > totalPages) {
-        setPage(totalPages);
-      } else if (newPage < 1) {
-        setPage(1);
-      }
-    }
-    pageChangeThrottleRef.current = null;
-  }, 100);
-}, [totalPages, page]);
+}, [totalPages]);
 
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK
@@ -3301,6 +3282,12 @@ if (user?.id && userCompanyId) {
   };
 
   const [showObjectSuggestions, setShowObjectSuggestions] = useState(false);
+
+  useEffect(() => {
+  // ✅ Принудительная установка страницы 1 при монтировании
+  console.log('🔧 Принудительная установка страницы 1');
+  setPage(1);
+}, []);
 
   const objectHistory = useMemo(() => {
     const objects = new Set();

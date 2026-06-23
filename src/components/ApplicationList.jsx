@@ -599,10 +599,6 @@ const ApplicationList = memo(({
   const [commentDrafts, setCommentDrafts] = useState({});
   const commentTimerRef = useRef({});
 
-  // ✅ ЗАЩИТА ОТ ДВОЙНЫХ ВЫЗОВОВ ПАГИНАЦИИ
-  const lastPageCallRef = useRef(null);
-  const pageChangeTimeoutRef = useRef(null);
-
   // ✅ Инжект стилей
   useEffect(() => {
     const styleEl = document.createElement('style');
@@ -611,84 +607,12 @@ const ApplicationList = memo(({
     return () => document.head.removeChild(styleEl);
   }, []);
 
-  // ✅ Загрузка следующей страницы при прокрутке (с защитой)
+  // ✅ Загрузка следующей страницы при прокрутке
   useEffect(() => {
     if (inView && !isLoading && page < totalPages) {
-      const now = Date.now();
-      if (lastPageCallRef.current && (now - lastPageCallRef.current) < 500) {
-        console.log('🛑 Пропускаем частый вызов infinite scroll');
-        return;
-      }
-      lastPageCallRef.current = now;
-      
-      if (pageChangeTimeoutRef.current) {
-        clearTimeout(pageChangeTimeoutRef.current);
-      }
-      
-      pageChangeTimeoutRef.current = setTimeout(() => {
-        onPageChange(page + 1);
-        pageChangeTimeoutRef.current = null;
-      }, 50);
+      onPageChange(page + 1);
     }
   }, [inView, isLoading, page, totalPages, onPageChange]);
-
-  // ✅ Обработчик "Назад" с защитой от двойного клика
-  // ApplicationList.jsx - Обработчик "Назад"
-const handlePrevPage = useCallback(() => {
-  if (page <= 1) {
-    console.log('⏸️ Уже на первой странице');
-    return;
-  }
-  
-  const now = Date.now();
-  if (lastPageCallRef.current && (now - lastPageCallRef.current) < 300) {
-    console.log('🛑 Пропускаем двойной клик "Назад"');
-    return;
-  }
-  lastPageCallRef.current = now;
-  
-  if (pageChangeTimeoutRef.current) {
-    clearTimeout(pageChangeTimeoutRef.current);
-  }
-  
-  pageChangeTimeoutRef.current = setTimeout(() => {
-    const newPage = Math.max(1, page - 1);
-    console.log('⬅️ Переход на страницу:', newPage, '(было:', page, ')');
-    onPageChange(newPage);
-    pageChangeTimeoutRef.current = null;
-  }, 50);
-}, [page, onPageChange]);
-
-  // ✅ Обработчик "Вперёд" с защитой от двойного клика
-  const handleNextPage = useCallback(() => {
-    if (page >= totalPages) return;
-    
-    const now = Date.now();
-    if (lastPageCallRef.current && (now - lastPageCallRef.current) < 300) {
-      console.log('🛑 Пропускаем двойной клик "Вперёд"');
-      return;
-    }
-    lastPageCallRef.current = now;
-    
-    if (pageChangeTimeoutRef.current) {
-      clearTimeout(pageChangeTimeoutRef.current);
-    }
-    
-    pageChangeTimeoutRef.current = setTimeout(() => {
-      console.log('➡️ Переход на страницу:', page + 1);
-      onPageChange(page + 1);
-      pageChangeTimeoutRef.current = null;
-    }, 50);
-  }, [page, totalPages, onPageChange]);
-
-  // ✅ Очистка таймеров
-  useEffect(() => {
-    return () => {
-      if (pageChangeTimeoutRef.current) {
-        clearTimeout(pageChangeTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // ✅ Автосохранение комментариев
   const loadCommentDraft = useCallback((applicationId) => {
@@ -960,34 +884,42 @@ const handlePrevPage = useCallback(() => {
           </div>
         )}
 
-        {/* ✅ Pagination for desktop с защитой от двойных вызовов */}
-
-{/* ✅ Pagination for desktop с защитой от двойных вызовов */}
-{!isMobile && totalPages > 1 && (
-  <nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')} role="navigation">
-    <button
-      onClick={handlePrevPage}
-      disabled={page <= 1}
-      className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-      aria-label={t('previousPage')}
-    >
-      <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-      {t('prev')}
-    </button>
-    <span className="px-4 py-2.5 text-gray-700 dark:text-gray-300 font-medium bg-gray-100 dark:bg-gray-700 rounded-xl" aria-current="page">
-      {formatNumber(Math.min(page, totalPages))} / {formatNumber(totalPages)}
-    </span>
-    <button
-      onClick={handleNextPage}
-      disabled={page >= totalPages}
-      className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-      aria-label={t('nextPage')}
-    >
-      {t('next')}
-      <ArrowLeft className="w-4 h-4 rotate-180" aria-hidden="true" />
-    </button>
-  </nav>
-)}
+        {/* ✅ Pagination for desktop */}
+        {!isMobile && totalPages > 1 && (
+          <nav className="flex justify-center mt-6 gap-2" aria-label={t('pagination')} role="navigation">
+            <button
+              onClick={() => {
+                console.log('⬅️ Клик "Назад", page:', page);
+                if (page > 1) {
+                  onPageChange(page - 1);
+                }
+              }}
+              disabled={page <= 1}
+              className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+              aria-label={t('previousPage')}
+            >
+              <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+              {t('prev')}
+            </button>
+            <span className="px-4 py-2.5 text-gray-700 dark:text-gray-300 font-medium bg-gray-100 dark:bg-gray-700 rounded-xl" aria-current="page">
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => {
+                console.log('➡️ Клик "Вперёд", page:', page);
+                if (page < totalPages) {
+                  onPageChange(page + 1);
+                }
+              }}
+              disabled={page >= totalPages}
+              className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+              aria-label={t('nextPage')}
+            >
+              {t('next')}
+              <ArrowLeft className="w-4 h-4 rotate-180" aria-hidden="true" />
+            </button>
+          </nav>
+        )}
       </div>
     </div>
   );
