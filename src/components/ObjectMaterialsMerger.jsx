@@ -21,17 +21,7 @@ const ObjectMaterialsMerger = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedObjects, setExpandedObjects] = useState(new Set());
 
-  // Фильтрация объектов по поиску
-  const filteredObjects = useMemo(() => {
-    if (!searchQuery.trim()) return objectsWithApplications;
-    const query = searchQuery.toLowerCase().trim();
-    return objectsWithApplications.filter(obj => 
-      obj.name.toLowerCase().includes(query) ||
-      obj.foremen?.some(f => f.toLowerCase().includes(query))
-    );
-  }, [objectsWithApplications, searchQuery]);
-
-  // Группировка заявок по объектам (улучшена)
+  // ✅ 1. СНАЧАЛА ГРУППИРОВКА ЗАЯВОК ПО ОБЪЕКТАМ
   const objectsWithApplications = useMemo(() => {
     const objects = {};
     
@@ -116,6 +106,16 @@ const ObjectMaterialsMerger = ({
       }))
       .sort((a, b) => b.mergeScore - a.mergeScore);
   }, [applications]);
+
+  // ✅ 2. ПОТОМ ФИЛЬТРАЦИЯ (использует objectsWithApplications)
+  const filteredObjects = useMemo(() => {
+    if (!searchQuery.trim()) return objectsWithApplications;
+    const query = searchQuery.toLowerCase().trim();
+    return objectsWithApplications.filter(obj => 
+      obj.name.toLowerCase().includes(query) ||
+      obj.foremen?.some(f => f.toLowerCase().includes(query))
+    );
+  }, [objectsWithApplications, searchQuery]);
 
   // Улучшенное обнаружение дубликатов
   const duplicates = useMemo(() => {
