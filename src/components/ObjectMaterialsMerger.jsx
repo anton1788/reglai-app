@@ -176,7 +176,7 @@ const ObjectMaterialsMerger = ({
     return result;
   }, [objectsWithApplications, viewMode, searchQuery]);
 
-  // ===== ОБНАРУЖЕНИЕ ДУБЛИКАТОВ =====
+  // ===== ОБНАРУЖЕНИЕ ДУБЛИКАТОВ МЕЖДУ ЗАЯВКАМИ =====
   const duplicates = useMemo(() => {
     const allMaterials = {};
     
@@ -214,6 +214,109 @@ const ObjectMaterialsMerger = ({
       .filter(m => m.applications.length > 1)
       .sort((a, b) => b.applications.length - a.applications.length);
   }, [applications, showArchived]);
+
+  // ===== ОБНАРУЖЕНИЕ ДУБЛИРУЮЩИХСЯ МАТЕРИАЛОВ ВНУТРИ ОДНОЙ ЗАЯВКИ =====
+  const findDuplicatesInsideApplications = useMemo(() => {
+    const result = [];
+    
+    applications.forEach(app => {
+      if (app.status === 'consolidated') return;
+      
+      const materialMap = new Map();
+      
+      app.materials?.forEach((mat, index) => {
+        const key = mat.description.toLowerCase().trim();
+        const existing = materialMap.get(key);
+        
+        if (existing) {
+          // Нашли дубль внутри заявки
+          result.push({
+            applicationId: app.id,
+            applicationName: app.object_name,
+            materialName: mat.description,
+            unit: mat.unit || 'шт',
+            occurrences: [
+              { index: existing.index, quantity: existing.quantity },
+              { index: index, quantity: Number(mat.quantity) || 0 }
+            ],
+            totalQuantity: existing.quantity + (Number(mat.quantity) || 0),
+            totalReceived: (existing.received || 0) + (Number(mat.received) || 0)
+          });
+        } else {
+          materialMap.set(key, {
+            index: index,
+            quantity: Number(mat.quantity) || 0,
+            received: Number(mat.received) || 0
+          });
+        }
+      });
+    });
+    
+    return result;
+  }, [applications]);
+
+  // ===== ОБЪЕДИНЕНИЕ ДУБЛЕЙ ВНУТРИ ОДНОЙ ЗАЯВКИ =====
+  const consolidateApplicationMaterials = useCallback(async (applicationId) => {
+    if (!applicationId) return { success: false, error: 'Нет ID заявки' };
+    
+    // Находим заявку
+    const app = applications.find(a => a.id === applicationId);
+    if (!app || !app.materials) {
+      return { success: false, error: 'Заявка не найдена' };
+    }
+    
+    // Группируем материалы по названию
+    const materialMap = new Map();
+    app.materials.forEach(mat => {
+      const key = mat.description.toLowerCase().trim();
+      const existing = materialMap.get(key);
+      if (existing) {
+        existing.quantity += Number(mat.quantity) || 0;
+        existing.received += Number(mat.received) || 0;
+        existing._mergedFrom = existing._mergedFrom || [];
+        existing._mergedFrom.push(mat);
+      } else {
+        materialMap.set(key, { 
+          ...mat, 
+          quantity: Number(mat.quantity) || 0,
+          received: Number(mat.received) || 0 
+        });
+      }
+    });
+    
+    const consolidatedMaterials = Array.from(materialMap.values());
+    const removedCount = app.materials.length - consolidatedMaterials.length;
+    
+    if (removedCount === 0) {
+      showNotification('Нет дублей для объединения', 'info');
+      return { success: false, removedCount: 0 };
+    }
+    
+    // Обновляем в БД
+    const { error } = await supabase
+      .from('applications')
+      .update({ 
+        materials: consolidatedMaterials,
+        status_history: [
+          ...(app.status_history || []),
+          {
+            action: 'consolidated_duplicates',
+            timestamp: new Date().toISOString(),
+            details: `Объединено ${removedCount} дублирующихся материалов`
+          }
+        ]
+      })
+      .eq('id', applicationId);
+    
+    if (error) throw error;
+    
+    showNotification(`✅ Объединено ${removedCount} дублей в заявке "${app.object_name}"`, 'success');
+    
+    // Обновляем UI
+    if (onRefresh) onRefresh();
+    
+    return { success: true, removedCount };
+  }, [applications, supabase, showNotification, onRefresh]);
 
   // ===== ФУНКЦИЯ ОБЪЕДИНЕНИЯ =====
   const mergeObjectMaterials = useCallback(async (objectName, applicationsToMerge) => {
@@ -480,15 +583,17 @@ const ObjectMaterialsMerger = ({
     const totalApps = activeApps.length;
     const totalObjects = objectsWithApplications.filter(o => o.activeApplications > 0).length;
     const totalDuplicates = duplicates.length;
+    const totalInsideDuplicates = findDuplicatesInsideApplications.length;
     const mergeableObjects = objectsWithApplications.filter(o => o.mergeable).length;
     const totalCost = objectsWithApplications.reduce((sum, o) => sum + o.totalCost, 0);
     
-    return { totalApps, totalObjects, totalDuplicates, mergeableObjects, totalCost };
-  }, [applications, objectsWithApplications, duplicates]);
+    return { totalApps, totalObjects, totalDuplicates, totalInsideDuplicates, mergeableObjects, totalCost };
+  }, [applications, objectsWithApplications, duplicates, findDuplicatesInsideApplications]);
 
   // ===== КОМПОНЕНТ КАРТОЧКИ ОБЪЕКТА =====
   const ObjectCard = useCallback(({ obj }) => {
     const duplicateCount = duplicates.filter(d => d.objectName === obj.name).length;
+    const insideDuplicateCount = findDuplicatesInsideApplications.filter(d => d.applicationName === obj.name).length;
     const isExpanded = expandedObjects.has(obj.name);
     const canMerge = obj.activeApplications >= 2 && !obj.isConsolidated;
     const isMerging = mergingInProgress.has(obj.name);
@@ -521,6 +626,13 @@ const ObjectMaterialsMerger = ({
               </h3>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Бейдж с дублями внутри заявок */}
+              {insideDuplicateCount > 0 && (
+                <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-full text-xs flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {insideDuplicateCount}
+                </span>
+              )}
               {duplicateCount > 0 && (
                 <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 rounded-full text-xs flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
@@ -590,6 +702,60 @@ const ObjectMaterialsMerger = ({
               ))}
             </div>
             
+            {/* ДУБЛИ ВНУТРИ ЗАЯВОК - КРАСНАЯ КАРТОЧКА */}
+            {insideDuplicateCount > 0 && (
+              <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-red-700 dark:text-red-300 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Обнаружены дубли внутри заявок!
+                    </p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                      Одинаковые материалы указаны несколько раз в одной заявке
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const appId = obj.applications[0]?.id;
+                      if (!appId) return;
+                      await consolidateApplicationMaterials(appId);
+                    }}
+                    className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    <Merge className="w-3.5 h-3.5" />
+                    Объединить дубли
+                  </button>
+                </div>
+                
+                {/* Список дублей */}
+                <div className="mt-2 space-y-1">
+                  {findDuplicatesInsideApplications
+                    .filter(d => d.applicationName === obj.name)
+                    .slice(0, 3)
+                    .map((d, idx) => (
+                      <div key={idx} className="text-xs text-red-600 dark:text-red-400 flex justify-between items-center bg-white/50 dark:bg-gray-800/50 px-2 py-1 rounded">
+                        <span>
+                          • {d.materialName}
+                          <span className="text-gray-500 text-[10px] ml-1">
+                            (повторяется {d.occurrences.length} раза)
+                          </span>
+                        </span>
+                        <span className="font-medium">
+                          всего {d.totalQuantity} {d.unit}
+                        </span>
+                      </div>
+                    ))}
+                  {insideDuplicateCount > 3 && (
+                    <p className="text-xs text-red-500">
+                      + ещё {insideDuplicateCount - 3}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* ДУБЛИ МЕЖДУ ЗАЯВКАМИ - ЖЁЛТАЯ КАРТОЧКА */}
             {duplicateCount > 0 && (
               <div className="mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg">
                 <p className="text-xs text-yellow-700 dark:text-yellow-300 font-medium">
@@ -598,7 +764,7 @@ const ObjectMaterialsMerger = ({
                 <div className="mt-1 space-y-0.5 max-h-20 overflow-y-auto">
                   {duplicates.filter(d => d.objectName === obj.name).slice(0, 3).map((d, i) => (
                     <p key={i} className="text-xs text-yellow-600 dark:text-yellow-400">
-                      • {d.materialName} ({d.applications.length} заявок, {d.totalQuantity} {d.unit})
+                      • {d.materialName} ({d.applications.length} заявок, всего {d.totalQuantity} {d.unit})
                     </p>
                   ))}
                   {duplicates.filter(d => d.objectName === obj.name).length > 3 && (
@@ -634,7 +800,7 @@ const ObjectMaterialsMerger = ({
         )}
       </div>
     );
-  }, [duplicates, expandedObjects, toggleObject, mergingInProgress, isLoading, mergeObjectMaterials]);
+  }, [duplicates, findDuplicatesInsideApplications, expandedObjects, toggleObject, mergingInProgress, isLoading, mergeObjectMaterials, consolidateApplicationMaterials]);
 
   // ===== МОДАЛЬНОЕ ОКНО ПРЕДПРОСМОТРА =====
   const MergePreviewModal = useCallback(() => {
@@ -836,15 +1002,15 @@ const ObjectMaterialsMerger = ({
         </div>
         <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-xl">
           <div className="text-2xl font-bold text-yellow-600">{stats.totalDuplicates}</div>
-          <div className="text-xs text-gray-600">Потенциальных дублей</div>
+          <div className="text-xs text-gray-600">Дублей между заявками</div>
+        </div>
+        <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-xl">
+          <div className="text-2xl font-bold text-red-600">{stats.totalInsideDuplicates}</div>
+          <div className="text-xs text-gray-600">Дублей внутри заявок</div>
         </div>
         <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-xl">
           <div className="text-2xl font-bold text-green-600">{stats.mergeableObjects}</div>
           <div className="text-xs text-gray-600">Для объединения</div>
-        </div>
-        <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl">
-          <div className="text-2xl font-bold text-purple-600">{stats.totalApps}</div>
-          <div className="text-xs text-gray-600">Активных заявок</div>
         </div>
         <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl">
           <div className="text-2xl font-bold text-blue-600">{stats.totalCost.toLocaleString()} ₽</div>
@@ -912,7 +1078,7 @@ const ObjectMaterialsMerger = ({
             <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <h4 className="font-medium text-yellow-800 dark:text-yellow-300">
-                Обнаружены повторяющиеся материалы ({duplicates.length})
+                Обнаружены повторяющиеся материалы между заявками ({duplicates.length})
               </h4>
               <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
                 Некоторые материалы заказаны в нескольких заявках на одном объекте.
@@ -926,6 +1092,33 @@ const ObjectMaterialsMerger = ({
                 ))}
                 {duplicates.length > 5 && (
                   <span className="text-xs text-yellow-600">+ ещё {duplicates.length - 5}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {findDuplicatesInsideApplications.length > 0 && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-medium text-red-800 dark:text-red-300">
+                ⚠️ Обнаружены дубли внутри заявок ({findDuplicatesInsideApplications.length})
+              </h4>
+              <p className="text-sm text-red-700 dark:text-red-400 mt-1">
+                В некоторых заявках одинаковые материалы указаны несколько раз.
+                Рекомендуем объединить их для упрощения учёта.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {findDuplicatesInsideApplications.slice(0, 5).map((d, i) => (
+                  <span key={i} className="text-xs bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-2 py-0.5 rounded-full">
+                    {d.materialName} ({d.totalQuantity} {d.unit})
+                  </span>
+                ))}
+                {findDuplicatesInsideApplications.length > 5 && (
+                  <span className="text-xs text-red-600">+ ещё {findDuplicatesInsideApplications.length - 5}</span>
                 )}
               </div>
             </div>
