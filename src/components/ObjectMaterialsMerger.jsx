@@ -702,58 +702,69 @@ const ObjectMaterialsMerger = ({
               ))}
             </div>
             
-            {/* ДУБЛИ ВНУТРИ ЗАЯВОК - КРАСНАЯ КАРТОЧКА */}
-            {insideDuplicateCount > 0 && (
-              <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-red-700 dark:text-red-300 flex items-center gap-1.5">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      Обнаружены дубли внутри заявок!
-                    </p>
-                    <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
-                      Одинаковые материалы указаны несколько раз в одной заявке
-                    </p>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      const appId = obj.applications[0]?.id;
-                      if (!appId) return;
-                      await consolidateApplicationMaterials(appId);
-                    }}
-                    className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1.5"
-                  >
-                    <Merge className="w-3.5 h-3.5" />
-                    Объединить дубли
-                  </button>
-                </div>
-                
-                {/* Список дублей */}
-                <div className="mt-2 space-y-1">
-                  {findDuplicatesInsideApplications
-                    .filter(d => d.applicationName === obj.name)
-                    .slice(0, 3)
-                    .map((d, idx) => (
-                      <div key={idx} className="text-xs text-red-600 dark:text-red-400 flex justify-between items-center bg-white/50 dark:bg-gray-800/50 px-2 py-1 rounded">
-                        <span>
-                          • {d.materialName}
-                          <span className="text-gray-500 text-[10px] ml-1">
-                            (повторяется {d.occurrences.length} раза)
-                          </span>
-                        </span>
-                        <span className="font-medium">
-                          всего {d.totalQuantity} {d.unit}
-                        </span>
-                      </div>
-                    ))}
-                  {insideDuplicateCount > 3 && (
-                    <p className="text-xs text-red-500">
-                      + ещё {insideDuplicateCount - 3}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
+            {/* ДУБЛИ ВНУТРИ ЗАЯВОК - ОБЩАЯ КНОПКА */}
+{insideDuplicateCount > 0 && (
+  <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-xs font-medium text-red-700 dark:text-red-300 flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5" />
+          Обнаружены дубли внутри заявок ({insideDuplicateCount})
+        </p>
+        <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+          Одинаковые материалы указаны несколько раз в заявках
+        </p>
+      </div>
+      <button
+        onClick={async () => {
+          // Находим все заявки объекта с дублями
+          const appIds = [...new Set(
+            findDuplicatesInsideApplications
+              .filter(d => d.applicationName === obj.name)
+              .map(d => d.applicationId)
+          )];
+          
+          let successCount = 0;
+          for (const appId of appIds) {
+            const result = await consolidateApplicationMaterials(appId);
+            if (result.success) successCount++;
+          }
+          
+          showNotification(`✅ Объединено дублей в ${successCount} заявках`, 'success');
+        }}
+        className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1.5"
+      >
+        <Merge className="w-3.5 h-3.5" />
+        Объединить все дубли
+      </button>
+    </div>
+    
+    {/* Список дублей */}
+    <div className="mt-2 space-y-1">
+      {findDuplicatesInsideApplications
+        .filter(d => d.applicationName === obj.name)
+        .slice(0, 3)
+        .map((d, idx) => (
+          <div key={idx} className="text-xs text-red-600 dark:text-red-400 flex justify-between items-center bg-white/50 dark:bg-gray-800/50 px-2 py-1 rounded">
+            <span>
+              • {d.materialName}
+              <span className="text-gray-500 text-[10px] ml-1">
+                (повторяется {d.occurrences.length} раза)
+              </span>
+            </span>
+            <span className="font-medium">
+              всего {d.totalQuantity} {d.unit}
+            </span>
+          </div>
+        ))}
+      {insideDuplicateCount > 3 && (
+        <p className="text-xs text-red-500">
+          + ещё {insideDuplicateCount - 3}
+        </p>
+      )}
+    </div>
+  </div>
+)}
             
             {/* ДУБЛИ МЕЖДУ ЗАЯВКАМИ - ЖЁЛТАЯ КАРТОЧКА */}
             {duplicateCount > 0 && (
