@@ -40,7 +40,9 @@ const Navbar = ({
   onToggleAdminMode,
   isCompanyOwner = false,
   companyId = null,
-  supabase = null
+  supabase = null,
+  // ✅ НОВЫЙ ПРОП — счетчик для объединения
+  mergeableCount = 0
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -176,9 +178,16 @@ const Navbar = ({
       items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
     }
 
-    // Объединение заявок (для manager и supply_admin)
-    if (userRole === 'manager' || userRole === 'supply_admin') {
-      items.push({ id: 'merge', label: 'Объединение заявок', icon: Merge, path: '/merge' });
+    // ============================================
+    // ✅ ОБЪЕДИНЕНИЕ ЗАЯВОК — для manager, supply_admin, director, владельца
+    // ============================================
+    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
+      items.push({ 
+        id: 'merge', 
+        label: `Объединение${mergeableCount > 0 ? ` (${mergeableCount})` : ''}`, 
+        icon: Merge, 
+        path: '/merge' 
+      });
     }
 
     // Для мастера и прораба - только заявки (свои), история
@@ -201,11 +210,6 @@ const Navbar = ({
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
       items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
     }
-
-    // ============================================
-    // 🆕 ИСПРАВЛЕННЫЕ ПУНКТЫ - доступны для:
-    // Бухгалтер, Руководитель, Администратор снабжения
-    // ============================================
 
     // ✅ API - для бухгалтера, руководителя, администратора снабжения
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
@@ -394,7 +398,7 @@ const Navbar = ({
               </div>
             )}
 
-            {/* Быстрые действия - обновлены для accountant */}
+            {/* Быстрые действия */}
             {(userRole === 'accountant' || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'master' || userRole === 'foreman' || isCompanyOwner) && (
               <div className="relative group">
                 <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
@@ -433,7 +437,6 @@ const Navbar = ({
                       <FileText className="w-4 h-4 text-purple-500" />
                       Создать документ
                     </button>
-                    {/* Быстрые действия для смет и отчётов - обновлены для accountant */}
                     {(userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) && (
                       <>
                         <button 
@@ -685,7 +688,8 @@ const Navbar = ({
                   (item.id === 'estimates' && currentPage === 'estimates') ||
                   (item.id === 'reports' && currentPage === 'reports') ||
                   (item.id === 'integration' && currentPage === 'integration') ||
-                  (item.id === 'api' && currentPage === 'api');
+                  (item.id === 'api' && currentPage === 'api') ||
+                  (item.id === 'merge' && currentPage === 'merge');
                 
                 return (
                   <button
@@ -710,6 +714,11 @@ const Navbar = ({
                     {item.id === 'cart' && cartItemsCount > 0 && (
                       <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center">
                         {cartItemsCount}
+                      </span>
+                    )}
+                    {item.id === 'merge' && mergeableCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-white text-xs rounded-full flex items-center justify-center">
+                        {mergeableCount}
                       </span>
                     )}
                   </button>
@@ -776,7 +785,8 @@ const Navbar = ({
                 (item.id === 'estimates' && currentPage === 'estimates') ||
                 (item.id === 'reports' && currentPage === 'reports') ||
                 (item.id === 'integration' && currentPage === 'integration') ||
-                (item.id === 'api' && currentPage === 'api');
+                (item.id === 'api' && currentPage === 'api') ||
+                (item.id === 'merge' && currentPage === 'merge');
               
               return (
                 <button
@@ -801,6 +811,11 @@ const Navbar = ({
                   {item.id === 'cart' && cartItemsCount > 0 && (
                     <span className="px-2 py-0.5 bg-orange-500 text-white text-xs rounded-full">
                       {cartItemsCount}
+                    </span>
+                  )}
+                  {item.id === 'merge' && mergeableCount > 0 && (
+                    <span className="px-2 py-0.5 bg-indigo-500 text-white text-xs rounded-full">
+                      {mergeableCount}
                     </span>
                   )}
                 </button>

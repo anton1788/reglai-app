@@ -1277,6 +1277,20 @@ const featureAdoption = useMemo(() => {
   );
 }, [companyUsers, applications, allApplications, isAdminMode, auditLogs]);
 
+// ===== КОЛИЧЕСТВО ОБЪЕКТОВ ДЛЯ ОБЪЕДИНЕНИЯ =====
+const mergeableCount = useMemo(() => {
+  const groups = {};
+  applications.forEach(app => {
+    if (app.status === 'consolidated') return;
+    if (!groups[app.object_name]) {
+      groups[app.object_name] = [];
+    }
+    groups[app.object_name].push(app);
+  });
+  return Object.values(groups).filter(group => group.length >= 2).length;
+}, [applications]);
+
+
   // ─────────────────────────────────────────────────────────
   // 🔔 ENHANCED NOTIFICATIONS (Pattern #4: Toast with undo)
   // ─────────────────────────────────────────────────────────
@@ -6260,82 +6274,85 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-[#4A6572]/5 to-transparent rounded-full blur-3xl"></div>
       </div>
       <Navbar
-        user={user}
-        companyName={userCompany}
-        userRole={userRole}
-        onLogout={handleLogout}
-        onNavigate={(path) => {
-  console.log('🔍 Навигация:', path);
-  
-  // 🏠 ГЛАВНАЯ - умное перенаправление по ролям
-  if (path === '/') {
-    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-      setCurrentView('managerDashboard');
-    } else if (userRole === 'accountant') {
-      setCurrentView('accountantDashboard');
-    } else if (userRole === 'client') {
-      setCurrentView('clientDashboard');
-    } else {
-      setCurrentView('create');
+  user={user}
+  companyName={userCompany}
+  userRole={userRole}
+  onLogout={handleLogout}
+  onNavigate={(path) => {
+    console.log('🔍 Навигация:', path);
+    
+    // 🏠 ГЛАВНАЯ - умное перенаправление по ролям
+    if (path === '/') {
+      if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+        setCurrentView('managerDashboard');
+      } else if (userRole === 'accountant') {
+        setCurrentView('accountantDashboard');
+      } else if (userRole === 'client') {
+        setCurrentView('clientDashboard');
+      } else {
+        setCurrentView('create');
+      }
+      return;
     }
-    return;
-  }
-  else if (path === '/estimates') setCurrentView('estimates');
-else if (path === '/reports') setCurrentView('reports');
-else if (path === '/integration') setCurrentView('integration');
-  
-  // Остальные маршруты
-  if (path === '/applications') setCurrentView('inwork');
-  else if (path === '/applications/new') setCurrentView('create');
-  else if (path === '/warehouse') setCurrentView('warehouse');
-  else if (path === '/clients') setCurrentView('clients');
-  else if (path === '/analytics') setCurrentView('analytics');
-  else if (path === '/profile') setCurrentView('profile');
-  else if (path === '/documents') setCurrentView('documents');
-  else if (path === '/chat') setCurrentView('chat');
-  else if (path === '/calendar') setCurrentView('calendar');
-  else if (path === '/settings') setCurrentView('settings');
-  else if (path === '/tariffs') setCurrentView('tariffs');
-  else if (path === '/companyProfile') setCurrentView('companyProfile');
-  else if (path === '/inwork') setCurrentView('inwork');
-  else if (path === '/history') setCurrentView('history');
-  else if (path === '/approvals') setCurrentView('approvals');
-  else if (path === '/employees') setCurrentView('employees');
-  else if (path === '/api') setCurrentView('api');
-  else if (path === '/audit') setCurrentView('audit');
-  else if (path === '/tasks') setCurrentView('tasks');
-  else if (path === '/help') setCurrentView('help');
-  else if (path === '/superAdmin') setCurrentView('superAdmin');
-  else if (path === '/crm-sales') setCurrentView('crm-sales');
-  else if (path === '/merge') setCurrentView('merge');
-  else if (path === '/search') {
-    const params = new URLSearchParams(path.split('?')[1]);
-    const query = params.get('q');
-    if (query) {
-      setSearchTerm(query);
-      setCurrentView('inwork');
+    else if (path === '/estimates') setCurrentView('estimates');
+    else if (path === '/reports') setCurrentView('reports');
+    else if (path === '/integration') setCurrentView('integration');
+    else if (path === '/applications') setCurrentView('inwork');
+    else if (path === '/applications/new') setCurrentView('create');
+    else if (path === '/warehouse') setCurrentView('warehouse');
+    else if (path === '/clients') setCurrentView('clients');
+    else if (path === '/analytics') setCurrentView('analytics');
+    else if (path === '/profile') setCurrentView('profile');
+    else if (path === '/documents') setCurrentView('documents');
+    else if (path === '/chat') setCurrentView('chat');
+    else if (path === '/calendar') setCurrentView('calendar');
+    else if (path === '/settings') setCurrentView('settings');
+    else if (path === '/tariffs') setCurrentView('tariffs');
+    else if (path === '/companyProfile') setCurrentView('companyProfile');
+    else if (path === '/inwork') setCurrentView('inwork');
+    else if (path === '/history') setCurrentView('history');
+    else if (path === '/approvals') setCurrentView('approvals');
+    else if (path === '/employees') setCurrentView('employees');
+    else if (path === '/api') setCurrentView('api');
+    else if (path === '/audit') setCurrentView('audit');
+    else if (path === '/tasks') setCurrentView('tasks');
+    else if (path === '/help') setCurrentView('help');
+    else if (path === '/superAdmin') setCurrentView('superAdmin');
+    else if (path === '/crm-sales') setCurrentView('crm-sales');
+    else if (path === '/merge') setCurrentView('merge');
+    else if (path === '/search') {
+      const params = new URLSearchParams(path.split('?')[1]);
+      const query = params.get('q');
+      if (query) {
+        setSearchTerm(query);
+        setCurrentView('inwork');
+      }
     }
-  }
-  // Для заказчика
-  else if (path === '/client') setCurrentView('clientDashboard');
-  else if (path === '/client/documents') setCurrentView('clientDocuments');
-  else if (path === '/client/chat') setCurrentView('clientChat');
-}}
-        currentPage={currentView}
-        onInvite={() => setShowInviteModal(true)}
-        onOpenTariffs={() => setCurrentView('tariffs')}
-        onOpenCompanyProfile={() => setCurrentView('companyProfile')}
-        isOnline={isOnline}
-        offlineDraftsCount={offlineDrafts.length}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        onToggleLanguage={handleLanguageChange}
-        notifications={[]}
-        pendingApprovalsCount={pendingApprovals?.length || 0}
-        cartItemsCount={formData.cart?.length || 0}
-        isAdminMode={isAdminMode}
-        onToggleAdminMode={() => setIsAdminMode(false)}
-      />
+    // Для заказчика
+    else if (path === '/client') setCurrentView('clientDashboard');
+    else if (path === '/client/documents') setCurrentView('clientDocuments');
+    else if (path === '/client/chat') setCurrentView('clientChat');
+  }}
+  currentPage={currentView}
+  onInvite={() => setShowInviteModal(true)}
+  onOpenTariffs={() => setCurrentView('tariffs')}
+  onOpenCompanyProfile={() => setCurrentView('companyProfile')}
+  isOnline={isOnline}
+  offlineDraftsCount={offlineDrafts.length}
+  theme={theme}
+  onToggleTheme={toggleTheme}
+  onToggleLanguage={handleLanguageChange}
+  notifications={[]}
+  pendingApprovalsCount={pendingApprovals?.length || 0}
+  cartItemsCount={formData.cart?.length || 0}
+  isAdminMode={isAdminMode}
+  onToggleAdminMode={() => setIsAdminMode(false)}
+  isCompanyOwner={isCompanyOwner}
+  companyId={userCompanyId}
+  supabase={supabase}
+  // ✅ НОВЫЙ ПРОП
+  mergeableCount={mergeableCount}
+/>
       {/* 📊 ПРОГРЕСС ОНБОРДИНГА - ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ НЕ ЗАВЕРШЕН */}
 {user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (
   <div className="max-w-7xl mx-auto px-4 pt-2">
