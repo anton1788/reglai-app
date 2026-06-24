@@ -1056,6 +1056,7 @@ const [churnSubmitting, setChurnSubmitting] = useState(false);
 const [churnReasons, setChurnReasons] = useState([]);
 const [initialViewSet, setInitialViewSet] = useState(false); 
 const [selectedClientId, setSelectedClientId] = useState(null);
+const [isSubmitting, setIsSubmitting] = useState(false);
 
 // 🧪 A/B Testing State
 const [abTestVariants, setABTestVariants] = useState({
@@ -2705,20 +2706,24 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
     showNotification('📥 Шаблон скачан', 'success');
   };
 
-  // ─────────────────────────────────────────────────────────
-  // 📤 SUBMIT APPLICATION
-  // ─────────────────────────────────────────────────────────
-  // ─────────────────────────────────────────────────────────
+  
+ // ─────────────────────────────────────────────────────────
 // 📤 SUBMIT APPLICATION — С ИНТЕГРАЦИЕЙ APPROVAL WORKFLOW
 // ─────────────────────────────────────────────────────────
 const handleSubmit = async (e) => {
   e.preventDefault();
 
+  // ✅ ЗАЩИТА ОТ ДВОЙНОГО НАЖАТИЯ
+  if (isSubmitting) {
+    console.log('⏳ Заявка уже отправляется, ожидайте...');
+    return;
+  }
+
   // 🔐 Проверка роли - только прораб, снабженец могут создавать
   if (userRole !== 'master' && userRole !== 'foreman' && userRole !== 'supply_admin' && userRole !== 'client_manager') {
-  showNotification('У вашей роли нет прав на создание заявок', 'error');
-  return;
-}
+    showNotification('У вашей роли нет прав на создание заявок', 'error');
+    return;
+  }
   
   // 🔐 Базовые проверки
   if (!user) {
@@ -2776,15 +2781,10 @@ const handleSubmit = async (e) => {
     status: ITEM_STATUS.PENDING
   }));
   
-// ========== 🔄 ИСПРАВЛЕННАЯ ЛОГИКА МАРШРУТИЗАЦИИ ==========
-// Заявка от мастера ВСЕГДА создается со статусом pending
-let initialStatus = APPLICATION_STATUS.PENDING;
-
-// ✅ Рассчитываем сумму для отображения/логирования (но не для маршрутизации)
-const totalAmount = validMaterials.reduce((sum, m) =>
-  sum + (m.quantity * (m.price || 1000)), 0
-);
-// ========== КОНЕЦ НОВОГО БЛОКА ==========
+  let initialStatus = APPLICATION_STATUS.PENDING;
+  const totalAmount = validMaterials.reduce((sum, m) =>
+    sum + (m.quantity * (m.price || 1000)), 0
+  );
   
   // 🔐 Проверка квоты
   if (currentPlan && !planLoading) {
@@ -2795,47 +2795,31 @@ const totalAmount = validMaterials.reduce((sum, m) =>
     }
   }
 
-  // ============================================================
-// 🔐 ПРОВЕРКА ЛИМИТОВ ДЛЯ БЕСПЛАТНОГО ТАРИФА
-// ============================================================
-
-if (currentPlan?.id === 'basic' || !currentPlan) {
-  try {
-    // 1. Проверка лимита заявок
-    const quota = await checkQuota(supabase, userCompanyId);
-    
-    if (!quota.allowed) {
-      showNotification(
-        `⚠️ Лимит заявок исчерпан (${quota.dailyUsage}/${quota.dailyLimit}). Обновите тариф для продолжения работы.`,
-        'warning'
-      );
-      setCurrentView('tariffs');
-      return;
+  // Проверка лимитов для бесплатного тарифа
+  if (currentPlan?.id === 'basic' || !currentPlan) {
+    try {
+      const quota = await checkQuota(supabase, userCompanyId);
+      if (!quota.allowed) {
+        showNotification(
+          `⚠️ Лимит заявок исчерпан (${quota.dailyUsage}/${quota.dailyLimit}). Обновите тариф.`,
+          'warning'
+        );
+        setCurrentView('tariffs');
+        return;
+      }
+      
+      const materialCheck = await checkMaterialsLimit(supabase, userCompanyId, validMaterials.length);
+      if (!materialCheck.allowed) {
+        showNotification(
+          `⚠️ В бесплатном тарифе максимум ${materialCheck.limit} материалов в заявке.`,
+          'warning'
+        );
+        return;
+      }
+    } catch (err) {
+      console.error('Ошибка проверки лимитов:', err);
     }
-    
-    // 2. Проверка лимита материалов
-    const materialCheck = await checkMaterialsLimit(supabase, userCompanyId, validMaterials.length);
-    
-    if (!materialCheck.allowed) {
-      showNotification(
-        `⚠️ В бесплатном тарифе максимум ${materialCheck.limit} материалов в заявке.`,
-        'warning'
-      );
-      return;
-    }
-    
-    // Предупреждение о скором исчерпании (если осталось 2 или меньше заявок)
-    if (quota.dailyRemaining <= 2 && quota.dailyRemaining > 0) {
-      showNotification(
-        `⚠️ Осталось ${quota.dailyRemaining} заявок. Скоро лимит будет исчерпан.`,
-        'warning'
-      );
-    }
-    
-  } catch (err) {
-    console.error('Ошибка проверки лимитов:', err);
   }
-}
   
   const startTime = Date.now();
   
@@ -2851,19 +2835,19 @@ if (currentPlan?.id === 'basic' || !currentPlan) {
     client_id: selectedClientId || null,
     created_at: new Date().toISOString(),
     total_amount: totalAmount,
-   status_history: [{
-  user_id: sessionUser.id,
-  user_email: sessionUser.email,
-  action: 'created',  // ✅ Всегда 'created', так как авто-согласование убрано
-  timestamp: new Date().toISOString()
-}],
+    status_history: [{
+      user_id: sessionUser.id,
+      user_email: sessionUser.email,
+      action: 'created',
+      timestamp: new Date().toISOString()
+    }],
     viewed_by_supply_admin: false
   };
   
-  // ─────────────────────────────────────────────────────────
-  // 🔄 OFFLINE QUEUE INTEGRATION
-  // ─────────────────────────────────────────────────────────
-  
+  // ✅ УСТАНАВЛИВАЕМ ФЛАГ ОТПРАВКИ
+  setIsSubmitting(true);
+
+  // Offline режим
   if (!isOnline) {
     const draftId = await saveDraftToDB({
       ...newApplication,
@@ -2889,6 +2873,7 @@ if (currentPlan?.id === 'basic' || !currentPlan) {
     await deleteDraftFromDB('current_form_draft');
     setCurrentView('pending');
     setPage(1);
+    setIsSubmitting(false);
     return;
   }
   
@@ -2902,18 +2887,13 @@ if (currentPlan?.id === 'basic' || !currentPlan) {
     
     const realApplicationId = data[0].id;
 
-    // ============================================================
-    // 🆕 УВЕЛИЧЕНИЕ СЧЁТЧИКА ЗАЯВОК (ВСТАВИТЬ СЮДА)
-    // ============================================================
     if (currentPlan?.id === 'basic' || !currentPlan) {
       try {
-        // Увеличиваем счётчик использования
         await incrementApplicationUsage(supabase, userCompanyId);
       } catch (err) {
         console.warn('⚠️ Ошибка увеличения счётчика:', err);
       }
     }
-    
     
     await logApplicationCreated(supabase, {
       id: realApplicationId,
@@ -2924,45 +2904,27 @@ if (currentPlan?.id === 'basic' || !currentPlan) {
       status: initialStatus
     }, userContext);
     
-    if (NOTIFICATIONS_ENABLED) {
-      try {
-        const response = await fetch('/functions/v1/send-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ event: 'application_created', application: data[0] })
-        });
-        if (response.status === 404) {
-          console.warn('⚠️ Edge Function не развёрнута');
-        }
-      } catch (err) {
-        console.warn('⚠️ Уведомление не отправлено:', err);
+    // ✅ Добавляем заявку ТОЛЬКО ОДИН РАЗ
+    setApplications([data[0], ...applications.slice(0, ITEMS_PER_PAGE - 1)]);
+    
+    if (user?.id && userCompanyId) {
+      const { data: existingApps } = await supabase
+        .from('applications')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(2);
+      
+      if (!existingApps || existingApps.length <= 1) {
+        await AnalyticsTracker.trackTimeToFirstApplication(user.id, data[0].id);
+        await AnalyticsTracker.trackOnboardingStep(
+          user.id,
+          userCompanyId,
+          'first_application',
+          'created',
+          { applicationId: data[0].id }
+        );
       }
     }
-    
-    setApplications([data[0], ...applications.slice(0, ITEMS_PER_PAGE - 1)]);
-    // ✅ ДОБАВИТЬ: Отслеживаем первую заявку
-if (user?.id && userCompanyId) {
-  const { data: existingApps } = await supabase
-    .from('applications')
-    .select('id')
-    .eq('user_id', user.id)
-    .limit(2);
-  
-  if (!existingApps || existingApps.length <= 1) {
-    await AnalyticsTracker.trackTimeToFirstApplication(
-      user.id,
-      data[0].id
-    );
-    
-    await AnalyticsTracker.trackOnboardingStep(
-      user.id,
-      userCompanyId,
-      'first_application',
-      'created',
-      { applicationId: data[0].id }
-    );
-  }
-}
     
     try {
       sendApplication(data[0], settings, t, userCompany, language, copyApplicationText, showNotification);
@@ -3035,6 +2997,7 @@ if (user?.id && userCompanyId) {
     } catch (queueError) {
       console.error('[App] Failed to queue offline request:', queueError);
       showNotification('⚠️ Ошибка сохранения заявки', 'error');
+      setIsSubmitting(false);
       return;
     }
     
@@ -3050,7 +3013,10 @@ if (user?.id && userCompanyId) {
     await deleteDraftFromDB('current_form_draft');
     setCurrentView('pending');
     setPage(1);
-    return;
+    
+  } finally {
+    // ✅ СНИМАЕМ ФЛАГ В ЛЮБОМ СЛУЧАЕ
+    setIsSubmitting(false);
   }
 };
 
@@ -6457,6 +6423,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       onDownloadTemplate={downloadExcelTemplate}
       fileInputRef={fileInputRef}
       capturedPhotos={capturedPhotos}
+      isSubmitting={isSubmitting}
     />
   </div>
 )}

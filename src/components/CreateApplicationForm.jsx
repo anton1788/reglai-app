@@ -594,13 +594,14 @@ const TemplateSelector = memo(({ templates, onLoad, t }) => {
 });
 TemplateSelector.displayName = 'TemplateSelector';
 
+// CreateApplicationForm.jsx — SubmitButton:
 const SubmitButton = memo(({ canSubmit, isLoading, t }) => (
   <button
     type="submit"
-    disabled={!canSubmit}
-    className={`w-full py-4 px-6 rounded-2xl font-semibold shadow-lg transition-all duration-300 flex items-center justify-center gap-3 focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
-      canSubmit
-        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl hover:scale-[1.02] focus:ring-indigo-500'
+    disabled={!canSubmit || isLoading}
+    className={`w-full py-4 px-6 rounded-2xl font-semibold shadow-lg transition-all duration-300 flex items-center justify-center gap-3 ${
+      canSubmit && !isLoading
+        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl hover:scale-[1.02]'
         : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
     }`}
     aria-busy={isLoading}
@@ -608,7 +609,7 @@ const SubmitButton = memo(({ canSubmit, isLoading, t }) => (
     {isLoading ? (
       <>
         <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-        <span className="text-lg">{t('sending')}</span>
+        <span className="text-lg">{t('sending') || 'Отправка...'}</span>
       </>
     ) : (
       <>
@@ -722,6 +723,7 @@ const CreateApplicationForm = memo(({
   setShowTemplateModal,
   templateName,
   setTemplateName,
+  isSubmitting = false,
   t,
   handleSubmit,
   handlePhoneChange,
@@ -1074,7 +1076,11 @@ useEffect(() => {
           </section>
 
           {/* Submit Button */}
-          <SubmitButton canSubmit={canSubmit} isLoading={isLoading} t={t} />
+<SubmitButton 
+  canSubmit={canSubmit} 
+  isLoading={isLoading || isSubmitting}  // ✅ ПРАВИЛЬНО: один раз с объединением
+  t={t} 
+/>
           
           {/* Keyboard hints */}
           <div className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500">
