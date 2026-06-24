@@ -1,15 +1,17 @@
 // src/components/ManagerAnalyticsDashboard.jsx
 import React, { useMemo } from 'react';
-import { TrendingUp, Users, Package, AlertCircle } from 'lucide-react';
+import { TrendingUp, Users, Package, AlertCircle, Building, CheckCircle, Clock } from 'lucide-react';
 
 const ManagerAnalyticsDashboard = ({ 
   applications, 
   companyUsers, 
   userCompany, 
-  currentPlan
+  currentPlan,
+  userRole,
+  isCompanyOwner
 }) => {
   
-  // Безопасный расчет статистики ТОЛЬКО для своей компании
+  // Безопасный расчет статистики
   const safeStats = useMemo(() => {
     if (!applications || applications.length === 0) {
       return {
@@ -19,7 +21,9 @@ const ManagerAnalyticsDashboard = ({
         receivedMaterials: 0,
         completionRate: 0,
         statusCounts: { pending: 0, partial: 0, received: 0, canceled: 0 },
-        topObjects: []
+        topObjects: [],
+        activeUsers: 0,
+        weeklyActivity: 0
       };
     }
     
@@ -47,6 +51,20 @@ const ManagerAnalyticsDashboard = ({
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
     
+    // Активность за последнюю неделю
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weeklyApps = applications.filter(a => new Date(a.created_at) >= weekAgo);
+    
+    // Активные пользователи (создавшие заявки за последние 30 дней)
+    const monthAgo = new Date();
+    monthAgo.setDate(monthAgo.getDate() - 30);
+    const activeUserIds = new Set(
+      applications
+        .filter(a => new Date(a.created_at) >= monthAgo)
+        .map(a => a.user_id)
+    );
+    
     return {
       totalApplications,
       totalObjects,
@@ -54,7 +72,9 @@ const ManagerAnalyticsDashboard = ({
       receivedMaterials,
       completionRate: totalMaterials > 0 ? Math.round((receivedMaterials / totalMaterials) * 100) : 0,
       statusCounts,
-      topObjects
+      topObjects,
+      activeUsers: activeUserIds.size,
+      weeklyActivity: weeklyApps.length
     };
   }, [applications]);
   
@@ -64,25 +84,45 @@ const ManagerAnalyticsDashboard = ({
     modalDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:999999;';
     
     let recommendations = '';
+    let detailedData = '';
+    
     if (type === 'conversion') {
       recommendations = `
         <div style="margin-top:16px;padding:16px;background:#eff6ff;border-radius:12px;">
           <h4 style="font-weight:bold;margin-bottom:8px;">📈 Как повысить конверсию:</h4>
-          <ul style="list-style:disc;padding-left:20px;space-y:4px;font-size:14px;">
+          <ul style="list-style:disc;padding-left:20px;font-size:14px;line-height:1.8;">
             <li>Улучшите онбординг новых пользователей</li>
             <li>Настройте автоматические напоминания</li>
             <li>Предложите демо-звонок для активных триалов</li>
           </ul>
         </div>
       `;
+      detailedData = `
+        <div style="margin-top:12px;padding:12px;background:#f8fafc;border-radius:8px;font-size:13px;">
+          <div>👥 Всего пользователей: ${companyUsers?.length || 0}</div>
+          <div>📊 Активных за неделю: ${safeStats.weeklyActivity}</div>
+          <div>🏢 Объектов: ${safeStats.totalObjects}</div>
+        </div>
+      `;
     } else if (type === 'churn') {
       recommendations = `
         <div style="margin-top:16px;padding:16px;background:#fef3c7;border-radius:12px;">
           <h4 style="font-weight:bold;margin-bottom:8px;">📉 Как снизить отток:</h4>
-          <ul style="list-style:disc;padding-left:20px;font-size:14px;">
+          <ul style="list-style:disc;padding-left:20px;font-size:14px;line-height:1.8;">
             <li>Собирайте обратную связь при отмене подписки</li>
             <li>Предлагайте персональные скидки для удержания</li>
             <li>Улучшите качество поддержки</li>
+          </ul>
+        </div>
+      `;
+    } else if (type === 'users') {
+      recommendations = `
+        <div style="margin-top:16px;padding:16px;background:#e8f5e9;border-radius:12px;">
+          <h4 style="font-weight:bold;margin-bottom:8px;">👥 Активность пользователей:</h4>
+          <ul style="list-style:disc;padding-left:20px;font-size:14px;line-height:1.8;">
+            <li>Активных пользователей: ${safeStats.activeUsers}</li>
+            <li>Заявок за неделю: ${safeStats.weeklyActivity}</li>
+            <li>Всего пользователей: ${companyUsers?.length || 0}</li>
           </ul>
         </div>
       `;
@@ -91,13 +131,14 @@ const ManagerAnalyticsDashboard = ({
     modalDiv.innerHTML = `
       <div style="background:white;border-radius:24px;max-width:500px;width:90%;padding:24px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h3 style="font-size:20px;font-weight:bold;margin:0;">📊 ${title}</h3>
+          <h3 style="font-size:20px;font-weight:bold;margin:0;color:#1f2937;">📊 ${title}</h3>
           <button class="close-modal" style="background:none;border:none;font-size:24px;cursor:pointer;color:#9ca3af;">&times;</button>
         </div>
         <div style="background:#f3f4f6;padding:20px;border-radius:16px;text-align:center;">
           <div style="font-size:14px;color:#6b7280;">Текущее значение</div>
           <div style="font-size:48px;font-weight:bold;color:#1f2937;">${value}</div>
         </div>
+        ${detailedData}
         ${recommendations}
         <button class="close-modal" style="margin-top:16px;width:100%;padding:12px;background:#4A6572;color:white;border:none;border-radius:12px;cursor:pointer;font-weight:bold;">
           Закрыть
@@ -115,23 +156,28 @@ const ManagerAnalyticsDashboard = ({
   return (
     <div className="max-w-7xl mx-auto p-4 page-enter">
       <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50">
-        {/* Заголовок с компанией */}
+        {/* Заголовок */}
         <div className="p-6 border-b border-gray-200/50 dark:border-gray-700/50">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                📊 Аналитика компании
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                📊 Управленческая аналитика
+                {isCompanyOwner && (
+                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full">
+                    👑 Владелец
+                  </span>
+                )}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {userCompany || 'Ваша компания'}
+                {userCompany || 'Ваша компания'} • Роль: {userRole === 'manager' ? 'Руководитель' : 'Менеджер'}
               </p>
             </div>
             <div className="text-right">
               <div className="text-xs text-gray-400">
-                Данные обновлены: {new Date().toLocaleString()}
+                Обновлено: {new Date().toLocaleString()}
               </div>
               {currentPlan && (
-                <div className="text-xs text-green-600 mt-1">
+                <div className="text-xs text-green-600 dark:text-green-400 mt-1">
                   Тариф: {currentPlan.name}
                 </div>
               )}
@@ -145,6 +191,7 @@ const ManagerAnalyticsDashboard = ({
             <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 text-center">
               <div className="text-2xl font-bold text-blue-700">{safeStats.totalApplications}</div>
               <div className="text-sm text-gray-600 mt-1">Всего заявок</div>
+              <div className="text-xs text-gray-400 mt-0.5">+{safeStats.weeklyActivity} за неделю</div>
             </div>
             <div className="bg-gradient-to-br from-green-50 to-green-100/50 rounded-xl p-4 text-center">
               <div className="text-2xl font-bold text-green-700">{safeStats.totalObjects}</div>
@@ -155,22 +202,22 @@ const ManagerAnalyticsDashboard = ({
               <div className="text-sm text-gray-600 mt-1">Выполнение</div>
             </div>
             <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-amber-700">{companyUsers?.length || 0}</div>
-              <div className="text-sm text-gray-600 mt-1">Пользователей</div>
+              <div className="text-2xl font-bold text-amber-700">{safeStats.activeUsers}</div>
+              <div className="text-sm text-gray-600 mt-1">Активных пользователей</div>
             </div>
           </div>
           
           {/* Ключевые метрики - кликабельные */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <div 
-              onClick={() => openManagerMetricModal('Конверсия из триала', '0%', 'conversion')} 
+              onClick={() => openManagerMetricModal('Конверсия из триала', `${safeStats.completionRate}%`, 'conversion')} 
               className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200/50 dark:border-gray-700/50 cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]"
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-gray-600 dark:text-gray-400">📊 Конверсия из триала</span>
                 <TrendingUp className="w-4 h-4 text-blue-500" />
               </div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-white">0%</div>
+              <div className="text-3xl font-bold text-gray-900 dark:text-white">{safeStats.completionRate}%</div>
               <div className="text-xs text-blue-500 mt-2">🔍 Нажмите для деталей</div>
             </div>
             
@@ -187,14 +234,14 @@ const ManagerAnalyticsDashboard = ({
             </div>
             
             <div 
-              onClick={() => openManagerMetricModal('Активные пользователи', companyUsers?.length || 0, 'users')} 
+              onClick={() => openManagerMetricModal('Активные пользователи', safeStats.activeUsers, 'users')} 
               className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200/50 dark:border-gray-700/50 cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]"
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-gray-600 dark:text-gray-400">👥 Активные пользователи</span>
                 <Users className="w-4 h-4 text-green-500" />
               </div>
-              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{companyUsers?.length || 0}</div>
+              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{safeStats.activeUsers}</div>
               <div className="text-xs text-blue-500 mt-2">🔍 Нажмите для деталей</div>
             </div>
           </div>
@@ -228,7 +275,7 @@ const ManagerAnalyticsDashboard = ({
             
             <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200/50 dark:border-gray-700/50">
               <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" />
+                <Building className="w-4 h-4" />
                 Топ объектов
               </h3>
               <div className="space-y-3">
