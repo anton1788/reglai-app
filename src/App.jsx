@@ -73,6 +73,7 @@ import AB_TEST_CONFIG from './utils/abTesting';
 import ManagerAnalyticsDashboard from './components/ManagerAnalyticsDashboard';
 import SupplyAdminAnalytics from './components/SupplyAdminAnalytics';
 import SuperAdminAnalyticsDashboard from './components/SuperAdminAnalyticsDashboard';
+import UniversalDashboard from './components/UniversalDashboard';
 import {
   getABTestVariant,
   saveABTestResult,
@@ -4693,29 +4694,30 @@ useEffect(() => {
   if (!user) return;
   
   // Только при первой загрузке устанавливаем начальный вид
-  if (!initialViewSet) {
-    // Руководитель
-    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-      setCurrentView('managerDashboard');
-    }
-    // Бухгалтер
-    else if (userRole === 'accountant') {
-      setCurrentView('accountantDashboard');
-    }
-    // Клиент
-    else if (userRole === 'client') {
-      setCurrentView('clientDashboard');
-    }
-    // Остальные
-    else if (currentUserPermissions.canCreate) {
-      setCurrentView('create');
-    } else if (currentUserPermissions.canViewAnalytics) {
-      setCurrentView('analytics');
-    } else {
-      setCurrentView('pending');
-    }
-    setInitialViewSet(true);
+  // В useEffect с initialViewSet:
+if (!initialViewSet) {
+  // Руководитель
+  if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+    setCurrentView('dashboard'); // ← ИЗМЕНИТЬ С 'managerDashboard' НА 'dashboard'
   }
+  // Бухгалтер
+  else if (userRole === 'accountant') {
+    setCurrentView('accountantDashboard');
+  }
+  // Клиент
+  else if (userRole === 'client') {
+    setCurrentView('clientDashboard');
+  }
+  // Остальные
+  else if (currentUserPermissions.canCreate) {
+    setCurrentView('create');
+  } else if (currentUserPermissions.canViewAnalytics) {
+    setCurrentView('analytics');
+  } else {
+    setCurrentView('pending');
+  }
+  setInitialViewSet(true);
+}
 }, [user, userRole, isCompanyOwner, currentUserPermissions.canCreate, currentUserPermissions.canViewAnalytics, initialViewSet]);
 
   // ─────────────────────────────────────────────────────────
@@ -6293,17 +6295,9 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     console.log('🔍 Навигация:', path);
     
     // 🏠 ГЛАВНАЯ - умное перенаправление по ролям
-    if (path === '/') {
-      if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-        setCurrentView('managerDashboard');
-      } else if (userRole === 'accountant') {
-        setCurrentView('accountantDashboard');
-      } else if (userRole === 'client') {
-        setCurrentView('clientDashboard');
-      } else {
-        setCurrentView('create');
-      }
-      return;
+     if (path === '/') {
+    setCurrentView('dashboard');
+    return;
     }
     else if (path === '/estimates') setCurrentView('estimates');
     else if (path === '/reports') setCurrentView('reports');
@@ -6485,15 +6479,50 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 )}
 
         {/* Дашборд для руководителя */}
-        {currentView === 'managerDashboard' && (
-            <ManagerMainDashboard
-                applications={applications}
-                companyUsers={companyUsers}
-                pendingApprovals={pendingApprovals}
-                user={user}
-                setCurrentView={setCurrentView}
-            />
-        )}
+        {(currentView === 'managerDashboard' || currentView === 'dashboard') && (
+    <UniversalDashboard
+        applications={applications}
+        companyUsers={companyUsers}
+        pendingApprovals={pendingApprovals}
+        user={user}
+        userRole={userRole}
+        userCompany={userCompany}
+        setCurrentView={setCurrentView}
+        isOnline={isOnline}
+        offlineDraftsCount={offlineDrafts.length}
+        currentPlan={currentPlan}
+        mergeableCount={mergeableCount}
+        cartItemsCount={formData.cart?.length || 0}
+        isCompanyOwner={isCompanyOwner}
+        onNavigate={(path) => {
+            // Используем существующую логику из onNavigate
+            if (path === '/applications/new') setCurrentView('create');
+            else if (path === '/employees') setCurrentView('employees');
+            else if (path === '/warehouse') setCurrentView('warehouse');
+            else if (path === '/analytics') setCurrentView('analytics');
+            else if (path === '/chat') setCurrentView('chat');
+            else if (path === '/approvals') setCurrentView('approvals');
+            else if (path === '/inwork') setCurrentView('inwork');
+            else if (path === '/merge') setCurrentView('merge');
+            else if (path === '/cart') setCurrentView('cart');
+            else if (path === '/profile') setCurrentView('profile');
+            else if (path === '/documents') setCurrentView('documents');
+            else if (path === '/calendar') setCurrentView('calendar');
+            else if (path === '/api') setCurrentView('api');
+            else if (path === '/audit') setCurrentView('audit');
+            else if (path === '/tasks') setCurrentView('tasks');
+            else if (path === '/help') setCurrentView('help');
+            else if (path === '/crm-sales') setCurrentView('crm-sales');
+            else if (path === '/estimates') setCurrentView('estimates');
+            else if (path === '/reports') setCurrentView('reports');
+            else if (path === '/integration') setCurrentView('integration');
+            else if (path === '/tariffs') setCurrentView('tariffs');
+            else if (path === '/companyProfile') setCurrentView('companyProfile');
+            else if (path === '/superAdmin') setCurrentView('superAdmin');
+        }}
+        t={t}
+    />
+)}
         
         {/* Дашборд для бухгалтера */}
         {currentView === 'accountantDashboard' && (
