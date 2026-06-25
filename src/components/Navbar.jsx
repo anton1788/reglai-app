@@ -41,8 +41,8 @@ const Navbar = ({
   isCompanyOwner = false,
   companyId = null,
   supabase = null,
-  // ✅ НОВЫЙ ПРОП — счетчик для объединения
-  mergeableCount = 0
+  mergeableCount = 0,
+  onSyncOffline = null
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -52,10 +52,14 @@ const Navbar = ({
   const [showRightScroll, setShowRightScroll] = useState(false);
   const [currentPlan, setCurrentPlan] = useState(null);
   const [planLoading, setPlanLoading] = useState(false);
+  const [mobileSearch, setMobileSearch] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  
   const profileRef = useRef(null);
   const notificationsRef = useRef(null);
   const searchRef = useRef(null);
   const navScrollRef = useRef(null);
+  const tabletNavScrollRef = useRef(null);
 
   // Загрузка текущего тарифа
   const loadCompanyPlan = useCallback(async () => {
@@ -105,19 +109,72 @@ const Navbar = ({
     return () => document.removeEventListener('keydown', handleGlobalSearch);
   }, []);
 
-  // Проверка скролла для кнопок навигации
+  // Горячие клавиши для навигации
   useEffect(() => {
+    const handleKeyboardNav = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        const shortcuts = {
+          '1': '/',
+          '2': '/applications',
+          '3': '/warehouse',
+          '4': '/clients',
+          '5': '/analytics',
+          '6': '/tasks',
+          '7': '/chat',
+          '8': '/calendar',
+        };
+        const path = shortcuts[e.key];
+        if (path && !e.target.closest('input') && !e.target.closest('textarea')) {
+          e.preventDefault();
+          onNavigate?.(path);
+          setIsMobileMenuOpen(false);
+        }
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyboardNav);
+    return () => document.removeEventListener('keydown', handleKeyboardNav);
+  }, [onNavigate]);
+
+  // Проверка скролла для кнопок навигации с debounce
+  useEffect(() => {
+    let timeoutId = null;
+    let scrollTimeoutId = null;
+
     const checkScroll = () => {
       if (navScrollRef.current) {
         const { scrollLeft, scrollWidth, clientWidth } = navScrollRef.current;
-        setShowLeftScroll(scrollLeft > 0);
+        setShowLeftScroll(scrollLeft > 10);
         setShowRightScroll(scrollLeft + clientWidth < scrollWidth - 10);
       }
     };
     
+    const debouncedCheck = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(checkScroll, 100);
+    };
+    
+    const handleScroll = () => {
+      if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
+      scrollTimeoutId = setTimeout(checkScroll, 50);
+    };
+    
     checkScroll();
-    window.addEventListener('resize', checkScroll);
-    return () => window.removeEventListener('resize', checkScroll);
+    window.addEventListener('resize', debouncedCheck);
+    
+    const scrollContainer = navScrollRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', handleScroll);
+    }
+    
+    return () => {
+      window.removeEventListener('resize', debouncedCheck);
+      if (scrollContainer) {
+        scrollContainer.removeEventListener('scroll', handleScroll);
+      }
+      if (timeoutId) clearTimeout(timeoutId);
+      if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
+    };
   }, []);
 
   const scrollNav = (direction) => {
@@ -134,6 +191,17 @@ const Navbar = ({
       onNavigate?.(`/search?q=${encodeURIComponent(searchQuery)}`);
       setSearchQuery('');
       setIsMobileMenuOpen(false);
+    }
+  };
+
+  const handleSyncOffline = async () => {
+    if (onSyncOffline && !isSyncing) {
+      setIsSyncing(true);
+      try {
+        await onSyncOffline();
+      } finally {
+        setIsSyncing(false);
+      }
     }
   };
 
@@ -178,9 +246,7 @@ const Navbar = ({
       items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
     }
 
-    // ============================================
-    // ✅ ОБЪЕДИНЕНИЕ ЗАЯВОК — для manager, supply_admin, director, владельца
-    // ============================================
+    // Объединение заявок — для manager, supply_admin, director, владельца
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
       items.push({ 
         id: 'merge', 
@@ -206,27 +272,27 @@ const Navbar = ({
       items.push({ id: 'clients', label: 'Клиенты', icon: Users, path: '/clients' });
     }
 
-    // АНАЛИТИКА - для manager, supply_admin, director, accountant, владельца компании
+    // Аналитика - для manager, supply_admin, director, accountant, владельца компании
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
       items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
     }
 
-    // ✅ API - для бухгалтера, руководителя, администратора снабжения
+    // API - для бухгалтера, руководителя, администратора снабжения
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
     }
 
-    // ✅ СМЕТЫ - для бухгалтера, руководителя, администратора снабжения
+    // Сметы - для бухгалтера, руководителя, администратора снабжения
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'estimates', label: 'Сметы', icon: Calculator, path: '/estimates' });
     }
 
-    // ✅ ОТЧЁТЫ - для бухгалтера, руководителя, администратора снабжения
+    // Отчёты - для бухгалтера, руководителя, администратора снабжения
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'reports', label: 'Отчёты', icon: FileText, path: '/reports' });
     }
 
-    // ✅ ИНТЕГРАЦИЯ - для руководителя и администратора снабжения
+    // Интеграция - для руководителя и администратора снабжения
     if (userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'integration', label: 'Интеграция', icon: Settings, path: '/integration' });
     }
@@ -260,7 +326,7 @@ const Navbar = ({
       items.push({ id: 'cart', label: `Корзина (${cartItemsCount})`, icon: ShoppingCart, path: '/cart' });
     }
 
-    // АУДИТ - для manager, director, accountant, владельца
+    // Аудит - для manager, director, accountant, владельца
     if (userRole === 'manager' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
       items.push({ id: 'audit', label: 'Аудит', icon: Eye, path: '/audit' });
     }
@@ -281,6 +347,9 @@ const Navbar = ({
   };
 
   const navItems = getNavItems();
+  const filteredNavItems = navItems.filter(item => 
+    item.label.toLowerCase().includes(mobileSearch.toLowerCase())
+  );
 
   // CSS для скрытия скроллбара
   useEffect(() => {
@@ -292,6 +361,13 @@ const Navbar = ({
       .no-scrollbar {
         -ms-overflow-style: none;
         scrollbar-width: none;
+      }
+      .fade-enter {
+        animation: fadeIn 0.2s ease-in-out;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.9); }
+        to { opacity: 1; transform: scale(1); }
       }
     `;
     document.head.appendChild(style);
@@ -358,31 +434,63 @@ const Navbar = ({
 
           {/* Правая часть */}
           <div className="flex items-center gap-1 flex-shrink-0">
-            {/* Индикатор тарифа */}
-            {currentPlan && !planLoading && (
-              <div className="hidden lg:flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <span className="text-sm">{getPlanIcon(currentPlan.id)}</span>
-                <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
-                  {currentPlan.name}
+            {/* Индикатор тарифа с состоянием загрузки */}
+            <div className="hidden lg:flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg min-w-[60px]">
+              {planLoading ? (
+                <div className="flex items-center gap-1">
+                  <div className="w-4 h-4 border-2 border-gray-300 border-t-[#4A6572] rounded-full animate-spin"></div>
+                  <span className="text-xs text-gray-400">Загрузка...</span>
+                </div>
+              ) : currentPlan ? (
+                <>
+                  <span className="text-sm">{getPlanIcon(currentPlan.id)}</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    {currentPlan.name}
+                  </span>
+                  {currentPlan.id !== 'enterprise' && (
+                    <button
+                      onClick={onOpenTariffs}
+                      className="ml-1 text-xs text-[#F9AA33] hover:underline"
+                    >
+                      ↑
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button
+                  onClick={onOpenTariffs}
+                  className="text-xs text-[#F9AA33] hover:underline"
+                >
+                  Выбрать тариф
+                </button>
+              )}
+            </div>
+
+            {/* Индикатор офлайн режима с синхронизацией */}
+            {!isOnline && offlineDraftsCount > 0 && (
+              <div className="hidden sm:flex items-center gap-2 px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                <div className="relative">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                </div>
+                <span className="text-xs font-medium text-yellow-700 dark:text-yellow-300 whitespace-nowrap">
+                  {offlineDraftsCount} черновик{offlineDraftsCount > 1 ? 'а' : ''}
                 </span>
-                {currentPlan.id !== 'enterprise' && (
-                  <button
-                    onClick={onOpenTariffs}
-                    className="ml-1 text-xs text-[#F9AA33] hover:underline"
+                {onSyncOffline && (
+                  <button 
+                    onClick={handleSyncOffline}
+                    disabled={isSyncing}
+                    className="text-xs text-yellow-600 dark:text-yellow-400 hover:underline disabled:opacity-50"
                   >
-                    ↑
+                    {isSyncing ? '...' : 'Синхр.'}
                   </button>
                 )}
               </div>
             )}
 
-            {!isOnline && (
-              <div className="flex items-center px-1.5 sm:px-2 py-1 sm:py-1.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-lg text-xs font-medium">
-                <WifiOff className="w-3 h-3 mr-1" />
-                <span className="hidden sm:inline">Офлайн</span>
-                {offlineDraftsCount > 0 && (
-                  <span className="ml-1">({offlineDraftsCount})</span>
-                )}
+            {!isOnline && offlineDraftsCount === 0 && (
+              <div className="hidden sm:flex items-center px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                <WifiOff className="w-3 h-3 text-yellow-500" />
+                <span className="ml-1 text-xs text-yellow-700 dark:text-yellow-300">Офлайн</span>
               </div>
             )}
 
@@ -632,11 +740,18 @@ const Navbar = ({
         </div>
       </div>
 
-      {/* Планшетная навигация - иконки с подписями */}
+      {/* Планшетная навигация - иконки с подписями и прокруткой */}
       {navItems.length > 0 && (
-        <div className="hidden sm:flex lg:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 overflow-x-auto no-scrollbar">
-          <div className="flex gap-1 p-2">
-            {navItems.slice(0, 6).map((item) => {
+        <div className="hidden sm:flex lg:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 relative">
+          {/* Левая градиентная маска */}
+          <div className="absolute left-0 top-0 bottom-0 w-8 z-5 bg-gradient-to-r from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
+          
+          <div 
+            ref={tabletNavScrollRef}
+            className="flex overflow-x-auto no-scrollbar gap-1 p-2 scroll-smooth px-8"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {navItems.slice(0, 8).map((item) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id || 
                 (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history'));
@@ -644,7 +759,7 @@ const Navbar = ({
                 <button
                   key={item.id}
                   onClick={() => { onNavigate?.(item.path); setIsMobileMenuOpen(false); }}
-                  className={`flex flex-col items-center gap-1 px-2 sm:px-3 py-2 rounded-lg transition-all flex-shrink-0 ${
+                  className={`flex flex-col items-center gap-1 px-2 sm:px-3 py-2 rounded-lg transition-all flex-shrink-0 relative ${
                     isActive
                       ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-700/50'
@@ -652,10 +767,28 @@ const Navbar = ({
                 >
                   <Icon className="w-5 h-5" />
                   <span className="text-xs font-medium">{item.label}</span>
+                  {item.id === 'approvals' && pendingApprovalsCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                      {pendingApprovalsCount}
+                    </span>
+                  )}
+                  {item.id === 'cart' && cartItemsCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                      {cartItemsCount}
+                    </span>
+                  )}
+                  {item.id === 'merge' && mergeableCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                      {mergeableCount}
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
+          
+          {/* Правая градиентная маска */}
+          <div className="absolute right-0 top-0 bottom-0 w-8 z-5 bg-gradient-to-l from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
         </div>
       )}
 
@@ -663,11 +796,24 @@ const Navbar = ({
       {navItems.length > 0 && (
         <div className="hidden lg:block border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
           <div className="w-full px-4 relative">
+            {/* Левая градиентная маска */}
+            {showLeftScroll && (
+              <div className="absolute left-0 top-0 bottom-0 w-12 z-5 bg-gradient-to-r from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
+            )}
+            
             {/* Кнопка прокрутки влево */}
             {showLeftScroll && (
               <button
                 onClick={() => scrollNav('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white dark:bg-gray-800 rounded-full shadow-md p-1 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title="Прокрутить влево"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    scrollNav('left');
+                  }
+                }}
+                className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white dark:bg-gray-800 rounded-full shadow-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all border border-gray-200 dark:border-gray-700 fade-enter`}
               >
                 <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
               </button>
@@ -676,7 +822,7 @@ const Navbar = ({
             {/* Прокручиваемое меню */}
             <div 
               ref={navScrollRef}
-              className="flex overflow-x-auto no-scrollbar gap-1 py-2 scroll-smooth"
+              className="flex overflow-x-auto no-scrollbar gap-1 py-2 scroll-smooth px-8"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {navItems.map((item) => {
@@ -730,16 +876,29 @@ const Navbar = ({
             {showRightScroll && (
               <button
                 onClick={() => scrollNav('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white dark:bg-gray-800 rounded-full shadow-md p-1 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title="Прокрутить вправо"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    scrollNav('right');
+                  }
+                }}
+                className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-white dark:bg-gray-800 rounded-full shadow-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all border border-gray-200 dark:border-gray-700 fade-enter`}
               >
                 <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" />
               </button>
+            )}
+            
+            {/* Правая градиентная маска */}
+            {showRightScroll && (
+              <div className="absolute right-0 top-0 bottom-0 w-12 z-5 bg-gradient-to-l from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
             )}
           </div>
         </div>
       )}
 
-      {/* Мобильное меню (бургер) */}
+      {/* Мобильное меню (бургер) с поиском и группировкой */}
       {isMobileMenuOpen && (
         <div className="lg:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 fade-enter max-h-[calc(100vh-56px)] overflow-y-auto">
           <form onSubmit={handleSearch} className="p-4 border-b border-gray-100 dark:border-gray-800">
@@ -777,7 +936,56 @@ const Navbar = ({
               </div>
             )}
 
-            {navItems.map((item) => {
+            {/* Поиск по меню */}
+            <div className="relative px-3 mb-2">
+              <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Поиск по меню..."
+                value={mobileSearch}
+                onChange={(e) => setMobileSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A6572] bg-gray-50 dark:bg-gray-800"
+              />
+            </div>
+
+            {/* Быстрые действия в мобильном меню */}
+            <div className="mx-3 mb-2 p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500 dark:text-gray-400 px-1 py-1">Быстрые действия</p>
+              <div className="flex flex-wrap gap-1 mt-1">
+                <button
+                  onClick={() => { onNavigate?.('/applications/new'); setIsMobileMenuOpen(false); }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                  Заявка
+                </button>
+                {(userRole === 'manager' || userRole === 'supply_admin') && (
+                  <button
+                    onClick={() => { onInvite?.(); setIsMobileMenuOpen(false); }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                  >
+                    <UserPlus className="w-3 h-3" />
+                    Пригласить
+                  </button>
+                )}
+                <button
+                  onClick={() => { onNavigate?.('/warehouse'); setIsMobileMenuOpen(false); }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
+                >
+                  <Package className="w-3 h-3" />
+                  Склад
+                </button>
+                <button
+                  onClick={() => { onNavigate?.('/documents'); setIsMobileMenuOpen(false); }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                >
+                  <FileText className="w-3 h-3" />
+                  Документ
+                </button>
+              </div>
+            </div>
+
+            {filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id ||
                 (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
@@ -801,20 +1009,20 @@ const Navbar = ({
                       : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="flex-1 text-left">{item.label}</span>
+                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  <span className="flex-1 text-left truncate">{item.label}</span>
                   {item.id === 'approvals' && pendingApprovalsCount > 0 && (
-                    <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
+                    <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
                       {pendingApprovalsCount}
                     </span>
                   )}
                   {item.id === 'cart' && cartItemsCount > 0 && (
-                    <span className="px-2 py-0.5 bg-orange-500 text-white text-xs rounded-full">
+                    <span className="ml-auto px-2 py-0.5 bg-orange-500 text-white text-xs rounded-full flex-shrink-0">
                       {cartItemsCount}
                     </span>
                   )}
                   {item.id === 'merge' && mergeableCount > 0 && (
-                    <span className="px-2 py-0.5 bg-indigo-500 text-white text-xs rounded-full">
+                    <span className="ml-auto px-2 py-0.5 bg-indigo-500 text-white text-xs rounded-full flex-shrink-0">
                       {mergeableCount}
                     </span>
                   )}
@@ -824,15 +1032,6 @@ const Navbar = ({
             
             <hr className="my-3 border-gray-100 dark:border-gray-800" />
             
-            {(userRole === 'manager' || userRole === 'supply_admin') && (
-              <button
-                onClick={() => { onInvite?.(); setIsMobileMenuOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-              >
-                <UserPlus className="w-5 h-5 text-green-500" />
-                Пригласить сотрудника
-              </button>
-            )}
             <button
               onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
               className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
