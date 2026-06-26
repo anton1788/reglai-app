@@ -1,38 +1,12 @@
 // src/utils/tariffPlans.js
 
-// 🔧 ИМПОРТЫ
 import { supabase } from './supabaseClient';
 
-// ✅ Функция получения статистики использования компании
-export const getUsageStats = async (companyId) => {
-  try {
-    // Подсчёт заявок за текущий месяц (30 дней)
-    const { count: applicationsCount } = await supabase
-      .from('applications')
-      .select('*', { count: 'exact', head: true })
-      .eq('company_id', companyId)
-      .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
-    
-    // Подсчёт пользователей компании
-    const { count: usersCount } = await supabase
-      .from('company_users')
-      .select('*', { count: 'exact', head: true })
-      .eq('company_id', companyId);
-    
-    return {
-      applications: applicationsCount || 0,
-      users: usersCount || 0,
-      lastUpdated: new Date().toISOString()
-    };
-  } catch (error) {
-    console.error('Ошибка получения статистики:', error);
-    return { applications: 0, users: 0, lastUpdated: null };
-  }
-};
+// ============================================================
+// 📦 КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ
+// ============================================================
 
-// 📦 КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ (ОБНОВЛЕННАЯ)
 export const TARIFF_PLANS = {
-  // БЕСПЛАТНЫЙ - для знакомства с продуктом
   basic: {
     id: 'basic',
     name: 'Базовый',
@@ -55,8 +29,6 @@ export const TARIFF_PLANS = {
     popular: false,
     color: '#4A6572'
   },
-
-  // СТАРТ - для малого бизнеса
   starter: {
     id: 'starter',
     name: 'Старт',
@@ -79,8 +51,6 @@ export const TARIFF_PLANS = {
     popular: false,
     color: '#6B8FA3'
   },
-
-  // ПРО - самый популярный
   pro: {
     id: 'pro',
     name: 'Профессиональный',
@@ -103,8 +73,6 @@ export const TARIFF_PLANS = {
     popular: true,
     color: '#F9AA33'
   },
-
-  // БИЗНЕС - для растущих компаний
   business: {
     id: 'business',
     name: 'Бизнес',
@@ -127,8 +95,6 @@ export const TARIFF_PLANS = {
     popular: false,
     color: '#3b82f6'
   },
-
-  // КОРПОРАТИВНЫЙ - для крупных клиентов
   enterprise: {
     id: 'enterprise',
     name: 'Корпоративный',
@@ -153,11 +119,14 @@ export const TARIFF_PLANS = {
   }
 };
 
-// 🏢 Получить план компании из Supabase
+// ============================================================
+// 🏢 ПОЛУЧИТЬ ПЛАН КОМПАНИИ (С ДАТАМИ)
+// ============================================================
+
 export const getCompanyPlan = async (supabaseClient, companyId) => {
   const { data, error } = await supabaseClient
     .from('companies')
-    .select('plan_tier, subscription_active, subscription_expires_at, api_usage_current, quota_reset_date')
+    .select('plan_tier, subscription_active, subscription_expires_at, plan_activated_at, api_usage_current, quota_reset_date')
     .eq('id', companyId)
     .single();
   
@@ -166,6 +135,7 @@ export const getCompanyPlan = async (supabaseClient, companyId) => {
       ...TARIFF_PLANS.basic,
       isActive: false,
       expiresAt: null,
+      activatedAt: null,
       usageCurrent: 0,
       quotaResetDate: null
     };
@@ -177,18 +147,25 @@ export const getCompanyPlan = async (supabaseClient, companyId) => {
     ...plan,
     isActive: data.subscription_active,
     expiresAt: data.subscription_expires_at,
+    activatedAt: data.plan_activated_at,
     usageCurrent: data.api_usage_current,
     quotaResetDate: data.quota_reset_date
   };
 };
 
-// 🔐 Проверка доступа к функции тарифа
+// ============================================================
+// 🔐 ПРОВЕРКА ДОСТУПА К ФУНКЦИИ
+// ============================================================
+
 export const checkFeatureAccess = (plan, feature) => {
   return plan.features[feature] === true || 
          typeof plan.features[feature] === 'string';
 };
 
-// 💰 Расчёт экономии при годовой оплате
+// ============================================================
+// 💰 РАСЧЁТ ЭКОНОМИИ
+// ============================================================
+
 export const calculateSavings = (plan) => {
   const monthlyTotal = plan.monthlyPrice * 12;
   const savings = monthlyTotal - plan.annualPrice;
@@ -201,7 +178,10 @@ export const calculateSavings = (plan) => {
   };
 };
 
-// 📊 Сравнение тарифов
+// ============================================================
+// 📊 СРАВНЕНИЕ ТАРИФОВ
+// ============================================================
+
 export const comparePlans = (planIds) => {
   const result = {};
   planIds.forEach(id => {
@@ -229,7 +209,10 @@ export const comparePlans = (planIds) => {
   return result;
 };
 
-// 🎯 Рекомендация тарифа на основе использования
+// ============================================================
+// 🎯 РЕКОМЕНДАЦИЯ ТАРИФА
+// ============================================================
+
 export const recommendPlan = (stats) => {
   const { users, applications } = stats;
   
@@ -240,18 +223,19 @@ export const recommendPlan = (stats) => {
   return 'enterprise';
 };
 
-// 📊 Проверка квоты API (с поддержкой фильтрации по apiKeyId)
+// ============================================================
+// 📊 ПРОВЕРКА КВОТЫ
+// ============================================================
+
 export const checkQuota = async (supabaseClient, companyId, apiKeyId = null) => {
   const now = new Date();
   
-  // Формируем базовый запрос
   let query = supabaseClient
     .from('api_usage_logs')
     .select('id', { count: 'exact', head: true })
     .eq('company_id', companyId)
     .gte('created_at', now.toISOString().split('T')[0]);
   
-  // Если передан apiKeyId — фильтруем по конкретному ключу
   if (apiKeyId) {
     query = query.eq('api_key_id', apiKeyId);
   }
@@ -298,7 +282,10 @@ export const checkQuota = async (supabaseClient, companyId, apiKeyId = null) => 
   };
 };
 
-// 📝 Логирование использования API
+// ============================================================
+// 📝 ЛОГИРОВАНИЕ ИСПОЛЬЗОВАНИЯ API
+// ============================================================
+
 export const logApiUsage = async (supabaseClient, data) => {
   try {
     const { error } = await supabaseClient.from('api_usage_logs').insert([{
@@ -317,7 +304,6 @@ export const logApiUsage = async (supabaseClient, data) => {
     
     if (error) throw error;
     
-    // Инкрементируем счётчик использования в компании
     const { error: incrementError } = await supabaseClient
       .from('companies')
       .update({ 
@@ -335,7 +321,10 @@ export const logApiUsage = async (supabaseClient, data) => {
   }
 };
 
-// 📈 Получить статистику использования по ключу
+// ============================================================
+// 📈 СТАТИСТИКА ПО КЛЮЧУ
+// ============================================================
+
 export const getKeyUsageStats = async (supabaseClient, apiKeyId, period = 'day') => {
   const now = new Date();
   let startDate;
@@ -365,7 +354,6 @@ export const getKeyUsageStats = async (supabaseClient, apiKeyId, period = 'day')
     byStatusCode: {}
   };
   
-  // Группировка по эндпоинтам
   data.forEach(log => {
     stats.byEndpoint[log.endpoint] = (stats.byEndpoint[log.endpoint] || 0) + 1;
     stats.byStatusCode[log.status_code] = (stats.byStatusCode[log.status_code] || 0) + 1;
@@ -374,7 +362,10 @@ export const getKeyUsageStats = async (supabaseClient, apiKeyId, period = 'day')
   return stats;
 };
 
-// 📊 Проверка лимита материалов
+// ============================================================
+// 📊 ПРОВЕРКА ЛИМИТА МАТЕРИАЛОВ
+// ============================================================
+
 export const checkMaterialsLimit = async (supabase, companyId, materialsCount) => {
   try {
     const { data, error } = await supabase
@@ -397,7 +388,10 @@ export const checkMaterialsLimit = async (supabase, companyId, materialsCount) =
   }
 };
 
-// 📈 Увеличение счётчика заявок
+// ============================================================
+// 📈 УВЕЛИЧЕНИЕ СЧЁТЧИКА ЗАЯВОК
+// ============================================================
+
 export const incrementApplicationUsage = async (supabase, companyId) => {
   try {
     const { error } = await supabase
@@ -411,7 +405,10 @@ export const incrementApplicationUsage = async (supabase, companyId) => {
   }
 };
 
-// 🔍 Функция для проверки квот через RPC
+// ============================================================
+// 🔍 ПРОВЕРКА КВОТ ЧЕРЕЗ RPC
+// ============================================================
+
 export const checkQuotaViaRPC = async (supabase, companyId, apiKeyId = null) => {
   try {
     const { data, error } = await supabase.rpc('check_quota', {
@@ -435,7 +432,10 @@ export const checkQuotaViaRPC = async (supabase, companyId, apiKeyId = null) => 
   }
 };
 
-// 📝 Функция для логирования API использования через RPC
+// ============================================================
+// 📝 ЛОГИРОВАНИЕ API ЧЕРЕЗ RPC
+// ============================================================
+
 export const logApiUsageViaRPC = async (supabase, params) => {
   try {
     const { data, error } = await supabase.rpc('log_api_usage', {
@@ -459,7 +459,10 @@ export const logApiUsageViaRPC = async (supabase, params) => {
   }
 };
 
-// 📊 Получить все доступные тарифы с дополнительной информацией
+// ============================================================
+// 📊 ПОЛУЧИТЬ ВСЕ ТАРИФЫ
+// ============================================================
+
 export const getAllPlans = () => {
   const planIds = Object.keys(TARIFF_PLANS);
   return planIds.map(id => {
@@ -474,12 +477,18 @@ export const getAllPlans = () => {
   });
 };
 
-// 🔍 Найти тариф по ID
+// ============================================================
+// 🔍 НАЙТИ ТАРИФ ПО ID
+// ============================================================
+
 export const findPlanById = (planId) => {
   return TARIFF_PLANS[planId] || null;
 };
 
-// 📈 Получить следующий уровень тарифа
+// ============================================================
+// 📈 ПОЛУЧИТЬ СЛЕДУЮЩИЙ УРОВЕНЬ
+// ============================================================
+
 export const getNextTier = (currentPlanId) => {
   const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
   const currentIndex = tiers.indexOf(currentPlanId);
@@ -494,7 +503,10 @@ export const getNextTier = (currentPlanId) => {
   };
 };
 
-// 📉 Получить предыдущий уровень тарифа
+// ============================================================
+// 📉 ПОЛУЧИТЬ ПРЕДЫДУЩИЙ УРОВЕНЬ
+// ============================================================
+
 export const getPreviousTier = (currentPlanId) => {
   const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
   const currentIndex = tiers.indexOf(currentPlanId);
@@ -510,10 +522,9 @@ export const getPreviousTier = (currentPlanId) => {
 };
 
 // ============================================================
-// 🔽 НОВАЯ ФУНКЦИЯ: getTariffUpgradeBenefits
+// 📈 ПРЕИМУЩЕСТВА АПГРЕЙДА
 // ============================================================
 
-// 📈 Получение преимуществ апгрейда тарифа
 export const getTariffUpgradeBenefits = (currentPlanId) => {
   const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
   const currentIndex = tiers.indexOf(currentPlanId);
@@ -530,7 +541,6 @@ export const getTariffUpgradeBenefits = (currentPlanId) => {
     return null;
   }
   
-  // Безопасное вычисление процентов (избегаем деления на 0)
   const safePercent = (from, to) => {
     if (from === 0) return 0;
     return Math.round(((to - from) / from) * 100);
@@ -570,10 +580,9 @@ export const getTariffUpgradeBenefits = (currentPlanId) => {
 };
 
 // ============================================================
-// 🔽 НОВАЯ ФУНКЦИЯ: checkTariffLimit
+// 📊 ПРОВЕРКА ЛИМИТА ПО ТАРИФУ
 // ============================================================
 
-// 📊 Проверка лимитов по тарифу
 export const checkTariffLimit = (planId, limitType, currentValue) => {
   const plan = TARIFF_PLANS[planId];
   if (!plan) return { allowed: false, limit: 0 };
@@ -597,7 +606,31 @@ export const checkTariffLimit = (planId, limitType, currentValue) => {
 };
 
 // ============================================================
-// 🔽 ЭКСПОРТ ПО УМОЛЧАНИЮ
+// 📊 ПОЛУЧИТЬ СТАТИСТИКУ ИСПОЛЬЗОВАНИЯ
 // ============================================================
+
+export const getUsageStats = async (companyId) => {
+  try {
+    const { count: applicationsCount } = await supabase
+      .from('applications')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
+    
+    const { count: usersCount } = await supabase
+      .from('company_users')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId);
+    
+    return {
+      applications: applicationsCount || 0,
+      users: usersCount || 0,
+      lastUpdated: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Ошибка получения статистики:', error);
+    return { applications: 0, users: 0, lastUpdated: null };
+  }
+};
 
 export default TARIFF_PLANS;

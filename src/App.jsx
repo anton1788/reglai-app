@@ -6903,42 +6903,47 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         
         {currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && 
   (isCompanyOwner || userRole === 'manager' || userRole === 'director' || userRole === 'client_manager') && (
-            <div className="max-w-7xl mx-auto p-4 page-enter">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {t('tariffSelector.title', 'Управление тарифом')}
-                </h2>
-                {isAdminMode && (
-                  <button
-                    onClick={handleAdminLogout}
-                    className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    {t('exitAdminMode', 'Выйти из режима админа')}
-                  </button>
-                )}
-              </div>
-              
-              {userCompanyId && !planLoading && (
-                <div className="mb-6">
-                  <QuotaUsage 
-                    userCompanyId={userCompanyId} 
-                    supabase={supabase} 
-                    quotaStatus={quotaStatus} 
-                  />
-                </div>
-              )}
-              
-              <TariffSelector
-                currentPlan={currentPlan?.id || 'basic'}
-                billingPeriod={billingPeriod}
-                onBillingPeriodChange={setBillingPeriod}
-                onSelectPlan={handleSelectPlan}
-                isLoading={planLoading}
-                t={t}
-                onPromoClick={() => setShowPromoModal(true)}
-                currentPlanDetails={currentPlanDetails}
-                promoCodeInfo={promoCodeInfo}
-              />
+    <div className="max-w-7xl mx-auto p-4 page-enter">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {t('tariffSelector.title', 'Управление тарифом')}
+        </h2>
+        {isAdminMode && (
+          <button
+            onClick={handleAdminLogout}
+            className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            {t('exitAdminMode', 'Выйти из режима админа')}
+          </button>
+        )}
+      </div>
+      
+      {userCompanyId && !planLoading && (
+        <div className="mb-6">
+          <QuotaUsage 
+            userCompanyId={userCompanyId} 
+            supabase={supabase} 
+            quotaStatus={quotaStatus} 
+          />
+        </div>
+      )}
+      
+      <TariffSelector
+        currentPlan={currentPlan?.id || 'basic'}
+        billingPeriod={billingPeriod}
+        onBillingPeriodChange={setBillingPeriod}
+        onSelectPlan={handleSelectPlan}
+        isLoading={planLoading}
+        t={t}
+        onPromoClick={() => setShowPromoModal(true)}
+        currentPlanDetails={{
+          ...currentPlanDetails,
+          usageCurrent: quotaStatus?.monthlyUsage || 0,
+          activated_at: currentPlanDetails?.activated_at,
+          expires_at: currentPlanDetails?.expires_at
+        }}
+        promoCodeInfo={promoCodeInfo}
+      />
               
               {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
                 <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">

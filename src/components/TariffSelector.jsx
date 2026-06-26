@@ -1,6 +1,5 @@
-// src/components/TariffSelector.jsx
 import React, { useState } from 'react';
-import { Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles, Shield, Headphones, Users, Key, Database, BarChart3, Webhook, Mail, MessageSquare, Phone, Star, Crown, Rocket } from 'lucide-react';
+import { Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles, Shield, Headphones, Users, Key, Database, BarChart3, Webhook, Mail, MessageSquare, Phone, Star, Crown, Rocket, AlertCircle } from 'lucide-react';
 import { TARIFF_PLANS, calculateSavings, getNextTier, getPreviousTier } from '../utils/tariffPlans';
 
 const TariffSelector = ({ 
@@ -27,6 +26,10 @@ const TariffSelector = ({
     }
   };
 
+  // ============================================================
+  // 🆕 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ДАТ
+  // ============================================================
+  
   const formatDate = (dateString) => {
     if (!dateString) return '—';
     return new Date(dateString).toLocaleDateString('ru-RU', {
@@ -41,6 +44,28 @@ const TariffSelector = ({
     const diff = new Date(expiresAt) - new Date();
     const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
     return days;
+  };
+
+  const getTrialDaysLeft = (activatedAt) => {
+    if (!activatedAt) return null;
+    const daysSinceActivation = Math.ceil((new Date() - new Date(activatedAt)) / (1000 * 60 * 60 * 24));
+    return Math.max(0, 14 - daysSinceActivation);
+  };
+
+  const getPlanStatus = (planId, expiresAt, activatedAt) => {
+    if (planId === 'basic') {
+      const daysLeft = getTrialDaysLeft(activatedAt);
+      if (daysLeft === null) return { label: 'Активен', color: 'text-green-600', bg: 'bg-green-100' };
+      if (daysLeft <= 0) return { label: 'Пробный период истёк', color: 'text-red-600', bg: 'bg-red-100' };
+      if (daysLeft <= 3) return { label: `Пробный период заканчивается (${daysLeft} дн.)`, color: 'text-orange-600', bg: 'bg-orange-100' };
+      return { label: `Пробный период (${daysLeft} дн.)`, color: 'text-green-600', bg: 'bg-green-100' };
+    }
+    
+    const daysLeft = getDaysLeft(expiresAt);
+    if (daysLeft === null) return { label: 'Активен', color: 'text-green-600', bg: 'bg-green-100' };
+    if (daysLeft <= 0) return { label: 'Истёк', color: 'text-red-600', bg: 'bg-red-100' };
+    if (daysLeft <= 7) return { label: `Истекает скоро (${daysLeft} дн.)`, color: 'text-orange-600', bg: 'bg-orange-100' };
+    return { label: 'Активен', color: 'text-green-600', bg: 'bg-green-100' };
   };
 
   const translate = (key, fallback) => {
@@ -87,32 +112,43 @@ const TariffSelector = ({
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-      {/* Информация о текущем тарифе */}
+      
+      {/* ============================================================
+          🆕 БЛОК С ДАТАМИ ТЕКУЩЕГО ТАРИФА (ПОЛНОСТЬЮ ОБНОВЛЁН)
+          ============================================================ */}
       {currentPlanDetails && (
         <div className="mb-8 bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 rounded-xl p-5 border border-[#4A6572]/20">
+          
+          {/* Заголовок */}
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-green-600" />
               <h3 className="font-semibold text-gray-900 dark:text-white">
                 {translate('currentPlanInfo', 'Текущий тариф')}: {getPlanIcon(currentPlan)} {getPlanDisplayName(currentPlan)}
               </h3>
-              {currentPlan !== 'basic' && (
-                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
-                  {translate('active', 'Активен')}
-                </span>
-              )}
+              {(() => {
+                const status = getPlanStatus(currentPlan, currentPlanDetails.expires_at, currentPlanDetails.activated_at);
+                return (
+                  <span className={`px-2 py-0.5 ${status.bg} ${status.color} text-xs rounded-full`}>
+                    {status.label}
+                  </span>
+                );
+              })()}
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <span>Уровень {getPlanLevel(currentPlan)} из 5</span>
             </div>
           </div>
           
+          {/* 🆕 ДАТЫ: АКТИВАЦИЯ, ОКОНЧАНИЕ, БЕСПЛАТНЫЙ ПЕРИОД */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 text-sm">
+            
+            {/* Дата активации */}
             <div className="flex items-start gap-2">
               <Calendar className="w-4 h-4 text-gray-500 mt-0.5" />
               <div>
                 <p className="text-gray-500 dark:text-gray-400">
-                  {translate('activationDate', 'Активирован')}:
+                  {translate('activationDate', '📅 Дата активации')}:
                 </p>
                 <p className="font-medium text-gray-900 dark:text-white">
                   {formatDate(currentPlanDetails.activated_at)}
@@ -120,32 +156,80 @@ const TariffSelector = ({
               </div>
             </div>
             
+            {/* Дата окончания */}
             <div className="flex items-start gap-2">
               <Clock className="w-4 h-4 text-gray-500 mt-0.5" />
               <div>
                 <p className="text-gray-500 dark:text-gray-400">
-                  {translate('expirationDate', 'Действует до')}:
+                  {translate('expirationDate', '⏰ Дата окончания')}:
                 </p>
                 <p className={`font-medium ${
-                  getDaysLeft(currentPlanDetails.expires_at) <= 7 
-                    ? 'text-orange-600 dark:text-orange-400' 
-                    : 'text-gray-900 dark:text-white'
+                  currentPlan === 'basic' 
+                    ? 'text-gray-400' 
+                    : currentPlanDetails.expires_at && getDaysLeft(currentPlanDetails.expires_at) <= 7 && getDaysLeft(currentPlanDetails.expires_at) > 0
+                      ? 'text-orange-600 dark:text-orange-400'
+                      : currentPlanDetails.expires_at && getDaysLeft(currentPlanDetails.expires_at) <= 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-gray-900 dark:text-white'
                 }`}>
-                  {formatDate(currentPlanDetails.expires_at)}
-                  {getDaysLeft(currentPlanDetails.expires_at) !== null && (
-                    <span className="text-xs ml-2 text-gray-500">
-                      ({getDaysLeft(currentPlanDetails.expires_at)} дн.)
+                  {currentPlan === 'basic' 
+                    ? '— (бесплатный тариф)' 
+                    : formatDate(currentPlanDetails.expires_at)}
+                  {currentPlan !== 'basic' && currentPlanDetails.expires_at && getDaysLeft(currentPlanDetails.expires_at) !== null && (
+                    <span className={`text-xs ml-2 ${
+                      getDaysLeft(currentPlanDetails.expires_at) <= 7 && getDaysLeft(currentPlanDetails.expires_at) > 0
+                        ? 'text-orange-500' 
+                        : getDaysLeft(currentPlanDetails.expires_at) <= 0
+                          ? 'text-red-500'
+                          : 'text-gray-500'
+                    }`}>
+                      {getDaysLeft(currentPlanDetails.expires_at) <= 0 
+                        ? '(истёк)' 
+                        : `(${getDaysLeft(currentPlanDetails.expires_at)} дн.)`}
                     </span>
                   )}
                 </p>
               </div>
             </div>
 
+            {/* 🆕 БЕСПЛАТНЫЙ ПЕРИОД (14 дней) */}
+            <div className="flex items-start gap-2">
+              <Gift className="w-4 h-4 text-[#F9AA33] mt-0.5" />
+              <div>
+                <p className="text-gray-500 dark:text-gray-400">
+                  {translate('trialPeriod', '🎁 Бесплатный период')}:
+                </p>
+                {currentPlan === 'basic' && currentPlanDetails?.activated_at ? (
+                  (() => {
+                    const daysLeft = getTrialDaysLeft(currentPlanDetails.activated_at);
+                    if (daysLeft === null) return <p className="font-medium text-gray-400">—</p>;
+                    if (daysLeft <= 0) {
+                      return <p className="font-medium text-red-600 dark:text-red-400">Период истёк</p>;
+                    }
+                    const daysText = daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней';
+                    return (
+                      <p className={`font-medium ${daysLeft <= 3 ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`}>
+                        {daysLeft} {daysText} из 14
+                        {daysLeft <= 3 && (
+                          <span className="text-xs ml-2 text-orange-500">⚠️ скоро закончится</span>
+                        )}
+                      </p>
+                    );
+                  })()
+                ) : (
+                  <p className="font-medium text-gray-400">—</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Статистика использования */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 pt-3 border-t border-[#4A6572]/20">
             <div className="flex items-start gap-2">
               <Users className="w-4 h-4 text-gray-500 mt-0.5" />
               <div>
                 <p className="text-gray-500 dark:text-gray-400">
-                  {translate('currentUsage', 'Использование')}:
+                  {translate('currentUsage', 'Использовано')}:
                 </p>
                 <p className="font-medium text-gray-900 dark:text-white">
                   {currentPlanDetails.usageCurrent || 0} / {TARIFF_PLANS[currentPlan]?.apiQuotaMonthly || 0}
@@ -154,6 +238,7 @@ const TariffSelector = ({
             </div>
           </div>
           
+          {/* Промокод */}
           {promoCodeInfo && (
             <div className="mt-3 pt-3 border-t border-[#4A6572]/20 flex items-start gap-2">
               <Gift className="w-4 h-4 text-[#F9AA33] mt-0.5" />
@@ -173,18 +258,21 @@ const TariffSelector = ({
             </div>
           )}
           
-          {onExtendPlan && (
+          {/* Кнопка продления */}
+          {onExtendPlan && currentPlan !== 'basic' && (
             <button
               onClick={onExtendPlan}
               className="mt-4 w-full py-2 bg-[#4A6572]/20 text-[#4A6572] dark:text-[#F9AA33] rounded-lg text-sm font-medium hover:bg-[#4A6572]/30 transition-colors"
             >
-              {translate('extendPlan', 'Продлить тариф')}
+              {translate('extendPlan', '🔄 Продлить тариф')}
             </button>
           )}
         </div>
       )}
 
-      {/* Заголовок и переключатель периода */}
+      {/* ============================================================
+          ЗАГОЛОВОК И ПЕРЕКЛЮЧАТЕЛЬ ПЕРИОДА
+          ============================================================ */}
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
           {translate('tariffSelector.title', 'Выберите подходящий тариф')}
@@ -220,23 +308,24 @@ const TariffSelector = ({
         </div>
       </div>
 
-      {/* Карточки тарифов */}
+      {/* ============================================================
+          КАРТОЧКИ ТАРИФОВ
+          ============================================================ */}
       <div className="grid md:grid-cols-3 gap-6">
-        {Object.values(TARIFF_PLANS).map((plan) => {
+        {Object.entries(TARIFF_PLANS).map(([planId, plan]) => {
           const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.annualPrice;
           const savings = calculateSavings(plan);
-          const isCurrent = currentPlan === plan.id;
+          const isCurrent = currentPlan === planId;
           const isPopular = plan.popular;
           const isFree = plan.monthlyPrice === 0;
-          const isNext = getNextTier(currentPlan)?.id === plan.id;
+          const isNext = getNextTier(currentPlan)?.id === planId;
 
-          // Получаем следующий план для сравнения
-          const nextPlan = getNextTier(plan.id);
-          const prevPlan = getPreviousTier(plan.id);
+          const nextPlan = getNextTier(planId);
+          const prevPlan = getPreviousTier(planId);
 
           return (
             <div
-              key={plan.id}
+              key={planId}
               className={`relative rounded-2xl border-2 transition-all duration-300 hover:shadow-xl ${
                 isCurrent
                   ? 'border-[#4A6572] bg-[#4A6572]/5 ring-2 ring-[#4A6572]/20'
@@ -272,9 +361,9 @@ const TariffSelector = ({
               <div className="p-6">
                 {/* Заголовок */}
                 <div className="text-center mb-6">
-                  <div className="text-3xl mb-2">{getPlanIcon(plan.id)}</div>
+                  <div className="text-3xl mb-2">{getPlanIcon(planId)}</div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                    {translate(`tariff.plans.${plan.id}.name`, plan.name)}
+                    {translate(`tariff.plans.${planId}.name`, plan.name)}
                   </h3>
                   
                   {!isFree ? (
@@ -351,7 +440,7 @@ const TariffSelector = ({
                     };
                     
                     return (
-                      <div key={`${plan.id}-${feature}`} className="flex items-center gap-3 text-sm">
+                      <div key={`${planId}-${feature}`} className="flex items-center gap-3 text-sm">
                         {enabled ? (
                           <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
                         ) : (
@@ -367,7 +456,7 @@ const TariffSelector = ({
 
                 {/* Кнопка действия */}
                 <button
-                  onClick={() => onSelectPlan(plan.id)}
+                  onClick={() => onSelectPlan(planId)}
                   disabled={isCurrent || isLoading}
                   className={`w-full py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
                     isCurrent
@@ -397,12 +486,12 @@ const TariffSelector = ({
                 {/* Сравнение с соседними тарифами */}
                 {showUpgradePrompt && !isCurrent && (
                   <div className="mt-3 text-center">
-                    {nextPlan && plan.id !== 'enterprise' && (
+                    {nextPlan && planId !== 'enterprise' && (
                       <p className="text-xs text-gray-400">
                         Следующий уровень: {getPlanIcon(nextPlan.id)} {getPlanDisplayName(nextPlan.id)}
                       </p>
                     )}
-                    {prevPlan && plan.id !== 'basic' && (
+                    {prevPlan && planId !== 'basic' && (
                       <p className="text-xs text-gray-400 mt-1">
                         От {getPlanIcon(prevPlan.id)} {getPlanDisplayName(prevPlan.id)}: +{((plan.apiQuotaMonthly - prevPlan.plan.apiQuotaMonthly) / prevPlan.plan.apiQuotaMonthly * 100).toFixed(0)}% запросов
                       </p>
@@ -415,7 +504,9 @@ const TariffSelector = ({
         })}
       </div>
 
-      {/* Дополнительная информация и промокод */}
+      {/* ============================================================
+          ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ
+          ============================================================ */}
       <div className="mt-10 text-center">
         <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-gray-500 dark:text-gray-400">
           <span className="flex items-center gap-1">
