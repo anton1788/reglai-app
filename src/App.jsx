@@ -44,6 +44,8 @@ import SmartVoiceSearch from './components/SmartVoiceSearch';
 
 // Добавить в renderNavigation новый пункт 'tasks'
 import SuperAdminCompanyTariffs from './components/SuperAdminCompanyTariffs';
+import SupportModal from './components/SupportModal';
+import HelpPage from './components/HelpPage'; // ← СЮДА
 import GlobalSearch from './components/GlobalSearch';
 import SuperAdminPanel from './components/SuperAdminPanel';
 import AnalyticsDetailModal from './components/AnalyticsDetailModal';
@@ -7118,6 +7120,14 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     companyId={userCompanyId}
     showNotification={showNotification}
     t={t}
+  />
+)}
+
+{currentView === 'help' && ( // ← ДОБАВИТЬ ЭТОТ БЛОК
+  <HelpPage
+    onNavigate={setCurrentView}
+    t={t}
+    language={language}
   />
 )}
       </main>
