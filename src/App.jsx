@@ -4493,6 +4493,33 @@ useEffect(() => {
       const planPromise = getCompanyPlan(supabase, userCompanyId);
       const plan = await Promise.race([planPromise, timeoutPromise]);
       setCurrentPlan(plan);
+
+       // 🆕 ПРОВЕРКА: если тариф платный и срок истёк → сбрасываем на basic
+      const now = new Date();
+      const expiresAt = new Date(plan.expiresAt);
+      
+      if (plan.id !== 'basic' && expiresAt < now) {
+        console.log('⏰ Тариф истёк, сбрасываем на basic');
+        
+        // Обновляем в БД
+        await supabase
+          .from('companies')
+          .update({
+            plan_tier: 'basic',
+            plan_activated_at: null,
+            plan_expires_at: null,
+            updated_at: now.toISOString()
+          })
+          .eq('id', userCompanyId);
+        
+        // Обновляем локально
+        setCurrentPlan(TARIFF_PLANS.basic);
+        setCurrentPlanDetails(null);
+        showNotification('⚠️ Пробный период истёк. Вы переведены на бесплатный тариф Базовый.', 'warning');
+        
+        setPlanLoading(false);
+        return;
+      }
       
       // 🆕 ЗАГРУЗКА ДЕТАЛЕЙ ТАРИФА (тоже с таймаутом)
       const companyPromise = supabase
@@ -4556,6 +4583,44 @@ useEffect(() => {
   
   syncPromos();
 }, [user, userRole, supabase]);
+
+// 🕐 ЕЖЕДНЕВНАЯ ПРОВЕРКА ИСТЕКШИХ ТАРИФОВ
+useEffect(() => {
+  const checkExpiredPlans = async () => {
+    if (!userCompanyId) return;
+    
+    const now = new Date();
+    
+    // Проверяем только платные тарифы
+    if (currentPlan?.id !== 'basic' && currentPlanDetails?.expires_at) {
+      const expiresAt = new Date(currentPlanDetails.expires_at);
+      
+      if (expiresAt < now) {
+        console.log('⏰ Тариф истёк, сбрасываем на basic (фоновая проверка)');
+        
+        await supabase
+          .from('companies')
+          .update({
+            plan_tier: 'basic',
+            plan_activated_at: null,
+            plan_expires_at: null,
+            updated_at: now.toISOString()
+          })
+          .eq('id', userCompanyId);
+        
+        setCurrentPlan(TARIFF_PLANS.basic);
+        setCurrentPlanDetails(null);
+        showNotification('⚠️ Пробный период истёк. Вы переведены на бесплатный тариф Базовый.', 'warning');
+      }
+    }
+  };
+  
+  // Проверяем при загрузке и каждый час
+  checkExpiredPlans();
+  const interval = setInterval(checkExpiredPlans, 60 * 60 * 1000);
+  
+  return () => clearInterval(interval);
+}, [userCompanyId, currentPlan, currentPlanDetails]);
 
 // ============================================================
 // 🆕 АВТОМАТИЧЕСКИЙ СБРОС ЛИМИТОВ (ВСТАВИТЬ СЮДА)

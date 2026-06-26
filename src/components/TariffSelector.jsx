@@ -191,9 +191,9 @@ const TariffSelector = ({
                 </p>
               </div>
             </div>
-
-            {/* 🆕 БЕСПЛАТНЫЙ ПЕРИОД (14 дней) */}
+            
            {/* 🆕 БЕСПЛАТНЫЙ ПЕРИОД (14 дней) — ТОЛЬКО ДЛЯ ПЛАТНЫХ ТАРИФОВ */}
+{/* 🆕 БЕСПЛАТНЫЙ ПЕРИОД (14 дней) — ТОЛЬКО ДЛЯ ПЛАТНЫХ ТАРИФОВ */}
 <div className="flex items-start gap-2">
   <Gift className="w-4 h-4 text-[#F9AA33] mt-0.5" />
   <div>
@@ -205,16 +205,30 @@ const TariffSelector = ({
         const daysLeft = getTrialDaysLeft(currentPlanDetails.activated_at);
         if (daysLeft === null) return <p className="font-medium text-gray-400">—</p>;
         if (daysLeft <= 0) {
-          return <p className="font-medium text-red-600 dark:text-red-400">Период истёк</p>;
+          return (
+            <div>
+              <p className="font-medium text-red-600 dark:text-red-400">Период истёк</p>
+              <p className="text-xs text-red-500 mt-0.5">
+                ⚠️ Вы будете переведены на бесплатный тариф
+              </p>
+            </div>
+          );
         }
         const daysText = daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней';
         return (
-          <p className={`font-medium ${daysLeft <= 3 ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`}>
-            {daysLeft} {daysText} из 14
+          <div>
+            <p className={`font-medium ${daysLeft <= 3 ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`}>
+              {daysLeft} {daysText} из 14
+              {daysLeft <= 3 && (
+                <span className="text-xs ml-2 text-orange-500">⚠️ скоро закончится</span>
+              )}
+            </p>
             {daysLeft <= 3 && (
-              <span className="text-xs ml-2 text-orange-500">⚠️ скоро закончится</span>
+              <p className="text-xs text-orange-500 mt-0.5">
+                🚀 Обновите тариф, чтобы продолжить работу
+              </p>
             )}
-          </p>
+          </div>
         );
       })()
     ) : currentPlan === 'basic' ? (
