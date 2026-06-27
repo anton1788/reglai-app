@@ -4469,6 +4469,7 @@ useEffect(() => {
     }
   }
 }, [user, userCompanyId, userRole, isAdminMode]); // ✅ Убрали page из зависимостей
+
   // 💰 Load company plan & quota
 useEffect(() => {
   const loadPlan = async () => {
@@ -4496,14 +4497,13 @@ useEffect(() => {
       const plan = await Promise.race([planPromise, timeoutPromise]);
       setCurrentPlan(plan);
 
-       // 🆕 ПРОВЕРКА: если тариф платный и срок истёк → сбрасываем на basic
+      // 🆕 ПРОВЕРКА: если тариф платный и срок истёк → сбрасываем на basic
       const now = new Date();
       const expiresAt = new Date(plan.expiresAt);
       
       if (plan.id !== 'basic' && expiresAt < now) {
         console.log('⏰ Тариф истёк, сбрасываем на basic');
         
-        // Обновляем в БД
         await supabase
           .from('companies')
           .update({
@@ -4514,7 +4514,6 @@ useEffect(() => {
           })
           .eq('id', userCompanyId);
         
-        // Обновляем локально
         setCurrentPlan(TARIFF_PLANS.basic);
         setCurrentPlanDetails(null);
         showNotification('⚠️ Пробный период истёк. Вы переведены на бесплатный тариф Базовый.', 'warning');
@@ -4532,7 +4531,9 @@ useEffect(() => {
       
       const companyData = await Promise.race([companyPromise, timeoutPromise]);
       
+      // ✅ УБЕДИТЕСЬ, ЧТО ЭТИ ДАННЫЕ УСТАНАВЛИВАЮТСЯ
       if (companyData?.data) {
+        console.log('📊 Company data loaded:', companyData.data);
         setCurrentPlanDetails({
           activated_at: companyData.data.plan_activated_at,
           expires_at: companyData.data.plan_expires_at
@@ -7004,34 +7005,33 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         t={t}
         onPromoClick={() => setShowPromoModal(true)}
         currentPlanDetails={{
-          ...currentPlanDetails,
-          usageCurrent: quotaStatus?.monthlyUsage || 0,
-          activated_at: currentPlanDetails?.activated_at,
-          expires_at: currentPlanDetails?.expires_at
+          activated_at: currentPlanDetails?.activated_at || null,
+          expires_at: currentPlanDetails?.expires_at || null,
+          usageCurrent: quotaStatus?.monthlyUsage || 0
         }}
         promoCodeInfo={promoCodeInfo}
       />
               
-              {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
-                <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
-                    {t('currentPlan', 'Ваш текущий план')}:
-                  </h4>
-                  <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
-                    <span>📦 {currentPlan.name}</span>
-                    <span>💰 {billingPeriod === 'monthly' 
-                      ? `${currentPlan.monthlyPrice} ₽/мес` 
-                      : `${currentPlan.annualPrice} ₽/год`}</span>
-                    <span>🔑 {currentPlan.maxApiKeys} API ключей</span>
-                    <span>👥 {currentPlan.maxUsers} пользователей</span>
-                    {currentPlan.isActive && (
-                      <span className="text-green-600">✅ Активен</span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+      {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
+        <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+            {t('currentPlan', 'Ваш текущий план')}:
+          </h4>
+          <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
+            <span>📦 {currentPlan.name}</span>
+            <span>💰 {billingPeriod === 'monthly' 
+              ? `${currentPlan.monthlyPrice} ₽/мес` 
+              : `${currentPlan.annualPrice} ₽/год`}</span>
+            <span>🔑 {currentPlan.maxApiKeys} API ключей</span>
+            <span>👥 {currentPlan.maxUsers} пользователей</span>
+            {currentPlan.isActive && (
+              <span className="text-green-600">✅ Активен</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )}
         
         {/* Вкладки для заказчика */}
         {currentView === 'clientDashboard' && userRole === 'client' && (
