@@ -4491,7 +4491,7 @@ useEffect(() => {
   }
 }, [user, userCompanyId, userRole, isAdminMode]); // ✅ Убрали page из зависимостей
 
-  // 💰 Load company plan & quota
+// 💰 Load company plan & quota (ОБНОВЛЁННАЯ ВЕРСИЯ)
 useEffect(() => {
   const loadPlan = async () => {
     // 🔒 Супер-админ: не загружаем тариф компании
@@ -4509,83 +4509,92 @@ useEffect(() => {
     try {
       setPlanLoading(true);
       
-      // Добавляем таймаут 10 секунд
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
-      );
+      // Загружаем данные компании
+      const { data: companyData, error: companyError } = await supabase
+        .from('companies')
+        .select('plan_tier, plan_activated_at, plan_expires_at, trial_started_at, trial_ended_at, promo_code_used, promo_applied_at, promo_discount_percent')
+        .eq('id', userCompanyId)
+        .single();
       
-      const planPromise = getCompanyPlan(supabase, userCompanyId);
-      const plan = await Promise.race([planPromise, timeoutPromise]);
-      setCurrentPlan(plan);
-
-      // 🆕 ПРОВЕРКА: если тариф платный и срок истёк → сбрасываем на basic
+      if (companyError) throw companyError;
+      
+      console.log('📊 Company data loaded:', companyData);
+      
       const now = new Date();
-      const expiresAt = new Date(plan.expiresAt);
+      let planId = companyData?.plan_tier || 'basic';
       
-      if (plan.id !== 'basic' && expiresAt < now) {
-        console.log('⏰ Тариф истёк, сбрасываем на basic');
-        
-        await supabase
-          .from('companies')
-          .update({
-            plan_tier: 'basic',
-            plan_activated_at: null,
-            plan_expires_at: null,
-            updated_at: now.toISOString()
-          })
-          .eq('id', userCompanyId);
-        
-        setCurrentPlan(TARIFF_PLANS.basic);
-        setCurrentPlanDetails(null);
-        showNotification('⚠️ Пробный период истёк. Вы переведены на бесплатный тариф Базовый.', 'warning');
-        
-        setPlanLoading(false);
-        return;
+      // 🔥 КЛЮЧЕВАЯ ЛОГИКА: Если есть пробный период и он не истёк, используем PRO
+      const isTrialActive = companyData?.trial_started_at && 
+                            companyData?.trial_ended_at && 
+                            new Date(companyData.trial_ended_at) > now;
+      
+      // Если пробный период активен, устанавливаем PRO, даже если в БД стоит basic
+      if (isTrialActive && planId === 'basic') {
+        console.log('🎯 Пробный период активен, устанавливаем PRO');
+        planId = 'pro';
+        setCurrentPlan(TARIFF_PLANS.pro);
+      } else {
+        setCurrentPlan(TARIFF_PLANS[planId] || TARIFF_PLANS.basic);
       }
       
-      // 🆕 ЗАГРУЗКА ДЕТАЛЕЙ ТАРИФА (тоже с таймаутом)
-      const companyPromise = supabase
-  .from('companies')
-  .select('plan_activated_at, plan_expires_at, promo_code_used, promo_applied_at, promo_discount_percent, trial_started_at, trial_ended_at')
-  .eq('id', userCompanyId)
-  .single();
-      
-      const companyData = await Promise.race([companyPromise, timeoutPromise]);
-      
-      // ✅ УБЕДИТЕСЬ, ЧТО ЭТИ ДАННЫЕ УСТАНАВЛИВАЮТСЯ
-      if (companyData?.data) {
-        console.log('📊 Company data loaded:', companyData.data);
-        setCurrentPlanDetails({
-  activated_at: companyData.data.plan_activated_at,
-  expires_at: companyData.data.plan_expires_at,
-  trial_started_at: companyData.data.trial_started_at,
-  trial_ended_at: companyData.data.trial_ended_at,
-  is_trial: companyData.data.trial_started_at !== null && companyData.data.plan_tier !== 'basic',
-  is_trial_expired: false
-});
-        
-        if (companyData.data.promo_code_used) {
-          setPromoCodeInfo({
-            code: companyData.data.promo_code_used,
-            applied_at: companyData.data.promo_applied_at,
-            discount_percent: companyData.data.promo_discount_percent
-          });
+      // Определяем, истёк ли пробный период
+      let isTrialExpired = false;
+      if (companyData?.trial_ended_at) {
+        const trialEnd = new Date(companyData.trial_ended_at);
+        if (trialEnd < now) {
+          isTrialExpired = true;
         }
       }
       
-      // Проверка квоты (опционально, с таймаутом)
+      // Устанавливаем детали тарифа
+      setCurrentPlanDetails({
+        activated_at: companyData?.plan_activated_at || companyData?.trial_started_at || null,
+        expires_at: companyData?.plan_expires_at || companyData?.trial_ended_at || null,
+        trial_started_at: companyData?.trial_started_at || null,
+        trial_ended_at: companyData?.trial_ended_at || null,
+        is_trial: companyData?.trial_started_at !== null && isTrialActive,
+        is_trial_expired: isTrialExpired,
+        usageCurrent: quotaStatus?.monthlyUsage || 0
+      });
+      
+      console.log('📊 currentPlanDetails set:', {
+        planId,
+        isTrialActive,
+        isTrialExpired,
+        activated_at: companyData?.plan_activated_at || companyData?.trial_started_at,
+        expires_at: companyData?.plan_expires_at || companyData?.trial_ended_at
+      });
+      
+      // Промокоды
+      if (companyData?.promo_code_used) {
+        setPromoCodeInfo({
+          code: companyData.promo_code_used,
+          applied_at: companyData.promo_applied_at,
+          discount_percent: companyData.promo_discount_percent
+        });
+      }
+      
+      // Квота
       try {
-        const quota = await Promise.race([checkQuota(supabase, userCompanyId), timeoutPromise]);
+        const quota = await checkQuota(supabase, userCompanyId);
         setQuotaStatus(quota);
       } catch (quotaErr) {
-        console.debug('Quota check failed (non-critical):', quotaErr.message);
+        console.debug('Quota check failed:', quotaErr.message);
         setQuotaStatus({ dailyUsage: 0, dailyLimit: 100, allowed: true });
       }
       
     } catch (err) {
       console.warn('Failed to load plan (using default):', err.message);
       setCurrentPlan(TARIFF_PLANS.basic);
-      setCurrentPlanDetails(null);
+      setCurrentPlanDetails({
+        activated_at: null,
+        expires_at: null,
+        trial_started_at: null,
+        trial_ended_at: null,
+        is_trial: false,
+        is_trial_expired: false,
+        usageCurrent: 0
+      });
       setQuotaStatus({ dailyUsage: 0, dailyLimit: 100, allowed: true });
     } finally {
       setPlanLoading(false);
