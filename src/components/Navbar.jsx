@@ -65,13 +65,17 @@ const Navbar = ({
 
   // Загрузка текущего тарифа
   const loadCompanyPlan = useCallback(async () => {
-    if (!companyId || !supabase) return;
+    if (!companyId || !supabase) {
+      setPlanLoading(false);
+      return;
+    }
     try {
       setPlanLoading(true);
       const planData = await getCompanyPlan(supabase, companyId);
       setCurrentPlan(planData);
     } catch (error) {
       console.error('Failed to load company plan:', error);
+      // Не сбрасываем план при ошибке
     } finally {
       setPlanLoading(false);
     }
@@ -376,6 +380,46 @@ const Navbar = ({
     return () => document.head.removeChild(style);
   }, []);
 
+  // Безопасный рендеринг индикатора тарифа
+  const renderTariffIndicator = () => {
+    if (planLoading) {
+      return (
+        <div className="flex items-center gap-1">
+          <div className="w-4 h-4 border-2 border-gray-300 border-t-[#4A6572] rounded-full animate-spin"></div>
+          <span className="text-xs text-gray-400">Загрузка...</span>
+        </div>
+      );
+    }
+    
+    if (currentPlan) {
+      return (
+        <>
+          <span className="text-sm">{getPlanIcon(currentPlan.id)}</span>
+          <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+            {currentPlan.name}
+          </span>
+          {currentPlan.id !== 'enterprise' && (
+            <button
+              onClick={onOpenTariffs}
+              className="ml-1 text-xs text-[#F9AA33] hover:underline"
+            >
+              ↑
+            </button>
+          )}
+        </>
+      );
+    }
+    
+    return (
+      <button
+        onClick={onOpenTariffs}
+        className="text-xs text-[#F9AA33] hover:underline"
+      >
+        Выбрать тариф
+      </button>
+    );
+  };
+
   return (
     <>
       <nav className="bg-white dark:bg-gray-900 shadow-lg sticky top-0 z-50 w-full">
@@ -439,34 +483,7 @@ const Navbar = ({
             <div className="flex items-center gap-1 flex-shrink-0">
               {/* Индикатор тарифа с состоянием загрузки */}
               <div className="hidden lg:flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg min-w-[60px]">
-                {planLoading ? (
-                  <div className="flex items-center gap-1">
-                    <div className="w-4 h-4 border-2 border-gray-300 border-t-[#4A6572] rounded-full animate-spin"></div>
-                    <span className="text-xs text-gray-400">Загрузка...</span>
-                  </div>
-                ) : currentPlan ? (
-                  <>
-                    <span className="text-sm">{getPlanIcon(currentPlan.id)}</span>
-                    <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
-                      {currentPlan.name}
-                    </span>
-                    {currentPlan.id !== 'enterprise' && (
-                      <button
-                        onClick={onOpenTariffs}
-                        className="ml-1 text-xs text-[#F9AA33] hover:underline"
-                      >
-                        ↑
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <button
-                    onClick={onOpenTariffs}
-                    className="text-xs text-[#F9AA33] hover:underline"
-                  >
-                    Выбрать тариф
-                  </button>
-                )}
+                {renderTariffIndicator()}
               </div>
 
               {/* Индикатор офлайн режима с синхронизацией */}
@@ -741,7 +758,6 @@ const Navbar = ({
                         <Settings className="w-4 h-4" />
                         Настройки
                       </button>
-                      {/* Пункт "Помощь" УДАЛЕН - теперь есть отдельная кнопка "Поддержка" */}
                       <hr className="my-2 border-gray-200 dark:border-gray-700" />
                       <button
                         onClick={onLogout}
