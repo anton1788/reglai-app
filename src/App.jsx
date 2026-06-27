@@ -186,6 +186,7 @@ import approvalEngine from './utils/approvalEngine';
 import EstimateCalculator from './components/EstimateCalculator';
 import ReportBuilder from './components/ReportBuilder';
 import OneCIntegration from './components/OneCIntegration';
+import SettingsPage from './components/SettingsPage';
 
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
@@ -1173,6 +1174,7 @@ useEffect(() => {
 const [updateInfo, setUpdateInfo] = useState(null);
 const [showUpdateModal, setShowUpdateModal] = useState(false);
 const [waitingWorker, setWaitingWorker] = useState(null);
+const [showSettings, setShowSettings] = useState(false);
 
   // ─────────────────────────────────────────────────────────
   // 🎯 FOCUS MANAGEMENT (Pattern #3)
@@ -7217,6 +7219,25 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     onNavigate={setCurrentView}
     t={t}
     language={language}
+  />
+)}
+
+{currentView === 'settings' && (
+  <SettingsPage
+    user={user}
+    userRole={userRole}
+    userCompany={userCompany}
+    userCompanyId={userCompanyId}
+    supabase={supabase}
+    language={language}
+    theme={theme}
+    onThemeChange={setTheme}
+    onLanguageChange={setLanguage}
+    t={t}
+    showNotification={showNotification}
+    applications={applications}
+    settings={settings}
+    onSettingsUpdate={setSettings}
   />
 )}
       </main>
