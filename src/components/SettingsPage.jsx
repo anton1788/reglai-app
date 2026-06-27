@@ -16,12 +16,10 @@ const SettingsPage = ({
   theme,
   onThemeChange,
   onLanguageChange,
-  // t - пока не используется, но оставим для будущего
   // eslint-disable-next-line no-unused-vars
   t,
   showNotification,
   applications,
-  // globalSettings - пока не используется
   // eslint-disable-next-line no-unused-vars
   settings: globalSettings,
   onSettingsUpdate
@@ -77,7 +75,7 @@ const SettingsPage = ({
   // 📋 Активные вкладки
   const [activeTab, setActiveTab] = useState('appearance');
 
-  // Загрузка настроек - обернули в useCallback
+  // Загрузка настроек
   const loadSettings = useCallback(async () => {
     setLoading(true);
     try {
@@ -116,16 +114,17 @@ const SettingsPage = ({
         setAutoCleanupEnabled(userPrefs.auto_cleanup_enabled ?? true);
       }
 
-      // Загружаем API ключ
+      // Загружаем API ключ (адаптировано под вашу структуру)
       const { data: apiData } = await supabase
         .from('api_keys')
-        .select('api_key')
+        .select('key_value, key_name, is_active')
         .eq('company_id', userCompanyId)
-        .eq('user_id', user?.id)
-        .single();
+        .eq('created_by', user?.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-      if (apiData) {
-        setApiKey(apiData.api_key);
+      if (apiData && apiData.length > 0) {
+        setApiKey(apiData[0].key_value);
       }
 
       // Загружаем версию приложения
@@ -226,12 +225,16 @@ const SettingsPage = ({
     try {
       const newKey = `rg_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
       
+      // Адаптировано под вашу структуру api_keys
       const { error } = await supabase
         .from('api_keys')
-        .upsert({
-          user_id: user?.id,
+        .insert({
           company_id: userCompanyId,
-          api_key: newKey,
+          key_name: `API Key ${new Date().toLocaleDateString()}`,
+          key_value: newKey,
+          is_active: true,
+          created_by: user?.id,
+          permissions: { read: true, write: true },
           created_at: new Date().toISOString()
         });
 
@@ -266,8 +269,8 @@ const SettingsPage = ({
       } else {
         showNotification('✅ У вас последняя версия приложения', 'success');
       }
-    }catch {
-  showNotification('❌ Ошибка проверки обновлений', 'error');
+    } catch {
+      showNotification('❌ Ошибка проверки обновлений', 'error');
     } finally {
       setCheckingUpdate(false);
     }
@@ -778,7 +781,7 @@ const SettingsPage = ({
   const renderAboutTab = () => {
     const stats = {
       totalApplications: applications?.length || 0,
-      totalUsers: 0, // Загрузите из пропсов
+      totalUsers: 0,
       totalObjects: new Set(applications?.map(a => a.object_name) || []).size
     };
 
