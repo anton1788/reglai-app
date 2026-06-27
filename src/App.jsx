@@ -5106,42 +5106,56 @@ const handleSelectPlan = async (planId) => {
   }
   
   try {
+    const now = new Date().toISOString();
+    let expiresAt = null;
+    
+    // Для платных тарифов устанавливаем дату окончания
+    if (planId !== 'basic') {
+      const days = billingPeriod === 'monthly' ? 30 : 365;
+      expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    }
+    
     // 🔍 ОТЛАДКА: логируем изменение тарифа
     console.log('🔍 [TARIFF] Changing plan:', {
       userCompanyId,
       planId,
       userId: user?.id,
       userEmail: user?.email,
-      userRole
+      userRole,
+      activated_at: now,
+      expires_at: expiresAt
     });
     
-    // 1. Обновляем тариф в базе данных
+    // 1. Обновляем тариф в базе данных с датами
+    const updateData = {
+      plan_tier: planId,
+      plan_activated_at: now,
+      plan_expires_at: expiresAt,
+      updated_at: now
+    };
+    
     const { error } = await supabase
       .from('companies')
-      .update({
-        plan_tier: planId,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', userCompanyId);
 
     if (error) throw error;
 
-    // 🆕 ОЧИСТКА КЭША ПОСЛЕ СМЕНЫ ТАРИФА
-    cacheManager.clear();
-    console.log('🗑️ Кэш очищен после смены тарифа');
-
-    // 2. 🔄 ОБНОВЛЯЕМ КВОТУ ПОСЛЕ СМЕНЫ ТАРИФА
+    // 2. Обновляем локальные состояния
+    setCurrentPlan(TARIFF_PLANS[planId]);
+    setCurrentPlanDetails({
+      activated_at: now,
+      expires_at: expiresAt,
+      usageCurrent: 0
+    });
+    
+    // 3. Обновляем квоту
     try {
       const newQuota = await checkQuota(supabase, userCompanyId);
       setQuotaStatus(newQuota);
-      console.log('📊 Квота обновлена:', newQuota);
     } catch (quotaErr) {
       console.warn('⚠️ Не удалось обновить квоту:', quotaErr.message);
-      // Не блокируем основную логику, если квота не обновилась
     }
-
-    // 3. Обновляем текущий план в состоянии
-    setCurrentPlan(TARIFF_PLANS[planId]);
     
     // 4. Закрываем модальное окно
     setShowTariffModal(false);
@@ -5149,9 +5163,8 @@ const handleSelectPlan = async (planId) => {
     // 5. Показываем уведомление об успехе
     showNotification(`✅ Тариф "${TARIFF_PLANS[planId].name}" активирован`, 'success');
     
-    // 6. 🔍 ОТЛАДКА АУДИТА
-    console.log('📝 [AUDIT] Calling logAuditAction...');
-    const auditResult = await logAuditAction(supabase, {
+    // 6. Аудит
+    await logAuditAction(supabase, {
       actionType: 'plan_changed',
       entityType: 'company',
       entityId: userCompanyId,
@@ -5162,11 +5175,9 @@ const handleSelectPlan = async (planId) => {
       userEmail: user?.email,
       userRole: userRole
     });
-    console.log('📝 [AUDIT] Result:', auditResult);
     
-    // 7. 🔄 Перезагружаем данные приложения для применения новых лимитов
+    // 7. Перезагружаем данные
     if (currentView === 'create' || currentView === 'tariffs') {
-      // Перезагружаем заявки для обновления лимитов в UI
       await loadApplications(page);
     }
     

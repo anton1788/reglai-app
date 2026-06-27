@@ -117,128 +117,127 @@ const TariffSelector = ({
           🆕 БЛОК С ДАТАМИ ТЕКУЩЕГО ТАРИФА (ПОЛНОСТЬЮ ОБНОВЛЁН)
           ============================================================ */}
       {currentPlanDetails && (
-        <div className="mb-8 bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 rounded-xl p-5 border border-[#4A6572]/20">
-          
-          {/* Заголовок */}
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">
-                {translate('currentPlanInfo', 'Текущий тариф')}: {getPlanIcon(currentPlan)} {getPlanDisplayName(currentPlan)}
-              </h3>
-              {(() => {
-                const status = getPlanStatus(currentPlan, currentPlanDetails.expires_at, currentPlanDetails.activated_at);
-                return (
-                  <span className={`px-2 py-0.5 ${status.bg} ${status.color} text-xs rounded-full`}>
-                    {status.label}
-                  </span>
-                );
-              })()}
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <span>Уровень {getPlanLevel(currentPlan)} из 5</span>
-            </div>
-          </div>
-          
-          {/* 🆕 ДАТЫ: АКТИВАЦИЯ, ОКОНЧАНИЕ, БЕСПЛАТНЫЙ ПЕРИОД */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 text-sm">
-            
-            {/* Дата активации */}
-            <div className="flex items-start gap-2">
-              <Calendar className="w-4 h-4 text-gray-500 mt-0.5" />
-              <div>
-                <p className="text-gray-500 dark:text-gray-400">
-                  {translate('activationDate', '📅 Дата активации')}:
-                </p>
-                <p className="font-medium text-gray-900 dark:text-white">
-                  {formatDate(currentPlanDetails.activated_at)}
-                </p>
-              </div>
-            </div>
-            
-            {/* Дата окончания */}
-            <div className="flex items-start gap-2">
-              <Clock className="w-4 h-4 text-gray-500 mt-0.5" />
-              <div>
-                <p className="text-gray-500 dark:text-gray-400">
-                  {translate('expirationDate', '⏰ Дата окончания')}:
-                </p>
-                <p className={`font-medium ${
-                  currentPlan === 'basic' 
-                    ? 'text-gray-400' 
-                    : currentPlanDetails.expires_at && getDaysLeft(currentPlanDetails.expires_at) <= 7 && getDaysLeft(currentPlanDetails.expires_at) > 0
-                      ? 'text-orange-600 dark:text-orange-400'
-                      : currentPlanDetails.expires_at && getDaysLeft(currentPlanDetails.expires_at) <= 0
-                        ? 'text-red-600 dark:text-red-400'
-                        : 'text-gray-900 dark:text-white'
-                }`}>
-                  {currentPlan === 'basic' 
-                    ? '— (бесплатный тариф)' 
-                    : formatDate(currentPlanDetails.expires_at)}
-                  {currentPlan !== 'basic' && currentPlanDetails.expires_at && getDaysLeft(currentPlanDetails.expires_at) !== null && (
-                    <span className={`text-xs ml-2 ${
-                      getDaysLeft(currentPlanDetails.expires_at) <= 7 && getDaysLeft(currentPlanDetails.expires_at) > 0
-                        ? 'text-orange-500' 
-                        : getDaysLeft(currentPlanDetails.expires_at) <= 0
-                          ? 'text-red-500'
-                          : 'text-gray-500'
-                    }`}>
-                      {getDaysLeft(currentPlanDetails.expires_at) <= 0 
-                        ? '(истёк)' 
-                        : `(${getDaysLeft(currentPlanDetails.expires_at)} дн.)`}
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
-            
-           {/* 🆕 БЕСПЛАТНЫЙ ПЕРИОД (14 дней) — ТОЛЬКО ДЛЯ ПЛАТНЫХ ТАРИФОВ */}
-{/* 🆕 БЕСПЛАТНЫЙ ПЕРИОД (14 дней) — ТОЛЬКО ДЛЯ ПЛАТНЫХ ТАРИФОВ */}
-<div className="flex items-start gap-2">
-  <Gift className="w-4 h-4 text-[#F9AA33] mt-0.5" />
-  <div>
-    <p className="text-gray-500 dark:text-gray-400">
-      {translate('trialPeriod', '🎁 Бесплатный период')}:
-    </p>
-    {currentPlan !== 'basic' && currentPlanDetails?.activated_at ? (
-      (() => {
-        const daysLeft = getTrialDaysLeft(currentPlanDetails.activated_at);
-        if (daysLeft === null) return <p className="font-medium text-gray-400">—</p>;
-        if (daysLeft <= 0) {
+  <div className="mb-8 bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 rounded-xl p-5 border border-[#4A6572]/20">
+    
+    {/* Заголовок */}
+    <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center gap-2">
+        <CheckCircle className="w-5 h-5 text-green-600" />
+        <h3 className="font-semibold text-gray-900 dark:text-white">
+          {translate('currentPlanInfo', 'Текущий тариф')}: {getPlanIcon(currentPlan)} {getPlanDisplayName(currentPlan)}
+        </h3>
+        {(() => {
+          const status = getPlanStatus(currentPlan, currentPlanDetails.expires_at, currentPlanDetails.activated_at);
           return (
-            <div>
-              <p className="font-medium text-red-600 dark:text-red-400">Период истёк</p>
-              <p className="text-xs text-red-500 mt-0.5">
-                ⚠️ Вы будете переведены на бесплатный тариф
-              </p>
-            </div>
+            <span className={`px-2 py-0.5 ${status.bg} ${status.color} text-xs rounded-full`}>
+              {status.label}
+            </span>
           );
-        }
-        const daysText = daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней';
-        return (
-          <div>
-            <p className={`font-medium ${daysLeft <= 3 ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`}>
-              {daysLeft} {daysText} из 14
-              {daysLeft <= 3 && (
-                <span className="text-xs ml-2 text-orange-500">⚠️ скоро закончится</span>
-              )}
-            </p>
-            {daysLeft <= 3 && (
-              <p className="text-xs text-orange-500 mt-0.5">
-                🚀 Обновите тариф, чтобы продолжить работу
-              </p>
+        })()}
+      </div>
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        <span>Уровень {getPlanLevel(currentPlan)} из 5</span>
+      </div>
+    </div>
+    
+    {/* 🆕 ДАТЫ: АКТИВАЦИЯ, ОКОНЧАНИЕ, БЕСПЛАТНЫЙ ПЕРИОД */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 text-sm">
+      
+      {/* Дата активации */}
+      <div className="flex items-start gap-2">
+        <Calendar className="w-4 h-4 text-gray-500 mt-0.5" />
+        <div>
+          <p className="text-gray-500 dark:text-gray-400">
+            {translate('activationDate', '📅 Дата активации')}:
+          </p>
+          <p className="font-medium text-gray-900 dark:text-white">
+            {currentPlan === 'basic' && !currentPlanDetails?.activated_at 
+              ? '— (бесплатный тариф)' 
+              : formatDate(currentPlanDetails.activated_at)}
+          </p>
+        </div>
+      </div>
+      
+      {/* Дата окончания */}
+      <div className="flex items-start gap-2">
+        <Clock className="w-4 h-4 text-gray-500 mt-0.5" />
+        <div>
+          <p className="text-gray-500 dark:text-gray-400">
+            {translate('expirationDate', '⏰ Дата окончания')}:
+          </p>
+          <p className={`font-medium ${
+            currentPlan === 'basic' 
+              ? 'text-gray-400' 
+              : currentPlanDetails?.expires_at && getDaysLeft(currentPlanDetails.expires_at) <= 7 && getDaysLeft(currentPlanDetails.expires_at) > 0
+                ? 'text-orange-600 dark:text-orange-400'
+                : currentPlanDetails?.expires_at && getDaysLeft(currentPlanDetails.expires_at) <= 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-gray-900 dark:text-white'
+          }`}>
+            {currentPlan === 'basic' || !currentPlanDetails?.expires_at
+              ? '— (бесплатный тариф)' 
+              : formatDate(currentPlanDetails.expires_at)}
+            {currentPlan !== 'basic' && currentPlanDetails?.expires_at && getDaysLeft(currentPlanDetails.expires_at) !== null && (
+              <span className={`text-xs ml-2 ${
+                getDaysLeft(currentPlanDetails.expires_at) <= 7 && getDaysLeft(currentPlanDetails.expires_at) > 0
+                  ? 'text-orange-500' 
+                  : getDaysLeft(currentPlanDetails.expires_at) <= 0
+                    ? 'text-red-500'
+                    : 'text-gray-500'
+              }`}>
+                {getDaysLeft(currentPlanDetails.expires_at) <= 0 
+                  ? '(истёк)' 
+                  : `(${getDaysLeft(currentPlanDetails.expires_at)} дн.)`}
+              </span>
             )}
-          </div>
-        );
-      })()
-    ) : currentPlan === 'basic' ? (
-      <p className="font-medium text-gray-400">— (бесплатный тариф)</p>
-    ) : (
-      <p className="font-medium text-gray-400">—</p>
-    )}
-  </div>
-</div>
-          </div>
+          </p>
+        </div>
+      </div>
+      
+      {/* 🆕 БЕСПЛАТНЫЙ ПЕРИОД (14 дней) */}
+      <div className="flex items-start gap-2">
+        <Gift className="w-4 h-4 text-[#F9AA33] mt-0.5" />
+        <div>
+          <p className="text-gray-500 dark:text-gray-400">
+            {translate('trialPeriod', '🎁 Бесплатный период')}:
+          </p>
+          {currentPlan !== 'basic' && currentPlanDetails?.activated_at ? (
+            (() => {
+              const daysLeft = getTrialDaysLeft(currentPlanDetails.activated_at);
+              if (daysLeft === null) return <p className="font-medium text-gray-400">—</p>;
+              if (daysLeft <= 0) {
+                return (
+                  <div>
+                    <p className="font-medium text-red-600 dark:text-red-400">Период истёк</p>
+                    <p className="text-xs text-red-500 mt-0.5">
+                      ⚠️ Вы будете переведены на бесплатный тариф
+                    </p>
+                  </div>
+                );
+              }
+              const daysText = daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней';
+              return (
+                <div>
+                  <p className={`font-medium ${daysLeft <= 3 ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`}>
+                    {daysLeft} {daysText} из 14
+                    {daysLeft <= 3 && (
+                      <span className="text-xs ml-2 text-orange-500">⚠️ скоро закончится</span>
+                    )}
+                  </p>
+                  {daysLeft <= 3 && (
+                    <p className="text-xs text-orange-500 mt-0.5">
+                      🚀 Обновите тариф, чтобы продолжить работу
+                    </p>
+                  )}
+                </div>
+              );
+            })()
+          ) : (
+            <p className="font-medium text-gray-400">— (бесплатный тариф)</p>
+          )}
+        </div>
+      </div>
+    </div>
 
           {/* Статистика использования */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 pt-3 border-t border-[#4A6572]/20">
