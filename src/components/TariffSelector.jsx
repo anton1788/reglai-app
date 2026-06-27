@@ -195,48 +195,73 @@ const TariffSelector = ({
       </div>
       
       {/* 🆕 БЕСПЛАТНЫЙ ПЕРИОД (14 дней) */}
-      <div className="flex items-start gap-2">
-        <Gift className="w-4 h-4 text-[#F9AA33] mt-0.5" />
-        <div>
-          <p className="text-gray-500 dark:text-gray-400">
-            {translate('trialPeriod', '🎁 Бесплатный период')}:
-          </p>
-          {currentPlan !== 'basic' && currentPlanDetails?.activated_at ? (
-            (() => {
-              const daysLeft = getTrialDaysLeft(currentPlanDetails.activated_at);
-              if (daysLeft === null) return <p className="font-medium text-gray-400">—</p>;
-              if (daysLeft <= 0) {
-                return (
-                  <div>
-                    <p className="font-medium text-red-600 dark:text-red-400">Период истёк</p>
-                    <p className="text-xs text-red-500 mt-0.5">
-                      ⚠️ Вы будете переведены на бесплатный тариф
-                    </p>
-                  </div>
-                );
-              }
-              const daysText = daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней';
-              return (
-                <div>
-                  <p className={`font-medium ${daysLeft <= 3 ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`}>
-                    {daysLeft} {daysText} из 14
-                    {daysLeft <= 3 && (
-                      <span className="text-xs ml-2 text-orange-500">⚠️ скоро закончится</span>
-                    )}
-                  </p>
-                  {daysLeft <= 3 && (
-                    <p className="text-xs text-orange-500 mt-0.5">
-                      🚀 Обновите тариф, чтобы продолжить работу
-                    </p>
-                  )}
-                </div>
-              );
-            })()
-          ) : (
-            <p className="font-medium text-gray-400">— (бесплатный тариф)</p>
-          )}
-        </div>
+<div className="flex items-start gap-2">
+  <Gift className="w-4 h-4 text-[#F9AA33] mt-0.5" />
+  <div>
+    <p className="text-gray-500 dark:text-gray-400">
+      {translate('trialPeriod', '🎁 Бесплатный период')}:
+    </p>
+    {currentPlanDetails?.is_trial ? (
+      (() => {
+        const trialEnd = new Date(currentPlanDetails.trial_ended_at);
+        const now = new Date();
+        const daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+        
+        if (currentPlanDetails.is_trial_expired || daysLeft <= 0) {
+          return (
+            <div>
+              <p className="font-medium text-red-600 dark:text-red-400">Период истёк</p>
+              <p className="text-xs text-red-500 mt-0.5">
+                ⚠️ Вы переведены на бесплатный тариф
+              </p>
+              <button
+                onClick={() => window.location.href = '/tariffs'}
+                className="mt-1 text-xs text-[#F9AA33] hover:underline"
+              >
+                Выбрать тариф →
+              </button>
+            </div>
+          );
+        }
+        
+        const daysText = daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней';
+        return (
+          <div>
+            <p className={`font-medium ${daysLeft <= 3 ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`}>
+              {daysLeft} {daysText} из 14
+              {daysLeft <= 3 && (
+                <span className="text-xs ml-2 text-orange-500">⚠️ скоро закончится</span>
+              )}
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              🚀 Доступен тариф <strong>Профессиональный</strong> со всеми функциями
+            </p>
+            {daysLeft <= 3 && (
+              <button
+                onClick={() => window.location.href = '/tariffs'}
+                className="mt-1 text-xs text-[#F9AA33] hover:underline"
+              >
+                Выбрать тариф →
+              </button>
+            )}
+          </div>
+        );
+      })()
+    ) : currentPlan === 'basic' ? (
+      <div>
+        <p className="font-medium text-gray-400">— (бесплатный тариф)</p>
+        <button
+          onClick={() => window.location.href = '/tariffs'}
+          className="mt-1 text-xs text-[#F9AA33] hover:underline"
+        >
+          Выбрать тариф →
+        </button>
       </div>
+    ) : (
+      <p className="font-medium text-gray-400">—</p>
+    )}
+  </div>
+</div>
     </div>
 
           {/* Статистика использования */}

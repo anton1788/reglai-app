@@ -2389,6 +2389,27 @@ const checkForUpdates = useCallback(async () => {
         }
       }
 
+      // 🔥 АКТИВАЦИЯ PRO ТАРИФА НА 14 ДНЕЙ
+      if (isCreatingCompany && targetCompanyId) {
+        const now = new Date().toISOString();
+        const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+        
+        const { error: planError } = await supabase
+          .from('companies')
+          .update({
+            plan_tier: 'pro',
+            plan_activated_at: now,
+            plan_expires_at: expiresAt,
+            trial_started_at: now,
+            trial_ended_at: expiresAt
+          })
+          .eq('id', targetCompanyId);
+        
+        if (planError) {
+          console.warn('⚠️ Не удалось активировать пробный тариф:', planError);
+        }
+      }
+
       const { error: companyUserError } = await supabase
         .from('company_users')
         .insert({
@@ -4524,10 +4545,10 @@ useEffect(() => {
       
       // 🆕 ЗАГРУЗКА ДЕТАЛЕЙ ТАРИФА (тоже с таймаутом)
       const companyPromise = supabase
-        .from('companies')
-        .select('plan_activated_at, plan_expires_at, promo_code_used, promo_applied_at, promo_discount_percent')
-        .eq('id', userCompanyId)
-        .single();
+  .from('companies')
+  .select('plan_activated_at, plan_expires_at, promo_code_used, promo_applied_at, promo_discount_percent, trial_started_at, trial_ended_at')
+  .eq('id', userCompanyId)
+  .single();
       
       const companyData = await Promise.race([companyPromise, timeoutPromise]);
       
@@ -4535,9 +4556,13 @@ useEffect(() => {
       if (companyData?.data) {
         console.log('📊 Company data loaded:', companyData.data);
         setCurrentPlanDetails({
-          activated_at: companyData.data.plan_activated_at,
-          expires_at: companyData.data.plan_expires_at
-        });
+  activated_at: companyData.data.plan_activated_at,
+  expires_at: companyData.data.plan_expires_at,
+  trial_started_at: companyData.data.trial_started_at,
+  trial_ended_at: companyData.data.trial_ended_at,
+  is_trial: companyData.data.trial_started_at !== null && companyData.data.plan_tier !== 'basic',
+  is_trial_expired: false
+});
         
         if (companyData.data.promo_code_used) {
           setPromoCodeInfo({
@@ -4569,6 +4594,46 @@ useEffect(() => {
   
   loadPlan();
 }, [userCompanyId, supabase, userRole, user, isSuperAdmin]);
+
+// Добавьте этот useEffect в App.jsx после loadPlan
+useEffect(() => {
+  const checkTrialExpired = async () => {
+    if (!userCompanyId || !supabase) return;
+    if (!currentPlanDetails?.is_trial) return;
+    
+    const trialEnd = new Date(currentPlanDetails.trial_ended_at);
+    const now = new Date();
+    
+    if (trialEnd < now && currentPlan?.id !== 'basic') {
+      console.log('⏰ Пробный период истёк, переходим на Базовый');
+      
+      await supabase
+        .from('companies')
+        .update({
+          plan_tier: 'basic',
+          plan_activated_at: null,
+          plan_expires_at: null,
+          updated_at: now.toISOString()
+        })
+        .eq('id', userCompanyId);
+      
+      setCurrentPlan(TARIFF_PLANS.basic);
+      setCurrentPlanDetails(prev => ({
+        ...prev,
+        is_trial_expired: true,
+        expires_at: null,
+        activated_at: null
+      }));
+      
+      showNotification('⚠️ Пробный период истёк. Выберите тариф для продолжения работы.', 'warning');
+      setCurrentView('tariffs');
+    }
+  };
+  
+  checkTrialExpired();
+  const interval = setInterval(checkTrialExpired, 5 * 60 * 1000);
+  return () => clearInterval(interval);
+}, [userCompanyId, supabase, currentPlanDetails, currentPlan]);
 
 // ✅ ДОБАВИТЬ СИНХРОНИЗАЦИЮ ПРОМОКОДОВ СЮДА (ПОСЛЕ загрузки тарифа)
 useEffect(() => {
@@ -7016,10 +7081,14 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         t={t}
         onPromoClick={() => setShowPromoModal(true)}
         currentPlanDetails={{
-          activated_at: currentPlanDetails?.activated_at || null,
-          expires_at: currentPlanDetails?.expires_at || null,
-          usageCurrent: quotaStatus?.monthlyUsage || 0
-        }}
+  activated_at: currentPlanDetails?.activated_at || null,
+  expires_at: currentPlanDetails?.expires_at || null,
+  usageCurrent: quotaStatus?.monthlyUsage || 0,
+  trial_started_at: currentPlanDetails?.trial_started_at || null,
+  trial_ended_at: currentPlanDetails?.trial_ended_at || null,
+  is_trial: currentPlanDetails?.is_trial || false,
+  is_trial_expired: currentPlanDetails?.is_trial_expired || false
+}}
         promoCodeInfo={promoCodeInfo}
       />
               
