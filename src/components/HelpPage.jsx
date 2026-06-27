@@ -28,7 +28,7 @@ import {
   Code
 } from 'lucide-react';
 
-const HelpPage = ({ onNavigate, language }) => {
+const HelpPage = ({ onNavigate, t, language = 'ru' }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSection, setExpandedSection] = useState(null);
 
@@ -36,87 +36,87 @@ const HelpPage = ({ onNavigate, language }) => {
     {
       id: 'getting-started',
       icon: <HelpCircle className="w-5 h-5" />,
-      title: 'Начало работы',
+      title: t?.('help.sections.gettingStarted') || 'Начало работы',
       items: [
-        { title: 'Регистрация и вход', path: '/help/register' },
-        { title: 'Первые шаги в системе', path: '/help/first-steps' },
-        { title: 'Настройка профиля', path: '/help/profile' },
-        { title: 'Приглашение сотрудников', path: '/help/invite' }
+        { title: t?.('help.items.register') || 'Регистрация и вход', path: '/help/register' },
+        { title: t?.('help.items.firstSteps') || 'Первые шаги в системе', path: '/help/first-steps' },
+        { title: t?.('help.items.profile') || 'Настройка профиля', path: '/help/profile' },
+        { title: t?.('help.items.invite') || 'Приглашение сотрудников', path: '/help/invite' }
       ]
     },
     {
       id: 'applications',
       icon: <ClipboardList className="w-5 h-5" />,
-      title: 'Заявки на материалы',
+      title: t?.('help.sections.applications') || 'Заявки на материалы',
       items: [
-        { title: 'Создание заявки', path: '/help/create-application' },
-        { title: 'Статусы заявок', path: '/help/application-statuses' },
-        { title: 'Работа с материалами', path: '/help/materials' },
-        { title: 'История заявок', path: '/help/history' }
+        { title: t?.('help.items.createApplication') || 'Создание заявки', path: '/help/create-application' },
+        { title: t?.('help.items.statuses') || 'Статусы заявок', path: '/help/application-statuses' },
+        { title: t?.('help.items.materials') || 'Работа с материалами', path: '/help/materials' },
+        { title: t?.('help.items.history') || 'История заявок', path: '/help/history' }
       ]
     },
     {
       id: 'warehouse',
       icon: <Package className="w-5 h-5" />,
-      title: 'Склад',
+      title: t?.('help.sections.warehouse') || 'Склад',
       items: [
-        { title: 'Управление складом', path: '/help/warehouse' },
-        { title: 'Приёмка материалов', path: '/help/receive' },
-        { title: 'Списание материалов', path: '/help/write-off' },
-        { title: 'Остатки и баланс', path: '/help/balance' }
+        { title: t?.('help.items.warehouseManage') || 'Управление складом', path: '/help/warehouse' },
+        { title: t?.('help.items.receive') || 'Приёмка материалов', path: '/help/receive' },
+        { title: t?.('help.items.writeOff') || 'Списание материалов', path: '/help/write-off' },
+        { title: t?.('help.items.balance') || 'Остатки и баланс', path: '/help/balance' }
       ]
     },
     {
       id: 'analytics',
       icon: <BarChart3 className="w-5 h-5" />,
-      title: 'Аналитика и отчёты',
+      title: t?.('help.sections.analytics') || 'Аналитика и отчёты',
       items: [
-        { title: 'Дашборд аналитики', path: '/help/analytics' },
-        { title: 'Отчёты по заявкам', path: '/help/reports' },
-        { title: 'Сметы и калькуляция', path: '/help/estimates' },
-        { title: 'Экспорт данных', path: '/help/export' }
+        { title: t?.('help.items.dashboard') || 'Дашборд аналитики', path: '/help/analytics' },
+        { title: t?.('help.items.reports') || 'Отчёты по заявкам', path: '/help/reports' },
+        { title: t?.('help.items.estimates') || 'Сметы и калькуляция', path: '/help/estimates' },
+        { title: t?.('help.items.export') || 'Экспорт данных', path: '/help/export' }
       ]
     },
     {
       id: 'roles',
       icon: <Users className="w-5 h-5" />,
-      title: 'Роли и права',
+      title: t?.('help.sections.roles') || 'Роли и права',
       items: [
-        { title: 'Роли в системе', path: '/help/roles' },
-        { title: 'Права доступа', path: '/help/permissions' },
-        { title: 'Управление сотрудниками', path: '/help/employees' },
-        { title: 'Блокировка пользователей', path: '/help/block-user' }
+        { title: t?.('help.items.rolesList') || 'Роли в системе', path: '/help/roles' },
+        { title: t?.('help.items.permissions') || 'Права доступа', path: '/help/permissions' },
+        { title: t?.('help.items.employees') || 'Управление сотрудниками', path: '/help/employees' },
+        { title: t?.('help.items.blockUser') || 'Блокировка пользователей', path: '/help/block-user' }
       ]
     },
     {
       id: 'communication',
       icon: <MessageSquare className="w-5 h-5" />,
-      title: 'Коммуникация',
+      title: t?.('help.sections.communication') || 'Коммуникация',
       items: [
-        { title: 'Чат компании', path: '/help/chat' },
-        { title: 'Календарь событий', path: '/help/calendar' },
-        { title: 'Комментарии к заявкам', path: '/help/comments' },
-        { title: 'Уведомления', path: '/help/notifications' }
+        { title: t?.('help.items.chat') || 'Чат компании', path: '/help/chat' },
+        { title: t?.('help.items.calendar') || 'Календарь событий', path: '/help/calendar' },
+        { title: t?.('help.items.comments') || 'Комментарии к заявкам', path: '/help/comments' },
+        { title: t?.('help.items.notifications') || 'Уведомления', path: '/help/notifications' }
       ]
     },
     {
       id: 'settings',
       icon: <Settings className="w-5 h-5" />,
-      title: 'Настройки',
+      title: t?.('help.sections.settings') || 'Настройки',
       items: [
-        { title: 'Настройки компании', path: '/help/company-settings' },
-        { title: 'API интеграция', path: '/help/api' },
-        { title: 'Интеграция с 1С', path: '/help/1c-integration' },
-        { title: 'Тарифы и оплата', path: '/help/tariffs' }
+        { title: t?.('help.items.companySettings') || 'Настройки компании', path: '/help/company-settings' },
+        { title: t?.('help.items.api') || 'API интеграция', path: '/help/api' },
+        { title: t?.('help.items.integration1c') || 'Интеграция с 1С', path: '/help/1c-integration' },
+        { title: t?.('help.items.tariffs') || 'Тарифы и оплата', path: '/help/tariffs' }
       ]
     }
   ];
 
   const quickLinks = [
-    { icon: <Video className="w-4 h-4" />, label: 'Видео-туториалы', color: 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' },
-    { icon: <FileText className="w-4 h-4" />, label: 'Документация', color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' },
-    { icon: <MessageCircle className="w-4 h-4" />, label: 'Чат поддержки', color: 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400' },
-    { icon: <Mail className="w-4 h-4" />, label: 'Email поддержки', color: 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400' }
+    { icon: <Video className="w-4 h-4" />, label: t?.('help.quickLinks.video') || 'Видео-туториалы', color: 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' },
+    { icon: <FileText className="w-4 h-4" />, label: t?.('help.quickLinks.docs') || 'Документация', color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' },
+    { icon: <MessageCircle className="w-4 h-4" />, label: t?.('help.quickLinks.chat') || 'Чат поддержки', color: 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400' },
+    { icon: <Mail className="w-4 h-4" />, label: t?.('help.quickLinks.email') || 'Email поддержки', color: 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400' }
   ];
 
   const filteredSections = sections.map(section => ({
@@ -128,6 +128,14 @@ const HelpPage = ({ onNavigate, language }) => {
 
   const toggleSection = (id) => {
     setExpandedSection(expandedSection === id ? null : id);
+  };
+
+  // Обработчик навигации
+  const handleNavigate = () => {
+    // остаёмся на странице помощи
+    if (onNavigate) {
+      onNavigate('help');
+    }
   };
 
   return (
@@ -176,6 +184,13 @@ const HelpPage = ({ onNavigate, language }) => {
           <div
             key={index}
             className={`flex items-center gap-2 p-3 rounded-xl cursor-pointer hover:shadow-md transition-all ${link.color}`}
+            onClick={() => {
+              if (index === 2) {
+                window.open('https://t.me/reglay_support', '_blank');
+              } else if (index === 3) {
+                window.location.href = 'mailto:support@reglay.pro';
+              }
+            }}
           >
             {link.icon}
             <span className="text-sm font-medium">{link.label}</span>
@@ -214,10 +229,7 @@ const HelpPage = ({ onNavigate, language }) => {
                 {section.items.map((item) => (
                   <button
                     key={item.path}
-                    onClick={() => {
-                      // Здесь будет навигация по разделам
-                      console.log('Navigate to:', item.path);
-                    }}
+                    onClick={handleNavigate}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded-lg transition-colors"
                   >
                     <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
