@@ -161,9 +161,7 @@ import PromoModal from './components/PromoModal';
 import PromoManager from './components/PromoManager';
 import KPIDashboard from './components/KPIDashboard';
 import { runCleanup } from './utils/autoCleanup';
-import { activatePromoPlan, 
-  // eslint-disable-next-line no-unused-vars
-  getAllPromoCodes } from './utils/promoManager';
+import { activatePromoPlan, syncPromoCodesToDB } from './utils/promoManager';
   import { initAutoCleanup } from './utils/autoCleanup';
 import {
   Plus, ArrowLeft, History, Minus, Send, Package, Building, User, Calendar,
@@ -4564,12 +4562,13 @@ useEffect(() => {
       
       // Промокоды
       if (companyData?.promo_code_used) {
-        setPromoCodeInfo({
-          code: companyData.promo_code_used,
-          applied_at: companyData.promo_applied_at,
-          discount_percent: companyData.promo_discount_percent
-        });
-      }
+  setPromoCodeInfo({
+    code: companyData.promo_code_used,
+    applied_at: companyData.promo_applied_at,
+    discount_percent: companyData.promo_discount_percent || 0,  // ← УБЕДИТЕСЬ, ЧТО ЭТО ЕСТЬ
+    plan: companyData.plan_tier  // ← ДОБАВИТЬ ЭТУ СТРОКУ
+  });
+}
       
       // Квота
       try {
@@ -7117,24 +7116,24 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       )}
       
       <TariffSelector
-        currentPlan={currentPlan?.id || 'basic'}
-        billingPeriod={billingPeriod}
-        onBillingPeriodChange={setBillingPeriod}
-        onSelectPlan={handleSelectPlan}
-        isLoading={planLoading}
-        t={t}
-        onPromoClick={() => setShowPromoModal(true)}
-        currentPlanDetails={{
-  activated_at: currentPlanDetails?.activated_at || null,
-  expires_at: currentPlanDetails?.expires_at || null,
-  usageCurrent: quotaStatus?.monthlyUsage || 0,
-  trial_started_at: currentPlanDetails?.trial_started_at || null,
-  trial_ended_at: currentPlanDetails?.trial_ended_at || null,
-  is_trial: currentPlanDetails?.is_trial || false,
-  is_trial_expired: currentPlanDetails?.is_trial_expired || false
-}}
-        promoCodeInfo={promoCodeInfo}
-      />
+  currentPlan={currentPlan?.id || 'basic'}
+  billingPeriod={billingPeriod}
+  onBillingPeriodChange={setBillingPeriod}
+  onSelectPlan={handleSelectPlan}
+  isLoading={planLoading}
+  t={t}
+  onPromoClick={() => setShowPromoModal(true)}
+  currentPlanDetails={{
+    activated_at: currentPlanDetails?.activated_at || null,
+    expires_at: currentPlanDetails?.expires_at || null,
+    usageCurrent: quotaStatus?.monthlyUsage || 0,
+    trial_started_at: currentPlanDetails?.trial_started_at || null,
+    trial_ended_at: currentPlanDetails?.trial_ended_at || null,
+    is_trial: currentPlanDetails?.is_trial || false,
+    is_trial_expired: currentPlanDetails?.is_trial_expired || false
+  }}
+  promoCodeInfo={promoCodeInfo}  // ← ДОБАВИТЬ ЭТУ СТРОКУ
+/>
               
       {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
         <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">

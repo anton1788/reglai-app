@@ -747,6 +747,20 @@ const renderNavigation = () => {
         Управление промокодами
       </button>
 
+       <button
+        onClick={async () => {
+          const { syncPromoCodesToDB } = await import('../utils/promoManager');
+          await syncPromoCodesToDB(supabase);
+          showNotification('✅ Промокоды синхронизированы!', 'success');
+          loadData();
+        }}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20"
+      >
+        <RefreshCw className="w-4 h-4" />
+        Синхронизировать промокоды
+      </button>
+
       {/* 🔥 КНОПКА ОЧИСТКИ СТАРЫХ ДАННЫХ */}
       <button
         onClick={async () => {

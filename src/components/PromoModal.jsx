@@ -4,16 +4,16 @@ import { X, Gift, Loader2 } from 'lucide-react';
 
 const PromoModal = ({ isOpen, onClose, onActivate, isLoading }) => {
   const [promoCode, setPromoCode] = useState('');
+  const [showHints, setShowHints] = useState(false);
   
   if (!isOpen) return null;
   
   const handleSubmit = (e) => {
-  e.preventDefault();
-  if (promoCode.trim()) {
-    console.log('📤 Отправляем промокод:', promoCode.trim());
-    onActivate(promoCode.trim());
-  }
-};
+    e.preventDefault();
+    if (promoCode.trim()) {
+      onActivate(promoCode.trim());
+    }
+  };
   
   return (
     <div 
@@ -27,7 +27,7 @@ const PromoModal = ({ isOpen, onClose, onActivate, isLoading }) => {
               <Gift className="w-5 h-5 text-white" />
             </div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-              Активация партнерского доступа
+              Активация промокода
             </h3>
           </div>
           <button
@@ -47,11 +47,36 @@ const PromoModal = ({ isOpen, onClose, onActivate, isLoading }) => {
               type="text"
               value={promoCode}
               onChange={(e) => setPromoCode(e.target.value)}
-              placeholder="например: FRIEND2024"
+              placeholder="например: FREE3M"
               className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center text-lg font-mono"
               autoFocus
               disabled={isLoading}
             />
+            
+            {/* 🆕 ПОДСКАЗКИ - ДОБАВИТЬ ЭТОТ БЛОК */}
+            <button
+              type="button"
+              onClick={() => setShowHints(!showHints)}
+              className="text-xs text-blue-500 hover:text-blue-700 mt-2"
+            >
+              {showHints ? 'Скрыть подсказки' : 'Какие промокоды доступны?'}
+            </button>
+            
+            {showHints && (
+              <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-xs space-y-1.5">
+                <p className="font-medium text-gray-700 dark:text-gray-300">Доступные промокоды:</p>
+                <div className="grid grid-cols-2 gap-1">
+                  <div><code className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">FREE3M</code> — 3 мес бесплатно</div>
+                  <div><code className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">HALF6M</code> — -50% на 6 мес</div>
+                  <div><code className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">PARTNER2026</code> — 1 год доступа</div>
+                  <div><code className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">TEST7D</code> — 7 дней теста</div>
+                  <div><code className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">STARTUP30</code> — -30% стартапам</div>
+                  <div><code className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">WELCOME20</code> — -20% новым</div>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">* Промокоды активируются только владельцем компании</p>
+              </div>
+            )}
+            
             <p className="text-xs text-gray-500 mt-2">
               * Промокод предоставляется по согласованию с администратором
             </p>

@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles, Shield, Headphones, Users, Key, Database, BarChart3, Webhook, Mail, MessageSquare, Phone, Star, Crown, Rocket, AlertCircle } from 'lucide-react';
+import { 
+  Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles, 
+  Shield, Headphones, Users, Key, Database, BarChart3, 
+  Webhook, Mail, MessageSquare, Phone, Star, Crown, Rocket, 
+  AlertCircle, DollarSign, Percent 
+} from 'lucide-react';
 import { TARIFF_PLANS, calculateSavings, getNextTier, getPreviousTier } from '../utils/tariffPlans';
 
 const TariffSelector = ({ 
@@ -27,7 +32,7 @@ const TariffSelector = ({
   };
 
   // ============================================================
-  // 🆕 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ДАТ (исправленные)
+  // 🆕 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ДАТ
   // ============================================================
   
   const formatDate = (dateString) => {
@@ -135,7 +140,7 @@ const TariffSelector = ({
           
           {/* Заголовок */}
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <CheckCircle className="w-5 h-5 text-green-600" />
               <h3 className="font-semibold text-gray-900 dark:text-white">
                 {translate('currentPlanInfo', 'Текущий тариф')}: {getPlanIcon(currentPlan)} {getPlanDisplayName(currentPlan)}
@@ -148,6 +153,12 @@ const TariffSelector = ({
                   </span>
                 );
               })()}
+              {/* 🆕 Показываем скидку от промокода */}
+              {promoCodeInfo && promoCodeInfo.discount_percent > 0 && (
+                <span className="px-2 py-0.5 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white text-xs font-bold rounded-full">
+                  🎁 -{promoCodeInfo.discount_percent}%
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <span>Уровень {getPlanLevel(currentPlan)} из 5</span>
@@ -286,14 +297,26 @@ const TariffSelector = ({
                 <p className="text-gray-500 dark:text-gray-400">
                   {translate('promoCodeApplied', 'Промокод')}:
                 </p>
-                <p className="font-medium text-gray-900 dark:text-white">
-                  {promoCodeInfo.code}
-                  {promoCodeInfo.discount_percent && (
-                    <span className="text-green-600 text-sm ml-2">
-                      (-{promoCodeInfo.discount_percent}%)
+                <p className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                  <code className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded font-mono text-sm">
+                    {promoCodeInfo.code}
+                  </code>
+                  {promoCodeInfo.discount_percent > 0 && (
+                    <span className="text-green-600 text-sm font-bold">
+                      скидка {promoCodeInfo.discount_percent}%
+                    </span>
+                  )}
+                  {promoCodeInfo.plan && (
+                    <span className="text-xs text-gray-500">
+                      → {getPlanDisplayName(promoCodeInfo.plan)}
                     </span>
                   )}
                 </p>
+                {promoCodeInfo.activated_at && (
+                  <p className="text-xs text-gray-400">
+                    Активирован: {formatDate(promoCodeInfo.activated_at)}
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -360,6 +383,15 @@ const TariffSelector = ({
           const isFree = plan.monthlyPrice === 0;
           const isNext = getNextTier(currentPlan)?.id === planId;
 
+          // 🆕 Проверяем, есть ли скидка по промокоду для этого тарифа
+          const hasDiscount = promoCodeInfo && 
+                             promoCodeInfo.plan === planId && 
+                             promoCodeInfo.discount_percent > 0;
+          
+          const discountedPrice = hasDiscount 
+            ? Math.round(price * (1 - promoCodeInfo.discount_percent / 100))
+            : price;
+
           const nextPlan = getNextTier(planId);
           const prevPlan = getPreviousTier(planId);
 
@@ -398,6 +430,13 @@ const TariffSelector = ({
                 </div>
               )}
 
+              {/* 🆕 Badge скидки от промокода */}
+              {hasDiscount && !isCurrent && (
+                <div className="absolute -top-4 right-4 px-3 py-1 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white text-xs font-bold rounded-full shadow-lg">
+                  🎁 -{promoCodeInfo.discount_percent}%
+                </div>
+              )}
+
               <div className="p-6">
                 {/* Заголовок */}
                 <div className="text-center mb-6">
@@ -409,9 +448,20 @@ const TariffSelector = ({
                   {!isFree ? (
                     <div>
                       <div className="flex items-baseline justify-center gap-1">
-                        <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                          {price.toLocaleString('ru-RU')} ₽
-                        </span>
+                        {hasDiscount ? (
+                          <>
+                            <span className="text-2xl text-gray-400 line-through">
+                              {price.toLocaleString('ru-RU')} ₽
+                            </span>
+                            <span className="text-4xl font-bold text-[#F9AA33] dark:text-[#F9AA33]">
+                              {discountedPrice.toLocaleString('ru-RU')} ₽
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-4xl font-bold text-gray-900 dark:text-white">
+                            {price.toLocaleString('ru-RU')} ₽
+                          </span>
+                        )}
                         <span className="text-gray-500 dark:text-gray-400 text-sm">
                           /{billingPeriod === 'monthly' 
                             ? translate('tariffSelector.perMonth', 'мес') 
@@ -421,6 +471,11 @@ const TariffSelector = ({
                       {billingPeriod === 'annual' && savings.savings > 0 && (
                         <p className="text-sm text-green-600 mt-2">
                           {translate('tariffSelector.savings', 'Экономия')} {savings.savingsPercent}% ({savings.savings.toLocaleString()} ₽)
+                        </p>
+                      )}
+                      {hasDiscount && (
+                        <p className="text-sm text-[#F9AA33] mt-1 font-semibold">
+                          🎁 Скидка {promoCodeInfo.discount_percent}% по промокоду
                         </p>
                       )}
                     </div>
@@ -503,6 +558,8 @@ const TariffSelector = ({
                       ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
                       : isFree
                       ? 'bg-green-500 hover:bg-green-600 text-white'
+                      : hasDiscount
+                      ? 'bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white hover:shadow-lg'
                       : isPopular
                       ? 'bg-gradient-to-r from-[#F9AA33] to-[#f59e0b] text-white hover:shadow-lg'
                       : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white hover:shadow-lg'
@@ -517,6 +574,7 @@ const TariffSelector = ({
                     translate('tariffSelector.startFree', 'Начать бесплатно')
                   ) : (
                     <>
+                      {hasDiscount && <Gift className="w-4 h-4" />}
                       {isPopular && <Sparkles className="w-4 h-4" />}
                       {translate('tariffSelector.selectPlan', 'Выбрать тариф')}
                     </>
