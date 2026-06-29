@@ -240,117 +240,117 @@ const Navbar = ({
   const unreadCount = notifications.filter(n => !n.read).length;
 
   // Все пункты навигации в зависимости от роли и тарифа
-  const getNavItems = () => {
-    const items = [];
+const getNavItems = () => {
+  const items = [];
 
-    // Базовые пункты для всех
-    items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
-    items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
+  // Базовые пункты для всех
+  items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
+  items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
 
-    // CRM Sales - Лиды (для manager и supply_admin)
-    if (userRole === 'manager' || userRole === 'supply_admin') {
-      items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
-    }
+  // CRM Sales - Лиды (для manager и supply_admin)
+  if (userRole === 'manager' || userRole === 'supply_admin') {
+    items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
+  }
 
-    // Объединение заявок — для manager, supply_admin, director, владельца
-    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
-      items.push({ 
-        id: 'merge', 
-        label: `Объединение${mergeableCount > 0 ? ` (${mergeableCount})` : ''}`, 
-        icon: Merge, 
-        path: '/merge' 
-      });
-    }
+  // Объединение заявок — для manager, supply_admin, director, владельца
+  if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
+    items.push({ 
+      id: 'merge', 
+      label: `Объединение${mergeableCount > 0 ? ` (${mergeableCount})` : ''}`, 
+      icon: Merge, 
+      path: '/merge' 
+    });
+  }
 
-    // Для мастера и прораба - только заявки (свои), история
-    if (userRole === 'master' || userRole === 'foreman') {
-      items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
-      items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
-    }
+  // Для мастера и прораба - только заявки (свои), история
+  if (userRole === 'master' || userRole === 'foreman') {
+    items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
+    items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
+  }
 
-    // Склад (для manager, supply_admin, foreman, accountant)
-    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || userRole === 'accountant') {
-      items.push({ id: 'warehouse', label: 'Склад', icon: Package, path: '/warehouse' });
-    }
+  // Склад (для manager, supply_admin, foreman, accountant)
+  if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || userRole === 'accountant') {
+    items.push({ id: 'warehouse', label: 'Склад', icon: Package, path: '/warehouse' });
+  }
 
-    // Клиенты (для manager и client_manager)
-    if (userRole === 'manager' || userRole === 'client_manager') {
-      items.push({ id: 'clients', label: 'Клиенты', icon: Users, path: '/clients' });
-    }
+  // Клиенты (для manager и client_manager)
+  if (userRole === 'manager' || userRole === 'client_manager') {
+    items.push({ id: 'clients', label: 'Клиенты', icon: Users, path: '/clients' });
+  }
 
-    // Аналитика - для manager, supply_admin, director, accountant, владельца компании
-    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
-      items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
-    }
+  // Аналитика - для manager, supply_admin, director, accountant, владельца компании
+  if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
+    items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
+  }
 
-    // API - для бухгалтера, руководителя, администратора снабжения
-    if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
-      items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
-    }
+  // API - для бухгалтера, руководителя, администратора снабжения
+  if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
+    items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
+  }
 
-    // Сметы - для бухгалтера, руководителя, администратора снабжения
-    if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
-      items.push({ id: 'estimates', label: 'Сметы', icon: Calculator, path: '/estimates' });
-    }
+  // Сметы - для бухгалтера, руководителя, администратора снабжения
+  if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
+    items.push({ id: 'estimates', label: 'Сметы', icon: Calculator, path: '/estimates' });
+  }
 
-    // Отчёты - для бухгалтера, руководителя, администратора снабжения
-    if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
-      items.push({ id: 'reports', label: 'Отчёты', icon: FileText, path: '/reports' });
-    }
+  // Отчёты - для бухгалтера, руководителя, администратора снабжения
+  if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
+    items.push({ id: 'reports', label: 'Отчёты', icon: FileText, path: '/reports' });
+  }
 
-    // Интеграция - для руководителя и администратора снабжения
-    if (userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
-      items.push({ id: 'integration', label: 'Интеграция', icon: Settings, path: '/integration' });
-    }
+  // Интеграция - для руководителя и администратора снабжения
+  if (userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
+    items.push({ id: 'integration', label: 'Интеграция', icon: Settings, path: '/integration' });
+  }
 
-    // Документы - для всех, кроме client
-    if (userRole !== 'client') {
-      items.push({ id: 'documents', label: 'Документы', icon: FileText, path: '/documents' });
-    }
+  // ✅ Документы - для всех, кроме client
+  if (userRole !== 'client') {
+    items.push({ id: 'documents', label: 'Документы', icon: FileText, path: '/documents' });
+  }
 
-    // Чат - для всех
-    items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
-    items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
+  // Чат - для всех
+  items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
+  items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
 
-    // Согласование (только для manager и director)
-    if (userRole === 'manager' || userRole === 'director') {
-      items.push({ 
-        id: 'approvals', 
-        label: `Согласование ${pendingApprovalsCount > 0 ? `(${pendingApprovalsCount})` : ''}`, 
-        icon: CheckCircle, 
-        path: '/approvals' 
-      });
-    }
+  // Согласование (только для manager и director)
+  if (userRole === 'manager' || userRole === 'director') {
+    items.push({ 
+      id: 'approvals', 
+      label: `Согласование ${pendingApprovalsCount > 0 ? `(${pendingApprovalsCount})` : ''}`, 
+      icon: CheckCircle, 
+      path: '/approvals' 
+    });
+  }
 
-    // Сотрудники (только для manager)
-    if (userRole === 'manager') {
-      items.push({ id: 'employees', label: 'Сотрудники', icon: Users, path: '/employees' });
-    }
+  // Сотрудники (только для manager)
+  if (userRole === 'manager') {
+    items.push({ id: 'employees', label: 'Сотрудники', icon: Users, path: '/employees' });
+  }
 
-    // Корзина
-    if (cartItemsCount > 0) {
-      items.push({ id: 'cart', label: `Корзина (${cartItemsCount})`, icon: ShoppingCart, path: '/cart' });
-    }
+  // Корзина
+  if (cartItemsCount > 0) {
+    items.push({ id: 'cart', label: `Корзина (${cartItemsCount})`, icon: ShoppingCart, path: '/cart' });
+  }
 
-    // Аудит - для manager, director, accountant, владельца
-    if (userRole === 'manager' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
-      items.push({ id: 'audit', label: 'Аудит', icon: Eye, path: '/audit' });
-    }
+  // Аудит - для manager, director, accountant, владельца
+  if (userRole === 'manager' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
+    items.push({ id: 'audit', label: 'Аудит', icon: Eye, path: '/audit' });
+  }
 
-    // Задачи
-    if (userRole !== 'client') {
-      items.push({ id: 'tasks', label: 'Задачи', icon: Target, path: '/tasks' });
-    }
+  // Задачи
+  if (userRole !== 'client') {
+    items.push({ id: 'tasks', label: 'Задачи', icon: Target, path: '/tasks' });
+  }
 
-    // Для заказчика - отдельные пункты
-    if (userRole === 'client') {
-      items.push({ id: 'clientDashboard', label: 'Мой объект', icon: Home, path: '/client' });
-      items.push({ id: 'clientDocuments', label: 'Мои документы', icon: FileText, path: '/client/documents' });
-      items.push({ id: 'clientChat', label: 'Чат с прорабом', icon: MessageCircle, path: '/client/chat' });
-    }
+  // Для заказчика - отдельные пункты
+  if (userRole === 'client') {
+    items.push({ id: 'clientDashboard', label: 'Мой объект', icon: Home, path: '/client' });
+    items.push({ id: 'clientDocuments', label: 'Мои документы', icon: FileText, path: '/client/documents' });
+    items.push({ id: 'clientChat', label: 'Чат с прорабом', icon: MessageCircle, path: '/client/chat' });
+  }
 
-    return items;
-  };
+  return items;
+};
 
   const navItems = getNavItems();
   const filteredNavItems = navItems.filter(item => 
@@ -786,10 +786,11 @@ const Navbar = ({
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {navItems.slice(0, 8).map((item) => {
-                const Icon = item.icon;
-                const isActive = currentPage === item.id || 
-                  (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history'));
-                return (
+  const Icon = item.icon;
+  const isActive = currentPage === item.id || 
+    (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
+    (item.id === 'documents' && currentPage === 'documents');  // ← ДОБАВИТЬ
+  return (
                   <button
                     key={item.id}
                     onClick={() => { onNavigate?.(item.path); setIsMobileMenuOpen(false); }}
@@ -862,14 +863,15 @@ const Navbar = ({
                 {navItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = currentPage === item.id || 
-                    (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
-                    (item.id === 'clients' && currentPage === 'clientDashboard') ||
-                    (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
-                    (item.id === 'estimates' && currentPage === 'estimates') ||
-                    (item.id === 'reports' && currentPage === 'reports') ||
-                    (item.id === 'integration' && currentPage === 'integration') ||
-                    (item.id === 'api' && currentPage === 'api') ||
-                    (item.id === 'merge' && currentPage === 'merge');
+  (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
+  (item.id === 'clients' && currentPage === 'clientDashboard') ||
+  (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
+  (item.id === 'estimates' && currentPage === 'estimates') ||
+  (item.id === 'reports' && currentPage === 'reports') ||
+  (item.id === 'integration' && currentPage === 'integration') ||
+  (item.id === 'api' && currentPage === 'api') ||
+  (item.id === 'merge' && currentPage === 'merge') ||
+  (item.id === 'documents' && currentPage === 'documents');
                   
                   return (
                     <button
@@ -1022,13 +1024,14 @@ const Navbar = ({
               {filteredNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentPage === item.id ||
-                  (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
-                  (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
-                  (item.id === 'estimates' && currentPage === 'estimates') ||
-                  (item.id === 'reports' && currentPage === 'reports') ||
-                  (item.id === 'integration' && currentPage === 'integration') ||
-                  (item.id === 'api' && currentPage === 'api') ||
-                  (item.id === 'merge' && currentPage === 'merge');
+  (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
+  (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
+  (item.id === 'estimates' && currentPage === 'estimates') ||
+  (item.id === 'reports' && currentPage === 'reports') ||
+  (item.id === 'integration' && currentPage === 'integration') ||
+  (item.id === 'api' && currentPage === 'api') ||
+  (item.id === 'merge' && currentPage === 'merge') ||
+  (item.id === 'documents' && currentPage === 'documents');
                 
                 return (
                   <button
