@@ -12,7 +12,8 @@ import {
   Crown, Rocket, Database, Key, Zap, Gift, TrendingUp,
   Calculator,
   FileText,
-  Settings
+  Settings,
+  FolderOpen
 } from 'lucide-react';
 import { getCompanyPlan } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
@@ -246,6 +247,15 @@ const Navbar = ({
     // Базовые пункты для всех
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
+
+     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'master' || userRole === 'foreman') {
+    items.push({ 
+      id: 'projects', 
+      label: 'Проекты', 
+      icon: FolderOpen, 
+      path: '/projects' 
+    });
+  }
 
     // CRM Sales - Лиды (для manager и supply_admin)
     if (userRole === 'manager' || userRole === 'supply_admin') {

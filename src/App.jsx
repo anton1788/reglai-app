@@ -17,6 +17,7 @@ import ClientPhotos from './components/ClientPortal/ClientPhotos';
 import ClientWorkAct from './components/ClientPortal/ClientWorkAct';
 import DocumentGenerator from './components/DocumentGenerator';
 import { CompanyProfileForm } from './components/CompanyProfileForm';
+import ProjectManager from './components/ProjectManager';
 import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingOverlay from './components/LoadingOverlay';
@@ -7270,6 +7271,15 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     applications={applications}
     settings={settings}
     onSettingsUpdate={setSettings}
+  />
+)}
+{currentView === 'projects' && (
+  <ProjectManager
+    supabase={supabase}
+    userCompanyId={userCompanyId}
+    userId={user?.id}
+    userRole={userRole}
+    showNotification={showNotification}
   />
 )}
       </main>
