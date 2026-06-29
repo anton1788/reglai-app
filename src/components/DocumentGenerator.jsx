@@ -84,10 +84,10 @@ const DocumentGenerator = ({
   const [companyDetails, setCompanyDetails] = useState(null);
   const [loadingCompanyDetails, setLoadingCompanyDetails] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0); // ✅ НОВОЕ: прогресс загрузки
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedFileUrl, setUploadedFileUrl] = useState('');
   
-  // ✅ НОВОЕ: Состояния для работы с проектной документацией
+  // ✅ Состояния для работы с проектной документацией
   const [projectFiles, setProjectFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   
@@ -96,7 +96,7 @@ const DocumentGenerator = ({
 
   const DOCS = useMemo(() => getAvailableDocsByRole(userRole), [userRole]);
 
-  // ✅ НОВОЕ: Функция определения иконки по типу файла
+  // ✅ Функция определения иконки по типу файла
   const getFileIcon = (fileName) => {
     const ext = fileName.split('.').pop().toLowerCase();
     if (ext === 'pdf') return '📄';
@@ -108,7 +108,7 @@ const DocumentGenerator = ({
     return '📎';
   };
 
-  // ✅ НОВОЕ: Функция форматирования размера файла
+  // ✅ Функция форматирования размера файла
   const formatFileSize = (bytes) => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -146,9 +146,13 @@ const DocumentGenerator = ({
     return () => document.head.removeChild(style);
   }, []);
 
-  // ✅ НОВОЕ: Загрузка файлов при выборе заявки
+  // ✅ Загрузка файлов при выборе заявки
   const loadProjectFiles = useCallback(async (appId) => {
-    if (!appId || !supabase) return;
+    if (!appId || !supabase) {
+      setProjectFiles([]);
+      setLoadingFiles(false);
+      return;
+    }
     setLoadingFiles(true);
     try {
       const { data, error } = await supabase
@@ -156,17 +160,22 @@ const DocumentGenerator = ({
         .select('*')
         .eq('application_id', appId)
         .order('created_at', { ascending: false });
-      if (error) throw error;
+        
+      if (error) {
+        console.warn('Ошибка загрузки файлов:', error.message);
+        setProjectFiles([]);
+        return;
+      }
       setProjectFiles(data || []);
     } catch (err) {
       console.error('Ошибка загрузки файлов:', err);
-      showNotification?.('❌ Не удалось загрузить файлы', 'error');
+      setProjectFiles([]);
     } finally {
       setLoadingFiles(false);
     }
-  }, [supabase, showNotification]);
+  }, [supabase]);
 
-  // ✅ НОВОЕ: Реакция на смену заявки
+  // ✅ Реакция на смену заявки
   useEffect(() => {
     if (selectedAppId) {
       loadProjectFiles(selectedAppId);
@@ -176,11 +185,11 @@ const DocumentGenerator = ({
   }, [selectedAppId, loadProjectFiles]);
 
   useEffect(() => {
-  if (activeTab === 'executive_diagram' && selectedApp && previewHtml) {
-    const updatedHtml = generateTemplate(activeTab, selectedApp);
-    setPreviewHtml(updatedHtml);
-  }
-}, [uploadedFileUrl, projectFiles, activeTab, selectedApp, previewHtml]);
+    if (activeTab === 'executive_diagram' && selectedApp && previewHtml) {
+      const updatedHtml = generateTemplate(activeTab, selectedApp);
+      setPreviewHtml(updatedHtml);
+    }
+  }, [uploadedFileUrl, projectFiles, activeTab, selectedApp, previewHtml]);
 
   const selectedApp = useMemo(() =>
     applications.find(a => a.id === selectedAppId),
@@ -197,7 +206,7 @@ const DocumentGenerator = ({
 
   const formatRub = (num) => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(num || 0);
 
-  // ✅ ОБНОВЛЕНО: Функция загрузки файла с прогрессом
+  // ✅ Функция загрузки файла с прогрессом
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !userCompanyId || !supabase || !selectedAppId) {
@@ -205,7 +214,6 @@ const DocumentGenerator = ({
       return;
     }
     
-    // Проверка размера файла (максимум 50 МБ)
     if (file.size > 50 * 1024 * 1024) {
       showNotification?.('❌ Файл слишком большой. Максимум 50 МБ', 'error');
       return;
@@ -217,7 +225,6 @@ const DocumentGenerator = ({
     try {
       const fileName = `${userCompanyId}/projects/${Date.now()}_${file.name}`;
       
-      // Загрузка с прогрессом
       const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(fileName, file, {
@@ -233,7 +240,6 @@ const DocumentGenerator = ({
         .from('documents')
         .getPublicUrl(fileName);
       
-      // Сохраняем информацию о файле в БД
       const { error: dbError } = await supabase
         .from('project_files')
         .insert([{
@@ -250,8 +256,6 @@ const DocumentGenerator = ({
       
       setUploadedFileUrl(publicUrl);
       showNotification?.('📎 Файл успешно загружен и сохранён', 'success');
-      
-      // Перезагружаем список файлов
       await loadProjectFiles(selectedAppId);
     } catch (err) {
       console.error('Ошибка загрузки файла:', err);
@@ -263,34 +267,29 @@ const DocumentGenerator = ({
     }
   };
 
-  // ✅ ОБНОВЛЕНО: Функция удаления файла с проверкой прав
+  // ✅ Функция удаления файла с проверкой прав
   const handleDeleteFile = async (fileId, fileUrl) => {
     if (!supabase) return;
     
-    // ✅ Проверка прав доступа
     const file = projectFiles.find(f => f.id === fileId);
     if (!file) {
       showNotification?.('❌ Файл не найден', 'error');
       return;
     }
     
-    // Только загрузивший пользователь или администратор может удалить
     if (file.uploaded_by !== user.id && userRole !== 'director' && userRole !== 'admin') {
       showNotification?.('⛔ У вас нет прав на удаление этого файла', 'error');
       return;
     }
     
-    // Подтверждение удаления
     if (!window.confirm(`Удалить файл "${file.file_name}"?`)) return;
     
     try {
-      // Удаляем из Storage
       const filePath = fileUrl.split('/storage/v1/object/public/documents/')[1];
       if (filePath) {
         await supabase.storage.from('documents').remove([filePath]);
       }
       
-      // Удаляем из БД
       const { error } = await supabase
         .from('project_files')
         .delete()
@@ -299,8 +298,6 @@ const DocumentGenerator = ({
       if (error) throw error;
       
       showNotification?.('🗑️ Файл удалён', 'success');
-      
-      // Перезагружаем список
       await loadProjectFiles(selectedAppId);
       
       if (uploadedFileUrl === fileUrl) {
@@ -312,20 +309,16 @@ const DocumentGenerator = ({
     }
   };
 
-  // ✅ НОВОЕ: Функция скачивания файла
+  // ✅ Функция скачивания файла
   const handleDownloadFile = async (fileUrl, fileName) => {
     try {
-      // Показываем уведомление о начале загрузки
       showNotification?.(`📥 Начинаем скачивание "${fileName}"...`, 'info');
-      
-      // Создаём ссылку для скачивания
       const link = document.createElement('a');
       link.href = fileUrl;
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
       showNotification?.('✅ Файл скачан', 'success');
     } catch (err) {
       console.error('Ошибка скачивания:', err);
@@ -366,8 +359,6 @@ const DocumentGenerator = ({
     const inn = cd.inn || '—';
     const kpp = cd.kpp || '—';
     const address = cd.address || '—';
-    // const bank = cd.bank_name || '—';
-// const bik = cd.bik || '—';
     const account = cd.account_number || '—';
     
     const signatures = `
@@ -404,7 +395,6 @@ const DocumentGenerator = ({
           sum + (Number(m.quantity) * (Number(m.price) || 1000)), 0
         );
         const today = new Date();
-        const cd = companyDetails || {};
         
         const materialsRows = app.materials.map((m, idx) => `
           <tr class="border border-black">
@@ -1463,7 +1453,6 @@ const DocumentGenerator = ({
       }
       
       case 'executive_diagram': {
-        // ✅ ОБНОВЛЕНО: Выводим список загруженных файлов в документе
         const filesListHtml = projectFiles.length > 0 ? `
           <div class="mb-6">
             <p class="font-medium mb-2">📎 Приложенная проектная документация (${projectFiles.length} файл.):</p>
@@ -1864,7 +1853,7 @@ const DocumentGenerator = ({
           </div>
         )}
 
-        {/* ✅ ОБНОВЛЕННЫЙ Блок загрузки и отображения PDF с улучшениями */}
+        {/* ✅ Блок загрузки и отображения PDF с улучшениями */}
         {activeTab === 'executive_diagram' && selectedAppId && (
           <div className="mb-4 no-print">
             <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center bg-gray-50 dark:bg-gray-700/30">
