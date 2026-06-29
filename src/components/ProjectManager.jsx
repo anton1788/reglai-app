@@ -50,91 +50,93 @@ const ProjectManager = ({ supabase, userCompanyId, userId, userRole, showNotific
     }
   }, [userCompanyId, supabase, showNotification]);
 
-  // Загрузка файла
-  const handleUpload = async (e) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    setUploading(true);
-    setUploadProgress(0);
-    
-    const uploadedProjects = [];
-    
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        
-        // Проверка размера (макс 50MB)
-        if (file.size > 50 * 1024 * 1024) {
-          showNotification?.(`⚠️ Файл "${file.name}" превышает 50MB`, 'warning');
-          continue;
-        }
-        
-        // ✅ ЭКРАНИРУЕМ ИМЯ ФАЙЛА
-        const safeFileName = file.name
-          .replace(/[^a-zA-Zа-яА-Я0-9._-]/g, '_')
-          .replace(/_+/g, '_');
-        
-        // ✅ ПРОСТОЙ ПУТЬ (без вложенных папок)
-        const storagePath = `${Date.now()}_${safeFileName}`;
-        
-        console.log('📤 Загрузка файла:', storagePath);
-        
-        // Загружаем в Storage
-        const { error: uploadError } = await supabase.storage
-          .from('projects')
-          .upload(storagePath, file);
-        
-        if (uploadError) {
-          console.error('❌ Ошибка загрузки в Storage:', uploadError);
-          showNotification?.(`❌ Ошибка Storage: ${uploadError.message}`, 'error');
-          continue;
-        }
-        
-        // Сохраняем в БД
-        const { data, error: dbError } = await supabase
-          .from('projects')
-          .insert([{
-            company_id: userCompanyId,
-            uploaded_by: userId,
-            name: file.name,
-            description: '',
-            file_size: file.size,
-            file_type: file.type || 'application/octet-stream',
-            storage_path: storagePath,
-            created_at: new Date().toISOString()
-          }])
-          .select()
-          .single();
-        
-        if (dbError) {
-          console.error('❌ Ошибка сохранения в БД:', dbError);
-          showNotification?.(`❌ Ошибка БД: ${dbError.message}`, 'error');
-          continue;
-        }
-        
-        // Получаем публичный URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('projects')
-          .getPublicUrl(storagePath);
-        
-        uploadedProjects.push({ ...data, publicUrl });
-        setUploadProgress(((i + 1) / files.length) * 100);
+  // Загрузка файла (УПРОЩЕННАЯ ВЕРСИЯ - БЕЗ СПЕЦИАЛЬНЫХ СИМВОЛОВ)
+const handleUpload = async (e) => {
+  const files = e.target.files;
+  if (!files || files.length === 0) return;
+  
+  setUploading(true);
+  setUploadProgress(0);
+  
+  const uploadedProjects = [];
+  
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
+      // Проверка размера (макс 50MB)
+      if (file.size > 50 * 1024 * 1024) {
+        showNotification?.(`⚠️ Файл "${file.name}" превышает 50MB`, 'warning');
+        continue;
       }
       
-      if (uploadedProjects.length > 0) {
-        setProjects(prev => [...uploadedProjects, ...prev]);
-        showNotification?.(`✅ Загружено ${uploadedProjects.length} проектов`, 'success');
+      // ✅ МАКСИМАЛЬНО ПРОСТОЕ ИМЯ — только timestamp + расширение
+      const fileExt = file.name.split('.').pop() || 'pdf';
+      const storagePath = `${Date.now()}.${fileExt}`;
+      
+      console.log('📤 Загрузка файла:', storagePath);
+      console.log('📤 Оригинальное имя:', file.name);
+      console.log('📤 Bucket:', 'projects');
+      
+      // Загружаем в Storage
+      const { error: uploadError } = await supabase.storage
+        .from('projects')
+        .upload(storagePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type || 'application/octet-stream'
+        });
+      
+      if (uploadError) {
+        console.error('❌ Ошибка загрузки в Storage:', uploadError);
+        showNotification?.(`❌ Ошибка Storage: ${uploadError.message}`, 'error');
+        continue;
       }
-    } catch (err) {
-      console.error('❌ Ошибка загрузки:', err);
-      showNotification?.(`❌ Ошибка: ${err.message || 'Неизвестная ошибка'}`, 'error');
-    } finally {
-      setUploading(false);
-      setUploadProgress(0);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      
+      // Сохраняем в БД
+      const { data, error: dbError } = await supabase
+        .from('projects')
+        .insert([{
+          company_id: userCompanyId,
+          uploaded_by: userId,
+          name: file.name, // ← ОРИГИНАЛЬНОЕ ИМЯ для отображения
+          description: '',
+          file_size: file.size,
+          file_type: file.type || 'application/octet-stream',
+          storage_path: storagePath, // ← ПРОСТОЕ ИМЯ в Storage
+          created_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+      
+      if (dbError) {
+        console.error('❌ Ошибка сохранения в БД:', dbError);
+        showNotification?.(`❌ Ошибка БД: ${dbError.message}`, 'error');
+        continue;
+      }
+      
+      // Получаем публичный URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('projects')
+        .getPublicUrl(storagePath);
+      
+      uploadedProjects.push({ ...data, publicUrl });
+      setUploadProgress(((i + 1) / files.length) * 100);
     }
-  };
+    
+    if (uploadedProjects.length > 0) {
+      setProjects(prev => [...uploadedProjects, ...prev]);
+      showNotification?.(`✅ Загружено ${uploadedProjects.length} проектов`, 'success');
+    }
+  } catch (err) {
+    console.error('❌ Ошибка загрузки:', err);
+    showNotification?.(`❌ Ошибка: ${err.message || 'Неизвестная ошибка'}`, 'error');
+  } finally {
+    setUploading(false);
+    setUploadProgress(0);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+};
 
   // Удаление проекта
   const handleDelete = async (projectId, storagePath) => {
