@@ -6487,6 +6487,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     else if (path === '/reports') setCurrentView('reports');
     else if (path === '/integration') setCurrentView('integration');
     else if (path === '/applications') setCurrentView('inwork');
+    else if (path === '/projects') setCurrentView('projects');
     else if (path === '/applications/new') setCurrentView('create');
     else if (path === '/warehouse') setCurrentView('warehouse');
     else if (path === '/clients') setCurrentView('clients');
