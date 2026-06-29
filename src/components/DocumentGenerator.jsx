@@ -2,12 +2,12 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { 
   FileText, Download, Printer, Calendar, Package, ClipboardList, Truck, 
-  Loader2, AlertCircle, FileCheck, Ruler, Receipt, Check, X, Upload, Paperclip
+  Loader2, AlertCircle, FileCheck, Ruler, Receipt, Check, X, Upload, Paperclip,
+  Trash2, ExternalLink, Image, File, FolderOpen, Plus, RefreshCw
 } from 'lucide-react';
 
 // ✅ ДОСТУПНЫЕ ДОКУМЕНТЫ В ЗАВИСИМОСТИ ОТ РОЛИ
 const getAvailableDocsByRole = (userRole) => {
-  // Для мастера и прораба - только Журнал работ и Исполнительная схема
   if (userRole === 'master' || userRole === 'foreman') {
     return [
       { id: 'work_log', label: 'Журнал работ', icon: Calendar },
@@ -15,7 +15,6 @@ const getAvailableDocsByRole = (userRole) => {
     ];
   }
   
-  // Для снабженца
   if (userRole === 'supply_admin') {
     return [
       { id: 'work_log', label: 'Журнал работ', icon: Calendar },
@@ -24,7 +23,6 @@ const getAvailableDocsByRole = (userRole) => {
     ];
   }
   
-  // Для руководителя - полный доступ
   if (userRole === 'manager' || userRole === 'director') {
     return [
       { id: 'work_act', label: 'Акт выполненных работ', icon: ClipboardList },
@@ -40,7 +38,6 @@ const getAvailableDocsByRole = (userRole) => {
     ];
   }
   
-  // Для бухгалтера
   if (userRole === 'accountant') {
     return [
       { id: 'invoice', label: 'Накладная', icon: Truck },
@@ -49,7 +46,6 @@ const getAvailableDocsByRole = (userRole) => {
     ];
   }
   
-  // Для заказчика
   if (userRole === 'client') {
     return [
       { id: 'work_log', label: 'Журнал работ', icon: Calendar },
@@ -58,7 +54,6 @@ const getAvailableDocsByRole = (userRole) => {
     ];
   }
   
-  // По умолчанию
   return [
     { id: 'work_log', label: 'Журнал работ', icon: Calendar },
     { id: 'executive_diagram', label: 'Исполнительная схема', icon: Ruler }
@@ -77,10 +72,340 @@ const PRINT_STYLES = `
 }
 `;
 
+// ─────────────────────────────────────────────────────────────
+// 📎 КОМПОНЕНТ УПРАВЛЕНИЯ ЗАГРУЖЕННЫМИ ФАЙЛАМИ
+// ─────────────────────────────────────────────────────────────
+const ProjectFilesManager = ({ 
+  applicationId, 
+  companyId, 
+  userId, 
+  supabase, 
+  showNotification,
+  onFilesChange 
+}) => {
+  const [files, setFiles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef(null);
+
+  // Загрузка списка файлов
+  const loadFiles = useCallback(async () => {
+    if (!applicationId || !companyId) return;
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('project_files')
+        .select('*')
+        .eq('application_id', applicationId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Получаем публичные URL для каждого файла
+      const filesWithUrls = await Promise.all((data || []).map(async (file) => {
+        const { data: { publicUrl } } = supabase.storage
+          .from('project_files')
+          .getPublicUrl(file.storage_path);
+        
+        return { ...file, publicUrl };
+      }));
+      
+      setFiles(filesWithUrls);
+      onFilesChange?.(filesWithUrls);
+    } catch (err) {
+      console.error('Ошибка загрузки файлов:', err);
+      showNotification?.('❌ Не удалось загрузить список файлов', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [applicationId, companyId, supabase, showNotification, onFilesChange]);
+
+  // Загрузка файлов в хранилище
+  const handleUpload = async (e) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles || selectedFiles.length === 0) return;
+    
+    if (!applicationId) {
+      showNotification?.('⚠️ Сначала выберите заявку', 'warning');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+    
+    const uploadedFiles = [];
+    
+    try {
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        
+        // Проверка размера (макс 50MB)
+        if (file.size > 50 * 1024 * 1024) {
+          showNotification?.(`⚠️ Файл "${file.name}" превышает 50MB`, 'warning');
+          continue;
+        }
+        
+        // Создаём уникальное имя
+        const fileName = `${companyId}/${applicationId}/${Date.now()}_${file.name}`;
+        
+        // Загружаем в Storage
+        const { error: uploadError } = await supabase.storage
+          .from('project_files')
+          .upload(fileName, file);
+        
+        if (uploadError) throw uploadError;
+        
+        // Сохраняем метаданные в БД
+        const { data, error: dbError } = await supabase
+          .from('project_files')
+          .insert([{
+            application_id: applicationId,
+            company_id: companyId,
+            uploaded_by: userId,
+            file_name: file.name,
+            file_size: file.size,
+            file_type: file.type || 'application/octet-stream',
+            storage_path: fileName,
+            created_at: new Date().toISOString()
+          }])
+          .select()
+          .single();
+        
+        if (dbError) throw dbError;
+        
+        // Получаем публичный URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('project_files')
+          .getPublicUrl(fileName);
+        
+        uploadedFiles.push({ ...data, publicUrl });
+        
+        setUploadProgress(((i + 1) / selectedFiles.length) * 100);
+      }
+      
+      // Обновляем список
+      setFiles(prev => [...uploadedFiles, ...prev]);
+      onFilesChange?.(files);
+      
+      showNotification?.(`✅ Загружено ${uploadedFiles.length} файлов`, 'success');
+    } catch (err) {
+      console.error('Ошибка загрузки:', err);
+      showNotification?.('❌ Ошибка загрузки файлов', 'error');
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // Удаление файла
+  const handleDelete = async (fileId, storagePath) => {
+    if (!confirm('Удалить этот файл?')) return;
+    
+    try {
+      // Удаляем из Storage
+      const { error: storageError } = await supabase.storage
+        .from('project_files')
+        .remove([storagePath]);
+      
+      if (storageError) throw storageError;
+      
+      // Удаляем из БД
+      const { error: dbError } = await supabase
+        .from('project_files')
+        .delete()
+        .eq('id', fileId);
+      
+      if (dbError) throw dbError;
+      
+      setFiles(prev => prev.filter(f => f.id !== fileId));
+      onFilesChange?.(files.filter(f => f.id !== fileId));
+      showNotification?.('🗑️ Файл удалён', 'success');
+    } catch (err) {
+      console.error('Ошибка удаления:', err);
+      showNotification?.('❌ Ошибка удаления файла', 'error');
+    }
+  };
+
+  // Копирование ссылки
+  const handleCopyLink = (url) => {
+    navigator.clipboard.writeText(url);
+    showNotification?.('📋 Ссылка скопирована', 'success');
+  };
+
+  // Форматирование размера
+  const formatSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  // Иконка для типа файла
+  const getFileIcon = (fileName) => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) return Image;
+    if (['pdf'].includes(ext)) return FileText;
+    if (['dwg', 'dxf'].includes(ext)) return Ruler;
+    if (['doc', 'docx'].includes(ext)) return FileText;
+    if (['xls', 'xlsx'].includes(ext)) return FileText;
+    return File;
+  };
+
+  useEffect(() => {
+    loadFiles();
+  }, [loadFiles]);
+
+  return (
+    <div className="space-y-3">
+      {/* Заголовок с кнопкой загрузки */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FolderOpen className="w-4 h-4 text-[#4A6572]" />
+          <span className="font-medium text-sm text-gray-700 dark:text-gray-300">
+            Проектные файлы ({files.length})
+          </span>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || !applicationId}
+            className={`px-3 py-1.5 text-xs rounded-lg flex items-center gap-1.5 transition-all ${
+              uploading || !applicationId
+                ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-[#4A6572] to-[#344955] text-white hover:shadow-md'
+            }`}
+          >
+            {uploading ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Upload className="w-3 h-3" />
+            )}
+            {uploading ? 'Загрузка...' : 'Загрузить'}
+          </button>
+          <button
+            onClick={loadFiles}
+            disabled={loading}
+            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title="Обновить список"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.dwg,.dxf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx"
+          onChange={handleUpload}
+          className="hidden"
+        />
+      </div>
+
+      {/* Прогресс загрузки */}
+      {uploading && (
+        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+          <div 
+            className="bg-gradient-to-r from-[#4A6572] to-[#344955] h-2 rounded-full transition-all duration-300"
+            style={{ width: `${uploadProgress}%` }}
+          />
+        </div>
+      )}
+
+      {/* Список файлов */}
+      {loading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+        </div>
+      ) : files.length === 0 ? (
+        <div className="text-center py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
+          <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-400">Нет загруженных файлов</p>
+          <p className="text-xs text-gray-400 mt-1">Загрузите проекты, чертежи или схемы</p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+          {files.map((file) => {
+            const Icon = getFileIcon(file.file_name);
+            const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(
+              file.file_name.split('.').pop()?.toLowerCase()
+            );
+            
+            return (
+              <div 
+                key={file.id}
+                className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors group"
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                  isImage ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-gray-100 dark:bg-gray-700'
+                }`}>
+                  <Icon className={`w-4 h-4 ${isImage ? 'text-blue-500' : 'text-gray-500'}`} />
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate" title={file.file_name}>
+                    {file.file_name}
+                  </p>
+                  <div className="flex items-center gap-3 text-xs text-gray-400">
+                    <span>{formatSize(file.file_size)}</span>
+                    <span>•</span>
+                    <span>{new Date(file.created_at).toLocaleDateString('ru-RU')}</span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {isImage && (
+                    <a 
+                      href={file.publicUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                      title="Просмотр"
+                    >
+                      <Image className="w-4 h-4" />
+                    </a>
+                  )}
+                  <a 
+                    href={file.publicUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                    title="Скачать"
+                  >
+                    <Download className="w-4 h-4" />
+                  </a>
+                  <button
+                    onClick={() => handleCopyLink(file.publicUrl)}
+                    className="p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                    title="Копировать ссылку"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(file.id, file.storage_path)}
+                    className="p-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    title="Удалить"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
+// 📄 ОСНОВНОЙ КОМПОНЕНТ DOCUMENT GENERATOR
+// ─────────────────────────────────────────────────────────────
 const DocumentGenerator = ({
   applications = [],
   user,
-  userRole, // ✅ userRole теперь передаётся как проп
+  userRole,
   showNotification,
   companyName,
   userCompanyId,
@@ -93,12 +418,9 @@ const DocumentGenerator = ({
   const [previewHtml, setPreviewHtml] = useState('');
   const [companyDetails, setCompanyDetails] = useState(null);
   const [loadingCompanyDetails, setLoadingCompanyDetails] = useState(false);
-  const [uploadingFile, setUploadingFile] = useState(false);
-  const [uploadedFileUrl, setUploadedFileUrl] = useState('');
+  const [projectFiles, setProjectFiles] = useState([]);
   const printRef = useRef(null);
-  const fileInputRef = useRef(null);
 
-  // ✅ Хук useMemo теперь внутри компонента
   const DOCS = useMemo(() => getAvailableDocsByRole(userRole), [userRole]);
 
   // Загрузка реквизитов компании
@@ -131,13 +453,6 @@ const DocumentGenerator = ({
     return () => document.head.removeChild(style);
   }, []);
 
-  useEffect(() => {
-  if (activeTab === 'executive_diagram' && selectedApp && previewHtml) {
-    const updatedHtml = generateTemplate(activeTab, selectedApp);
-    setPreviewHtml(updatedHtml);
-  }
-}, [uploadedFileUrl]); // Сработает после обновления uploadedFileUrl
-
   const selectedApp = useMemo(() =>
     applications.find(a => a.id === selectedAppId),
     [applications, selectedAppId]
@@ -152,37 +467,6 @@ const DocumentGenerator = ({
   );
 
   const formatRub = (num) => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(num || 0);
-// eslint-disable-next-line no-unused-vars
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !userCompanyId || !supabase) return;
-    
-    setUploadingFile(true);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${userCompanyId}/diagrams/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, file);
-      
-      if (uploadError) throw uploadError;
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from('documents')
-        .getPublicUrl(fileName);
-      
-      setUploadedFileUrl(publicUrl);
-
-      showNotification('📎 Файл загружен', 'success');
-    } catch (err) {
-      console.error('Ошибка загрузки файла:', err);
-      showNotification('❌ Ошибка загрузки файла', 'error');
-    } finally {
-      setUploadingFile(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
 
   const saveGeneratedDocument = useCallback(async (docType, app, htmlContent) => {
     if (!supabase || !userCompanyId || !user?.id) return null;
@@ -208,33 +492,47 @@ const DocumentGenerator = ({
     }
   }, [supabase, userCompanyId, user?.id]);
 
-  const generateTemplate = (type, app) => {
-    if (!app) return '';
-    const date = new Date(app.created_at).toLocaleDateString('ru-RU');
-    const docNumber = app.id?.slice(0, 8).toUpperCase() || '---';
-    
-    const cd = companyDetails || {};
-    const inn = cd.inn || '—';
-    const kpp = cd.kpp || '—';
-    const address = cd.address || '—';
-    const bank = cd.bank_name || '—';
-    const bik = cd.bik || '—';
-    const account = cd.account_number || '—';
-    
-    const signatures = `
-      <div class="mt-8 pt-4 border-t border-gray-300 dark:border-gray-600 flex justify-between">
-        <div class="text-center w-1/2">
-          <p class="text-sm text-gray-500 dark:text-gray-400">Исполнитель</p>
-          <p class="mt-8 border-b border-gray-400 dark:border-gray-500 w-3/4 mx-auto"></p>
-          <p class="text-xs mt-1">(${app.foreman_name})</p>
-        </div>
-        <div class="text-center w-1/2">
-          <p class="text-sm text-gray-500 dark:text-gray-400">Заказчик</p>
-          <p class="mt-8 border-b border-gray-400 dark:border-gray-500 w-3/4 mx-auto"></p>
-          <p class="text-xs mt-1">(${companyName || '—'})</p>
-        </div>
+  // Выносим генерацию шаблонов в useCallback с зависимостями
+  const generateTemplate = useCallback((type, app) => {
+  if (!app) return '';
+  const date = new Date(app.created_at).toLocaleDateString('ru-RU');
+  const docNumber = app.id?.slice(0, 8).toUpperCase() || '---';
+  
+  // ✅ Используем все переменные в подписях и реквизитах
+  const cd = companyDetails || {};
+  const inn = cd.inn || '—';
+  const kpp = cd.kpp || '—';
+  const address = cd.address || '—';
+  const bank = cd.bank_name || '—';
+  const bik = cd.bik || '—';
+  const account = cd.account_number || '—';
+  
+  // 🆕 Функция для рендеринга реквизитов (использует все переменные)
+  const renderCompanyDetails = () => `
+    <div class="text-xs text-gray-600 dark:text-gray-400">
+      <p><strong>${cd.name || companyName || '—'}</strong></p>
+      <p>ИНН: ${inn} | КПП: ${kpp}</p>
+      <p>${address}</p>
+      <p>Банк: ${bank} | БИК: ${bik}</p>
+      <p>Р/с: ${account}</p>
+    </div>
+  `;
+  
+  const signatures = `
+    <div class="mt-8 pt-4 border-t border-gray-300 dark:border-gray-600 flex justify-between">
+      <div class="text-center w-1/2">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Исполнитель</p>
+        <p class="mt-8 border-b border-gray-400 dark:border-gray-500 w-3/4 mx-auto"></p>
+        <p class="text-xs mt-1">(${app.foreman_name})</p>
       </div>
-    `;
+      <div class="text-center w-1/2">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Заказчик</p>
+        <p class="mt-8 border-b border-gray-400 dark:border-gray-500 w-3/4 mx-auto"></p>
+        <p class="text-xs mt-1">(${companyName || '—'})</p>
+        ${renderCompanyDetails()}
+      </div>
+    </div>
+  `;
 
     const vatSignatures = `
       <div class="mt-8 pt-4 border-t border-gray-300 dark:border-gray-600 grid grid-cols-2 gap-8 text-sm">
@@ -251,184 +549,170 @@ const DocumentGenerator = ({
 
     switch (type) {
       case 'work_act': {
-  const totalAmount = app.materials.reduce((sum, m) => 
-    sum + (Number(m.quantity) * (Number(m.price) || 1000)), 0
-  );
-  const today = new Date();
-  
-  const cd = companyDetails || {};
-  
-  const materialsRows = app.materials.map((m, idx) => `
-    <tr class="border border-black">
-      <td class="border border-black p-1 text-center">${idx + 1}</td>
-      <td class="border border-black p-1">${m.description || '—'}</td>
-      <td class="border border-black p-1 text-center">—</td>
-      <td class="border border-black p-1 text-center">${m.unit || 'шт'}</td>
-      <td class="border border-black p-1 text-center">${Number(m.quantity).toLocaleString('ru-RU')}</td>
-      <td class="border border-black p-1 text-right pr-2">${(Number(m.price) || 1000).toLocaleString('ru-RU')}</td>
-      <td class="border border-black p-1 text-right pr-2 font-medium">${(Number(m.quantity) * (Number(m.price) || 1000)).toLocaleString('ru-RU')}</td>
-    </tr>
-  `).join('');
-
-  return `
-    <div class="p-4 bg-white rounded-xl shadow-sm max-w-5xl mx-auto font-sans text-sm print:p-2">
-      <!-- Заголовок формы -->
-      <div class="text-center mb-2">
-        <div class="text-xs">Унифицированная форма № КС-2</div>
-        <div class="text-[10px] text-gray-500">Утверждена постановлением Госкомстата России от 11.11.99 № 100</div>
-      </div>
-      
-      <!-- Коды формы -->
-      <div class="flex justify-end mb-2 text-[10px]">
-        <table class="border-collapse">
-          <tr>
-            <td class="border border-black px-1">Форма по ОКУД</td>
-            <td class="border border-black px-1 font-bold">0322005</td>
+        const totalAmount = app.materials.reduce((sum, m) => 
+          sum + (Number(m.quantity) * (Number(m.price) || 1000)), 0
+        );
+        const today = new Date();
+        
+        const companyData = companyDetails || {};
+        
+        const materialsRows = app.materials.map((m, idx) => `
+          <tr class="border border-black">
+            <td class="border border-black p-1 text-center">${idx + 1}</td>
+            <td class="border border-black p-1">${m.description || '—'}</td>
+            <td class="border border-black p-1 text-center">—</td>
+            <td class="border border-black p-1 text-center">${m.unit || 'шт'}</td>
+            <td class="border border-black p-1 text-center">${Number(m.quantity).toLocaleString('ru-RU')}</td>
+            <td class="border border-black p-1 text-right pr-2">${(Number(m.price) || 1000).toLocaleString('ru-RU')}</td>
+            <td class="border border-black p-1 text-right pr-2 font-medium">${(Number(m.quantity) * (Number(m.price) || 1000)).toLocaleString('ru-RU')}</td>
           </tr>
-        </table>
-      </div>
-      
-      <!-- Участники -->
-      <div class="space-y-1 mb-2 text-[10px]">
-        <div class="grid grid-cols-12">
-          <div class="col-span-2 font-medium">Инвестор</div>
-          <div class="col-span-8 border-b border-black border-dotted">${cd.investor || companyName || '—'}</div>
-          <div class="col-span-2 text-right">по ОКПО</div>
-          <div class="col-span-2 col-start-11 border-b border-black border-dotted">${cd.okpo || '—'}</div>
-        </div>
-        <div class="grid grid-cols-12">
-          <div class="col-span-2 font-medium">Заказчик</div>
-          <div class="col-span-8 border-b border-black border-dotted">${cd.customer || companyName || '—'}</div>
-          <div class="col-span-2 text-right">по ОКПО</div>
-          <div class="col-span-2 col-start-11 border-b border-black border-dotted">${cd.okpo || '—'}</div>
-        </div>
-        <div class="grid grid-cols-12">
-          <div class="col-span-2 font-medium">Подрядчик</div>
-          <div class="col-span-8 border-b border-black border-dotted">${companyName || '—'}</div>
-          <div class="col-span-2 text-right">по ОКПО</div>
-          <div class="col-span-2 col-start-11 border-b border-black border-dotted">${cd.okpo || '—'}</div>
-        </div>
-        <div class="grid grid-cols-12">
-          <div class="col-span-2 font-medium">Объект</div>
-          <div class="col-span-10 border-b border-black border-dotted">${app.object_name || '—'}</div>
-        </div>
-      </div>
-      
-      <!-- Договор и период -->
-      <div class="grid grid-cols-3 gap-2 mb-2 text-[10px]">
-        <div class="flex items-center">
-          <span class="font-medium mr-1">Договор №</span>
-          <span class="border-b border-black w-20 text-center">${docNumber}</span>
-        </div>
-        <div class="flex items-center">
-          <span class="font-medium mr-1">от</span>
-          <span class="border-b border-black w-20 text-center">${new Date(app.created_at).toLocaleDateString('ru-RU')}</span>
-        </div>
-        <div class="flex items-center justify-end">
-          <span class="font-medium mr-1">Период:</span>
-          <span class="border-b border-black w-16 text-center">с ${new Date(app.created_at).toLocaleDateString('ru-RU')}</span>
-          <span class="mx-1">по</span>
-          <span class="border-b border-black w-16 text-center">${today.toLocaleDateString('ru-RU')}</span>
-        </div>
-      </div>
-      
-      <!-- Заголовок -->
-      <div class="text-center font-bold my-2">АКТ</div>
-      <div class="text-center font-bold mb-3">о приёмке выполненных работ</div>
-      
-      <!-- Сметная стоимость -->
-      <div class="flex justify-end mb-2 text-[10px]">
-        <span class="font-medium mr-2">Сметная стоимость работ по договору:</span>
-        <span class="border-b border-black w-28 text-right">${totalAmount.toLocaleString('ru-RU')}</span>
-        <span class="ml-1">руб.</span>
-      </div>
-      
-      <!-- Таблица работ -->
-      <div class="overflow-x-auto">
-        <table class="w-full border-collapse text-[9px] mb-2">
-          <thead>
-            <tr class="border border-black">
-              <th class="border border-black p-0.5 text-center w-8">№ п/п</th>
-              <th class="border border-black p-0.5 text-left min-w-[200px]">Наименование работ</th>
-              <th class="border border-black p-0.5 text-center w-16">Ед. изм.</th>
-              <th class="border border-black p-0.5 text-center w-20">Количество</th>
-              <th class="border border-black p-0.5 text-right pr-1 w-24">Цена за единицу, руб.</th>
-              <th class="border border-black p-0.5 text-right pr-1 w-28">Стоимость, руб.</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${materialsRows}
-          </tbody>
-          <tfoot>
-            <tr class="border border-black font-bold">
-              <td colspan="4" class="border border-black p-1 text-right pr-2">Итого</td>
-              <td class="border border-black p-1 text-center">Х</td>
-              <td class="border border-black p-1 text-right pr-2">${totalAmount.toLocaleString('ru-RU')}</td>
-            </tr>
-            <tr class="border border-black font-bold">
-              <td colspan="4" class="border border-black p-1 text-right pr-2">Всего</td>
-              <td class="border border-black p-1 text-center">Х</td>
-              <td class="border border-black p-1 text-right pr-2 font-bold">${totalAmount.toLocaleString('ru-RU')}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      
-      <!-- Сумма прописью -->
-      <div class="text-[10px] mb-3">
-        <p>Всего выполнено на сумму: <span class="border-b border-black w-full inline-block"></span></p>
-        <p class="text-[9px] text-gray-500">(прописью)</p>
-      </div>
-      
-      <!-- Подписи -->
-      <div class="mt-4 pt-2 border-t border-black text-[10px]">
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <p class="font-medium mb-2">Сдал (Подрядчик)</p>
-            <div class="flex items-center gap-2">
-              <span class="border-b border-black flex-1"></span>
-              <span class="text-[9px] text-gray-500">(должность)</span>
+        `).join('');
+
+        return `
+          <div class="p-4 bg-white rounded-xl shadow-sm max-w-5xl mx-auto font-sans text-sm print:p-2">
+            <div class="text-center mb-2">
+              <div class="text-xs">Унифицированная форма № КС-2</div>
+              <div class="text-[10px] text-gray-500">Утверждена постановлением Госкомстата России от 11.11.99 № 100</div>
             </div>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="border-b border-black w-24"></span>
-              <span class="text-[9px] text-gray-500">(подпись)</span>
-              <span class="border-b border-black flex-1 ml-2"></span>
-              <span class="text-[9px] text-gray-500">${app.foreman_name || '(расшифровка)'}</span>
+            
+            <div class="flex justify-end mb-2 text-[10px]">
+              <table class="border-collapse">
+                <tr>
+                  <td class="border border-black px-1">Форма по ОКУД</td>
+                  <td class="border border-black px-1 font-bold">0322005</td>
+                </tr>
+              </table>
             </div>
-            <div class="mt-2 text-center text-gray-400">М.П.</div>
+            
+            <div class="space-y-1 mb-2 text-[10px]">
+              <div class="grid grid-cols-12">
+                <div class="col-span-2 font-medium">Инвестор</div>
+                <div class="col-span-8 border-b border-black border-dotted">${companyData.investor || companyName || '—'}</div>
+                <div class="col-span-2 text-right">по ОКПО</div>
+                <div class="col-span-2 col-start-11 border-b border-black border-dotted">${companyData.okpo || '—'}</div>
+              </div>
+              <div class="grid grid-cols-12">
+                <div class="col-span-2 font-medium">Заказчик</div>
+                <div class="col-span-8 border-b border-black border-dotted">${companyData.customer || companyName || '—'}</div>
+                <div class="col-span-2 text-right">по ОКПО</div>
+                <div class="col-span-2 col-start-11 border-b border-black border-dotted">${companyData.okpo || '—'}</div>
+              </div>
+              <div class="grid grid-cols-12">
+                <div class="col-span-2 font-medium">Подрядчик</div>
+                <div class="col-span-8 border-b border-black border-dotted">${companyName || '—'}</div>
+                <div class="col-span-2 text-right">по ОКПО</div>
+                <div class="col-span-2 col-start-11 border-b border-black border-dotted">${companyData.okpo || '—'}</div>
+              </div>
+              <div class="grid grid-cols-12">
+                <div class="col-span-2 font-medium">Объект</div>
+                <div class="col-span-10 border-b border-black border-dotted">${app.object_name || '—'}</div>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-2 mb-2 text-[10px]">
+              <div class="flex items-center">
+                <span class="font-medium mr-1">Договор №</span>
+                <span class="border-b border-black w-20 text-center">${docNumber}</span>
+              </div>
+              <div class="flex items-center">
+                <span class="font-medium mr-1">от</span>
+                <span class="border-b border-black w-20 text-center">${new Date(app.created_at).toLocaleDateString('ru-RU')}</span>
+              </div>
+              <div class="flex items-center justify-end">
+                <span class="font-medium mr-1">Период:</span>
+                <span class="border-b border-black w-16 text-center">с ${new Date(app.created_at).toLocaleDateString('ru-RU')}</span>
+                <span class="mx-1">по</span>
+                <span class="border-b border-black w-16 text-center">${today.toLocaleDateString('ru-RU')}</span>
+              </div>
+            </div>
+            
+            <div class="text-center font-bold my-2">АКТ</div>
+            <div class="text-center font-bold mb-3">о приёмке выполненных работ</div>
+            
+            <div class="flex justify-end mb-2 text-[10px]">
+              <span class="font-medium mr-2">Сметная стоимость работ по договору:</span>
+              <span class="border-b border-black w-28 text-right">${totalAmount.toLocaleString('ru-RU')}</span>
+              <span class="ml-1">руб.</span>
+            </div>
+            
+            <div class="overflow-x-auto">
+              <table class="w-full border-collapse text-[9px] mb-2">
+                <thead>
+                  <tr class="border border-black">
+                    <th class="border border-black p-0.5 text-center w-8">№ п/п</th>
+                    <th class="border border-black p-0.5 text-left min-w-[200px]">Наименование работ</th>
+                    <th class="border border-black p-0.5 text-center w-16">Ед. изм.</th>
+                    <th class="border border-black p-0.5 text-center w-20">Количество</th>
+                    <th class="border border-black p-0.5 text-right pr-1 w-24">Цена за единицу, руб.</th>
+                    <th class="border border-black p-0.5 text-right pr-1 w-28">Стоимость, руб.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${materialsRows}
+                </tbody>
+                <tfoot>
+                  <tr class="border border-black font-bold">
+                    <td colspan="4" class="border border-black p-1 text-right pr-2">Итого</td>
+                    <td class="border border-black p-1 text-center">Х</td>
+                    <td class="border border-black p-1 text-right pr-2">${totalAmount.toLocaleString('ru-RU')}</td>
+                  </tr>
+                  <tr class="border border-black font-bold">
+                    <td colspan="4" class="border border-black p-1 text-right pr-2">Всего</td>
+                    <td class="border border-black p-1 text-center">Х</td>
+                    <td class="border border-black p-1 text-right pr-2 font-bold">${totalAmount.toLocaleString('ru-RU')}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            
+            <div class="text-[10px] mb-3">
+              <p>Всего выполнено на сумму: <span class="border-b border-black w-full inline-block"></span></p>
+              <p class="text-[9px] text-gray-500">(прописью)</p>
+            </div>
+            
+            <div class="mt-4 pt-2 border-t border-black text-[10px]">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <p class="font-medium mb-2">Сдал (Подрядчик)</p>
+                  <div class="flex items-center gap-2">
+                    <span class="border-b border-black flex-1"></span>
+                    <span class="text-[9px] text-gray-500">(должность)</span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span class="border-b border-black w-24"></span>
+                    <span class="text-[9px] text-gray-500">(подпись)</span>
+                    <span class="border-b border-black flex-1 ml-2"></span>
+                    <span class="text-[9px] text-gray-500">${app.foreman_name || '(расшифровка)'}</span>
+                  </div>
+                  <div class="mt-2 text-center text-gray-400">М.П.</div>
+                </div>
+                <div>
+                  <p class="font-medium mb-2">Принял (Заказчик)</p>
+                  <div class="flex items-center gap-2">
+                    <span class="border-b border-black flex-1"></span>
+                    <span class="text-[9px] text-gray-500">(должность)</span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span class="border-b border-black w-24"></span>
+                    <span class="text-[9px] text-gray-500">(подпись)</span>
+                    <span class="border-b border-black flex-1 ml-2"></span>
+                    <span class="text-[9px] text-gray-500">(расшифровка)</span>
+                  </div>
+                  <div class="mt-2 text-center text-gray-400">М.П.</div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <p class="font-medium mb-2">Принял (Заказчик)</p>
-            <div class="flex items-center gap-2">
-              <span class="border-b border-black flex-1"></span>
-              <span class="text-[9px] text-gray-500">(должность)</span>
-            </div>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="border-b border-black w-24"></span>
-              <span class="text-[9px] text-gray-500">(подпись)</span>
-              <span class="border-b border-black flex-1 ml-2"></span>
-              <span class="text-[9px] text-gray-500">(расшифровка)</span>
-            </div>
-            <div class="mt-2 text-center text-gray-400">М.П.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-}
+        `;
+      }
       
-      // ✅ ИСПРАВЛЕННАЯ ФОРМА АКТА ПРИЕМКИ МАТЕРИАЛОВ (М-7)
       case 'material_act': {
         const totalAmount = app.materials.reduce((sum, m) => 
           sum + (Number(m.supplier_received_quantity || m.received || 0) * (Number(m.price) || 1000)), 0
         );
-        
         const today = new Date();
-        // ✅ ИСПРАВЛЕНО: Добавлен eslint-disable для переменных, используемых в шаблонной строке
-        // eslint-disable-next-line no-unused-vars
-        const startDate = new Date(app.created_at);
-        // eslint-disable-next-line no-unused-vars
-        const endDate = today;
+        const companyData = companyDetails || {};
+        const address = companyData.address || companyName || '—';
         
         return `
           <div class="p-8 bg-white rounded-xl shadow-sm max-w-6xl mx-auto font-sans">
@@ -516,10 +800,6 @@ const DocumentGenerator = ({
               </div>
             </div>
             
-            <div class="mb-4">
-              <div class="text-sm">По сопроводительным документам значилось:</div>
-            </div>
-            
             <div class="overflow-x-auto">
               <table class="w-full border-collapse text-sm mb-4">
                 <thead>
@@ -542,8 +822,6 @@ const DocumentGenerator = ({
                 <tbody>
                   ${app.materials
                     .filter(m => (m.supplier_received_quantity || m.received || 0) > 0)
-                    // ✅ ИСПРАВЛЕНО: Добавлен eslint-disable для idx, используемого в шаблонной строке
-                    // eslint-disable-next-line no-unused-vars
                     .map((m, idx) => {
                       const qtyDoc = Number(m.quantity) || 0;
                       const qtyFact = Number(m.supplier_received_quantity || m.received || 0);
@@ -657,19 +935,18 @@ const DocumentGenerator = ({
         `;
       }
       
-      // ✅ ИСПРАВЛЕННАЯ ФОРМА ОБЩЕГО ЖУРНАЛА РАБОТ (КС-6)
       case 'work_log': {
         const today = new Date();
+        const companyData = companyDetails || {};
+        const address = companyData.address || companyName || '—';
         
         return `
           <div class="p-8 bg-white rounded-xl shadow-sm max-w-6xl mx-auto font-sans">
-            <!-- Заголовок формы -->
             <div class="text-center mb-4">
               <div class="text-sm">Типовая межотраслевая форма № КС-6</div>
               <div class="text-xs text-gray-500">Утверждена постановлением Госкомстата России от 30.10.97 № 71а</div>
             </div>
             
-            <!-- Номер журнала -->
             <div class="flex justify-between items-center mb-6">
               <div class="text-lg font-bold">ОБЩИЙ ЖУРНАЛ РАБОТ № 1</div>
               <div class="text-right">
@@ -678,7 +955,6 @@ const DocumentGenerator = ({
               </div>
             </div>
             
-            <!-- Титульный лист -->
             <div class="space-y-3 mb-6">
               <div class="grid grid-cols-12">
                 <div class="col-span-3 font-medium">Специализированная строительная организация</div>
@@ -702,7 +978,6 @@ const DocumentGenerator = ({
               </div>
             </div>
             
-            <!-- Ответственные лица -->
             <div class="space-y-2 mb-6 text-sm">
               <p>Должность, фамилия, имя, отчество и подпись лица, ответственного от строительной организации за строительство объекта и ведение общего журнала работ:</p>
               <div class="border-b border-black h-10"></div>
@@ -717,7 +992,6 @@ const DocumentGenerator = ({
               <div class="text-center text-xs text-gray-500">(должность, подпись, расшифровка подписи)</div>
             </div>
             
-            <!-- Сроки работ -->
             <div class="grid grid-cols-2 gap-4 mb-6">
               <div>
                 <p class="font-medium">Начало работ:</p>
@@ -743,7 +1017,6 @@ const DocumentGenerator = ({
               </div>
             </div>
             
-            <!-- Нумерация страниц -->
             <div class="flex items-center gap-2 mb-6 text-sm">
               <span>В настоящем журнале</span>
               <span class="border-b border-black w-20 text-center">${app.materials?.length || 0}</span>
@@ -756,7 +1029,6 @@ const DocumentGenerator = ({
             
             <div class="page-break"></div>
             
-            <!-- Раздел 1. Список инженерно-технического персонала -->
             <div class="mt-6">
               <h3 class="text-md font-bold text-center mb-4">Раздел 1. Список инженерно-технического персонала, занятого на строительстве объекта</h3>
               
@@ -791,7 +1063,6 @@ const DocumentGenerator = ({
             
             <div class="page-break"></div>
             
-            <!-- Раздел 2. Перечень актов промежуточной приемки -->
             <div class="mt-6">
               <h3 class="text-md font-bold text-center mb-4">Раздел 2. Перечень актов промежуточной приемки ответственных конструкций и освидетельствования скрытых работ</h3>
               
@@ -804,20 +1075,14 @@ const DocumentGenerator = ({
                   </tr>
                 </thead>
                 <tbody>
-                  ${app.materials.slice(0, 10)
-                    // ✅ ИСПРАВЛЕНО: Добавлен eslint-disable для idx, используемого в шаблонной строке
-                    // eslint-disable-next-line no-unused-vars
-                    .map((m, idx) => `
+                  ${app.materials.slice(0, 10).map((m, idx) => `
                     <tr>
                       <td class="border border-black p-2 text-center">${idx + 1}</td>
                       <td class="border border-black p-2">Приемка выполненных работ по ${m.description} — ${m.quantity} ${m.unit}</td>
                       <td class="border border-black p-2">${today.toLocaleDateString('ru-RU')}, ${app.foreman_name} (прораб)</td>
                     </tr>
                   `).join('')}
-                  ${app.materials.length < 10 ? Array(10 - app.materials.length).fill(0)
-                    // ✅ ИСПРАВЛЕНО: Добавлен eslint-disable для _ и idx
-                    // eslint-disable-next-line no-unused-vars
-                    .map((_, idx) => `
+                  ${app.materials.length < 10 ? Array(10 - app.materials.length).fill(0).map((_, idx) => `
                     <tr>
                       <td class="border border-black p-2 text-center">${app.materials.length + idx + 1}</td>
                       <td class="border border-black p-2">—</td>
@@ -834,7 +1099,6 @@ const DocumentGenerator = ({
             
             <div class="page-break"></div>
             
-            <!-- Раздел 3. Ведомость результатов операционного контроля -->
             <div class="mt-6">
               <h3 class="text-md font-bold text-center mb-4">Раздел 3. Ведомость результатов операционного контроля и оценки качества строительно-монтажных работ</h3>
               
@@ -848,10 +1112,7 @@ const DocumentGenerator = ({
                   </tr>
                 </thead>
                 <tbody>
-                  ${app.materials.slice(0, 15)
-                    // ✅ ИСПРАВЛЕНО: Добавлен eslint-disable для idx, используемого в шаблонной строке
-                    // eslint-disable-next-line no-unused-vars
-                    .map((m, idx) => `
+                  ${app.materials.slice(0, 15).map((m) => `
                     <tr>
                       <td class="border border-black p-2 text-center">${today.toLocaleDateString('ru-RU')}</td>
                       <td class="border border-black p-2">${m.description} — ${m.quantity} ${m.unit}</td>
@@ -877,7 +1138,6 @@ const DocumentGenerator = ({
             
             <div class="page-break"></div>
             
-            <!-- Раздел 5. Сведения о производстве работ -->
             <div class="mt-6">
               <h3 class="text-md font-bold text-center mb-4">Раздел 5. Сведения о производстве работ</h3>
               
@@ -901,7 +1161,6 @@ const DocumentGenerator = ({
               </table>
             </div>
             
-            <!-- Завершающая страница -->
             <div class="mt-8">
               <div class="text-center text-xs text-gray-400">Последняя страница формы № КС-6</div>
               
@@ -936,289 +1195,270 @@ const DocumentGenerator = ({
       }
       
       case 'invoice': {
-  const totalAmount = app.materials.reduce((sum, m) => 
-    sum + (Number(m.quantity) * (Number(m.price) || 1000)), 0
-  );
-  const ndsAmount = Math.round(totalAmount * 20 / 120);
-  const withoutNds = totalAmount - ndsAmount;
-  const today = new Date();
-  
-  const cd = companyDetails || {};
-  
-  const materialsRows = app.materials.map((m, idx) => {
-    const qty = Number(m.quantity) || 0;
-    const price = Number(m.price) || 1000;
-    const itemTotal = qty * price;
-    const itemNds = Math.round(itemTotal * 20 / 120);
-    const itemWithoutNds = itemTotal - itemNds;
-    
-    return `
-      <tr class="border border-black">
-        <td class="border border-black p-1 text-center">${idx + 1}</td>
-        <td class="border border-black p-1">${m.description || '—'}</td>
-        <td class="border border-black p-1 text-center">${m.unit || 'шт'}</td>
-        <td class="border border-black p-1 text-center">—</td>
-        <td class="border border-black p-1 text-center">${qty.toLocaleString('ru-RU')}</td>
-        <td class="border border-black p-1 text-center">1</td>
-        <td class="border border-black p-1 text-center">—</td>
-        <td class="border border-black p-1 text-right pr-2">${price.toLocaleString('ru-RU')}</td>
-        <td class="border border-black p-1 text-right pr-2">${itemWithoutNds.toLocaleString('ru-RU')}</td>
-        <td class="border border-black p-1 text-center">20%</td>
-        <td class="border border-black p-1 text-right pr-2">${itemNds.toLocaleString('ru-RU')}</td>
-        <td class="border border-black p-1 text-right pr-2 font-medium">${itemTotal.toLocaleString('ru-RU')}</td>
-      </tr>
-    `;
-  }).join('');
-
-  return `
-    <div class="p-4 bg-white rounded-xl shadow-sm max-w-7xl mx-auto font-sans text-sm print:p-2">
-      <!-- Заголовок формы -->
-      <div class="text-center mb-2">
-        <div class="text-xs">Унифицированная форма № ТОРГ-12</div>
-        <div class="text-[10px] text-gray-500">Утверждена постановлением Госкомстата России от 25.12.98 № 132</div>
-      </div>
-      
-      <!-- Коды формы -->
-      <div class="flex justify-end mb-2 text-[10px]">
-        <table class="border-collapse">
-          <tr>
-            <td class="border border-black px-1">Код</td>
-            <td class="border border-black px-1">Форма по ОКУД</td>
-            <td class="border border-black px-1 font-bold">0330212</td>
-          </tr>
-        </table>
-      </div>
-      
-      <!-- Грузоотправитель -->
-      <div class="mb-1">
-        <div class="grid grid-cols-12">
-          <div class="col-span-2 font-medium text-[10px]">Грузоотправитель</div>
-          <div class="col-span-8 border-b border-black border-dotted text-[10px]">${cd.address || companyName || '—'}</div>
-          <div class="col-span-2 text-right text-[10px]">по ОКПО</div>
-          <div class="col-span-2 col-start-11 border-b border-black border-dotted">${cd.okpo || '—'}</div>
-        </div>
-      </div>
-      
-      <!-- Грузополучатель -->
-      <div class="mb-1">
-        <div class="grid grid-cols-12">
-          <div class="col-span-2 font-medium text-[10px]">Грузополучатель</div>
-          <div class="col-span-8 border-b border-black border-dotted text-[10px]">${app.object_name || '—'}</div>
-          <div class="col-span-2 text-right text-[10px]">по ОКПО</div>
-          <div class="col-span-2 col-start-11 border-b border-black border-dotted">—</div>
-        </div>
-      </div>
-      
-      <!-- Поставщик -->
-      <div class="mb-1">
-        <div class="grid grid-cols-12">
-          <div class="col-span-2 font-medium text-[10px]">Поставщик</div>
-          <div class="col-span-8 border-b border-black border-dotted text-[10px]">${companyName || '—'}, ${cd.address || ''}</div>
-          <div class="col-span-2 text-right text-[10px]">по ОКПО</div>
-          <div class="col-span-2 col-start-11 border-b border-black border-dotted">${cd.okpo || '—'}</div>
-        </div>
-      </div>
-      
-      <!-- Плательщик -->
-      <div class="mb-2">
-        <div class="grid grid-cols-12">
-          <div class="col-span-2 font-medium text-[10px]">Плательщик</div>
-          <div class="col-span-8 border-b border-black border-dotted text-[10px]">${app.object_name || '—'}</div>
-          <div class="col-span-2 text-right text-[10px]">по ОКПО</div>
-          <div class="col-span-2 col-start-11 border-b border-black border-dotted">—</div>
-        </div>
-      </div>
-      
-      <!-- Основание и транспортная накладная -->
-      <div class="grid grid-cols-2 gap-4 mb-2 text-[10px]">
-        <div class="flex items-center">
-          <span class="font-medium mr-1">Основание</span>
-          <span class="border-b border-black w-32 text-center">договор № ${docNumber}</span>
-          <span class="ml-1">от</span>
-          <span class="border-b border-black w-20 text-center">${new Date(app.created_at).toLocaleDateString('ru-RU')}</span>
-        </div>
-        <div class="flex items-center justify-end">
-          <span class="font-medium mr-1">Транспортная накладная №</span>
-          <span class="border-b border-black w-16 text-center">—</span>
-          <span class="ml-1">от</span>
-          <span class="border-b border-black w-16 text-center">—</span>
-        </div>
-      </div>
-      
-      <!-- Номер и дата документа -->
-      <div class="flex justify-end gap-4 mb-2 text-[10px]">
-        <div>
-          <span class="font-medium">Номер документа</span>
-          <div class="border-b border-black w-24 text-center mt-1">${docNumber}</div>
-        </div>
-        <div>
-          <span class="font-medium">Дата составления</span>
-          <div class="border-b border-black w-24 text-center mt-1">${today.toLocaleDateString('ru-RU')}</div>
-        </div>
-      </div>
-      
-      <!-- Заголовок таблицы -->
-      <div class="text-center font-bold mb-1">ТОВАРНАЯ НАКЛАДНАЯ</div>
-      
-      <!-- Основная таблица -->
-      <div class="overflow-x-auto">
-        <table class="w-full border-collapse text-[9px] mb-2">
-          <thead>
-            <tr class="border border-black">
-              <th rowspan="2" class="border border-black p-0.5 text-center w-8">№ п/п</th>
-              <th rowspan="2" class="border border-black p-0.5 text-left min-w-[150px]">Наименование товара, характеристика, сорт, артикул</th>
-              <th colspan="2" class="border border-black p-0.5 text-center">Единица измерения</th>
-              <th rowspan="2" class="border border-black p-0.5 text-center w-16">Вид упаковки</th>
-              <th colspan="2" class="border border-black p-0.5 text-center">Количество</th>
-              <th rowspan="2" class="border border-black p-0.5 text-center w-16">Масса брутто</th>
-              <th rowspan="2" class="border border-black p-0.5 text-center w-20">Количество (масса нетто)</th>
-              <th rowspan="2" class="border border-black p-0.5 text-right pr-1 w-20">Цена, руб. коп.</th>
-              <th rowspan="2" class="border border-black p-0.5 text-right pr-1 w-24">Сумма без учёта НДС, руб. коп.</th>
-              <th colspan="2" class="border border-black p-0.5 text-center">НДС</th>
-              <th rowspan="2" class="border border-black p-0.5 text-right pr-1 w-24">Сумма с учётом НДС, руб. коп.</th>
-            </tr>
-            <tr class="border border-black">
-              <th class="border border-black p-0.5 text-center w-12">код</th>
-              <th class="border border-black p-0.5 text-center w-16">наименование</th>
-              <th class="border border-black p-0.5 text-center w-16">в одном месте</th>
-              <th class="border border-black p-0.5 text-center w-12">мест, штук</th>
-              <th class="border border-black p-0.5 text-center w-16">ставка, %</th>
-              <th class="border border-black p-0.5 text-right pr-1 w-20">сумма, руб. коп.</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${materialsRows}
-          </tbody>
-          <tfoot>
-            <tr class="border border-black font-bold">
-              <td colspan="5" class="border border-black p-1 text-right pr-2">Итого</td>
-              <td class="border border-black p-1 text-center">—</td>
-              <td class="border border-black p-1 text-center">${app.materials.reduce((sum, m) => sum + (Number(m.quantity) || 0), 0).toLocaleString('ru-RU')}</td>
-              <td class="border border-black p-1 text-center">—</td>
-              <td class="border border-black p-1 text-center">—</td>
-              <td class="border border-black p-1 text-right pr-1">Х</td>
-              <td class="border border-black p-1 text-right pr-1">${withoutNds.toLocaleString('ru-RU')}</td>
-              <td class="border border-black p-1 text-center">Х</td>
-              <td class="border border-black p-1 text-right pr-1">${ndsAmount.toLocaleString('ru-RU')}</td>
-              <td class="border border-black p-1 text-right pr-1">${totalAmount.toLocaleString('ru-RU')}</td>
-            </tr>
-            <tr class="border border-black font-bold">
-              <td colspan="9" class="border border-black p-1 text-right pr-2">Всего по накладной</td>
-              <td class="border border-black p-1 text-center">Х</td>
-              <td class="border border-black p-1 text-right pr-1">${withoutNds.toLocaleString('ru-RU')}</td>
-              <td class="border border-black p-1 text-center">Х</td>
-              <td class="border border-black p-1 text-right pr-1">${ndsAmount.toLocaleString('ru-RU')}</td>
-              <td class="border border-black p-1 text-right pr-1 font-bold">${totalAmount.toLocaleString('ru-RU')}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      
-      <!-- Итоговая информация -->
-      <div class="text-[10px] mb-2">
-        <p>Товарная накладная имеет приложение на <span class="border-b border-black w-8 inline-block text-center">—</span> листах</p>
-        <p>и содержит <span class="border-b border-black w-16 inline-block text-center">—</span> порядковых номеров записей</p>
-      </div>
-      
-      <div class="grid grid-cols-2 gap-4 text-[10px] mb-2">
-        <div>
-          <p>Масса груза (нетто) <span class="border-b border-black w-32 inline-block"></span></p>
-          <p class="text-[9px] text-gray-500">(прописью)</p>
-        </div>
-        <div>
-          <p>Масса груза (брутто) <span class="border-b border-black w-32 inline-block"></span></p>
-          <p class="text-[9px] text-gray-500">(прописью)</p>
-        </div>
-      </div>
-      
-      <div class="text-[10px] mb-2">
-        <p>Всего мест <span class="border-b border-black w-16 inline-block text-center">—</span> <span class="text-[9px] text-gray-500">(прописью)</span></p>
-      </div>
-      
-      <!-- Подписи -->
-      <div class="mt-4 pt-2 border-t border-black text-[10px]">
-        <div class="grid grid-cols-2 gap-4 mb-2">
-          <div>
-            <p class="font-medium mb-1">Отпуск груза разрешил</p>
-            <div class="flex items-center gap-2">
-              <span class="border-b border-black flex-1"></span>
-              <span class="text-[9px] text-gray-500">(должность)</span>
-            </div>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="border-b border-black w-24"></span>
-              <span class="text-[9px] text-gray-500">(подпись)</span>
-              <span class="border-b border-black flex-1 ml-2"></span>
-              <span class="text-[9px] text-gray-500">(расшифровка)</span>
-            </div>
-          </div>
-          <div>
-            <p class="font-medium mb-1">Главный бухгалтер</p>
-            <div class="flex items-center gap-2">
-              <span class="border-b border-black flex-1"></span>
-              <span class="text-[9px] text-gray-500">(подпись)</span>
-              <span class="border-b border-black w-32 ml-2"></span>
-              <span class="text-[9px] text-gray-500">(расшифровка)</span>
-            </div>
-          </div>
-        </div>
+        const totalAmount = app.materials.reduce((sum, m) => 
+          sum + (Number(m.quantity) * (Number(m.price) || 1000)), 0
+        );
+        const ndsAmount = Math.round(totalAmount * 20 / 120);
+        const withoutNds = totalAmount - ndsAmount;
+        const today = new Date();
         
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <p class="font-medium mb-1">Отпуск груза произвёл</p>
-            <div class="flex items-center gap-2">
-              <span class="border-b border-black flex-1"></span>
-              <span class="text-[9px] text-gray-500">(должность)</span>
-            </div>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="border-b border-black w-24"></span>
-              <span class="text-[9px] text-gray-500">(подпись)</span>
-              <span class="border-b border-black flex-1 ml-2"></span>
-              <span class="text-[9px] text-gray-500">(расшифровка)</span>
-            </div>
-          </div>
-          <div>
-            <p class="font-medium mb-1">Груз получил грузополучатель</p>
-            <div class="flex items-center gap-2">
-              <span class="border-b border-black flex-1"></span>
-              <span class="text-[9px] text-gray-500">(должность)</span>
-            </div>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="border-b border-black w-24"></span>
-              <span class="text-[9px] text-gray-500">(подпись)</span>
-              <span class="border-b border-black flex-1 ml-2"></span>
-              <span class="text-[9px] text-gray-500">(расшифровка)</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Печати и даты -->
-      <div class="flex justify-between mt-4 text-[10px]">
-        <div class="text-center">
-          <div class="border border-black w-32 h-16 mx-auto mb-1 flex items-center justify-center text-gray-400">М.П.</div>
-          <p>"<span class="border-b border-black w-4 inline-block"></span>" <span class="border-b border-black w-16 inline-block"></span> 20__ г.</p>
-        </div>
-        <div class="text-center">
-          <div class="border border-black w-32 h-16 mx-auto mb-1 flex items-center justify-center text-gray-400">М.П.</div>
-          <p>"<span class="border-b border-black w-4 inline-block"></span>" <span class="border-b border-black w-16 inline-block"></span> 20__ г.</p>
-        </div>
-      </div>
-    </div>
-  `;
-}
+        const companyData = companyDetails || {};
+        
+        const materialsRows = app.materials.map((m, idx) => {
+          const qty = Number(m.quantity) || 0;
+          const price = Number(m.price) || 1000;
+          const itemTotal = qty * price;
+          const itemNds = Math.round(itemTotal * 20 / 120);
+          const itemWithoutNds = itemTotal - itemNds;
+          
+          return `
+            <tr class="border border-black">
+              <td class="border border-black p-1 text-center">${idx + 1}</td>
+              <td class="border border-black p-1">${m.description || '—'}</td>
+              <td class="border border-black p-1 text-center">${m.unit || 'шт'}</td>
+              <td class="border border-black p-1 text-center">—</td>
+              <td class="border border-black p-1 text-center">${qty.toLocaleString('ru-RU')}</td>
+              <td class="border border-black p-1 text-center">1</td>
+              <td class="border border-black p-1 text-center">—</td>
+              <td class="border border-black p-1 text-right pr-2">${price.toLocaleString('ru-RU')}</td>
+              <td class="border border-black p-1 text-right pr-2">${itemWithoutNds.toLocaleString('ru-RU')}</td>
+              <td class="border border-black p-1 text-center">20%</td>
+              <td class="border border-black p-1 text-right pr-2">${itemNds.toLocaleString('ru-RU')}</td>
+              <td class="border border-black p-1 text-right pr-2 font-medium">${itemTotal.toLocaleString('ru-RU')}</td>
+            </tr>
+          `;
+        }).join('');
 
-      // ✅ ИСПРАВЛЕННАЯ ФОРМА КС-2
+        return `
+          <div class="p-4 bg-white rounded-xl shadow-sm max-w-7xl mx-auto font-sans text-sm print:p-2">
+            <div class="text-center mb-2">
+              <div class="text-xs">Унифицированная форма № ТОРГ-12</div>
+              <div class="text-[10px] text-gray-500">Утверждена постановлением Госкомстата России от 25.12.98 № 132</div>
+            </div>
+            
+            <div class="flex justify-end mb-2 text-[10px]">
+              <table class="border-collapse">
+                <tr>
+                  <td class="border border-black px-1">Код</td>
+                  <td class="border border-black px-1">Форма по ОКУД</td>
+                  <td class="border border-black px-1 font-bold">0330212</td>
+                </tr>
+              </table>
+            </div>
+            
+            <div class="mb-1">
+              <div class="grid grid-cols-12">
+                <div class="col-span-2 font-medium text-[10px]">Грузоотправитель</div>
+                <div class="col-span-8 border-b border-black border-dotted text-[10px]">${companyData.address || companyName || '—'}</div>
+                <div class="col-span-2 text-right text-[10px]">по ОКПО</div>
+                <div class="col-span-2 col-start-11 border-b border-black border-dotted">${companyData.okpo || '—'}</div>
+              </div>
+            </div>
+            
+            <div class="mb-1">
+              <div class="grid grid-cols-12">
+                <div class="col-span-2 font-medium text-[10px]">Грузополучатель</div>
+                <div class="col-span-8 border-b border-black border-dotted text-[10px]">${app.object_name || '—'}</div>
+                <div class="col-span-2 text-right text-[10px]">по ОКПО</div>
+                <div class="col-span-2 col-start-11 border-b border-black border-dotted">—</div>
+              </div>
+            </div>
+            
+            <div class="mb-1">
+              <div class="grid grid-cols-12">
+                <div class="col-span-2 font-medium text-[10px]">Поставщик</div>
+                <div class="col-span-8 border-b border-black border-dotted text-[10px]">${companyName || '—'}, ${companyData.address || ''}</div>
+                <div class="col-span-2 text-right text-[10px]">по ОКПО</div>
+                <div class="col-span-2 col-start-11 border-b border-black border-dotted">${companyData.okpo || '—'}</div>
+              </div>
+            </div>
+            
+            <div class="mb-2">
+              <div class="grid grid-cols-12">
+                <div class="col-span-2 font-medium text-[10px]">Плательщик</div>
+                <div class="col-span-8 border-b border-black border-dotted text-[10px]">${app.object_name || '—'}</div>
+                <div class="col-span-2 text-right text-[10px]">по ОКПО</div>
+                <div class="col-span-2 col-start-11 border-b border-black border-dotted">—</div>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-2 text-[10px]">
+              <div class="flex items-center">
+                <span class="font-medium mr-1">Основание</span>
+                <span class="border-b border-black w-32 text-center">договор № ${docNumber}</span>
+                <span class="ml-1">от</span>
+                <span class="border-b border-black w-20 text-center">${new Date(app.created_at).toLocaleDateString('ru-RU')}</span>
+              </div>
+              <div class="flex items-center justify-end">
+                <span class="font-medium mr-1">Транспортная накладная №</span>
+                <span class="border-b border-black w-16 text-center">—</span>
+                <span class="ml-1">от</span>
+                <span class="border-b border-black w-16 text-center">—</span>
+              </div>
+            </div>
+            
+            <div class="flex justify-end gap-4 mb-2 text-[10px]">
+              <div>
+                <span class="font-medium">Номер документа</span>
+                <div class="border-b border-black w-24 text-center mt-1">${docNumber}</div>
+              </div>
+              <div>
+                <span class="font-medium">Дата составления</span>
+                <div class="border-b border-black w-24 text-center mt-1">${today.toLocaleDateString('ru-RU')}</div>
+              </div>
+            </div>
+            
+            <div class="text-center font-bold mb-1">ТОВАРНАЯ НАКЛАДНАЯ</div>
+            
+            <div class="overflow-x-auto">
+              <table class="w-full border-collapse text-[9px] mb-2">
+                <thead>
+                  <tr class="border border-black">
+                    <th rowspan="2" class="border border-black p-0.5 text-center w-8">№ п/п</th>
+                    <th rowspan="2" class="border border-black p-0.5 text-left min-w-[150px]">Наименование товара, характеристика, сорт, артикул</th>
+                    <th colspan="2" class="border border-black p-0.5 text-center">Единица измерения</th>
+                    <th rowspan="2" class="border border-black p-0.5 text-center w-16">Вид упаковки</th>
+                    <th colspan="2" class="border border-black p-0.5 text-center">Количество</th>
+                    <th rowspan="2" class="border border-black p-0.5 text-center w-16">Масса брутто</th>
+                    <th rowspan="2" class="border border-black p-0.5 text-center w-20">Количество (масса нетто)</th>
+                    <th rowspan="2" class="border border-black p-0.5 text-right pr-1 w-20">Цена, руб. коп.</th>
+                    <th rowspan="2" class="border border-black p-0.5 text-right pr-1 w-24">Сумма без учёта НДС, руб. коп.</th>
+                    <th colspan="2" class="border border-black p-0.5 text-center">НДС</th>
+                    <th rowspan="2" class="border border-black p-0.5 text-right pr-1 w-24">Сумма с учётом НДС, руб. коп.</th>
+                  </tr>
+                  <tr class="border border-black">
+                    <th class="border border-black p-0.5 text-center w-12">код</th>
+                    <th class="border border-black p-0.5 text-center w-16">наименование</th>
+                    <th class="border border-black p-0.5 text-center w-16">в одном месте</th>
+                    <th class="border border-black p-0.5 text-center w-12">мест, штук</th>
+                    <th class="border border-black p-0.5 text-center w-16">ставка, %</th>
+                    <th class="border border-black p-0.5 text-right pr-1 w-20">сумма, руб. коп.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${materialsRows}
+                </tbody>
+                <tfoot>
+                  <tr class="border border-black font-bold">
+                    <td colspan="5" class="border border-black p-1 text-right pr-2">Итого</td>
+                    <td class="border border-black p-1 text-center">—</td>
+                    <td class="border border-black p-1 text-center">${app.materials.reduce((sum, m) => sum + (Number(m.quantity) || 0), 0).toLocaleString('ru-RU')}</td>
+                    <td class="border border-black p-1 text-center">—</td>
+                    <td class="border border-black p-1 text-center">—</td>
+                    <td class="border border-black p-1 text-right pr-1">Х</td>
+                    <td class="border border-black p-1 text-right pr-1">${withoutNds.toLocaleString('ru-RU')}</td>
+                    <td class="border border-black p-1 text-center">Х</td>
+                    <td class="border border-black p-1 text-right pr-1">${ndsAmount.toLocaleString('ru-RU')}</td>
+                    <td class="border border-black p-1 text-right pr-1">${totalAmount.toLocaleString('ru-RU')}</td>
+                  </tr>
+                  <tr class="border border-black font-bold">
+                    <td colspan="9" class="border border-black p-1 text-right pr-2">Всего по накладной</td>
+                    <td class="border border-black p-1 text-center">Х</td>
+                    <td class="border border-black p-1 text-right pr-1">${withoutNds.toLocaleString('ru-RU')}</td>
+                    <td class="border border-black p-1 text-center">Х</td>
+                    <td class="border border-black p-1 text-right pr-1">${ndsAmount.toLocaleString('ru-RU')}</td>
+                    <td class="border border-black p-1 text-right pr-1 font-bold">${totalAmount.toLocaleString('ru-RU')}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            
+            <div class="text-[10px] mb-2">
+              <p>Товарная накладная имеет приложение на <span class="border-b border-black w-8 inline-block text-center">—</span> листах</p>
+              <p>и содержит <span class="border-b border-black w-16 inline-block text-center">—</span> порядковых номеров записей</p>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 text-[10px] mb-2">
+              <div>
+                <p>Масса груза (нетто) <span class="border-b border-black w-32 inline-block"></span></p>
+                <p class="text-[9px] text-gray-500">(прописью)</p>
+              </div>
+              <div>
+                <p>Масса груза (брутто) <span class="border-b border-black w-32 inline-block"></span></p>
+                <p class="text-[9px] text-gray-500">(прописью)</p>
+              </div>
+            </div>
+            
+            <div class="text-[10px] mb-2">
+              <p>Всего мест <span class="border-b border-black w-16 inline-block text-center">—</span> <span class="text-[9px] text-gray-500">(прописью)</span></p>
+            </div>
+            
+            <div class="mt-4 pt-2 border-t border-black text-[10px]">
+              <div class="grid grid-cols-2 gap-4 mb-2">
+                <div>
+                  <p class="font-medium mb-1">Отпуск груза разрешил</p>
+                  <div class="flex items-center gap-2">
+                    <span class="border-b border-black flex-1"></span>
+                    <span class="text-[9px] text-gray-500">(должность)</span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span class="border-b border-black w-24"></span>
+                    <span class="text-[9px] text-gray-500">(подпись)</span>
+                    <span class="border-b border-black flex-1 ml-2"></span>
+                    <span class="text-[9px] text-gray-500">(расшифровка)</span>
+                  </div>
+                </div>
+                <div>
+                  <p class="font-medium mb-1">Главный бухгалтер</p>
+                  <div class="flex items-center gap-2">
+                    <span class="border-b border-black flex-1"></span>
+                    <span class="text-[9px] text-gray-500">(подпись)</span>
+                    <span class="border-b border-black w-32 ml-2"></span>
+                    <span class="text-[9px] text-gray-500">(расшифровка)</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <p class="font-medium mb-1">Отпуск груза произвёл</p>
+                  <div class="flex items-center gap-2">
+                    <span class="border-b border-black flex-1"></span>
+                    <span class="text-[9px] text-gray-500">(должность)</span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span class="border-b border-black w-24"></span>
+                    <span class="text-[9px] text-gray-500">(подпись)</span>
+                    <span class="border-b border-black flex-1 ml-2"></span>
+                    <span class="text-[9px] text-gray-500">(расшифровка)</span>
+                  </div>
+                </div>
+                <div>
+                  <p class="font-medium mb-1">Груз получил грузополучатель</p>
+                  <div class="flex items-center gap-2">
+                    <span class="border-b border-black flex-1"></span>
+                    <span class="text-[9px] text-gray-500">(должность)</span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span class="border-b border-black w-24"></span>
+                    <span class="text-[9px] text-gray-500">(подпись)</span>
+                    <span class="border-b border-black flex-1 ml-2"></span>
+                    <span class="text-[9px] text-gray-500">(расшифровка)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="flex justify-between mt-4 text-[10px]">
+              <div class="text-center">
+                <div class="border border-black w-32 h-16 mx-auto mb-1 flex items-center justify-center text-gray-400">М.П.</div>
+                <p>"<span class="border-b border-black w-4 inline-block"></span>" <span class="border-b border-black w-16 inline-block"></span> 20__ г.</p>
+              </div>
+              <div class="text-center">
+                <div class="border border-black w-32 h-16 mx-auto mb-1 flex items-center justify-center text-gray-400">М.П.</div>
+                <p>"<span class="border-b border-black w-4 inline-block"></span>" <span class="border-b border-black w-16 inline-block"></span> 20__ г.</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       case 'ks2': {
         const totalAmount = app.materials.reduce((sum, m) => 
           sum + (Number(m.supplier_received_quantity || m.received || 0) * (Number(m.price) || 1000)), 0
         );
-        
         const today = new Date();
-        // ✅ ИСПРАВЛЕНО: Добавлен eslint-disable для переменных, используемых в шаблонной строке
-        // eslint-disable-next-line no-unused-vars
-        const startDate = new Date(app.created_at);
-        // eslint-disable-next-line no-unused-vars
-        const endDate = today;
+        const companyData = companyDetails || {};
         
         return `
           <div class="p-8 bg-white rounded-xl shadow-sm max-w-5xl mx-auto font-sans">
@@ -1238,21 +1478,21 @@ const DocumentGenerator = ({
             <div class="space-y-2 mb-4 text-sm">
               <div class="grid grid-cols-12">
                 <div class="col-span-2 font-medium">Инвестор</div>
-                <div class="col-span-8 border-b border-black border-dotted">${cd.investor || companyName || '—'}</div>
+                <div class="col-span-8 border-b border-black border-dotted">${companyData.investor || companyName || '—'}</div>
                 <div class="col-span-2 text-right">по ОКПО</div>
               </div>
               <div class="pl-6 text-xs text-gray-500">(организация, адрес, телефон, факс)</div>
               
               <div class="grid grid-cols-12 mt-2">
                 <div class="col-span-2 font-medium">Заказчик (Генподрядчик)</div>
-                <div class="col-span-8 border-b border-black border-dotted">${cd.customer || companyName || '—'}</div>
+                <div class="col-span-8 border-b border-black border-dotted">${companyData.customer || companyName || '—'}</div>
                 <div class="col-span-2 text-right">по ОКПО</div>
               </div>
               <div class="pl-6 text-xs text-gray-500">(организация, адрес, телефон, факс)</div>
               
               <div class="grid grid-cols-12 mt-2">
                 <div class="col-span-2 font-medium">Подрядчик (Субподрядчик)</div>
-                <div class="col-span-8 border-b border-black border-dotted">${cd.contractor || companyName || '—'}</div>
+                <div class="col-span-8 border-b border-black border-dotted">${companyData.contractor || companyName || '—'}</div>
                 <div class="col-span-2 text-right">по ОКПО</div>
               </div>
               <div class="pl-6 text-xs text-gray-500">(организация, адрес, телефон, факс)</div>
@@ -1291,9 +1531,9 @@ const DocumentGenerator = ({
               <div class="flex items-center col-span-1">
                 <span class="font-medium mr-2">Отчетный период</span>
                 <div class="flex items-center gap-1">
-                  <span class="border-b border-black w-20 text-center">с ${startDate.toLocaleDateString('ru-RU')}</span>
+                  <span class="border-b border-black w-20 text-center">с ${new Date(app.created_at).toLocaleDateString('ru-RU')}</span>
                   <span>по</span>
-                  <span class="border-b border-black w-20 text-center">${endDate.toLocaleDateString('ru-RU')}</span>
+                  <span class="border-b border-black w-20 text-center">${today.toLocaleDateString('ru-RU')}</span>
                 </div>
               </div>
             </div>
@@ -1331,10 +1571,7 @@ const DocumentGenerator = ({
                 </tr>
               </thead>
               <tbody>
-                ${app.materials
-                  // ✅ ИСПРАВЛЕНО: Добавлен eslint-disable для idx, используемого в шаблонной строке
-                  // eslint-disable-next-line no-unused-vars
-                  .map((m, idx) => {
+                ${app.materials.map((m, idx) => {
                   const received = Number(m.supplier_received_quantity || m.received || 0);
                   const price = Number(m.price) || 1000;
                   const total = received * price;
@@ -1391,19 +1628,13 @@ const DocumentGenerator = ({
         `;
       }
 
-      // ✅ ИСПРАВЛЕННАЯ ФОРМА КС-3
       case 'ks3': {
         const totalAmount = app.materials.reduce((sum, m) => 
           sum + (Number(m.supplier_received_quantity || m.received || 0) * (Number(m.price) || 1000)), 0
         );
         const ndsAmount = Math.round(totalAmount * 20 / 120);
-        
         const today = new Date();
-        // ✅ ИСПРАВЛЕНО: Добавлен eslint-disable для переменных, используемых в шаблонной строке
-        // eslint-disable-next-line no-unused-vars
-        const startDate = new Date(app.created_at);
-        // eslint-disable-next-line no-unused-vars
-        const endDate = today;
+        const companyData = companyDetails || {};
         
         return `
           <div class="p-8 bg-white rounded-xl shadow-sm max-w-5xl mx-auto font-sans">
@@ -1423,21 +1654,21 @@ const DocumentGenerator = ({
             <div class="space-y-2 mb-4 text-sm">
               <div class="grid grid-cols-12">
                 <div class="col-span-2 font-medium">Инвестор</div>
-                <div class="col-span-8 border-b border-black border-dotted">${cd.investor || companyName || '—'}</div>
+                <div class="col-span-8 border-b border-black border-dotted">${companyData.investor || companyName || '—'}</div>
                 <div class="col-span-2 text-right">по ОКПО</div>
               </div>
               <div class="pl-6 text-xs text-gray-500">(организация, адрес, телефон, факс)</div>
               
               <div class="grid grid-cols-12 mt-2">
                 <div class="col-span-2 font-medium">Заказчик (Генподрядчик)</div>
-                <div class="col-span-8 border-b border-black border-dotted">${cd.customer || companyName || '—'}</div>
+                <div class="col-span-8 border-b border-black border-dotted">${companyData.customer || companyName || '—'}</div>
                 <div class="col-span-2 text-right">по ОКПО</div>
               </div>
               <div class="pl-6 text-xs text-gray-500">(организация, адрес, телефон, факс)</div>
               
               <div class="grid grid-cols-12 mt-2">
                 <div class="col-span-2 font-medium">Подрядчик (Субподрядчик)</div>
-                <div class="col-span-8 border-b border-black border-dotted">${cd.contractor || companyName || '—'}</div>
+                <div class="col-span-8 border-b border-black border-dotted">${companyData.contractor || companyName || '—'}</div>
                 <div class="col-span-2 text-right">по ОКПО</div>
               </div>
               <div class="pl-6 text-xs text-gray-500">(организация, адрес, телефон, факс)</div>
@@ -1476,9 +1707,9 @@ const DocumentGenerator = ({
               <div class="flex items-center col-span-1">
                 <span class="font-medium mr-2">Отчетный период</span>
                 <div class="flex items-center gap-1">
-                  <span class="border-b border-black w-20 text-center">с ${startDate.toLocaleDateString('ru-RU')}</span>
+                  <span class="border-b border-black w-20 text-center">с ${new Date(app.created_at).toLocaleDateString('ru-RU')}</span>
                   <span>по</span>
-                  <span class="border-b border-black w-20 text-center">${endDate.toLocaleDateString('ru-RU')}</span>
+                  <span class="border-b border-black w-20 text-center">${today.toLocaleDateString('ru-RU')}</span>
                 </div>
               </div>
             </div>
@@ -1575,310 +1806,306 @@ const DocumentGenerator = ({
       }
 
       case 'hidden_works': {
-  const today = new Date();
-  const cd = companyDetails || {};
-  
-  const worksRows = app.materials.map((m, idx) => `
-    <tr class="border border-black">
-      <td class="border border-black p-1 text-center w-8">${idx + 1}</td>
-      <td class="border border-black p-1">${m.description || '—'}</td>
-      <td class="border border-black p-1 text-center w-16">${m.unit || 'шт'}</td>
-      <td class="border border-black p-1 text-center w-20">${Number(m.quantity).toLocaleString('ru-RU')}</td>
-      <td class="border border-black p-1 text-center w-24">—</td>
-      <td class="border border-black p-1 text-center w-32">✓ Соответствует проекту</td>
-    </tr>
-  `).join('');
+        const today = new Date();
+        const companyData = companyDetails || {};
+        
+        const worksRows = app.materials.map((m, idx) => `
+          <tr class="border border-black">
+            <td class="border border-black p-1 text-center w-8">${idx + 1}</td>
+            <td class="border border-black p-1">${m.description || '—'}</td>
+            <td class="border border-black p-1 text-center w-16">${m.unit || 'шт'}</td>
+            <td class="border border-black p-1 text-center w-20">${Number(m.quantity).toLocaleString('ru-RU')}</td>
+            <td class="border border-black p-1 text-center w-24">—</td>
+            <td class="border border-black p-1 text-center w-32">✓ Соответствует проекту</td>
+          </tr>
+        `).join('');
 
-  return `
-    <div class="p-6 bg-white rounded-xl shadow-sm max-w-5xl mx-auto font-sans text-sm print:p-4">
-      <!-- Заголовок формы -->
-      <div class="text-center mb-4">
-        <div class="text-lg font-bold">АКТ</div>
-        <div class="text-md font-semibold">на скрытые работы № ${docNumber}</div>
-        <div class="text-xs text-gray-500 mt-1">от ${today.toLocaleDateString('ru-RU')}</div>
-      </div>
-      
-      <!-- Реквизиты -->
-      <div class="space-y-2 mb-4 text-xs">
-        <div class="grid grid-cols-12">
-          <div class="col-span-3 font-medium">Объект</div>
-          <div class="col-span-9 border-b border-black border-dotted">${app.object_name || '—'}</div>
-        </div>
-        <div class="grid grid-cols-12">
-          <div class="col-span-3 font-medium">Адрес объекта</div>
-          <div class="col-span-9 border-b border-black border-dotted">${cd.address || '—'}</div>
-        </div>
-        <div class="grid grid-cols-12">
-          <div class="col-span-3 font-medium">Заказчик</div>
-          <div class="col-span-9 border-b border-black border-dotted">${cd.customer || companyName || '—'}</div>
-        </div>
-        <div class="grid grid-cols-12">
-          <div class="col-span-3 font-medium">Подрядчик</div>
-          <div class="col-span-9 border-b border-black border-dotted">${companyName || '—'}</div>
-        </div>
-        <div class="grid grid-cols-12">
-          <div class="col-span-3 font-medium">Основание</div>
-          <div class="col-span-9 border-b border-black border-dotted">Договор № ${docNumber} от ${new Date(app.created_at).toLocaleDateString('ru-RU')}</div>
-        </div>
-      </div>
-      
-      <!-- Таблица работ -->
-      <div class="mb-4">
-        <p class="font-medium mb-2">Перечень работ, подлежащих освидетельствованию:</p>
-        <table class="w-full border-collapse text-xs">
-          <thead>
-            <tr class="border border-black bg-gray-50">
-              <th class="border border-black p-1 text-center w-8">№</th>
-              <th class="border border-black p-1 text-left">Наименование работ/конструкций</th>
-              <th class="border border-black p-1 text-center w-16">Ед.изм.</th>
-              <th class="border border-black p-1 text-center w-20">Объём</th>
-              <th class="border border-black p-1 text-center w-24">Проектные отметки</th>
-              <th class="border border-black p-1 text-center w-32">Качество</th>
-            </tr>
-          </thead>
-          <tbody>${worksRows}</tbody>
-        </table>
-      </div>
-      
-      <!-- Заключение -->
-      <div class="mb-6 p-3 bg-gray-50 rounded border border-gray-200">
-        <p class="font-medium mb-2">Заключение:</p>
-        <p class="text-xs">Работы выполнены в соответствии с проектной документацией, техническими регламентами и СНиП. Претензий к качеству выполненных работ нет. Работы приняты.</p>
-      </div>
-      
-      <!-- Приложения -->
-      <div class="mb-6 text-xs">
-        <p class="font-medium">Приложения:</p>
-        <ul class="list-disc pl-5 mt-1 space-y-1">
-          <li>Исполнительная схема — ${app.materials.length} л.</li>
-          <li>Фотофиксация — ${app.materials.length} л.</li>
-          <li>Протоколы испытаний — по мере наличия</li>
-        </ul>
-      </div>
-      
-      <!-- Подписи -->
-      <div class="mt-8 pt-4 border-t border-black text-xs">
-        <div class="grid grid-cols-2 gap-8">
-          <div>
-            <p class="font-medium mb-3">Представитель подрядчика</p>
-            <div class="flex items-center gap-2 mb-1">
-              <span class="border-b border-black flex-1"></span>
-              <span class="text-gray-500">(должность)</span>
+        return `
+          <div class="p-6 bg-white rounded-xl shadow-sm max-w-5xl mx-auto font-sans text-sm print:p-4">
+            <div class="text-center mb-4">
+              <div class="text-lg font-bold">АКТ</div>
+              <div class="text-md font-semibold">на скрытые работы № ${docNumber}</div>
+              <div class="text-xs text-gray-500 mt-1">от ${today.toLocaleDateString('ru-RU')}</div>
             </div>
-            <div class="flex items-center gap-2">
-              <span class="border-b border-black w-24"></span>
-              <span class="text-gray-500">(подпись)</span>
-              <span class="border-b border-black flex-1 ml-2"></span>
-              <span class="text-gray-500">${app.foreman_name || '(расшифровка)'}</span>
+            
+            <div class="space-y-2 mb-4 text-xs">
+              <div class="grid grid-cols-12">
+                <div class="col-span-3 font-medium">Объект</div>
+                <div class="col-span-9 border-b border-black border-dotted">${app.object_name || '—'}</div>
+              </div>
+              <div class="grid grid-cols-12">
+                <div class="col-span-3 font-medium">Адрес объекта</div>
+                <div class="col-span-9 border-b border-black border-dotted">${companyData.address || '—'}</div>
+              </div>
+              <div class="grid grid-cols-12">
+                <div class="col-span-3 font-medium">Заказчик</div>
+                <div class="col-span-9 border-b border-black border-dotted">${companyData.customer || companyName || '—'}</div>
+              </div>
+              <div class="grid grid-cols-12">
+                <div class="col-span-3 font-medium">Подрядчик</div>
+                <div class="col-span-9 border-b border-black border-dotted">${companyName || '—'}</div>
+              </div>
+              <div class="grid grid-cols-12">
+                <div class="col-span-3 font-medium">Основание</div>
+                <div class="col-span-9 border-b border-black border-dotted">Договор № ${docNumber} от ${new Date(app.created_at).toLocaleDateString('ru-RU')}</div>
+              </div>
+            </div>
+            
+            <div class="mb-4">
+              <p class="font-medium mb-2">Перечень работ, подлежащих освидетельствованию:</p>
+              <table class="w-full border-collapse text-xs">
+                <thead>
+                  <tr class="border border-black bg-gray-50">
+                    <th class="border border-black p-1 text-center w-8">№</th>
+                    <th class="border border-black p-1 text-left">Наименование работ/конструкций</th>
+                    <th class="border border-black p-1 text-center w-16">Ед.изм.</th>
+                    <th class="border border-black p-1 text-center w-20">Объём</th>
+                    <th class="border border-black p-1 text-center w-24">Проектные отметки</th>
+                    <th class="border border-black p-1 text-center w-32">Качество</th>
+                  </tr>
+                </thead>
+                <tbody>${worksRows}</tbody>
+              </table>
+            </div>
+            
+            <div class="mb-6 p-3 bg-gray-50 rounded border border-gray-200">
+              <p class="font-medium mb-2">Заключение:</p>
+              <p class="text-xs">Работы выполнены в соответствии с проектной документацией, техническими регламентами и СНиП. Претензий к качеству выполненных работ нет. Работы приняты.</p>
+            </div>
+            
+            <div class="mb-6 text-xs">
+              <p class="font-medium">Приложения:</p>
+              <ul class="list-disc pl-5 mt-1 space-y-1">
+                <li>Исполнительная схема — ${app.materials.length} л.</li>
+                <li>Фотофиксация — ${app.materials.length} л.</li>
+                <li>Протоколы испытаний — по мере наличия</li>
+              </ul>
+            </div>
+            
+            <div class="mt-8 pt-4 border-t border-black text-xs">
+              <div class="grid grid-cols-2 gap-8">
+                <div>
+                  <p class="font-medium mb-3">Представитель подрядчика</p>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="border-b border-black flex-1"></span>
+                    <span class="text-gray-500">(должность)</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="border-b border-black w-24"></span>
+                    <span class="text-gray-500">(подпись)</span>
+                    <span class="border-b border-black flex-1 ml-2"></span>
+                    <span class="text-gray-500">${app.foreman_name || '(расшифровка)'}</span>
+                  </div>
+                </div>
+                <div>
+                  <p class="font-medium mb-3">Представитель заказчика / технадзора</p>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="border-b border-black flex-1"></span>
+                    <span class="text-gray-500">(должность)</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="border-b border-black w-24"></span>
+                    <span class="text-gray-500">(подпись)</span>
+                    <span class="border-b border-black flex-1 ml-2"></span>
+                    <span class="text-gray-500">(расшифровка)</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex justify-between mt-6 text-center text-gray-400">
+                <div>М.П.<br/>«___» ______ 20__ г.</div>
+                <div>М.П.<br/>«___» ______ 20__ г.</div>
+              </div>
             </div>
           </div>
-          <div>
-            <p class="font-medium mb-3">Представитель заказчика / технадзора</p>
-            <div class="flex items-center gap-2 mb-1">
-              <span class="border-b border-black flex-1"></span>
-              <span class="text-gray-500">(должность)</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="border-b border-black w-24"></span>
-              <span class="text-gray-500">(подпись)</span>
-              <span class="border-b border-black flex-1 ml-2"></span>
-              <span class="text-gray-500">(расшифровка)</span>
-            </div>
-          </div>
-        </div>
-        <div class="flex justify-between mt-6 text-center text-gray-400">
-          <div>М.П.<br/>«___» ______ 20__ г.</div>
-          <div>М.П.<br/>«___» ______ 20__ г.</div>
-        </div>
-      </div>
-    </div>
-  `;
-}
+        `;
+      }
 
       case 'executive_diagram': {
-  return `
-    <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-4xl mx-auto">
-      <h1 class="text-xl font-bold text-center mb-4">ИСПОЛНИТЕЛЬНАЯ СХЕМА</h1>
-      <div class="grid grid-cols-2 gap-4 text-sm mb-6">
-        <p><strong>Объект:</strong> ${app.object_name}</p>
-        <p><strong>Дата:</strong> ${date}</p>
-        <p><strong>Прораб:</strong> ${app.foreman_name}</p>
-        <p><strong>№ заявки:</strong> ${docNumber}</p>
-      </div>
-      ${uploadedFileUrl ? `
-        <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <p class="font-medium flex items-center gap-2">
-            📎 Прикреплённый файл:
-          </p>
-          <a href="${uploadedFileUrl}" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline break-all">
-            ${uploadedFileUrl.split('/').pop()}
-          </a>
-        </div>
-      ` : `
-        <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 mb-6 text-center bg-gray-50 dark:bg-gray-700/30">
-          <p class="text-gray-500 dark:text-gray-400 mb-2">📐 Место для схемы / чертежа</p>
-          <p class="text-xs text-gray-400">Исполнительная схема не загружена</p>
-        </div>
-      `}
-      <div class="mb-6">
-        <p class="font-medium mb-2">Перечень выполненных работ:</p>
-        <ul class="space-y-1 text-sm">
-          ${app.materials.map(m => `
-            <li class="flex justify-between border-b border-gray-100 dark:border-gray-700 pb-1">
-              <span>${m.description}</span>
-              <span class="text-gray-500">${m.quantity} ${m.unit}</span>
-            </li>
-          `).join('')}
-        </ul>
-      </div>
-      ${signatures}
-    </div>
-  `;
-}
+        // Создаём список файлов для отображения в HTML
+        const filesHtml = projectFiles.length > 0 ? `
+          <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <p class="font-medium text-sm mb-2">📎 Прикреплённые проектные файлы:</p>
+            <ul class="space-y-1">
+              ${projectFiles.map(file => `
+                <li class="flex items-center gap-2 text-sm">
+                  <a href="${file.publicUrl}" target="_blank" rel="noopener noreferrer" 
+                     class="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+                    <span>📄</span>
+                    ${file.file_name}
+                    <span class="text-xs text-gray-400">(${(file.file_size / 1024).toFixed(1)} KB)</span>
+                  </a>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        ` : `
+          <div class="mt-4 p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-center bg-gray-50 dark:bg-gray-700/30">
+            <p class="text-gray-500 dark:text-gray-400 text-sm">📐 Исполнительная схема не загружена</p>
+            <p class="text-xs text-gray-400 mt-1">Загрузите проектные файлы выше</p>
+          </div>
+        `;
+
+        return `
+          <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-4xl mx-auto">
+            <h1 class="text-xl font-bold text-center mb-4">ИСПОЛНИТЕЛЬНАЯ СХЕМА</h1>
+            <div class="grid grid-cols-2 gap-4 text-sm mb-6">
+              <p><strong>Объект:</strong> ${app.object_name}</p>
+              <p><strong>Дата:</strong> ${date}</p>
+              <p><strong>Прораб:</strong> ${app.foreman_name}</p>
+              <p><strong>№ заявки:</strong> ${docNumber}</p>
+            </div>
+            ${filesHtml}
+            <div class="mb-6 mt-4">
+              <p class="font-medium mb-2">Перечень выполненных работ:</p>
+              <ul class="space-y-1 text-sm">
+                ${app.materials.map(m => `
+                  <li class="flex justify-between border-b border-gray-100 dark:border-gray-700 pb-1">
+                    <span>${m.description}</span>
+                    <span class="text-gray-500">${m.quantity} ${m.unit}</span>
+                  </li>
+                `).join('')}
+              </ul>
+            </div>
+            ${signatures}
+          </div>
+        `;
+      }
 
       case 'invoice_bill': {
-  const totalAmount = app.materials.reduce((sum, m) => 
-    sum + (Number(m.quantity) || 0) * (Number(m.price) || 1000), 0
-  );
-  const ndsAmount = Math.round(totalAmount * 20 / 120);
-  const withoutNds = totalAmount - ndsAmount;
-  const today = new Date();
-  
-  const cd = companyDetails || {};
-  
-  const materialsRows = app.materials.map((m, idx) => {
-    const qty = Number(m.quantity) || 0;
-    const price = Number(m.price) || 1000;
-    const itemTotal = qty * price;
-    return `
-      <tr class="border border-black">
-        <td class="border border-black p-1 text-center w-8">${idx + 1}</td>
-        <td class="border border-black p-1">${m.description || '—'}</td>
-        <td class="border border-black p-1 text-center w-12">${m.unit || 'шт'}</td>
-        <td class="border border-black p-1 text-center w-16">${qty.toLocaleString('ru-RU')}</td>
-        <td class="border border-black p-1 text-right pr-2 w-24">${price.toLocaleString('ru-RU')}</td>
-        <td class="border border-black p-1 text-right pr-2 w-28 font-medium">${itemTotal.toLocaleString('ru-RU')}</td>
-      </tr>
-    `;
-  }).join('');
+        const totalAmount = app.materials.reduce((sum, m) => 
+          sum + (Number(m.quantity) || 0) * (Number(m.price) || 1000), 0
+        );
+        const ndsAmount = Math.round(totalAmount * 20 / 120);
+        const withoutNds = totalAmount - ndsAmount;
+        const today = new Date();
+        
+        const companyData = companyDetails || {};
+        
+        const materialsRows = app.materials.map((m, idx) => {
+          const qty = Number(m.quantity) || 0;
+          const price = Number(m.price) || 1000;
+          const itemTotal = qty * price;
+          return `
+            <tr class="border border-black">
+              <td class="border border-black p-1 text-center w-8">${idx + 1}</td>
+              <td class="border border-black p-1">${m.description || '—'}</td>
+              <td class="border border-black p-1 text-center w-12">${m.unit || 'шт'}</td>
+              <td class="border border-black p-1 text-center w-16">${qty.toLocaleString('ru-RU')}</td>
+              <td class="border border-black p-1 text-right pr-2 w-24">${price.toLocaleString('ru-RU')}</td>
+              <td class="border border-black p-1 text-right pr-2 w-28 font-medium">${itemTotal.toLocaleString('ru-RU')}</td>
+            </tr>
+          `;
+        }).join('');
 
-  return `
-    <div class="p-6 bg-white rounded-xl shadow-sm max-w-5xl mx-auto font-sans text-sm print:p-4">
-      <!-- Шапка с реквизитами -->
-      <div class="flex justify-between items-start mb-6 border-b border-black pb-4">
-        <div class="w-1/2 pr-4">
-          <p class="font-bold text-lg mb-2">ПОСТАВЩИК:</p>
-          <p class="text-xs"><strong>${cd.name || companyName || '—'}</strong></p>
-          <p class="text-xs">Адрес: ${cd.address || '—'}</p>
-          <p class="text-xs">ИНН/КПП: ${cd.inn || '—'} / ${cd.kpp || '—'}</p>
-          <p class="text-xs">Тел.: ${cd.phone || '—'}</p>
-          <p class="text-xs mt-2"><strong>Банковские реквизиты:</strong></p>
-          <p class="text-xs">Банк: ${cd.bank_name || '—'}</p>
-          <p class="text-xs">БИК: ${cd.bik || '—'}</p>
-          <p class="text-xs">Р/с: ${cd.account_number || '—'}</p>
-          <p class="text-xs">К/с: ${cd.correspondent_account || '—'}</p>
-        </div>
-        <div class="w-1/2 pl-4 border-l border-black">
-          <p class="font-bold text-lg mb-2">ПОКУПАТЕЛЬ:</p>
-          <p class="text-xs"><strong>${app.object_name || '—'}</strong></p>
-          <p class="text-xs">Адрес: ${cd.customer_address || '—'}</p>
-          <p class="text-xs">ИНН/КПП: ${cd.customer_inn || '—'} / ${cd.customer_kpp || '—'}</p>
-          <p class="text-xs">Контактное лицо: ${app.foreman_name || '—'}</p>
-          <p class="text-xs">Тел.: ${app.foreman_phone || '—'}</p>
-        </div>
-      </div>
-      
-      <!-- Заголовок счёта -->
-      <div class="text-center mb-4">
-        <h1 class="text-2xl font-bold">СЧЕТ № ${docNumber}</h1>
-        <p class="text-sm text-gray-600">от ${today.toLocaleDateString('ru-RU')}</p>
-      </div>
-      
-      <!-- Основание -->
-      <div class="mb-4 p-3 bg-gray-50 rounded border border-gray-200 text-xs">
-        <p><strong>Основание:</strong> Заявка на материалы от ${new Date(app.created_at).toLocaleDateString('ru-RU')}</p>
-        <p><strong>Договор:</strong> № ${docNumber} от ${new Date(app.created_at).toLocaleDateString('ru-RU')}</p>
-      </div>
-      
-      <!-- Таблица товаров -->
-      <table class="w-full border-collapse text-xs mb-4">
-        <thead>
-          <tr class="border border-black bg-gray-50">
-            <th class="border border-black p-1 text-center w-8">№</th>
-            <th class="border border-black p-1 text-left">Наименование товара, работ, услуг</th>
-            <th class="border border-black p-1 text-center w-12">Ед.</th>
-            <th class="border border-black p-1 text-center w-16">Кол-во</th>
-            <th class="border border-black p-1 text-right pr-2 w-24">Цена, руб.</th>
-            <th class="border border-black p-1 text-right pr-2 w-28">Сумма, руб.</th>
-          </tr>
-        </thead>
-        <tbody>${materialsRows}</tbody>
-        <tfoot>
-          <tr class="border border-black font-bold">
-            <td colspan="5" class="border border-black p-1 text-right pr-4">Итого:</td>
-            <td class="border border-black p-1 text-right pr-2">${withoutNds.toLocaleString('ru-RU')}</td>
-          </tr>
-          <tr class="border border-black">
-            <td colspan="5" class="border border-black p-1 text-right pr-4">НДС 20%:</td>
-            <td class="border border-black p-1 text-right pr-2">${ndsAmount.toLocaleString('ru-RU')}</td>
-          </tr>
-          <tr class="border border-black font-bold bg-gray-50">
-            <td colspan="5" class="border border-black p-1 text-right pr-4 text-lg">Всего к оплате:</td>
-            <td class="border border-black p-1 text-right pr-2 text-lg font-bold">${totalAmount.toLocaleString('ru-RU')}</td>
-          </tr>
-        </tfoot>
-      </table>
-      
-      <!-- Сумма прописью -->
-      <div class="mb-4 text-xs">
-        <p>Всего к оплате: <span class="border-b border-black w-full inline-block"></span> рублей 00 копеек</p>
-        <p class="text-gray-500">(прописью)</p>
-      </div>
-      
-      <!-- Условия оплаты -->
-      <div class="mb-6 p-3 bg-blue-50 rounded border border-blue-200 text-xs">
-        <p><strong>Условия оплаты:</strong> Оплата в течение 3 (трёх) банковских дней с момента выставления счёта.</p>
-        <p><strong>Срок оплаты:</strong> до ${new Date(today.setDate(today.getDate() + 3)).toLocaleDateString('ru-RU')}</p>
-      </div>
-      
-      <!-- Подписи -->
-      <div class="mt-8 pt-4 border-t border-black text-xs">
-        <div class="grid grid-cols-2 gap-8">
-          <div>
-            <p class="font-medium mb-3">Руководитель</p>
-            <div class="flex items-center gap-2 mb-1">
-              <span class="border-b border-black flex-1"></span>
-              <span class="text-gray-500">(подпись)</span>
+        return `
+          <div class="p-6 bg-white rounded-xl shadow-sm max-w-5xl mx-auto font-sans text-sm print:p-4">
+            <div class="flex justify-between items-start mb-6 border-b border-black pb-4">
+              <div class="w-1/2 pr-4">
+                <p class="font-bold text-lg mb-2">ПОСТАВЩИК:</p>
+                <p class="text-xs"><strong>${companyData.name || companyName || '—'}</strong></p>
+                <p class="text-xs">Адрес: ${companyData.address || '—'}</p>
+                <p class="text-xs">ИНН/КПП: ${companyData.inn || '—'} / ${companyData.kpp || '—'}</p>
+                <p class="text-xs">Тел.: ${companyData.phone || '—'}</p>
+                <p class="text-xs mt-2"><strong>Банковские реквизиты:</strong></p>
+                <p class="text-xs">Банк: ${companyData.bank_name || '—'}</p>
+                <p class="text-xs">БИК: ${companyData.bik || '—'}</p>
+                <p class="text-xs">Р/с: ${companyData.account_number || '—'}</p>
+                <p class="text-xs">К/с: ${companyData.correspondent_account || '—'}</p>
+              </div>
+              <div class="w-1/2 pl-4 border-l border-black">
+                <p class="font-bold text-lg mb-2">ПОКУПАТЕЛЬ:</p>
+                <p class="text-xs"><strong>${app.object_name || '—'}</strong></p>
+                <p class="text-xs">Адрес: ${companyData.customer_address || '—'}</p>
+                <p class="text-xs">ИНН/КПП: ${companyData.customer_inn || '—'} / ${companyData.customer_kpp || '—'}</p>
+                <p class="text-xs">Контактное лицо: ${app.foreman_name || '—'}</p>
+                <p class="text-xs">Тел.: ${app.foreman_phone || '—'}</p>
+              </div>
             </div>
-            <div class="flex items-center gap-2">
-              <span class="border-b border-black w-32"></span>
-              <span class="text-gray-500">(расшифровка)</span>
+            
+            <div class="text-center mb-4">
+              <h1 class="text-2xl font-bold">СЧЕТ № ${docNumber}</h1>
+              <p class="text-sm text-gray-600">от ${today.toLocaleDateString('ru-RU')}</p>
+            </div>
+            
+            <div class="mb-4 p-3 bg-gray-50 rounded border border-gray-200 text-xs">
+              <p><strong>Основание:</strong> Заявка на материалы от ${new Date(app.created_at).toLocaleDateString('ru-RU')}</p>
+              <p><strong>Договор:</strong> № ${docNumber} от ${new Date(app.created_at).toLocaleDateString('ru-RU')}</p>
+            </div>
+            
+            <table class="w-full border-collapse text-xs mb-4">
+              <thead>
+                <tr class="border border-black bg-gray-50">
+                  <th class="border border-black p-1 text-center w-8">№</th>
+                  <th class="border border-black p-1 text-left">Наименование товара, работ, услуг</th>
+                  <th class="border border-black p-1 text-center w-12">Ед.</th>
+                  <th class="border border-black p-1 text-center w-16">Кол-во</th>
+                  <th class="border border-black p-1 text-right pr-2 w-24">Цена, руб.</th>
+                  <th class="border border-black p-1 text-right pr-2 w-28">Сумма, руб.</th>
+                </tr>
+              </thead>
+              <tbody>${materialsRows}</tbody>
+              <tfoot>
+                <tr class="border border-black font-bold">
+                  <td colspan="5" class="border border-black p-1 text-right pr-4">Итого:</td>
+                  <td class="border border-black p-1 text-right pr-2">${withoutNds.toLocaleString('ru-RU')}</td>
+                </tr>
+                <tr class="border border-black">
+                  <td colspan="5" class="border border-black p-1 text-right pr-4">НДС 20%:</td>
+                  <td class="border border-black p-1 text-right pr-2">${ndsAmount.toLocaleString('ru-RU')}</td>
+                </tr>
+                <tr class="border border-black font-bold bg-gray-50">
+                  <td colspan="5" class="border border-black p-1 text-right pr-4 text-lg">Всего к оплате:</td>
+                  <td class="border border-black p-1 text-right pr-2 text-lg font-bold">${totalAmount.toLocaleString('ru-RU')}</td>
+                </tr>
+              </tfoot>
+            </table>
+            
+            <div class="mb-4 text-xs">
+              <p>Всего к оплате: <span class="border-b border-black w-full inline-block"></span> рублей 00 копеек</p>
+              <p class="text-gray-500">(прописью)</p>
+            </div>
+            
+            <div class="mb-6 p-3 bg-blue-50 rounded border border-blue-200 text-xs">
+              <p><strong>Условия оплаты:</strong> Оплата в течение 3 (трёх) банковских дней с момента выставления счёта.</p>
+              <p><strong>Срок оплаты:</strong> до ${new Date(today.setDate(today.getDate() + 3)).toLocaleDateString('ru-RU')}</p>
+            </div>
+            
+            <div class="mt-8 pt-4 border-t border-black text-xs">
+              <div class="grid grid-cols-2 gap-8">
+                <div>
+                  <p class="font-medium mb-3">Руководитель</p>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="border-b border-black flex-1"></span>
+                    <span class="text-gray-500">(подпись)</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="border-b border-black w-32"></span>
+                    <span class="text-gray-500">(расшифровка)</span>
+                  </div>
+                </div>
+                <div>
+                  <p class="font-medium mb-3">Главный бухгалтер</p>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="border-b border-black flex-1"></span>
+                    <span class="text-gray-500">(подпись)</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="border-b border-black w-32"></span>
+                    <span class="text-gray-500">(расшифровка)</span>
+                  </div>
+                </div>
+              </div>
+              <div class="text-center mt-6 text-gray-400 text-xs">
+                М.П.
+              </div>
+            </div>
+            
+            <div class="mt-4 text-[10px] text-gray-400 text-center">
+              * Счёт действителен в течение 30 дней с даты выставления
             </div>
           </div>
-          <div>
-            <p class="font-medium mb-3">Главный бухгалтер</p>
-            <div class="flex items-center gap-2 mb-1">
-              <span class="border-b border-black flex-1"></span>
-              <span class="text-gray-500">(подпись)</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="border-b border-black w-32"></span>
-              <span class="text-gray-500">(расшифровка)</span>
-            </div>
-          </div>
-        </div>
-        <div class="text-center mt-6 text-gray-400 text-xs">
-          М.П.
-        </div>
-      </div>
-      
-      <!-- Примечание -->
-      <div class="mt-4 text-[10px] text-gray-400 text-center">
-        * Счёт действителен в течение 30 дней с даты выставления
-      </div>
-    </div>
-  `;
-}
+        `;
+      }
 
       case 'invoice_vat': {
         const totalAmount = app.materials.reduce((sum, m) => 
@@ -1886,6 +2113,13 @@ const DocumentGenerator = ({
         );
         const ndsAmount = Math.round(totalAmount * 20 / 120);
         const withoutNds = totalAmount - ndsAmount;
+        const companyData = companyDetails || {};
+        const address = companyData.address || '—';
+        const inn = companyData.inn || '—';
+        const kpp = companyData.kpp || '—';
+        const bank = companyData.bank_name || '—';
+        const bik = companyData.bik || '—';
+        const account = companyData.account_number || '—';
         
         return `
           <div class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm max-w-5xl mx-auto">
@@ -1960,7 +2194,7 @@ const DocumentGenerator = ({
       default: 
         return '';
     }
-  };
+  }, [companyDetails, companyName, projectFiles]);
 
   const handleBatchPrint = async () => {
     if (selectedAppIds.length === 0) {
@@ -2039,15 +2273,25 @@ const DocumentGenerator = ({
     }
   };
 
+  // Обработчик изменения файлов
+  const handleFilesChange = useCallback((files) => {
+    setProjectFiles(files);
+    // Если активный таб - исполнительная схема, обновляем превью
+    if (activeTab === 'executive_diagram' && selectedApp) {
+      const html = generateTemplate(activeTab, selectedApp);
+      setPreviewHtml(html);
+    }
+  }, [activeTab, selectedApp, generateTemplate]);
+
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6 page-enter">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Документооборот</h2>
         {(userRole === 'master' || userRole === 'foreman') && (
-  <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-    📋 Вам доступны: Журнал работ и Исполнительная схема
-  </p>
-)}
+          <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+            📋 Вам доступны: Журнал работ и Исполнительная схема
+          </p>
+        )}
         <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 no-scrollbar">
           {DOCS.map(doc => (
             <button
@@ -2055,7 +2299,6 @@ const DocumentGenerator = ({
               onClick={() => {
                 setActiveTab(doc.id);
                 setSelectedAppIds([]);
-                setUploadedFileUrl('');
               }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                 activeTab === doc.id
@@ -2111,7 +2354,10 @@ const DocumentGenerator = ({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Выберите заявку</label>
             <select
               value={selectedAppId}
-              onChange={(e) => setSelectedAppId(e.target.value)}
+              onChange={(e) => {
+                setSelectedAppId(e.target.value);
+                setProjectFiles([]);
+              }}
               className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               <option value="">— Не выбрано —</option>
@@ -2149,28 +2395,19 @@ const DocumentGenerator = ({
           </div>
         )}
 
-        {activeTab === 'executive_diagram' && previewHtml && (
-  <div className="mb-4 no-print">
-    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-      <label className="px-3 py-1.5 text-xs bg-[#4A6572] text-white rounded hover:bg-[#344955] cursor-pointer inline-flex items-center gap-1">
-        <Upload className="w-3 h-3" />
-        {uploadingFile ? 'Загрузка...' : 'Загрузить схему'}
-        <input 
-          type="file" 
-          ref={fileInputRef}
-          onChange={handleFileUpload}
-          accept=".pdf,.dwg,.png,.jpg,.jpeg"
-          className="hidden"
-        />
-      </label>
-      {uploadedFileUrl && (
-        <p className="mt-2 text-xs text-green-600">
-          ✓ Файл загружен: {uploadedFileUrl.split('/').pop()}
-        </p>
-      )}
-    </div>
-  </div>
-)}
+        {/* 🆕 Менеджер проектных файлов для исполнительной схемы */}
+        {activeTab === 'executive_diagram' && selectedAppId && (
+          <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-200 dark:border-gray-700">
+            <ProjectFilesManager
+              applicationId={selectedAppId}
+              companyId={userCompanyId}
+              userId={user?.id}
+              supabase={supabase}
+              showNotification={showNotification}
+              onFilesChange={handleFilesChange}
+            />
+          </div>
+        )}
 
         {previewHtml ? (
           <div className="space-y-4">
