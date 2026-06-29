@@ -7281,6 +7281,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     userId={user?.id}
     userRole={userRole}
     showNotification={showNotification}
+    applications={applications}
   />
 )}
       </main>
