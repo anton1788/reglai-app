@@ -70,18 +70,26 @@ const ProjectManager = ({ supabase, userCompanyId, userId, userRole, showNotific
           continue;
         }
         
-        // Создаём уникальное имя
+        // ✅ ЭКРАНИРУЕМ ИМЯ ФАЙЛА
         const safeFileName = file.name
           .replace(/[^a-zA-Zа-яА-Я0-9._-]/g, '_')
           .replace(/_+/g, '_');
-        const storagePath = `${userCompanyId}/projects/${Date.now()}_${safeFileName}`;
+        
+        // ✅ ПРОСТОЙ ПУТЬ (без вложенных папок)
+        const storagePath = `${Date.now()}_${safeFileName}`;
+        
+        console.log('📤 Загрузка файла:', storagePath);
         
         // Загружаем в Storage
         const { error: uploadError } = await supabase.storage
           .from('projects')
           .upload(storagePath, file);
         
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error('❌ Ошибка загрузки в Storage:', uploadError);
+          showNotification?.(`❌ Ошибка Storage: ${uploadError.message}`, 'error');
+          continue;
+        }
         
         // Сохраняем в БД
         const { data, error: dbError } = await supabase
@@ -99,7 +107,11 @@ const ProjectManager = ({ supabase, userCompanyId, userId, userRole, showNotific
           .select()
           .single();
         
-        if (dbError) throw dbError;
+        if (dbError) {
+          console.error('❌ Ошибка сохранения в БД:', dbError);
+          showNotification?.(`❌ Ошибка БД: ${dbError.message}`, 'error');
+          continue;
+        }
         
         // Получаем публичный URL
         const { data: { publicUrl } } = supabase.storage
@@ -110,11 +122,13 @@ const ProjectManager = ({ supabase, userCompanyId, userId, userRole, showNotific
         setUploadProgress(((i + 1) / files.length) * 100);
       }
       
-      setProjects(prev => [...uploadedProjects, ...prev]);
-      showNotification?.(`✅ Загружено ${uploadedProjects.length} проектов`, 'success');
+      if (uploadedProjects.length > 0) {
+        setProjects(prev => [...uploadedProjects, ...prev]);
+        showNotification?.(`✅ Загружено ${uploadedProjects.length} проектов`, 'success');
+      }
     } catch (err) {
-      console.error('Ошибка загрузки:', err);
-      showNotification?.(`❌ Ошибка: ${err.message}`, 'error');
+      console.error('❌ Ошибка загрузки:', err);
+      showNotification?.(`❌ Ошибка: ${err.message || 'Неизвестная ошибка'}`, 'error');
     } finally {
       setUploading(false);
       setUploadProgress(0);
