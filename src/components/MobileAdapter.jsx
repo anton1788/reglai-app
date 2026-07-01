@@ -1,12 +1,12 @@
 // src/components/MobileAdapter.jsx
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { 
   Menu, X, Home, Plus, List, History, Warehouse, Users, 
   BarChart3, Settings, HelpCircle, LogOut, ChevronLeft,
   ShoppingCart, FileText, Calendar, MessageCircle, Briefcase,
   ClipboardList, UserCog, CreditCard, TrendingUp, FolderOpen,
   PieChart, Shield, CheckCircle, Zap, Code, Calculator, User,
-  Wifi, WifiOff, Search, Sun, Moon, Bell, Download, Upload
+  Wifi, WifiOff, Search, Sun, Moon, Bell, Globe
 } from 'lucide-react';
 
 /**
@@ -15,39 +15,20 @@ import {
  * ============================================================
  * 
  * 🔹 Что делает:
- *   - Определяет мобильное устройство по ширине экрана
+ *   - Реактивно определяет мобильное устройство (с resize)
  *   - Показывает Bottom Navigation вместо верхнего меню
- *   - Добавляет выдвижное меню (Drawer)
+ *   - Добавляет выдвижное меню (Drawer) с прокруткой
  *   - Поддерживает свайп-жесты
  *   - Увеличивает touch-цели до 44px+
  *   - Поддерживает безопасные зоны iPhone
  *   - Показывает индикатор офлайн-режима
- * 
- * 🔹 Использование в App.jsx:
- *   <MobileAdapter
- *     currentView={currentView}
- *     onNavigate={(path) => setCurrentView(path.replace('/', ''))}
- *     onLogout={handleLogout}
- *     user={user}
- *     userRole={userRole}
- *     userCompany={userCompany}
- *     isOnline={isOnline}
- *     offlineDraftsCount={offlineDrafts.length}
- *     pendingApprovalsCount={pendingApprovals?.length || 0}
- *     cartItemsCount={formData.cart?.length || 0}
- *     mergeableCount={mergeableCount}
- *     theme={theme}
- *     onToggleTheme={toggleTheme}
- *     onToggleLanguage={handleLanguageChange}
- *     language={language}
- *   >
- *     {children}
- *   </MobileAdapter>
- * ============================================================
+ *   - Подсветка активного пункта меню
  */
 const MobileAdapter = ({ 
-  // ===== НАВИГАЦИЯ =====
+  // ===== ДЕТИ =====
   children, 
+  
+  // ===== НАВИГАЦИЯ =====
   currentView, 
   onNavigate,
   onLogout,
@@ -77,15 +58,22 @@ const MobileAdapter = ({
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchStartY, setTouchStartY] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const drawerRef = useRef(null);
+  
+  // ✅ РЕАКТИВНОЕ ОПРЕДЕЛЕНИЕ МОБИЛЬНОСТИ
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' && window.innerWidth <= 768
+  );
 
-  // ============================================================
-  // 📱 ОПРЕДЕЛЕНИЕ МОБИЛЬНОГО УСТРОЙСТВА
-  // ============================================================
-  const isMobile = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= 768 || 
-           ('ontouchstart' in window) ||
-           (navigator.maxTouchPoints > 0);
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // ============================================================
@@ -95,7 +83,7 @@ const MobileAdapter = ({
     const items = [];
     const role = userRole || 'master';
 
-    // === ГЛАВНАЯ (для всех) ===
+    // === ГЛАВНАЯ ===
     items.push({
       id: 'dashboard',
       icon: Home,
@@ -131,7 +119,7 @@ const MobileAdapter = ({
     }
 
     // === СКЛАД ===
-    if (['supply_admin', 'manager', 'director', 'foreman', 'master'].includes(role)) {
+    if (['supply_admin', 'manager', 'director', 'foreman', 'master', 'accountant'].includes(role)) {
       items.push({
         id: 'warehouse',
         icon: Warehouse,
@@ -167,14 +155,38 @@ const MobileAdapter = ({
     }
 
     // === ПРОЕКТЫ ===
-    if (['manager', 'director', 'supply_admin', 'client_manager'].includes(role)) {
+    if (['manager', 'director', 'supply_admin', 'client_manager', 'master', 'foreman'].includes(role)) {
       items.push({
         id: 'projects',
-        icon: Briefcase,
+        icon: FolderOpen,
         label: 'Проекты',
         path: '/projects',
         show: false,
         badge: 0
+      });
+    }
+
+    // === CRM ЛИДЫ ===
+    if (['manager', 'supply_admin'].includes(role)) {
+      items.push({
+        id: 'crm-sales',
+        icon: TrendingUp,
+        label: 'CRM Лиды',
+        path: '/crm-sales',
+        show: false,
+        badge: 0
+      });
+    }
+
+    // === ОБЪЕДИНЕНИЕ ===
+    if (['manager', 'director', 'supply_admin'].includes(role)) {
+      items.push({
+        id: 'merge',
+        icon: FolderOpen,
+        label: 'Объединение',
+        path: '/merge',
+        show: false,
+        badge: mergeableCount || 0
       });
     }
 
@@ -215,7 +227,7 @@ const MobileAdapter = ({
     }
 
     // === СОГЛАСОВАНИЯ ===
-    if (['manager', 'director', 'supply_admin'].includes(role)) {
+    if (['manager', 'director'].includes(role)) {
       items.push({
         id: 'approvals',
         icon: ClipboardList,
@@ -262,30 +274,6 @@ const MobileAdapter = ({
       });
     }
 
-    // === CRM ===
-    if (['manager', 'director', 'client_manager'].includes(role)) {
-      items.push({
-        id: 'crm-sales',
-        icon: TrendingUp,
-        label: 'CRM',
-        path: '/crm-sales',
-        show: false,
-        badge: 0
-      });
-    }
-
-    // === ОБЪЕДИНЕНИЕ ===
-    if (['manager', 'director', 'supply_admin'].includes(role)) {
-      items.push({
-        id: 'merge',
-        icon: FolderOpen,
-        label: 'Объединение',
-        path: '/merge',
-        show: false,
-        badge: mergeableCount || 0
-      });
-    }
-
     // === СМЕТЫ ===
     if (['manager', 'director', 'supply_admin', 'accountant'].includes(role)) {
       items.push({
@@ -310,12 +298,12 @@ const MobileAdapter = ({
       });
     }
 
-    // === ИНТЕГРАЦИИ ===
+    // === ИНТЕГРАЦИЯ ===
     if (['manager', 'director', 'supply_admin'].includes(role)) {
       items.push({
         id: 'integration',
         icon: Zap,
-        label: 'Интеграции',
+        label: 'Интеграция',
         path: '/integration',
         show: false,
         badge: 0
@@ -323,7 +311,7 @@ const MobileAdapter = ({
     }
 
     // === API ===
-    if (['manager', 'director', 'supply_admin'].includes(role)) {
+    if (['manager', 'director', 'supply_admin', 'accountant'].includes(role)) {
       items.push({
         id: 'api',
         icon: Code,
@@ -335,7 +323,7 @@ const MobileAdapter = ({
     }
 
     // === АУДИТ ===
-    if (['manager', 'director', 'supply_admin'].includes(role)) {
+    if (['manager', 'director', 'supply_admin', 'accountant'].includes(role)) {
       items.push({
         id: 'audit',
         icon: Shield,
@@ -400,7 +388,6 @@ const MobileAdapter = ({
       });
     }
 
-    // Фильтруем только видимые в навигации
     return items.filter(item => item.show !== false);
   }, [userRole, pendingApprovalsCount, cartItemsCount, mergeableCount]);
 
@@ -408,7 +395,6 @@ const MobileAdapter = ({
   // 📱 BOTTOM NAVIGATION BAR (нижняя панель)
   // ============================================================
   const BottomNav = useCallback(() => {
-    // Берём первые 5 пунктов для основной навигации
     const mainItems = navigationItems.slice(0, 5);
     const hasMore = navigationItems.length > 5;
 
@@ -440,24 +426,20 @@ const MobileAdapter = ({
                 `}
                 aria-label={item.label}
               >
-                {/* Иконка */}
                 <Icon className={`w-5 h-5 ${isActive ? 'stroke-2' : 'stroke-1.5'}`} />
                 
-                {/* Бейдж с числом */}
                 {hasBadge && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
                     {item.badge > 99 ? '99+' : item.badge}
                   </span>
                 )}
 
-                {/* Подпись */}
                 <span className={`text-[10px] font-medium mt-0.5 transition-colors ${
                   isActive ? 'text-[#4A6572] dark:text-[#F9AA33]' : ''
                 }`}>
                   {item.label}
                 </span>
 
-                {/* Индикатор активной вкладки */}
                 {isActive && (
                   <span className="absolute -top-0.5 w-6 h-0.5 bg-[#4A6572] dark:bg-[#F9AA33] rounded-full" />
                 )}
@@ -465,7 +447,6 @@ const MobileAdapter = ({
             );
           })}
 
-          {/* Кнопка "Ещё" */}
           {hasMore && (
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -493,12 +474,13 @@ const MobileAdapter = ({
   const DrawerMenu = useCallback(() => {
     if (!isMenuOpen) return null;
 
-    // Основные пункты (первые 5 уже внизу)
     const extraItems = navigationItems.slice(5);
+    const filteredExtraItems = extraItems.filter(item =>
+      item.label.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
     return (
       <>
-        {/* Оверлей */}
         <div 
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 fade-enter"
           onClick={() => setIsMenuOpen(false)}
@@ -507,8 +489,10 @@ const MobileAdapter = ({
           }}
         />
         
-        {/* Меню */}
-        <div className="fixed right-0 top-0 bottom-0 w-[300px] max-w-[85vw] bg-white dark:bg-gray-900 shadow-2xl z-50 slide-in-right overflow-y-auto">
+        <div 
+          ref={drawerRef}
+          className="fixed right-0 top-0 bottom-0 w-[300px] max-w-[85vw] bg-white dark:bg-gray-900 shadow-2xl z-50 slide-in-right overflow-y-auto"
+        >
           {/* Шапка меню */}
           <div className="sticky top-0 bg-white dark:bg-gray-900 z-10">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
@@ -560,16 +544,30 @@ const MobileAdapter = ({
                 </div>
               </div>
             </div>
+
+            {/* Поиск по меню */}
+            <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Поиск по меню..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A6572] bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Пункты меню */}
-          <div className="p-3 pb-20">
-            {extraItems.length > 0 && (
+          <div className="p-3 pb-32">
+            {filteredExtraItems.length > 0 ? (
               <>
                 <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-3 py-2">
                   Все разделы
                 </p>
-                {extraItems.map((item) => {
+                {filteredExtraItems.map((item) => {
                   const isActive = currentView === item.id || 
                                   (item.id === 'dashboard' && currentView === '');
                   const Icon = item.icon;
@@ -602,12 +600,26 @@ const MobileAdapter = ({
                   );
                 })}
               </>
+            ) : (
+              <div className="text-center py-8 text-gray-400 text-sm">
+                Ничего не найдено
+              </div>
             )}
 
-            {/* Разделитель */}
             <div className="my-2 border-t border-gray-200 dark:border-gray-700" />
 
-            {/* Кнопка выхода */}
+            {/* Настройки и выход */}
+            <button
+              onClick={() => {
+                setIsMenuOpen(false);
+                onNavigate('/settings');
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300 touch-target"
+            >
+              <Settings className="w-5 h-5" />
+              <span className="text-sm font-medium">Настройки</span>
+            </button>
+
             <button
               onClick={() => {
                 setIsMenuOpen(false);
@@ -619,7 +631,6 @@ const MobileAdapter = ({
               <span className="text-sm font-medium">Выйти</span>
             </button>
 
-            {/* Версия */}
             <div className="mt-4 text-center">
               <p className="text-[10px] text-gray-400 dark:text-gray-500">
                 Реглай PRO v1.0.0 • {new Date().getFullYear()}
@@ -629,13 +640,12 @@ const MobileAdapter = ({
         </div>
       </>
     );
-  }, [isMenuOpen, navigationItems, currentView, onNavigate, onLogout, user, userCompany, isOnline, offlineDraftsCount]);
+  }, [isMenuOpen, navigationItems, currentView, onNavigate, onLogout, user, userCompany, isOnline, offlineDraftsCount, searchQuery]);
 
   // ============================================================
   // 📱 HEADER ДЛЯ МОБИЛЬНОЙ ВЕРСИИ
   // ============================================================
   const MobileHeader = useCallback(() => {
-    // Определяем текущий заголовок
     const getTitle = () => {
       const item = navigationItems.find(i => i.id === currentView || (i.id === 'dashboard' && currentView === ''));
       return item?.label || 'Реглай PRO';
@@ -644,7 +654,6 @@ const MobileAdapter = ({
     return (
       <header className="sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 safe-area-top shadow-sm">
         <div className="flex items-center justify-between px-3 py-2 max-w-screen-xl mx-auto">
-          {/* Левая часть */}
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-8 h-8 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-lg flex items-center justify-center flex-shrink-0">
               <img src="/icon-192.png" alt="Reglai" className="w-5 h-5" />
@@ -654,12 +663,9 @@ const MobileAdapter = ({
             </span>
           </div>
 
-          {/* Правая часть */}
           <div className="flex items-center gap-1">
-            {/* Индикатор онлайн */}
             <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
             
-            {/* Кнопка поиска */}
             <button
               onClick={() => onNavigate('/search')}
               className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors touch-target"
@@ -668,7 +674,6 @@ const MobileAdapter = ({
               <Search className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             </button>
 
-            {/* Переключение темы */}
             <button
               onClick={onToggleTheme}
               className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors touch-target"
@@ -681,7 +686,6 @@ const MobileAdapter = ({
               )}
             </button>
 
-            {/* Переключение языка */}
             <button
               onClick={onToggleLanguage}
               className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors touch-target text-xs font-medium"
@@ -689,7 +693,6 @@ const MobileAdapter = ({
               {language === 'ru' ? 'RU' : 'EN'}
             </button>
 
-            {/* Кнопка меню */}
             <button
               onClick={() => setIsMenuOpen(true)}
               className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors touch-target"
