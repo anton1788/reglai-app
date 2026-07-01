@@ -13,7 +13,9 @@ import {
   Calculator,
   FileText,
   Settings,
-  FolderOpen
+  FolderOpen, List, Warehouse,
+  CreditCard, UserCog,
+  PieChart
 } from 'lucide-react';
 import { getCompanyPlan } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
