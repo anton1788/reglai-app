@@ -150,15 +150,42 @@ const TimeDisplay = memo(({ date, language = 'ru' }) => {
   const now = new Date();
   const diff = now - d;
   
-  if (diff < 60000) return 'только что';
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} мин`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} ч`;
-  if (diff < 604800000) return `${Math.floor(diff / 86400000)} дн`;
+  // Если сообщение создано сегодня
+  if (d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString(language === 'ru' ? 'ru-RU' : 'en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
   
+  // Если сообщение создано вчера
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) {
+    return `Вчера ${d.toLocaleTimeString(language === 'ru' ? 'ru-RU' : 'en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })}`;
+  }
+  
+  // Если сообщение создано на этой неделе
+  const weekAgo = new Date(now);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  if (d > weekAgo) {
+    return d.toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+  
+  // Если сообщение старше недели
   return d.toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
     day: '2-digit',
     month: 'short',
-    year: 'numeric'
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
   });
 });
 
@@ -1033,146 +1060,145 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   // 📨 ЗАГРУЗКА СООБЩЕНИЙ (БЕЗ is_pinned)
   // ============================================================
 
-  const loadMessages = useCallback(async () => {
-    if (loadMessagesRef.current) return;
-    loadMessagesRef.current = true;
+ const loadMessages = useCallback(async () => {
+  if (loadMessagesRef.current) return;
+  loadMessagesRef.current = true;
 
-    if (!userCompanyId || !activeChannel) {
-      loadMessagesRef.current = false;
-      return;
+  if (!userCompanyId || !activeChannel) {
+    loadMessagesRef.current = false;
+    return;
+  }
+
+  if (isInitialLoad) {
+    setLoading(true);
+  }
+
+  try {
+    const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+    const isDirectChat = activeChannel?.startsWith('dm_');
+
+    let query = supabase
+      .from('company_messages')
+      .select('*')
+      .eq('company_id', userCompanyId)
+      .is('deleted_at', null)  // ✅ ПОКАЗЫВАЕМ ТОЛЬКО НЕ УДАЛЁННЫЕ
+      .order('created_at', { ascending: false })
+      .limit(MESSAGES_PER_PAGE);
+
+    if (isSystemChannel) {
+      query = query.eq('channel', activeChannel).eq('channel_type', 'system');
+    } else if (isDirectChat) {
+      query = query.eq('channel_id', activeChannel).eq('channel_type', 'direct');
+    } else {
+      query = query.eq('channel_id', activeChannel).eq('channel_type', 'custom');
     }
 
-    if (isInitialLoad) {
-      setLoading(true);
+    const { data: messagesData, error } = await query;
+    if (error) {
+      console.warn('Ошибка загрузки сообщений:', error);
+      if (error.code === '42P01') {
+        setMessages([]);
+        setLoading(false);
+        loadMessagesRef.current = false;
+        setIsInitialLoad(false);
+        return;
+      }
+      throw error;
     }
 
-    try {
-      const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
-      const isDirectChat = activeChannel?.startsWith('dm_');
+    const sortedMessages = messagesData?.reverse() || [];
+    const messageIds = sortedMessages.map(m => m.id);
 
-      let query = supabase
-        .from('company_messages')
-        .select('*')
-        .eq('company_id', userCompanyId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(MESSAGES_PER_PAGE);
-
-      if (isSystemChannel) {
-        query = query.eq('channel', activeChannel).eq('channel_type', 'system');
-      } else if (isDirectChat) {
-        query = query.eq('channel_id', activeChannel).eq('channel_type', 'direct');
-      } else {
-        query = query.eq('channel_id', activeChannel).eq('channel_type', 'custom');
-      }
-
-      const { data: messagesData, error } = await query;
-      if (error) {
-        console.warn('Ошибка загрузки сообщений:', error);
-        // Если таблица не существует, просто показываем пустой список
-        if (error.code === '42P01') {
-          setMessages([]);
-          setLoading(false);
-          loadMessagesRef.current = false;
-          setIsInitialLoad(false);
-          return;
-        }
-        throw error;
-      }
-
-      const sortedMessages = messagesData?.reverse() || [];
-      const messageIds = sortedMessages.map(m => m.id);
-
-      let reactionsMap = {};
-      if (messageIds.length > 0) {
-        const { data: reactionsData } = await supabase
-          .from('message_reactions')
-          .select('message_id, emoji, user_id')
-          .in('message_id', messageIds);
-        if (reactionsData) {
-          reactionsMap = reactionsData.reduce((acc, r) => {
-            if (!acc[r.message_id]) acc[r.message_id] = [];
-            acc[r.message_id].push({ emoji: r.emoji, user_id: r.user_id });
-            return acc;
-          }, {});
-        }
-      }
-
-      const userIds = [...new Set(sortedMessages.map(m => m.user_id).filter(Boolean))];
-      let usersMap = {};
-      if (userIds.length > 0) {
-        const { data: usersData } = await supabase
-          .from('company_users')
-          .select('user_id, full_name, role')
-          .in('user_id', userIds);
-        usersMap = (usersData || []).reduce((acc, u) => {
-          acc[u.user_id] = { full_name: u.full_name, role: u.role };
+    // Загружаем реакции
+    let reactionsMap = {};
+    if (messageIds.length > 0) {
+      const { data: reactionsData } = await supabase
+        .from('message_reactions')
+        .select('message_id, emoji, user_id')
+        .in('message_id', messageIds);
+      if (reactionsData) {
+        reactionsMap = reactionsData.reduce((acc, r) => {
+          if (!acc[r.message_id]) acc[r.message_id] = [];
+          acc[r.message_id].push({ emoji: r.emoji, user_id: r.user_id });
           return acc;
         }, {});
       }
-
-      let replyMap = {};
-      const messagesWithReply = sortedMessages.filter(m => m.reply_to_message_id);
-      if (messagesWithReply.length > 0) {
-        const replyIds = messagesWithReply.map(m => m.reply_to_message_id);
-        const { data: replyMessages } = await supabase
-          .from('company_messages')
-          .select('id, content, user_id')
-          .in('id', replyIds);
-        if (replyMessages) {
-          const replyUserIds = [...new Set(replyMessages.map(r => r.user_id))];
-          let replyUsersMap = {};
-          if (replyUserIds.length > 0) {
-            const { data: replyUsers } = await supabase
-              .from('company_users')
-              .select('user_id, full_name')
-              .in('user_id', replyUserIds);
-            replyUsersMap = (replyUsers || []).reduce((acc, u) => {
-              acc[u.user_id] = { full_name: u.full_name };
-              return acc;
-            }, {});
-          }
-          replyMessages.forEach(reply => {
-            replyMap[reply.id] = {
-              ...reply,
-              user: { user_metadata: { full_name: replyUsersMap[reply.user_id]?.full_name || 'Пользователь' } }
-            };
-          });
-        }
-      }
-
-      // ⚠️ УБИРАЕМ ЗАПРОС К is_pinned - он не существует
-      // Вместо этого используем локальное состояние pinnedMessages
-      // Если в будущем добавите колонку is_pinned, можно будет раскомментировать
-
-      const enrichedMessages = sortedMessages.map(msg => ({
-        ...msg,
-        user: { user_metadata: usersMap[msg.user_id] || { full_name: 'Пользователь', role: 'user' } },
-        reactions: reactionsMap[msg.id] || [],
-        replied_message: replyMap[msg.reply_to_message_id] || null,
-        is_pinned: pinnedMessages.includes(msg.id), // Используем локальное состояние
-      }));
-
-      setMessages(enrichedMessages);
-
-      if (enrichedMessages.length > 0) {
-        const lastRead = lastReadTimes[activeChannel] || new Date(0);
-        const firstUnreadIdx = enrichedMessages.findIndex(m =>
-          new Date(m.created_at) > lastRead && m.user_id !== user?.id
-        );
-        setFirstUnreadId(firstUnreadIdx >= 0 ? enrichedMessages[firstUnreadIdx].id : null);
-      }
-
-      setTimeout(() => forceScrollToBottom('auto'), 150);
-      markChannelAsRead(activeChannel);
-    } catch (err) {
-      console.error('Ошибка загрузки сообщений:', err);
-    } finally {
-      setLoading(false);
-      setIsInitialLoad(false);
-      loadMessagesRef.current = false;
     }
-  }, [userCompanyId, activeChannel, lastReadTimes, user?.id, forceScrollToBottom, markChannelAsRead, isInitialLoad, pinnedMessages]);
+
+    // Загружаем пользователей
+    const userIds = [...new Set(sortedMessages.map(m => m.user_id).filter(Boolean))];
+    let usersMap = {};
+    if (userIds.length > 0) {
+      const { data: usersData } = await supabase
+        .from('company_users')
+        .select('user_id, full_name, role')
+        .in('user_id', userIds);
+      usersMap = (usersData || []).reduce((acc, u) => {
+        acc[u.user_id] = { full_name: u.full_name, role: u.role };
+        return acc;
+      }, {});
+    }
+
+    // Загружаем ответы (только не удалённые)
+    let replyMap = {};
+    const messagesWithReply = sortedMessages.filter(m => m.reply_to_message_id);
+    if (messagesWithReply.length > 0) {
+      const replyIds = messagesWithReply.map(m => m.reply_to_message_id);
+      const { data: replyMessages } = await supabase
+        .from('company_messages')
+        .select('id, content, user_id')
+        .in('id', replyIds)
+        .is('deleted_at', null);  // ✅ Ответы тоже фильтруем
+      if (replyMessages) {
+        const replyUserIds = [...new Set(replyMessages.map(r => r.user_id))];
+        let replyUsersMap = {};
+        if (replyUserIds.length > 0) {
+          const { data: replyUsers } = await supabase
+            .from('company_users')
+            .select('user_id, full_name')
+            .in('user_id', replyUserIds);
+          replyUsersMap = (replyUsers || []).reduce((acc, u) => {
+            acc[u.user_id] = { full_name: u.full_name };
+            return acc;
+          }, {});
+        }
+        replyMessages.forEach(reply => {
+          replyMap[reply.id] = {
+            ...reply,
+            user: { user_metadata: { full_name: replyUsersMap[reply.user_id]?.full_name || 'Пользователь' } }
+          };
+        });
+      }
+    }
+
+    const enrichedMessages = sortedMessages.map(msg => ({
+      ...msg,
+      user: { user_metadata: usersMap[msg.user_id] || { full_name: 'Пользователь', role: 'user' } },
+      reactions: reactionsMap[msg.id] || [],
+      replied_message: replyMap[msg.reply_to_message_id] || null,
+      is_pinned: pinnedMessages.includes(msg.id),
+    }));
+
+    setMessages(enrichedMessages);
+
+    if (enrichedMessages.length > 0) {
+      const lastRead = lastReadTimes[activeChannel] || new Date(0);
+      const firstUnreadIdx = enrichedMessages.findIndex(m =>
+        new Date(m.created_at) > lastRead && m.user_id !== user?.id
+      );
+      setFirstUnreadId(firstUnreadIdx >= 0 ? enrichedMessages[firstUnreadIdx].id : null);
+    }
+
+    setTimeout(() => forceScrollToBottom('auto'), 150);
+    markChannelAsRead(activeChannel);
+  } catch (err) {
+    console.error('Ошибка загрузки сообщений:', err);
+  } finally {
+    setLoading(false);
+    setIsInitialLoad(false);
+    loadMessagesRef.current = false;
+  }
+}, [userCompanyId, activeChannel, lastReadTimes, user?.id, forceScrollToBottom, markChannelAsRead, isInitialLoad, pinnedMessages]);
 
   // Загружаем сообщения только при смене канала или при монтировании
   useEffect(() => {
@@ -1183,69 +1209,98 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   }, [activeChannel]);
 
   // ============================================================
-  // 📡 ПОДПИСКА НА НОВЫЕ СООБЩЕНИЯ
-  // ============================================================
+// 📡 ПОДПИСКА НА НОВЫЕ СООБЩЕНИЯ (С ФИЛЬТРАЦИЕЙ УДАЛЁННЫХ)
+// ============================================================
 
-  useEffect(() => {
-    if (!userCompanyId || !activeChannel) return;
+useEffect(() => {
+  if (!userCompanyId || !activeChannel) return;
+  if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
+
+  const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+  const filter = isSystemChannel
+    ? `company_id=eq.${userCompanyId} AND channel=eq.${activeChannel} AND channel_type=eq.system`
+    : `channel_id=eq.${activeChannel}`;
+
+  subscriptionRef.current = supabase
+    .channel(`messages:${activeChannel}`)
+    // 🔵 СЛУШАЕМ НОВЫЕ СООБЩЕНИЯ
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'company_messages',
+      filter,
+    }, async (payload) => {
+      const newMsg = payload.new;
+      if (newMsg.deleted_at) return;  // ✅ Игнорируем удалённые
+
+      const msgChannelId = newMsg.channel_id || newMsg.channel;
+      if (activeChannel !== msgChannelId && newMsg.user_id !== user?.id) {
+        setUnreadCounts(prev => ({
+          ...prev,
+          [msgChannelId]: (prev[msgChannelId] || 0) + 1,
+        }));
+      }
+
+      const { data: userData } = await supabase
+        .from('company_users')
+        .select('full_name, role')
+        .eq('user_id', newMsg.user_id)
+        .single();
+
+      const { data: reactionsData } = await supabase
+        .from('message_reactions')
+        .select('emoji, user_id')
+        .eq('message_id', newMsg.id);
+
+      const enrichedMessage = {
+        ...newMsg,
+        user: { user_metadata: userData || { full_name: 'Пользователь', role: 'user' } },
+        reactions: reactionsData || [],
+        replied_message: null,
+        is_pinned: pinnedMessages.includes(newMsg.id),
+      };
+
+      setMessages(prev => [...prev, enrichedMessage]);
+      setTimeout(() => scrollToBottom('smooth'), 50);
+
+      if (shouldAutoScroll && !isUserScrollingRef.current) {
+        markChannelAsRead(activeChannel);
+      }
+    })
+    // 🟢 СЛУШАЕМ ОБНОВЛЕНИЯ (ДЛЯ УДАЛЕНИЯ)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'company_messages',
+      filter,
+    }, async (payload) => {
+      const updatedMsg = payload.new;
+      
+      // ✅ Если сообщение было удалено - убираем из UI
+      if (updatedMsg.deleted_at) {
+        setMessages(prev => prev.filter(m => m.id !== updatedMsg.id));
+        // Если было закреплено - открепляем
+        if (pinnedMessages.includes(updatedMsg.id)) {
+          setPinnedMessages(prev => prev.filter(id => id !== updatedMsg.id));
+        }
+        return;
+      }
+      
+      // Обновляем существующее сообщение (редактирование)
+      setMessages(prev => prev.map(m => 
+        m.id === updatedMsg.id ? { 
+          ...m, 
+          content: updatedMsg.content,
+          edited_at: updatedMsg.edited_at
+        } : m
+      ));
+    })
+    .subscribe();
+
+  return () => {
     if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
-
-    const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
-    const filter = isSystemChannel
-      ? `company_id=eq.${userCompanyId} AND channel=eq.${activeChannel} AND channel_type=eq.system`
-      : `channel_id=eq.${activeChannel}`;
-
-    subscriptionRef.current = supabase
-      .channel(`messages:${activeChannel}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'company_messages',
-        filter,
-      }, async (payload) => {
-        const newMsg = payload.new;
-        if (newMsg.deleted_at) return;
-
-        const msgChannelId = newMsg.channel_id || newMsg.channel;
-        if (activeChannel !== msgChannelId && newMsg.user_id !== user?.id) {
-          setUnreadCounts(prev => ({
-            ...prev,
-            [msgChannelId]: (prev[msgChannelId] || 0) + 1,
-          }));
-        }
-
-        const { data: userData } = await supabase
-          .from('company_users')
-          .select('full_name, role')
-          .eq('user_id', newMsg.user_id)
-          .single();
-
-        const { data: reactionsData } = await supabase
-          .from('message_reactions')
-          .select('emoji, user_id')
-          .eq('message_id', newMsg.id);
-
-        const enrichedMessage = {
-          ...newMsg,
-          user: { user_metadata: userData || { full_name: 'Пользователь', role: 'user' } },
-          reactions: reactionsData || [],
-          replied_message: null,
-          is_pinned: pinnedMessages.includes(newMsg.id),
-        };
-
-        setMessages(prev => [...prev, enrichedMessage]);
-        setTimeout(() => scrollToBottom('smooth'), 50);
-
-        if (shouldAutoScroll && !isUserScrollingRef.current) {
-          markChannelAsRead(activeChannel);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
-    };
-  }, [userCompanyId, activeChannel, user?.id, scrollToBottom, markChannelAsRead, shouldAutoScroll, pinnedMessages]);
+  };
+}, [userCompanyId, activeChannel, user?.id, scrollToBottom, markChannelAsRead, shouldAutoScroll, pinnedMessages]);
 
   // ============================================================
   // 💾 СОХРАНЁННЫЕ СООБЩЕНИЯ
@@ -1322,20 +1377,38 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   }, []);
 
   const deleteMessage = useCallback(async (messageId) => {
-    if (!window.confirm('Удалить сообщение?')) return;
-    try {
-      await supabase
-        .from('company_messages')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', messageId)
-        .eq('user_id', user?.id);
-      setMessages(prev => prev.filter(m => m.id !== messageId));
-      showNotification?.('Сообщение удалено', 'info');
-    } catch (err) {
-      console.error('Ошибка удаления:', err);
-      showNotification?.('Не удалось удалить сообщение', 'error');
+  if (!window.confirm('Удалить сообщение?')) return;
+  
+  try {
+    // Помечаем как удалённое в БД
+    const { error } = await supabase
+      .from('company_messages')
+      .update({ 
+        deleted_at: new Date().toISOString()
+      })
+      .eq('id', messageId)
+      .eq('user_id', user?.id);
+    
+    if (error) {
+      console.error('Ошибка удаления:', error);
+      showNotification?.('Не удалось удалить сообщение: ' + error.message, 'error');
+      return;
     }
-  }, [user?.id, showNotification]);
+    
+    // ✅ МГНОВЕННОЕ УДАЛЕНИЕ ИЗ UI
+    setMessages(prev => prev.filter(m => m.id !== messageId));
+    
+    // Если сообщение было закреплено - открепляем
+    if (pinnedMessages.includes(messageId)) {
+      setPinnedMessages(prev => prev.filter(id => id !== messageId));
+    }
+    
+    showNotification?.('Сообщение удалено', 'info');
+  } catch (err) {
+    console.error('Ошибка удаления:', err);
+    showNotification?.('Не удалось удалить сообщение', 'error');
+  }
+}, [user?.id, pinnedMessages, showNotification]);
 
   const toggleReaction = useCallback(async (messageId, emoji) => {
     if (!user?.id) return;
