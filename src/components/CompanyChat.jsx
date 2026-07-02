@@ -6,7 +6,7 @@ import {
   Plus, Users, Settings, Search, CornerUpLeft, Bookmark, BookmarkCheck,
   Menu, ChevronDown, Pin, Copy, Reply,
   Mic, MicOff, Image, File, MoreVertical, Zap,
-  UserPlus, UserMinus, Bell, Crown
+  UserPlus, UserMinus, Bell, Crown, AtSign
 } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 
@@ -15,10 +15,38 @@ import { supabase } from '../utils/supabaseClient';
 // ============================================================
 
 const SYSTEM_CHANNELS = [
-  { id: 'general', label: 'Общий', icon: '💬', color: '#4A6572', description: 'Общие вопросы и обсуждения' },
-  { id: 'supply', label: 'Снабжение', icon: '📦', color: '#F9AA33', description: 'Закупки и поставки материалов' },
-  { id: 'foremen', label: 'Прорабы', icon: '👷', color: '#2E7D32', description: 'Обсуждение объектов' },
-  { id: 'announcements', label: 'Объявления', icon: '📢', color: '#D32F2F', description: 'Важные объявления' },
+  { 
+    id: 'general', 
+    label: 'Общий', 
+    icon: '💬', 
+    color: '#4A6572', 
+    description: 'Общие вопросы и обсуждения',
+    category: 'Основные'
+  },
+  { 
+    id: 'supply', 
+    label: 'Снабжение', 
+    icon: '📦', 
+    color: '#F9AA33', 
+    description: 'Закупки и поставки материалов',
+    category: 'Рабочие'
+  },
+  { 
+    id: 'foremen', 
+    label: 'Прорабы', 
+    icon: '👷', 
+    color: '#2E7D32', 
+    description: 'Обсуждение объектов',
+    category: 'Рабочие'
+  },
+  { 
+    id: 'announcements', 
+    label: 'Объявления', 
+    icon: '📢', 
+    color: '#D32F2F', 
+    description: 'Важные объявления',
+    category: 'Административные'
+  },
 ];
 
 const REACTION_EMOJIS = [
@@ -28,6 +56,13 @@ const REACTION_EMOJIS = [
   { emoji: '😮', label: 'Wow' },
   { emoji: '😢', label: 'Sad' },
   { emoji: '🔥', label: 'Fire' },
+];
+
+const EMOJI_CATEGORIES = [
+  { name: 'Смайлы', emojis: ['😊', '😂', '🤣', '😅', '😍', '🥰', '😘', '😗', '😙', '😚'] },
+  { name: 'Реакции', emojis: ['👍', '👎', '👏', '🙌', '🤝', '✊', '💪', '🤗', '🤔', '🙄'] },
+  { name: 'Работа', emojis: ['💼', '📊', '📈', '📉', '📋', '📝', '📎', '📌', '🔗', '📅'] },
+  { name: 'Стройка', emojis: ['🏗️', '🪚', '🔨', '⚒️', '🛠️', '📐', '🔧', '🧱', '🏠', '🪜'] },
 ];
 
 const QUICK_REPLIES = [
@@ -111,6 +146,44 @@ const styles = `
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: rgba(74, 101, 114, 0.5);
   }
+  
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 30;
+  }
+  
+  .channel-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .channel-sidebar.open {
+    transform: translateX(0);
+  }
+  
+  @media (max-width: 640px) {
+    .chat-container {
+      height: calc(100vh - 80px) !important;
+      border-radius: 0 !important;
+    }
+    .message-text {
+      font-size: 14px !important;
+      line-height: 1.5 !important;
+    }
+    .message-actions {
+      opacity: 1 !important;
+    }
+    .mobile-header {
+      display: flex !important;
+    }
+  }
 `;
 
 // ============================================================
@@ -149,7 +222,6 @@ const TimeDisplay = memo(({ date, language = 'ru' }) => {
   const d = new Date(date);
   const now = new Date();
   
-  // Если сообщение создано сегодня
   if (d.toDateString() === now.toDateString()) {
     return d.toLocaleTimeString(language === 'ru' ? 'ru-RU' : 'en-US', {
       hour: '2-digit',
@@ -157,7 +229,6 @@ const TimeDisplay = memo(({ date, language = 'ru' }) => {
     });
   }
   
-  // Если сообщение создано вчера
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   if (d.toDateString() === yesterday.toDateString()) {
@@ -167,7 +238,6 @@ const TimeDisplay = memo(({ date, language = 'ru' }) => {
     })}`;
   }
   
-  // Если сообщение создано на этой неделе
   const weekAgo = new Date(now);
   weekAgo.setDate(weekAgo.getDate() - 7);
   if (d > weekAgo) {
@@ -178,7 +248,6 @@ const TimeDisplay = memo(({ date, language = 'ru' }) => {
     });
   }
   
-  // Если сообщение старше недели
   return d.toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
     day: '2-digit',
     month: 'short',
@@ -193,6 +262,42 @@ const formatFileSize = (bytes) => {
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1048576).toFixed(1)} MB`;
 };
+
+// ============================================================
+// 📱 КОМПОНЕНТ ПРЕВЬЮ ФАЙЛА
+// ============================================================
+
+const FilePreview = memo(({ file, onRemove }) => {
+  const [preview, setPreview] = useState(null);
+
+  useEffect(() => {
+    if (file.type?.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => setPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  }, [file]);
+
+  return (
+    <div className="relative inline-flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+      {preview ? (
+        <img src={preview} alt={file.name} className="w-12 h-12 object-cover rounded" />
+      ) : (
+        <File className="w-8 h-8 text-gray-400" />
+      )}
+      <div className="flex flex-col">
+        <span className="text-xs truncate max-w-[100px]">{file.name}</span>
+        <span className="text-[10px] text-gray-400">{formatFileSize(file.size)}</span>
+      </div>
+      <button 
+        onClick={onRemove} 
+        className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full transition-colors"
+      >
+        <X className="w-3.5 h-3.5 text-gray-500" />
+      </button>
+    </div>
+  );
+});
 
 // ============================================================
 // 📱 КОМПОНЕНТ СООБЩЕНИЯ
@@ -281,7 +386,7 @@ const MessageItem = memo(({
           </div>
         )}
         
-        <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+        <div className="text-sm whitespace-pre-wrap break-words leading-relaxed message-text">
           {formatMessage?.(msg.content)}
         </div>
         
@@ -364,7 +469,7 @@ const MessageItem = memo(({
         </div>
 
         {!isEditing && !msg.deleted_at && (
-          <div className={`flex items-center gap-0.5 mt-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity ${isOwn ? 'justify-end' : ''}`}>
+          <div className={`flex items-center gap-0.5 mt-1 text-xs message-actions ${isOwn ? 'justify-end' : ''}`}>
             <button
               onClick={() => setShowReactions(!showReactions)}
               className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
@@ -477,6 +582,7 @@ const ChatSidebar = memo(({
   connectionStatus,
   isMobile,
   showSidebar,
+  onCloseSidebar,
   currentUserRole,
   companyUsers,
   currentUser,
@@ -503,10 +609,21 @@ const ChatSidebar = memo(({
     }
   }, [searchQuery, channels]);
 
+  // Группировка каналов по категориям
+  const groupedChannels = useMemo(() => {
+    const groups = {};
+    filteredChannels.forEach(ch => {
+      const category = ch.category || 'Другие';
+      if (!groups[category]) groups[category] = [];
+      groups[category].push(ch);
+    });
+    return groups;
+  }, [filteredChannels]);
+
   if (!showSidebar) return null;
 
-  return (
-    <aside className={`${isMobile ? 'absolute z-40 w-72 h-full' : 'w-72'} border-r border-gray-200/50 dark:border-gray-700/50 glass-effect flex flex-col`}>
+  const sidebarContent = (
+    <aside className={`${isMobile ? 'channel-sidebar open' : 'w-72'} border-r border-gray-200/50 dark:border-gray-700/50 glass-effect flex flex-col`}>
       <div className="flex-shrink-0 p-4 border-b border-gray-200/50 dark:border-gray-700/50">
         <div className="flex items-center gap-3">
           <Avatar name={currentUser?.user_metadata?.full_name} size="lg" />
@@ -562,37 +679,44 @@ const ChatSidebar = memo(({
           )}
         </div>
 
-        {filteredChannels.map((channel) => {
-          const isActive = activeChannel === channel.id;
-          const unread = unreadCounts[channel.id] || 0;
+        {Object.entries(groupedChannels).map(([category, chs]) => (
+          <div key={category}>
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1.5">
+              {category}
+            </div>
+            {chs.map((channel) => {
+              const isActive = activeChannel === channel.id;
+              const unread = unreadCounts[channel.id] || 0;
 
-          return (
-            <button
-              key={channel.id}
-              onClick={() => onChannelSelect(channel.id)}
-              className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-all group ${
-                isActive
-                  ? 'channel-active bg-gradient-to-r from-[#4A6572]/10 to-[#4A6572]/5 dark:from-[#4A6572]/20 dark:to-[#4A6572]/5'
-                  : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-lg">{channel.icon}</span>
-                <span className="truncate flex-1 text-left">{channel.label || channel.name}</span>
-                {unread > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[20px] text-center">
-                    {unread > 9 ? '9+' : unread}
-                  </span>
-                )}
-              </div>
-              {lastReadTimes[channel.id] && (
-                <div className="text-[10px] text-gray-400 pl-9 mt-0.5">
-                  Прочитано: <TimeDisplay date={lastReadTimes[channel.id]} />
-                </div>
-              )}
-            </button>
-          );
-        })}
+              return (
+                <button
+                  key={channel.id}
+                  onClick={() => onChannelSelect(channel.id)}
+                  className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-all group ${
+                    isActive
+                      ? 'channel-active bg-gradient-to-r from-[#4A6572]/10 to-[#4A6572]/5 dark:from-[#4A6572]/20 dark:to-[#4A6572]/5'
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">{channel.icon}</span>
+                    <span className="truncate flex-1 text-left">{channel.label || channel.name}</span>
+                    {unread > 0 && (
+                      <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[20px] text-center">
+                        {unread > 9 ? '9+' : unread}
+                      </span>
+                    )}
+                  </div>
+                  {lastReadTimes[channel.id] && (
+                    <div className="text-[10px] text-gray-400 pl-9 mt-0.5">
+                      Прочитано: <TimeDisplay date={lastReadTimes[channel.id]} />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
 
         {filteredChannels.length === 0 && (
           <div className="text-center py-8 text-gray-400 text-sm">
@@ -628,6 +752,17 @@ const ChatSidebar = memo(({
       </div>
     </aside>
   );
+
+  if (isMobile) {
+    return (
+      <>
+        {showSidebar && <div className="sidebar-overlay" onClick={onCloseSidebar} />}
+        {sidebarContent}
+      </>
+    );
+  }
+
+  return sidebarContent;
 });
 
 // ============================================================
@@ -648,8 +783,21 @@ const MessageInput = memo(({
   onQuickReply,
   onMicToggle,
   isRecording,
+  attachedFiles,
+  onRemoveFile,
+  mentionSuggestions,
+  onMentionSelect,
+  mentionIndex,
 }) => {
   const [showQuick, setShowQuick] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiCategory, setEmojiCategory] = useState(0);
+
+  const handleEmojiClick = (emoji) => {
+    onChange({ target: { value: value + emoji } });
+    setShowEmojiPicker(false);
+    textareaRef.current?.focus();
+  };
 
   return (
     <div className="flex-shrink-0 p-3 border-t border-gray-200/50 dark:border-gray-700/50 glass-effect">
@@ -672,6 +820,19 @@ const MessageInput = memo(({
         </div>
       )}
 
+      {/* Прикреплённые файлы */}
+      {attachedFiles?.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {attachedFiles.map((file, idx) => (
+            <FilePreview 
+              key={idx} 
+              file={file} 
+              onRemove={() => onRemoveFile?.(idx)}
+            />
+          ))}
+        </div>
+      )}
+
       {showQuick && (
         <div className="mb-2 flex flex-wrap gap-1.5">
           {QUICK_REPLIES.map((reply) => (
@@ -686,12 +847,24 @@ const MessageInput = memo(({
         </div>
       )}
 
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-2 relative">
         <div className="flex items-center gap-1">
           <label className="p-2 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors text-gray-500 hover:text-gray-700 dark:text-gray-400">
             <Paperclip className="w-5 h-5" />
-            <input type="file" onChange={onFileUpload} className="hidden" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" />
+            <input type="file" onChange={onFileUpload} className="hidden" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" multiple />
           </label>
+          
+          <button
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className={`p-2 rounded-xl transition-colors ${
+              showEmojiPicker
+                ? 'bg-[#4A6572]/10 text-[#4A6572]'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-500'
+            }`}
+          >
+            <Smile className="w-5 h-5" />
+          </button>
+          
           <button
             onClick={onMicToggle}
             className={`p-2 rounded-xl transition-colors ${
@@ -702,6 +875,7 @@ const MessageInput = memo(({
           >
             {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </button>
+          
           <button
             onClick={() => setShowQuick(!showQuick)}
             className={`p-2 rounded-xl transition-colors ${
@@ -728,6 +902,57 @@ const MessageInput = memo(({
           {isRecording && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
               <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+            </div>
+          )}
+
+          {/* Подсказки упоминаний */}
+          {mentionSuggestions?.length > 0 && (
+            <div className="absolute bottom-full mb-1 left-0 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50 min-w-[200px]">
+              {mentionSuggestions.map((user, idx) => (
+                <button
+                  key={user.user_id}
+                  onClick={() => onMentionSelect?.(user)}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 ${
+                    idx === mentionIndex ? 'bg-gray-100 dark:bg-gray-700' : ''
+                  }`}
+                >
+                  <Avatar name={user.full_name} size="xs" />
+                  <span>{user.full_name}</span>
+                  <span className="text-xs text-gray-400">({user.role})</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Выбор эмодзи */}
+          {showEmojiPicker && (
+            <div className="absolute bottom-full mb-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-2 z-50 w-64">
+              <div className="flex gap-1 mb-2 overflow-x-auto">
+                {EMOJI_CATEGORIES.map((cat, idx) => (
+                  <button
+                    key={cat.name}
+                    onClick={() => setEmojiCategory(idx)}
+                    className={`px-2 py-0.5 text-xs rounded whitespace-nowrap ${
+                      idx === emojiCategory 
+                        ? 'bg-[#4A6572] text-white' 
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-5 gap-1">
+                {EMOJI_CATEGORIES[emojiCategory]?.emojis.map(emoji => (
+                  <button
+                    key={emoji}
+                    onClick={() => handleEmojiClick(emoji)}
+                    className="p-1.5 text-xl hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -785,11 +1010,23 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   const [showSidebar, setShowSidebar] = useState(true);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
-  const [pinnedMessages, setPinnedMessages] = useState([]); // Храним ID закреплённых сообщений
+  const [pinnedMessages, setPinnedMessages] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [firstUnreadId, setFirstUnreadId] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  
+  // 🔍 НОВЫЕ STATE ДЛЯ ПОИСКА
+  const [searchMessagesQuery, setSearchMessagesQuery] = useState('');
+  const [filteredMessages, setFilteredMessages] = useState([]);
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  
+  // 📎 НОВЫЕ STATE ДЛЯ ФАЙЛОВ
+  const [attachedFiles, setAttachedFiles] = useState([]);
+  
+  // 💬 НОВЫЕ STATE ДЛЯ УПОМИНАНИЙ
+  const [mentionSuggestions, setMentionSuggestions] = useState([]);
+  const [mentionIndex, setMentionIndex] = useState(-1);
 
   // ========== REFS ==========
   const messagesContainerRef = useRef(null);
@@ -809,16 +1046,14 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) setShowSidebar(false);
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  useEffect(() => {
-    if (!isMobile) setShowSidebar(true);
-  }, [isMobile]);
 
   // ============================================================
   // 📡 ПРОВЕРКА СОЕДИНЕНИЯ
@@ -912,6 +1147,81 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
       }
       return <span key={`text-${i}`}>{part}</span>;
     });
+  }, []);
+
+  // ============================================================
+  // 🔍 ПОИСК ПО СООБЩЕНИЯМ
+  // ============================================================
+
+  const handleSearchMessages = useCallback((query) => {
+    setSearchMessagesQuery(query);
+    if (query.trim()) {
+      const filtered = messages.filter(msg => 
+        msg.content?.toLowerCase().includes(query.toLowerCase()) ||
+        msg.user?.user_metadata?.full_name?.toLowerCase().includes(query.toLowerCase())
+      );
+      setFilteredMessages(filtered);
+      setIsSearchMode(true);
+    } else {
+      setIsSearchMode(false);
+      setFilteredMessages([]);
+    }
+  }, [messages]);
+
+  // ============================================================
+  // 💬 УПОМИНАНИЯ
+  // ============================================================
+
+  const handleMention = useCallback((value, cursorPos) => {
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const lastAtSign = textBeforeCursor.lastIndexOf('@');
+    if (lastAtSign !== -1) {
+      const query = textBeforeCursor.slice(lastAtSign + 1);
+      if (query.length >= 1) {
+        const suggestions = companyUsers
+          .filter(u => 
+            u.full_name?.toLowerCase().includes(query.toLowerCase()) ||
+            u.user_id?.toLowerCase().includes(query.toLowerCase())
+          )
+          .slice(0, 5);
+        setMentionSuggestions(suggestions);
+        setMentionIndex(suggestions.length > 0 ? 0 : -1);
+        return;
+      }
+    }
+    setMentionSuggestions([]);
+    setMentionIndex(-1);
+  }, [companyUsers]);
+
+  const handleMentionSelect = useCallback((user) => {
+    const text = newMessage;
+    const cursorPos = textareaRef.current?.selectionStart || text.length;
+    const lastAtSign = text.slice(0, cursorPos).lastIndexOf('@');
+    const textBefore = text.slice(0, lastAtSign);
+    const textAfter = text.slice(cursorPos);
+    const newText = `${textBefore}@${user.full_name} ${textAfter}`;
+    setNewMessage(newText);
+    setMentionSuggestions([]);
+    setMentionIndex(-1);
+    textareaRef.current?.focus();
+  }, [newMessage]);
+
+  // ============================================================
+  // 📎 ЗАГРУЗКА ФАЙЛОВ
+  // ============================================================
+
+  const handleFileUpload = useCallback((e) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = files.filter(f => f.size <= MAX_FILE_SIZE);
+    if (validFiles.length !== files.length) {
+      showNotification?.('Некоторые файлы превышают 10MB', 'warning');
+    }
+    setAttachedFiles(prev => [...prev, ...validFiles]);
+    e.target.value = '';
+  }, [showNotification]);
+
+  const handleRemoveFile = useCallback((index) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
   }, []);
 
   // ============================================================
@@ -1056,150 +1366,146 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   }, [user?.id]);
 
   // ============================================================
-  // 📨 ЗАГРУЗКА СООБЩЕНИЙ (БЕЗ is_pinned)
+  // 📨 ЗАГРУЗКА СООБЩЕНИЙ
   // ============================================================
 
- const loadMessages = useCallback(async () => {
-  if (loadMessagesRef.current) return;
-  loadMessagesRef.current = true;
+  const loadMessages = useCallback(async () => {
+    if (loadMessagesRef.current) return;
+    loadMessagesRef.current = true;
 
-  if (!userCompanyId || !activeChannel) {
-    loadMessagesRef.current = false;
-    return;
-  }
-
-  if (isInitialLoad) {
-    setLoading(true);
-  }
-
-  try {
-    const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
-    const isDirectChat = activeChannel?.startsWith('dm_');
-
-    let query = supabase
-      .from('company_messages')
-      .select('*')
-      .eq('company_id', userCompanyId)
-      .is('deleted_at', null)  // ✅ ПОКАЗЫВАЕМ ТОЛЬКО НЕ УДАЛЁННЫЕ
-      .order('created_at', { ascending: false })
-      .limit(MESSAGES_PER_PAGE);
-
-    if (isSystemChannel) {
-      query = query.eq('channel', activeChannel).eq('channel_type', 'system');
-    } else if (isDirectChat) {
-      query = query.eq('channel_id', activeChannel).eq('channel_type', 'direct');
-    } else {
-      query = query.eq('channel_id', activeChannel).eq('channel_type', 'custom');
+    if (!userCompanyId || !activeChannel) {
+      loadMessagesRef.current = false;
+      return;
     }
 
-    const { data: messagesData, error } = await query;
-    if (error) {
-      console.warn('Ошибка загрузки сообщений:', error);
-      if (error.code === '42P01') {
-        setMessages([]);
-        setLoading(false);
-        loadMessagesRef.current = false;
-        setIsInitialLoad(false);
-        return;
-      }
-      throw error;
+    if (isInitialLoad) {
+      setLoading(true);
     }
 
-    const sortedMessages = messagesData?.reverse() || [];
-    const messageIds = sortedMessages.map(m => m.id);
+    try {
+      const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+      const isDirectChat = activeChannel?.startsWith('dm_');
 
-    // Загружаем реакции
-    let reactionsMap = {};
-    if (messageIds.length > 0) {
-      const { data: reactionsData } = await supabase
-        .from('message_reactions')
-        .select('message_id, emoji, user_id')
-        .in('message_id', messageIds);
-      if (reactionsData) {
-        reactionsMap = reactionsData.reduce((acc, r) => {
-          if (!acc[r.message_id]) acc[r.message_id] = [];
-          acc[r.message_id].push({ emoji: r.emoji, user_id: r.user_id });
-          return acc;
-        }, {});
-      }
-    }
-
-    // Загружаем пользователей
-    const userIds = [...new Set(sortedMessages.map(m => m.user_id).filter(Boolean))];
-    let usersMap = {};
-    if (userIds.length > 0) {
-      const { data: usersData } = await supabase
-        .from('company_users')
-        .select('user_id, full_name, role')
-        .in('user_id', userIds);
-      usersMap = (usersData || []).reduce((acc, u) => {
-        acc[u.user_id] = { full_name: u.full_name, role: u.role };
-        return acc;
-      }, {});
-    }
-
-    // Загружаем ответы (только не удалённые)
-    let replyMap = {};
-    const messagesWithReply = sortedMessages.filter(m => m.reply_to_message_id);
-    if (messagesWithReply.length > 0) {
-      const replyIds = messagesWithReply.map(m => m.reply_to_message_id);
-      const { data: replyMessages } = await supabase
+      let query = supabase
         .from('company_messages')
-        .select('id, content, user_id')
-        .in('id', replyIds)
-        .is('deleted_at', null);  // ✅ Ответы тоже фильтруем
-      if (replyMessages) {
-        const replyUserIds = [...new Set(replyMessages.map(r => r.user_id))];
-        let replyUsersMap = {};
-        if (replyUserIds.length > 0) {
-          const { data: replyUsers } = await supabase
-            .from('company_users')
-            .select('user_id, full_name')
-            .in('user_id', replyUserIds);
-          replyUsersMap = (replyUsers || []).reduce((acc, u) => {
-            acc[u.user_id] = { full_name: u.full_name };
+        .select('*')
+        .eq('company_id', userCompanyId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(MESSAGES_PER_PAGE);
+
+      if (isSystemChannel) {
+        query = query.eq('channel', activeChannel).eq('channel_type', 'system');
+      } else if (isDirectChat) {
+        query = query.eq('channel_id', activeChannel).eq('channel_type', 'direct');
+      } else {
+        query = query.eq('channel_id', activeChannel).eq('channel_type', 'custom');
+      }
+
+      const { data: messagesData, error } = await query;
+      if (error) {
+        console.warn('Ошибка загрузки сообщений:', error);
+        if (error.code === '42P01') {
+          setMessages([]);
+          setLoading(false);
+          loadMessagesRef.current = false;
+          setIsInitialLoad(false);
+          return;
+        }
+        throw error;
+      }
+
+      const sortedMessages = messagesData?.reverse() || [];
+      const messageIds = sortedMessages.map(m => m.id);
+
+      let reactionsMap = {};
+      if (messageIds.length > 0) {
+        const { data: reactionsData } = await supabase
+          .from('message_reactions')
+          .select('message_id, emoji, user_id')
+          .in('message_id', messageIds);
+        if (reactionsData) {
+          reactionsMap = reactionsData.reduce((acc, r) => {
+            if (!acc[r.message_id]) acc[r.message_id] = [];
+            acc[r.message_id].push({ emoji: r.emoji, user_id: r.user_id });
             return acc;
           }, {});
         }
-        replyMessages.forEach(reply => {
-          replyMap[reply.id] = {
-            ...reply,
-            user: { user_metadata: { full_name: replyUsersMap[reply.user_id]?.full_name || 'Пользователь' } }
-          };
-        });
       }
+
+      const userIds = [...new Set(sortedMessages.map(m => m.user_id).filter(Boolean))];
+      let usersMap = {};
+      if (userIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from('company_users')
+          .select('user_id, full_name, role')
+          .in('user_id', userIds);
+        usersMap = (usersData || []).reduce((acc, u) => {
+          acc[u.user_id] = { full_name: u.full_name, role: u.role };
+          return acc;
+        }, {});
+      }
+
+      let replyMap = {};
+      const messagesWithReply = sortedMessages.filter(m => m.reply_to_message_id);
+      if (messagesWithReply.length > 0) {
+        const replyIds = messagesWithReply.map(m => m.reply_to_message_id);
+        const { data: replyMessages } = await supabase
+          .from('company_messages')
+          .select('id, content, user_id')
+          .in('id', replyIds)
+          .is('deleted_at', null);
+        if (replyMessages) {
+          const replyUserIds = [...new Set(replyMessages.map(r => r.user_id))];
+          let replyUsersMap = {};
+          if (replyUserIds.length > 0) {
+            const { data: replyUsers } = await supabase
+              .from('company_users')
+              .select('user_id, full_name')
+              .in('user_id', replyUserIds);
+            replyUsersMap = (replyUsers || []).reduce((acc, u) => {
+              acc[u.user_id] = { full_name: u.full_name };
+              return acc;
+            }, {});
+          }
+          replyMessages.forEach(reply => {
+            replyMap[reply.id] = {
+              ...reply,
+              user: { user_metadata: { full_name: replyUsersMap[reply.user_id]?.full_name || 'Пользователь' } }
+            };
+          });
+        }
+      }
+
+      const enrichedMessages = sortedMessages.map(msg => ({
+        ...msg,
+        user: { user_metadata: usersMap[msg.user_id] || { full_name: 'Пользователь', role: 'user' } },
+        reactions: reactionsMap[msg.id] || [],
+        replied_message: replyMap[msg.reply_to_message_id] || null,
+        is_pinned: pinnedMessages.includes(msg.id),
+      }));
+
+      setMessages(enrichedMessages);
+
+      if (enrichedMessages.length > 0) {
+        const lastRead = lastReadTimes[activeChannel] || new Date(0);
+        const firstUnreadIdx = enrichedMessages.findIndex(m =>
+          new Date(m.created_at) > lastRead && m.user_id !== user?.id
+        );
+        setFirstUnreadId(firstUnreadIdx >= 0 ? enrichedMessages[firstUnreadIdx].id : null);
+      }
+
+      setTimeout(() => forceScrollToBottom('auto'), 150);
+      markChannelAsRead(activeChannel);
+    } catch (err) {
+      console.error('Ошибка загрузки сообщений:', err);
+    } finally {
+      setLoading(false);
+      setIsInitialLoad(false);
+      loadMessagesRef.current = false;
     }
+  }, [userCompanyId, activeChannel, lastReadTimes, user?.id, forceScrollToBottom, markChannelAsRead, isInitialLoad, pinnedMessages]);
 
-    const enrichedMessages = sortedMessages.map(msg => ({
-      ...msg,
-      user: { user_metadata: usersMap[msg.user_id] || { full_name: 'Пользователь', role: 'user' } },
-      reactions: reactionsMap[msg.id] || [],
-      replied_message: replyMap[msg.reply_to_message_id] || null,
-      is_pinned: pinnedMessages.includes(msg.id),
-    }));
-
-    setMessages(enrichedMessages);
-
-    if (enrichedMessages.length > 0) {
-      const lastRead = lastReadTimes[activeChannel] || new Date(0);
-      const firstUnreadIdx = enrichedMessages.findIndex(m =>
-        new Date(m.created_at) > lastRead && m.user_id !== user?.id
-      );
-      setFirstUnreadId(firstUnreadIdx >= 0 ? enrichedMessages[firstUnreadIdx].id : null);
-    }
-
-    setTimeout(() => forceScrollToBottom('auto'), 150);
-    markChannelAsRead(activeChannel);
-  } catch (err) {
-    console.error('Ошибка загрузки сообщений:', err);
-  } finally {
-    setLoading(false);
-    setIsInitialLoad(false);
-    loadMessagesRef.current = false;
-  }
-}, [userCompanyId, activeChannel, lastReadTimes, user?.id, forceScrollToBottom, markChannelAsRead, isInitialLoad, pinnedMessages]);
-
-  // Загружаем сообщения только при смене канала или при монтировании
   useEffect(() => {
     loadMessagesRef.current = false;
     setIsInitialLoad(true);
@@ -1208,98 +1514,93 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   }, [activeChannel]);
 
   // ============================================================
-// 📡 ПОДПИСКА НА НОВЫЕ СООБЩЕНИЯ (С ФИЛЬТРАЦИЕЙ УДАЛЁННЫХ)
-// ============================================================
+  // 📡 ПОДПИСКА НА НОВЫЕ СООБЩЕНИЯ
+  // ============================================================
 
-useEffect(() => {
-  if (!userCompanyId || !activeChannel) return;
-  if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
-
-  const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
-  const filter = isSystemChannel
-    ? `company_id=eq.${userCompanyId} AND channel=eq.${activeChannel} AND channel_type=eq.system`
-    : `channel_id=eq.${activeChannel}`;
-
-  subscriptionRef.current = supabase
-    .channel(`messages:${activeChannel}`)
-    // 🔵 СЛУШАЕМ НОВЫЕ СООБЩЕНИЯ
-    .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'company_messages',
-      filter,
-    }, async (payload) => {
-      const newMsg = payload.new;
-      if (newMsg.deleted_at) return;  // ✅ Игнорируем удалённые
-
-      const msgChannelId = newMsg.channel_id || newMsg.channel;
-      if (activeChannel !== msgChannelId && newMsg.user_id !== user?.id) {
-        setUnreadCounts(prev => ({
-          ...prev,
-          [msgChannelId]: (prev[msgChannelId] || 0) + 1,
-        }));
-      }
-
-      const { data: userData } = await supabase
-        .from('company_users')
-        .select('full_name, role')
-        .eq('user_id', newMsg.user_id)
-        .single();
-
-      const { data: reactionsData } = await supabase
-        .from('message_reactions')
-        .select('emoji, user_id')
-        .eq('message_id', newMsg.id);
-
-      const enrichedMessage = {
-        ...newMsg,
-        user: { user_metadata: userData || { full_name: 'Пользователь', role: 'user' } },
-        reactions: reactionsData || [],
-        replied_message: null,
-        is_pinned: pinnedMessages.includes(newMsg.id),
-      };
-
-      setMessages(prev => [...prev, enrichedMessage]);
-      setTimeout(() => scrollToBottom('smooth'), 50);
-
-      if (shouldAutoScroll && !isUserScrollingRef.current) {
-        markChannelAsRead(activeChannel);
-      }
-    })
-    // 🟢 СЛУШАЕМ ОБНОВЛЕНИЯ (ДЛЯ УДАЛЕНИЯ)
-    .on('postgres_changes', {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'company_messages',
-      filter,
-    }, async (payload) => {
-      const updatedMsg = payload.new;
-      
-      // ✅ Если сообщение было удалено - убираем из UI
-      if (updatedMsg.deleted_at) {
-        setMessages(prev => prev.filter(m => m.id !== updatedMsg.id));
-        // Если было закреплено - открепляем
-        if (pinnedMessages.includes(updatedMsg.id)) {
-          setPinnedMessages(prev => prev.filter(id => id !== updatedMsg.id));
-        }
-        return;
-      }
-      
-      // Обновляем существующее сообщение (редактирование)
-      setMessages(prev => prev.map(m => 
-        m.id === updatedMsg.id ? { 
-          ...m, 
-          content: updatedMsg.content,
-          edited_at: updatedMsg.edited_at
-        } : m
-      ));
-    })
-    .subscribe();
-
-  return () => {
+  useEffect(() => {
+    if (!userCompanyId || !activeChannel) return;
     if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
-  };
-}, [userCompanyId, activeChannel, user?.id, scrollToBottom, markChannelAsRead, shouldAutoScroll, pinnedMessages]);
+
+    const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+    const filter = isSystemChannel
+      ? `company_id=eq.${userCompanyId} AND channel=eq.${activeChannel} AND channel_type=eq.system`
+      : `channel_id=eq.${activeChannel}`;
+
+    subscriptionRef.current = supabase
+      .channel(`messages:${activeChannel}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'company_messages',
+        filter,
+      }, async (payload) => {
+        const newMsg = payload.new;
+        if (newMsg.deleted_at) return;
+
+        const msgChannelId = newMsg.channel_id || newMsg.channel;
+        if (activeChannel !== msgChannelId && newMsg.user_id !== user?.id) {
+          setUnreadCounts(prev => ({
+            ...prev,
+            [msgChannelId]: (prev[msgChannelId] || 0) + 1,
+          }));
+        }
+
+        const { data: userData } = await supabase
+          .from('company_users')
+          .select('full_name, role')
+          .eq('user_id', newMsg.user_id)
+          .single();
+
+        const { data: reactionsData } = await supabase
+          .from('message_reactions')
+          .select('emoji, user_id')
+          .eq('message_id', newMsg.id);
+
+        const enrichedMessage = {
+          ...newMsg,
+          user: { user_metadata: userData || { full_name: 'Пользователь', role: 'user' } },
+          reactions: reactionsData || [],
+          replied_message: null,
+          is_pinned: pinnedMessages.includes(newMsg.id),
+        };
+
+        setMessages(prev => [...prev, enrichedMessage]);
+        setTimeout(() => scrollToBottom('smooth'), 50);
+
+        if (shouldAutoScroll && !isUserScrollingRef.current) {
+          markChannelAsRead(activeChannel);
+        }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'company_messages',
+        filter,
+      }, async (payload) => {
+        const updatedMsg = payload.new;
+        
+        if (updatedMsg.deleted_at) {
+          setMessages(prev => prev.filter(m => m.id !== updatedMsg.id));
+          if (pinnedMessages.includes(updatedMsg.id)) {
+            setPinnedMessages(prev => prev.filter(id => id !== updatedMsg.id));
+          }
+          return;
+        }
+        
+        setMessages(prev => prev.map(m => 
+          m.id === updatedMsg.id ? { 
+            ...m, 
+            content: updatedMsg.content,
+            edited_at: updatedMsg.edited_at
+          } : m
+        ));
+      })
+      .subscribe();
+
+    return () => {
+      if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
+    };
+  }, [userCompanyId, activeChannel, user?.id, scrollToBottom, markChannelAsRead, shouldAutoScroll, pinnedMessages]);
 
   // ============================================================
   // 💾 СОХРАНЁННЫЕ СООБЩЕНИЯ
@@ -1376,38 +1677,35 @@ useEffect(() => {
   }, []);
 
   const deleteMessage = useCallback(async (messageId) => {
-  if (!window.confirm('Удалить сообщение?')) return;
-  
-  try {
-    // Помечаем как удалённое в БД
-    const { error } = await supabase
-      .from('company_messages')
-      .update({ 
-        deleted_at: new Date().toISOString()
-      })
-      .eq('id', messageId)
-      .eq('user_id', user?.id);
+    if (!window.confirm('Удалить сообщение?')) return;
     
-    if (error) {
-      console.error('Ошибка удаления:', error);
-      showNotification?.('Не удалось удалить сообщение: ' + error.message, 'error');
-      return;
+    try {
+      const { error } = await supabase
+        .from('company_messages')
+        .update({ 
+          deleted_at: new Date().toISOString()
+        })
+        .eq('id', messageId)
+        .eq('user_id', user?.id);
+      
+      if (error) {
+        console.error('Ошибка удаления:', error);
+        showNotification?.('Не удалось удалить сообщение: ' + error.message, 'error');
+        return;
+      }
+      
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      
+      if (pinnedMessages.includes(messageId)) {
+        setPinnedMessages(prev => prev.filter(id => id !== messageId));
+      }
+      
+      showNotification?.('Сообщение удалено', 'info');
+    } catch (err) {
+      console.error('Ошибка удаления:', err);
+      showNotification?.('Не удалось удалить сообщение', 'error');
     }
-    
-    // ✅ МГНОВЕННОЕ УДАЛЕНИЕ ИЗ UI
-    setMessages(prev => prev.filter(m => m.id !== messageId));
-    
-    // Если сообщение было закреплено - открепляем
-    if (pinnedMessages.includes(messageId)) {
-      setPinnedMessages(prev => prev.filter(id => id !== messageId));
-    }
-    
-    showNotification?.('Сообщение удалено', 'info');
-  } catch (err) {
-    console.error('Ошибка удаления:', err);
-    showNotification?.('Не удалось удалить сообщение', 'error');
-  }
-}, [user?.id, pinnedMessages, showNotification]);
+  }, [user?.id, pinnedMessages, showNotification]);
 
   const toggleReaction = useCallback(async (messageId, emoji) => {
     if (!user?.id) return;
@@ -1441,7 +1739,6 @@ useEffect(() => {
     }
   }, [user?.id, messages]);
 
-  // ⚠️ УПРОЩЁННАЯ ВЕРСИЯ ПИНА (без is_pinned в БД)
   const handlePinMessage = useCallback(async (messageId) => {
     try {
       const isPinned = pinnedMessages.includes(messageId);
@@ -1456,7 +1753,6 @@ useEffect(() => {
         setPinnedMessages(prev => [...prev, messageId]);
         showNotification?.('Сообщение закреплено (локально)', 'success');
       }
-      // Обновляем сообщения
       setMessages(prev => prev.map(m =>
         m.id === messageId
           ? { ...m, is_pinned: !isPinned }
@@ -1475,31 +1771,6 @@ useEffect(() => {
       showNotification?.('Текст скопирован в буфер обмена', 'success');
     }
   }, [messages, showNotification]);
-
-  // ============================================================
-  // 📎 ЗАГРУЗКА ФАЙЛОВ
-  // ============================================================
-
-  const handleFileUpload = useCallback(async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !userCompanyId) return;
-    if (file.size > MAX_FILE_SIZE) {
-      showNotification?.('Файл слишком большой (макс. 10MB)', 'error');
-      return;
-    }
-    try {
-      const fileName = `${userCompanyId}/${Date.now()}_${file.name.replace(/[^a-z0-9.-]/gi, '_')}`;
-      const { error: uploadError } = await supabase.storage.from('chat-attachments').upload(fileName, file);
-      if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from('chat-attachments').getPublicUrl(fileName);
-      setNewMessage(prev => prev + `\n📎 ${file.name}: ${publicUrl}`);
-      showNotification?.('Файл прикреплён', 'success');
-    } catch (err) {
-      console.error('Ошибка загрузки:', err);
-      showNotification?.('Не удалось загрузить файл', 'error');
-    }
-    e.target.value = '';
-  }, [userCompanyId, showNotification]);
 
   // ============================================================
   // ⌨️ ОТПРАВКА СООБЩЕНИЯ
@@ -1529,6 +1800,12 @@ useEffect(() => {
         content: content,
         created_at: new Date().toISOString(),
         reply_to_message_id: replyTo?.id || null,
+        attachments: attachedFiles.map(f => ({
+          name: f.name,
+          size: f.size,
+          type: f.type,
+          // В реальном приложении здесь должен быть URL загруженного файла
+        }))
       };
 
       if (isSystemChannel) {
@@ -1570,6 +1847,8 @@ useEffect(() => {
           is_pinned: false,
         };
         setMessages(prev => [...prev, newMsg]);
+        // Очищаем прикреплённые файлы после отправки
+        setAttachedFiles([]);
       }
 
       setNewMessage('');
@@ -1581,7 +1860,7 @@ useEffect(() => {
     } finally {
       setSending(false);
     }
-  }, [newMessage, user?.id, userRole, sending, activeChannel, canWriteToChannel, userCompanyId, replyTo, showNotification, forceScrollToBottom]);
+  }, [newMessage, user?.id, userRole, sending, activeChannel, canWriteToChannel, userCompanyId, replyTo, showNotification, forceScrollToBottom, attachedFiles]);
 
   // ============================================================
   // 🖊️ ОБРАБОТКА ТЕКСТОВОГО ПОЛЯ
@@ -1592,6 +1871,10 @@ useEffect(() => {
   setNewMessage(value);
   e.target.style.height = 'auto';
   e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+
+  // Обработка упоминаний
+  const cursorPos = e.target.selectionStart;
+  handleMention(value, cursorPos);
 
   if (value.trim()) {
     const channel = supabase.channel(`typing:${activeChannel}`);
@@ -1609,9 +1892,35 @@ useEffect(() => {
       });
     }, 1000);
   }
-}, [activeChannel, user?.id, user?.user_metadata?.full_name]); // ✅ ДОБАВЛЕНА ЗАВИСИМОСТЬ
+}, [activeChannel, user?.id, user?.user_metadata?.full_name, handleMention]); // ✅ ДОБАВЛЕНЫ ЗАВИСИМОСТИ
 
   const handleKeyDown = useCallback((e) => {
+    // Навигация по подсказкам упоминаний
+    if (mentionSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex(prev => (prev + 1) % mentionSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex(prev => prev <= 0 ? mentionSuggestions.length - 1 : prev - 1);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        if (mentionIndex >= 0 && mentionIndex < mentionSuggestions.length) {
+          e.preventDefault();
+          handleMentionSelect(mentionSuggestions[mentionIndex]);
+          return;
+        }
+      }
+      if (e.key === 'Escape') {
+        setMentionSuggestions([]);
+        setMentionIndex(-1);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (editingMessageId) saveEdit(editingMessageId);
@@ -1621,7 +1930,7 @@ useEffect(() => {
       if (editingMessageId) cancelEdit();
       if (replyTo) setReplyTo(null);
     }
-  }, [editingMessageId, saveEdit, sendMessage, cancelEdit, replyTo]);
+  }, [mentionSuggestions, mentionIndex, handleMentionSelect, editingMessageId, saveEdit, sendMessage, cancelEdit, replyTo]);
 
   const handleQuickReply = useCallback((text) => {
     setNewMessage(text);
@@ -1802,8 +2111,31 @@ useEffect(() => {
     setShouldAutoScroll(true);
     setIsUserScrolling(false);
     isUserScrollingRef.current = false;
+    // Сбрасываем поиск при смене канала
+    setSearchMessagesQuery('');
+    setIsSearchMode(false);
+    setFilteredMessages([]);
     if (isMobile) setShowSidebar(false);
   }, [isMobile]);
+
+  // ============================================================
+  // 📊 ГРУППИРОВКА СООБЩЕНИЙ ПО ДНЯМ
+  // ============================================================
+
+  const groupMessagesByDate = useCallback((msgs) => {
+    const groups = {};
+    msgs.forEach(msg => {
+      const date = new Date(msg.created_at).toDateString();
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(msg);
+    });
+    return groups;
+  }, []);
+
+  const groupedMessages = useMemo(() => {
+    const msgs = isSearchMode ? filteredMessages : messages;
+    return groupMessagesByDate(msgs);
+  }, [messages, filteredMessages, isSearchMode, groupMessagesByDate]);
 
   // ============================================================
   // 🧹 ОЧИСТКА
@@ -1825,7 +2157,7 @@ useEffect(() => {
   // ============================================================
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden chat-container">
       <style>{styles}</style>
 
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
@@ -1838,6 +2170,7 @@ useEffect(() => {
           connectionStatus={connectionStatus}
           isMobile={isMobile}
           showSidebar={showSidebar}
+          onCloseSidebar={() => setShowSidebar(false)}
           currentUserRole={userRole}
           companyUsers={companyUsers}
           currentUser={user}
@@ -1870,7 +2203,7 @@ useEffect(() => {
             <header className="flex-shrink-0 px-4 py-3 border-b border-gray-200/50 dark:border-gray-700/50 glass-effect flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {isMobile && !showSidebar && (
-                  <button onClick={() => setShowSidebar(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                  <button onClick={() => setShowSidebar(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors mobile-header">
                     <Menu className="w-5 h-5" />
                   </button>
                 )}
@@ -1891,9 +2224,26 @@ useEffect(() => {
               </div>
 
               <div className="flex items-center gap-2">
-                <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500 hover:text-gray-700">
-                  <Search className="w-4 h-4" />
-                </button>
+                {/* Поиск по сообщениям */}
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchMessagesQuery}
+                    onChange={(e) => handleSearchMessages(e.target.value)}
+                    placeholder="Поиск в чате..."
+                    className="pl-7 pr-3 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded-lg focus:ring-1 focus:ring-[#4A6572] w-32 sm:w-48 focus:outline-none"
+                  />
+                  {isSearchMode && (
+                    <button 
+                      onClick={() => handleSearchMessages('')}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-600 text-xs"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                
                 <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500 hover:text-gray-700">
                   <Bell className="w-4 h-4" />
                 </button>
@@ -1915,7 +2265,13 @@ useEffect(() => {
                   <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
                   <span className="text-sm text-gray-500">Загрузка сообщений...</span>
                 </div>
-              ) : messages.length === 0 ? (
+              ) : isSearchMode && filteredMessages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                  <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="font-medium text-base">Сообщения не найдены</p>
+                  <p className="text-xs mt-1 opacity-70">Попробуйте изменить запрос</p>
+                </div>
+              ) : messages.length === 0 && !isSearchMode ? (
                 <div className="flex flex-col items-center justify-center h-40 text-gray-400">
                   <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
                     <MessageCircle className="w-8 h-8 opacity-50" />
@@ -1925,7 +2281,7 @@ useEffect(() => {
                 </div>
               ) : (
                 <>
-                  {pinnedMessages.length > 0 && (
+                  {pinnedMessages.length > 0 && !isSearchMode && (
                     <div className="mb-4 p-3 bg-yellow-50/50 dark:bg-yellow-900/10 rounded-xl border border-yellow-200 dark:border-yellow-800/30">
                       <div className="flex items-center gap-2 text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-2">
                         <Pin className="w-3.5 h-3.5" />
@@ -1943,32 +2299,47 @@ useEffect(() => {
                     </div>
                   )}
 
-                  {messages.map((msg) => (
-                    <MessageItem
-                      key={msg.id}
-                      msg={msg}
-                      user={user}
-                      userRole={userRole}
-                      isOwn={msg.user_id === user?.id}
-                      isEditing={editingMessageId === msg.id}
-                      editText={editText}
-                      onStartEdit={startEdit}
-                      onSaveEdit={saveEdit}
-                      onCancelEdit={cancelEdit}
-                      onDelete={deleteMessage}
-                      onToggleReaction={toggleReaction}
-                      onReply={handleReply}
-                      onToggleSave={toggleSaveMessage}
-                      isSaved={savedMessages.has(msg.id)}
-                      formatMessage={formatMessage}
-                      language={language}
-                      textareaRef={textareaRef}
-                      onPinMessage={handlePinMessage}
-                      isPinned={pinnedMessages.includes(msg.id)}
-                      onCopyMessage={handleCopyMessage}
-                      isHighlighted={false}
-                      isFirstUnread={msg.id === firstUnreadId}
-                    />
+                  {Object.entries(groupedMessages).map(([date, msgs]) => (
+                    <React.Fragment key={date}>
+                      <div className="flex items-center gap-3 my-4">
+                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                        <span className="text-xs text-gray-400 font-medium">
+                          {new Date(date).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
+                            weekday: 'long',
+                            day: 'numeric',
+                            month: 'long'
+                          })}
+                        </span>
+                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                      </div>
+                      {msgs.map((msg) => (
+                        <MessageItem
+                          key={msg.id}
+                          msg={msg}
+                          user={user}
+                          userRole={userRole}
+                          isOwn={msg.user_id === user?.id}
+                          isEditing={editingMessageId === msg.id}
+                          editText={editText}
+                          onStartEdit={startEdit}
+                          onSaveEdit={saveEdit}
+                          onCancelEdit={cancelEdit}
+                          onDelete={deleteMessage}
+                          onToggleReaction={toggleReaction}
+                          onReply={handleReply}
+                          onToggleSave={toggleSaveMessage}
+                          isSaved={savedMessages.has(msg.id)}
+                          formatMessage={formatMessage}
+                          language={language}
+                          textareaRef={textareaRef}
+                          onPinMessage={handlePinMessage}
+                          isPinned={pinnedMessages.includes(msg.id)}
+                          onCopyMessage={handleCopyMessage}
+                          isHighlighted={isSearchMode}
+                          isFirstUnread={msg.id === firstUnreadId}
+                        />
+                      ))}
+                    </React.Fragment>
                   ))}
 
                   <div ref={(el) => {
@@ -2020,6 +2391,11 @@ useEffect(() => {
               onQuickReply={handleQuickReply}
               onMicToggle={toggleRecording}
               isRecording={isRecording}
+              attachedFiles={attachedFiles}
+              onRemoveFile={handleRemoveFile}
+              mentionSuggestions={mentionSuggestions}
+              onMentionSelect={handleMentionSelect}
+              mentionIndex={mentionIndex}
             />
           </div>
         )}
