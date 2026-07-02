@@ -552,8 +552,10 @@ const MessageItem = memo(({
   );
 });
 
+// src/components/CompanyChat.jsx - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ
+
 // ============================================================
-// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (МОБИЛЬНАЯ ВЕРСИЯ - КАК WHATSAPP)
+// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (АДАПТИВНАЯ ВЕРСИЯ)
 // ============================================================
 
 const ChatSidebar = memo(({
@@ -601,9 +603,7 @@ const ChatSidebar = memo(({
     return groups;
   }, [filteredChannels]);
 
-  if (!showSidebar) return null;
-
-  // Мобильная версия - полноэкранный сайдбар
+  // Мобильная версия - как в WhatsApp (слайдер)
   if (isMobile) {
     return (
       <>
@@ -613,7 +613,13 @@ const ChatSidebar = memo(({
             onClick={onCloseSidebar} 
           />
         )}
-        <aside className="fixed inset-0 w-full h-full z-50 bg-white dark:bg-gray-800 flex flex-col">
+        <aside className={`
+          fixed top-0 left-0 bottom-0 w-[85%] max-w-[320px] z-50 
+          bg-white dark:bg-gray-800 flex flex-col
+          transition-transform duration-300 ease-out
+          ${showSidebar ? 'translate-x-0' : '-translate-x-full'}
+          shadow-2xl
+        `}>
           {/* Шапка */}
           <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
             <div className="flex items-center gap-3">
@@ -633,7 +639,7 @@ const ChatSidebar = memo(({
                 onClick={onCloseSidebar} 
                 className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors flex-shrink-0"
               >
-                <X className="w-6 h-6 text-gray-500" />
+                <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
 
@@ -665,7 +671,7 @@ const ChatSidebar = memo(({
             )}
           </div>
 
-          {/* Список каналов - занимает всё свободное место */}
+          {/* Список каналов */}
           <div className="flex-1 overflow-y-auto px-2 pb-1 space-y-0.5 scrollbar-thin">
             {Object.entries(groupedChannels).map(([category, chs]) => (
               <div key={category}>
@@ -717,7 +723,7 @@ const ChatSidebar = memo(({
             )}
           </div>
 
-          {/* Пользователи - прижаты к низу, компактно */}
+          {/* Пользователи */}
           <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
             <div className="flex items-center justify-between mb-1.5">
               <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -752,7 +758,7 @@ const ChatSidebar = memo(({
     );
   }
 
-  // Десктопная версия
+  // Десктопная версия - как на вашем скриншоте
   return (
     <aside className="relative w-72 flex-shrink-0 bg-white dark:bg-gray-800 flex flex-col h-full border-r border-gray-200 dark:border-gray-700">
       {/* Шапка */}
