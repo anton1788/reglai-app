@@ -570,7 +570,7 @@ const MessageItem = memo(({
 });
 
 // ============================================================
-// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ
+// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (ИСПРАВЛЕННЫЙ)
 // ============================================================
 
 const ChatSidebar = memo(({
@@ -623,7 +623,13 @@ const ChatSidebar = memo(({
   if (!showSidebar) return null;
 
   const sidebarContent = (
-    <aside className={`${isMobile ? 'channel-sidebar open' : 'w-72'} border-r border-gray-200/50 dark:border-gray-700/50 glass-effect flex flex-col`}>
+    <aside className={`${
+      isMobile 
+        ? 'fixed inset-y-0 left-0 w-[85%] max-w-[320px] z-50 shadow-2xl' 
+        : 'relative w-72'
+    } border-r border-gray-200/50 dark:border-gray-700/50 glass-effect flex flex-col h-full`}>
+      
+      {/* Профиль пользователя */}
       <div className="flex-shrink-0 p-4 border-b border-gray-200/50 dark:border-gray-700/50">
         <div className="flex items-center gap-3">
           <Avatar name={currentUser?.user_metadata?.full_name} size="lg" />
@@ -638,6 +644,14 @@ const ChatSidebar = memo(({
               <span className={`w-1.5 h-1.5 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
             </div>
           </div>
+          {isMobile && (
+            <button 
+              onClick={onCloseSidebar} 
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          )}
           <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
             <Settings className="w-4 h-4 text-gray-500" />
           </button>
@@ -665,6 +679,7 @@ const ChatSidebar = memo(({
         </button>
       </div>
 
+      {/* Каналы */}
       <nav className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
         <div className="flex items-center justify-between px-2 mb-2">
           <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Каналы</span>
@@ -692,7 +707,7 @@ const ChatSidebar = memo(({
                 <button
                   key={channel.id}
                   onClick={() => onChannelSelect(channel.id)}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-all group ${
+                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
                     isActive
                       ? 'channel-active bg-gradient-to-r from-[#4A6572]/10 to-[#4A6572]/5 dark:from-[#4A6572]/20 dark:to-[#4A6572]/5'
                       : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300'
@@ -726,27 +741,30 @@ const ChatSidebar = memo(({
         )}
       </nav>
 
-      <div className="flex-shrink-0 p-3 border-t border-gray-200/50 dark:border-gray-700/50">
+      {/* Пользователи - УВЕЛИЧЕННАЯ ВЕРСИЯ */}
+      <div className="flex-shrink-0 p-3 border-t border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/30">
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             Пользователи ({companyUsers?.length || 0})
           </h4>
           <button className="text-xs text-[#4A6572] hover:underline">Все</button>
         </div>
-        <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto scrollbar-thin">
-          {companyUsers?.slice(0, 8).map((u) => (
+        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto scrollbar-thin">
+          {companyUsers?.slice(0, 12).map((u) => (
             <button
               key={u.user_id}
               onClick={() => onStartDirectChat?.(u)}
-              className="flex items-center gap-1.5 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700/50 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700/50 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors shadow-sm border border-gray-100 dark:border-gray-600"
               title={u.full_name}
             >
               <Avatar name={u.full_name} size="xs" />
-              <span className="truncate max-w-[60px]">{u.full_name}</span>
+              <span className="truncate max-w-[70px] font-medium">{u.full_name}</span>
             </button>
           ))}
-          {(companyUsers?.length || 0) > 8 && (
-            <span className="text-xs text-gray-400 px-2 py-1">+{companyUsers.length - 8}</span>
+          {(companyUsers?.length || 0) > 12 && (
+            <span className="text-xs text-gray-400 px-2 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+              +{companyUsers.length - 12}
+            </span>
           )}
         </div>
       </div>
@@ -756,7 +774,12 @@ const ChatSidebar = memo(({
   if (isMobile) {
     return (
       <>
-        {showSidebar && <div className="sidebar-overlay" onClick={onCloseSidebar} />}
+        {showSidebar && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 animate-in fade-in duration-200"
+            onClick={onCloseSidebar} 
+          />
+        )}
         {sidebarContent}
       </>
     );
