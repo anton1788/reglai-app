@@ -151,24 +151,10 @@ const styles = `
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.5);
-    z-index: 30;
-  }
-  
-  .channel-sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 280px;
     z-index: 40;
-    transform: translateX(-100%);
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  .channel-sidebar.open {
-    transform: translateX(0);
   }
   
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
     .chat-container {
       height: calc(100vh - 80px) !important;
       border-radius: 0 !important;
@@ -179,9 +165,6 @@ const styles = `
     }
     .message-actions {
       opacity: 1 !important;
-    }
-    .mobile-header {
-      display: flex !important;
     }
   }
 `;
@@ -570,7 +553,7 @@ const MessageItem = memo(({
 });
 
 // ============================================================
-// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (ИСПРАВЛЕННЫЙ)
+// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (С ИСПРАВЛЕННЫМИ ПРОПСАМИ)
 // ============================================================
 
 const ChatSidebar = memo(({
@@ -592,7 +575,6 @@ const ChatSidebar = memo(({
   searchQuery,
   onSearchChange,
 }) => {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [filteredChannels, setFilteredChannels] = useState(channels);
 
   useEffect(() => {
@@ -609,7 +591,6 @@ const ChatSidebar = memo(({
     }
   }, [searchQuery, channels]);
 
-  // Группировка каналов по категориям
   const groupedChannels = useMemo(() => {
     const groups = {};
     filteredChannels.forEach(ch => {
@@ -625,12 +606,11 @@ const ChatSidebar = memo(({
   const sidebarContent = (
     <aside className={`${
       isMobile 
-        ? 'fixed inset-y-0 left-0 w-[85%] max-w-[320px] z-50 shadow-2xl' 
-        : 'relative w-72'
-    } border-r border-gray-200/50 dark:border-gray-700/50 glass-effect flex flex-col h-full`}>
+        ? 'fixed inset-y-0 left-0 w-[88%] max-w-[340px] z-50 shadow-2xl' 
+        : 'relative w-72 flex-shrink-0'
+    } bg-white dark:bg-gray-800 flex flex-col h-full border-r border-gray-200 dark:border-gray-700`}>
       
-      {/* Профиль пользователя */}
-      <div className="flex-shrink-0 p-4 border-b border-gray-200/50 dark:border-gray-700/50">
+      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
         <div className="flex items-center gap-3">
           <Avatar name={currentUser?.user_metadata?.full_name} size="lg" />
           <div className="flex-1 min-w-0">
@@ -647,17 +627,15 @@ const ChatSidebar = memo(({
           {isMobile && (
             <button 
               onClick={onCloseSidebar} 
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
             >
               <X className="w-5 h-5 text-gray-500" />
             </button>
           )}
-          <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-            <Settings className="w-4 h-4 text-gray-500" />
-          </button>
         </div>
 
-        <div className={`mt-3 transition-all duration-300 ${isSearchOpen ? 'h-10' : 'h-0 overflow-hidden'}`}>
+        {/* Поиск каналов - всегда виден */}
+        <div className="mt-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
@@ -665,38 +643,27 @@ const ChatSidebar = memo(({
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Поиск каналов..."
-              className="w-full pl-9 pr-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A6572]"
+              className="w-full pl-9 pr-3 py-2 text-sm bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A6572] placeholder:text-gray-400"
             />
           </div>
         </div>
-
-        <button
-          onClick={() => setIsSearchOpen(!isSearchOpen)}
-          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors flex items-center gap-1 mt-1"
-        >
-          <Search className="w-3.5 h-3.5" />
-          {isSearchOpen ? 'Скрыть поиск' : 'Поиск каналов'}
-        </button>
       </div>
 
-      {/* Каналы */}
-      <nav className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
-        <div className="flex items-center justify-between px-2 mb-2">
-          <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Каналы</span>
-          {canCreateChannel && (
-            <button
-              onClick={onCreateChannel}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              title="Создать канал"
-            >
-              <Plus className="w-4 h-4 text-gray-500" />
-            </button>
-          )}
-        </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
+        {/* Кнопка создания канала */}
+        {canCreateChannel && (
+          <button
+            onClick={onCreateChannel}
+            className="w-full px-3 py-2.5 mb-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Создать канал
+          </button>
+        )}
 
         {Object.entries(groupedChannels).map(([category, chs]) => (
           <div key={category}>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1.5">
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-2">
               {category}
             </div>
             {chs.map((channel) => {
@@ -707,10 +674,10 @@ const ChatSidebar = memo(({
                 <button
                   key={channel.id}
                   onClick={() => onChannelSelect(channel.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
+                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                     isActive
-                      ? 'channel-active bg-gradient-to-r from-[#4A6572]/10 to-[#4A6572]/5 dark:from-[#4A6572]/20 dark:to-[#4A6572]/5'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300'
+                      ? 'bg-[#4A6572] text-white shadow-md'
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -723,7 +690,7 @@ const ChatSidebar = memo(({
                     )}
                   </div>
                   {lastReadTimes[channel.id] && (
-                    <div className="text-[10px] text-gray-400 pl-9 mt-0.5">
+                    <div className={`text-[10px] pl-9 mt-0.5 ${isActive ? 'text-white/70' : 'text-gray-400'}`}>
                       Прочитано: <TimeDisplay date={lastReadTimes[channel.id]} />
                     </div>
                   )}
@@ -739,22 +706,21 @@ const ChatSidebar = memo(({
             Каналы не найдены
           </div>
         )}
-      </nav>
+      </div>
 
-      {/* Пользователи - УВЕЛИЧЕННАЯ ВЕРСИЯ */}
-      <div className="flex-shrink-0 p-3 border-t border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/30">
+      <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             Пользователи ({companyUsers?.length || 0})
           </h4>
-          <button className="text-xs text-[#4A6572] hover:underline">Все</button>
+          <button className="text-xs text-[#4A6572] hover:underline font-medium">Все</button>
         </div>
         <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto scrollbar-thin">
           {companyUsers?.slice(0, 12).map((u) => (
             <button
               key={u.user_id}
               onClick={() => onStartDirectChat?.(u)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700/50 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors shadow-sm border border-gray-100 dark:border-gray-600"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors shadow-sm border border-gray-200 dark:border-gray-600"
               title={u.full_name}
             >
               <Avatar name={u.full_name} size="xs" />
@@ -843,7 +809,6 @@ const MessageInput = memo(({
         </div>
       )}
 
-      {/* Прикреплённые файлы */}
       {attachedFiles?.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
           {attachedFiles.map((file, idx) => (
@@ -928,7 +893,6 @@ const MessageInput = memo(({
             </div>
           )}
 
-          {/* Подсказки упоминаний */}
           {mentionSuggestions?.length > 0 && (
             <div className="absolute bottom-full mb-1 left-0 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50 min-w-[200px]">
               {mentionSuggestions.map((user, idx) => (
@@ -947,7 +911,6 @@ const MessageInput = memo(({
             </div>
           )}
 
-          {/* Выбор эмодзи */}
           {showEmojiPicker && (
             <div className="absolute bottom-full mb-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-2 z-50 w-64">
               <div className="flex gap-1 mb-2 overflow-x-auto">
@@ -1039,15 +1002,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   const [firstUnreadId, setFirstUnreadId] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   
-  // 🔍 НОВЫЕ STATE ДЛЯ ПОИСКА
   const [searchMessagesQuery, setSearchMessagesQuery] = useState('');
   const [filteredMessages, setFilteredMessages] = useState([]);
   const [isSearchMode, setIsSearchMode] = useState(false);
   
-  // 📎 НОВЫЕ STATE ДЛЯ ФАЙЛОВ
   const [attachedFiles, setAttachedFiles] = useState([]);
   
-  // 💬 НОВЫЕ STATE ДЛЯ УПОМИНАНИЙ
   const [mentionSuggestions, setMentionSuggestions] = useState([]);
   const [mentionIndex, setMentionIndex] = useState(-1);
 
@@ -1827,7 +1787,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
           name: f.name,
           size: f.size,
           type: f.type,
-          // В реальном приложении здесь должен быть URL загруженного файла
         }))
       };
 
@@ -1870,7 +1829,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
           is_pinned: false,
         };
         setMessages(prev => [...prev, newMsg]);
-        // Очищаем прикреплённые файлы после отправки
         setAttachedFiles([]);
       }
 
@@ -1890,35 +1848,33 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   // ============================================================
 
   const handleTextareaChange = useCallback((e) => {
-  const value = e.target.value;
-  setNewMessage(value);
-  e.target.style.height = 'auto';
-  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+    const value = e.target.value;
+    setNewMessage(value);
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
 
-  // Обработка упоминаний
-  const cursorPos = e.target.selectionStart;
-  handleMention(value, cursorPos);
+    const cursorPos = e.target.selectionStart;
+    handleMention(value, cursorPos);
 
-  if (value.trim()) {
-    const channel = supabase.channel(`typing:${activeChannel}`);
-    channel.send({
-      type: 'broadcast',
-      event: 'typing',
-      payload: { user_id: user?.id, user_name: user?.user_metadata?.full_name || 'Пользователь' }
-    });
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
+    if (value.trim()) {
+      const channel = supabase.channel(`typing:${activeChannel}`);
       channel.send({
         type: 'broadcast',
-        event: 'typing_stop',
-        payload: { user_id: user?.id }
+        event: 'typing',
+        payload: { user_id: user?.id, user_name: user?.user_metadata?.full_name || 'Пользователь' }
       });
-    }, 1000);
-  }
-}, [activeChannel, user?.id, user?.user_metadata?.full_name, handleMention]); // ✅ ДОБАВЛЕНЫ ЗАВИСИМОСТИ
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        channel.send({
+          type: 'broadcast',
+          event: 'typing_stop',
+          payload: { user_id: user?.id }
+        });
+      }, 1000);
+    }
+  }, [activeChannel, user?.id, user?.user_metadata?.full_name, handleMention]);
 
   const handleKeyDown = useCallback((e) => {
-    // Навигация по подсказкам упоминаний
     if (mentionSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -2134,7 +2090,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
     setShouldAutoScroll(true);
     setIsUserScrolling(false);
     isUserScrollingRef.current = false;
-    // Сбрасываем поиск при смене канала
     setSearchMessagesQuery('');
     setIsSearchMode(false);
     setFilteredMessages([]);
@@ -2180,251 +2135,250 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   // ============================================================
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden chat-container">
+    <div className="flex h-[calc(100vh-80px)] bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden chat-container">
       <style>{styles}</style>
 
-      <div className="flex flex-1 min-h-0 overflow-hidden relative">
-        <ChatSidebar
-          channels={allChannels}
-          activeChannel={activeChannel}
-          onChannelSelect={handleChannelSelect}
-          canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
-          onCreateChannel={() => setShowCreateModal(true)}
-          connectionStatus={connectionStatus}
-          isMobile={isMobile}
-          showSidebar={showSidebar}
-          onCloseSidebar={() => setShowSidebar(false)}
-          currentUserRole={userRole}
-          companyUsers={companyUsers}
-          currentUser={user}
-          onStartDirectChat={(targetUser) => {
-            const dmId = `dm_${[user?.id, targetUser.user_id].sort().join('_')}`;
-            const existingDM = customChannels.find(c => c.id === dmId);
-            if (!existingDM) {
-              setCustomChannels(prev => [...prev, {
-                id: dmId,
-                name: targetUser.full_name,
-                label: targetUser.full_name,
-                icon: '💬',
-                type: 'direct',
-                participants: [user?.id, targetUser.user_id],
-                created_by: user?.id,
-                created_at: new Date().toISOString(),
-              }]);
-            }
-            setActiveChannel(dmId);
-            if (isMobile) setShowSidebar(false);
-          }}
-          unreadCounts={unreadCounts}
-          lastReadTimes={lastReadTimes}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-        />
+      <ChatSidebar
+        channels={allChannels}
+        activeChannel={activeChannel}
+        onChannelSelect={handleChannelSelect}
+        canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
+        onCreateChannel={() => setShowCreateModal(true)}
+        connectionStatus={connectionStatus}
+        isMobile={isMobile}
+        showSidebar={showSidebar}
+        onCloseSidebar={() => setShowSidebar(false)}
+        currentUserRole={userRole}
+        companyUsers={companyUsers}
+        currentUser={user}
+        onStartDirectChat={(targetUser) => {
+          const dmId = `dm_${[user?.id, targetUser.user_id].sort().join('_')}`;
+          const existingDM = customChannels.find(c => c.id === dmId);
+          if (!existingDM) {
+            setCustomChannels(prev => [...prev, {
+              id: dmId,
+              name: targetUser.full_name,
+              label: targetUser.full_name,
+              icon: '💬',
+              type: 'direct',
+              participants: [user?.id, targetUser.user_id],
+              created_by: user?.id,
+              created_at: new Date().toISOString(),
+            }]);
+          }
+          setActiveChannel(dmId);
+          if (isMobile) setShowSidebar(false);
+        }}
+        unreadCounts={unreadCounts}
+        lastReadTimes={lastReadTimes}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      />
 
-        {(!isMobile || !showSidebar) && (
-          <div className="flex-1 flex flex-col min-w-0 h-full">
-            <header className="flex-shrink-0 px-4 py-3 border-b border-gray-200/50 dark:border-gray-700/50 glass-effect flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {isMobile && !showSidebar && (
-                  <button onClick={() => setShowSidebar(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors mobile-header">
-                    <Menu className="w-5 h-5" />
-                  </button>
-                )}
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl bg-gray-100 dark:bg-gray-700 w-10 h-10 rounded-full flex items-center justify-center">
-                    {currentChannel?.icon || '💬'}
-                  </span>
-                  <div>
-                    <h2 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
-                      {currentChannel?.label || currentChannel?.name}
-                      {currentChannel?.type === 'direct' && <span className="text-xs font-normal text-gray-400">(личный)</span>}
-                    </h2>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-                      {currentChannel?.description}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Поиск по сообщениям */}
-                <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchMessagesQuery}
-                    onChange={(e) => handleSearchMessages(e.target.value)}
-                    placeholder="Поиск в чате..."
-                    className="pl-7 pr-3 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded-lg focus:ring-1 focus:ring-[#4A6572] w-32 sm:w-48 focus:outline-none"
-                  />
-                  {isSearchMode && (
-                    <button 
-                      onClick={() => handleSearchMessages('')}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-600 text-xs"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                
-                <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500 hover:text-gray-700">
-                  <Bell className="w-4 h-4" />
-                </button>
-                <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
-                  <MessageCircle className="w-3.5 h-3.5" />
-                  <span>{messages.length}</span>
-                </div>
-              </div>
-            </header>
-
-            <div
-              ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin"
-              onScroll={handleScroll}
-              style={{ WebkitOverflowScrolling: 'touch' }}
-            >
-              {isInitialLoad && loading ? (
-                <div className="flex flex-col items-center justify-center h-40 gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
-                  <span className="text-sm text-gray-500">Загрузка сообщений...</span>
-                </div>
-              ) : isSearchMode && filteredMessages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-                  <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p className="font-medium text-base">Сообщения не найдены</p>
-                  <p className="text-xs mt-1 opacity-70">Попробуйте изменить запрос</p>
-                </div>
-              ) : messages.length === 0 && !isSearchMode ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
-                    <MessageCircle className="w-8 h-8 opacity-50" />
-                  </div>
-                  <p className="font-medium text-base sm:text-lg">Нет сообщений</p>
-                  <p className="text-xs sm:text-sm mt-1 opacity-70">Начните обсуждение!</p>
-                </div>
-              ) : (
-                <>
-                  {pinnedMessages.length > 0 && !isSearchMode && (
-                    <div className="mb-4 p-3 bg-yellow-50/50 dark:bg-yellow-900/10 rounded-xl border border-yellow-200 dark:border-yellow-800/30">
-                      <div className="flex items-center gap-2 text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-2">
-                        <Pin className="w-3.5 h-3.5" />
-                        Закреплённые сообщения ({pinnedMessages.length})
-                      </div>
-                      {pinnedMessages.slice(0, 3).map(pinId => {
-                        const msg = messages.find(m => m.id === pinId);
-                        if (!msg) return null;
-                        return (
-                          <div key={pinId} className="text-xs text-gray-600 dark:text-gray-400 truncate py-0.5">
-                            <span className="font-medium">{msg.user?.user_metadata?.full_name}:</span> {msg.content?.slice(0, 60)}...
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {Object.entries(groupedMessages).map(([date, msgs]) => (
-                    <React.Fragment key={date}>
-                      <div className="flex items-center gap-3 my-4">
-                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                        <span className="text-xs text-gray-400 font-medium">
-                          {new Date(date).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
-                            weekday: 'long',
-                            day: 'numeric',
-                            month: 'long'
-                          })}
-                        </span>
-                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                      </div>
-                      {msgs.map((msg) => (
-                        <MessageItem
-                          key={msg.id}
-                          msg={msg}
-                          user={user}
-                          userRole={userRole}
-                          isOwn={msg.user_id === user?.id}
-                          isEditing={editingMessageId === msg.id}
-                          editText={editText}
-                          onStartEdit={startEdit}
-                          onSaveEdit={saveEdit}
-                          onCancelEdit={cancelEdit}
-                          onDelete={deleteMessage}
-                          onToggleReaction={toggleReaction}
-                          onReply={handleReply}
-                          onToggleSave={toggleSaveMessage}
-                          isSaved={savedMessages.has(msg.id)}
-                          formatMessage={formatMessage}
-                          language={language}
-                          textareaRef={textareaRef}
-                          onPinMessage={handlePinMessage}
-                          isPinned={pinnedMessages.includes(msg.id)}
-                          onCopyMessage={handleCopyMessage}
-                          isHighlighted={isSearchMode}
-                          isFirstUnread={msg.id === firstUnreadId}
-                        />
-                      ))}
-                    </React.Fragment>
-                  ))}
-
-                  <div ref={(el) => {
-                    if (el && shouldAutoScroll && !isUserScrolling) {
-                      el.scrollIntoView({ behavior: 'auto', block: 'end' });
-                    }
-                  }} />
-                </>
-              )}
-            </div>
-
-            {typingUsers.size > 0 && !isUserScrolling && (
-              <div className="flex-shrink-0 px-4 py-1">
-                <div className="flex items-center gap-2">
-                  <div className="typing-indicator">
-                    <span></span><span></span><span></span>
-                  </div>
-                  <span className="text-xs text-gray-500 animate-pulse">
-                    {Array.from(typingUsers).map(id => {
-                      const userData = companyUsers.find(u => u.user_id === id);
-                      return userData?.full_name?.split(' ')[0];
-                    }).join(', ')} печатает...
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {isUserScrolling && !shouldAutoScroll && messages.length > 10 && (
-              <button
-                onClick={() => forceScrollToBottom('smooth')}
-                className="absolute bottom-28 right-4 bg-[#4A6572] text-white rounded-full p-2.5 shadow-lg hover:bg-[#344955] transition-all z-10"
-                style={{ bottom: '110px' }}
+      <div className="flex-1 flex flex-col min-w-0 bg-gray-50 dark:bg-gray-900/20">
+        <header className="flex-shrink-0 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {isMobile && !showSidebar && (
+              <button 
+                onClick={() => setShowSidebar(true)} 
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
-                <ChevronDown className="w-5 h-5" />
+                <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
               </button>
             )}
+            <div className="flex items-center gap-3">
+              <span className="text-2xl bg-gray-100 dark:bg-gray-700 w-10 h-10 rounded-full flex items-center justify-center">
+                {currentChannel?.icon || '💬'}
+              </span>
+              <div>
+                <h2 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
+                  {currentChannel?.label || currentChannel?.name}
+                  {currentChannel?.type === 'direct' && (
+                    <span className="text-xs font-normal text-gray-400">(личный)</span>
+                  )}
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+                  {currentChannel?.description}
+                </p>
+              </div>
+            </div>
+          </div>
 
-            <MessageInput
-              value={newMessage}
-              onChange={handleTextareaChange}
-              onSend={sendMessage}
-              onKeyDown={handleKeyDown}
-              onFileUpload={handleFileUpload}
-              replyTo={replyTo}
-              onCancelReply={() => setReplyTo(null)}
-              isSending={sending}
-              placeholder={replyTo ? `Ответ ${replyTo.user?.user_metadata?.full_name}...` : 'Введите сообщение...'}
-              textareaRef={textareaRef}
-              onQuickReply={handleQuickReply}
-              onMicToggle={toggleRecording}
-              isRecording={isRecording}
-              attachedFiles={attachedFiles}
-              onRemoveFile={handleRemoveFile}
-              mentionSuggestions={mentionSuggestions}
-              onMentionSelect={handleMentionSelect}
-              mentionIndex={mentionIndex}
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative hidden sm:block">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input
+                type="text"
+                value={searchMessagesQuery}
+                onChange={(e) => handleSearchMessages(e.target.value)}
+                placeholder="Поиск..."
+                className="pl-7 pr-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 rounded-lg focus:ring-1 focus:ring-[#4A6572] w-32 sm:w-40 focus:outline-none"
+              />
+              {isSearchMode && (
+                <button 
+                  onClick={() => handleSearchMessages('')}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-600 text-xs"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            
+            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500">
+              <Bell className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded-full">
+              <MessageCircle className="w-3.5 h-3.5" />
+              <span>{messages.length}</span>
+            </div>
+          </div>
+        </header>
+
+        <div
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin"
+          onScroll={handleScroll}
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          {isInitialLoad && loading ? (
+            <div className="flex flex-col items-center justify-center h-40 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
+              <span className="text-sm text-gray-500">Загрузка сообщений...</span>
+            </div>
+          ) : isSearchMode && filteredMessages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+              <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p className="font-medium text-base">Сообщения не найдены</p>
+              <p className="text-xs mt-1 opacity-70">Попробуйте изменить запрос</p>
+            </div>
+          ) : messages.length === 0 && !isSearchMode ? (
+            <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+              <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                <MessageCircle className="w-8 h-8 opacity-50" />
+              </div>
+              <p className="font-medium text-base sm:text-lg">Нет сообщений</p>
+              <p className="text-xs sm:text-sm mt-1 opacity-70">Начните обсуждение!</p>
+            </div>
+          ) : (
+            <>
+              {pinnedMessages.length > 0 && !isSearchMode && (
+                <div className="mb-4 p-3 bg-yellow-50/50 dark:bg-yellow-900/10 rounded-xl border border-yellow-200 dark:border-yellow-800/30">
+                  <div className="flex items-center gap-2 text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-2">
+                    <Pin className="w-3.5 h-3.5" />
+                    Закреплённые сообщения ({pinnedMessages.length})
+                  </div>
+                  {pinnedMessages.slice(0, 3).map(pinId => {
+                    const msg = messages.find(m => m.id === pinId);
+                    if (!msg) return null;
+                    return (
+                      <div key={pinId} className="text-xs text-gray-600 dark:text-gray-400 truncate py-0.5">
+                        <span className="font-medium">{msg.user?.user_metadata?.full_name}:</span> {msg.content?.slice(0, 60)}...
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {Object.entries(groupedMessages).map(([date, msgs]) => (
+                <React.Fragment key={date}>
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                    <span className="text-xs text-gray-400 font-medium">
+                      {new Date(date).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long'
+                      })}
+                    </span>
+                    <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                  </div>
+                  {msgs.map((msg) => (
+                    <MessageItem
+                      key={msg.id}
+                      msg={msg}
+                      user={user}
+                      userRole={userRole}
+                      isOwn={msg.user_id === user?.id}
+                      isEditing={editingMessageId === msg.id}
+                      editText={editText}
+                      onStartEdit={startEdit}
+                      onSaveEdit={saveEdit}
+                      onCancelEdit={cancelEdit}
+                      onDelete={deleteMessage}
+                      onToggleReaction={toggleReaction}
+                      onReply={handleReply}
+                      onToggleSave={toggleSaveMessage}
+                      isSaved={savedMessages.has(msg.id)}
+                      formatMessage={formatMessage}
+                      language={language}
+                      textareaRef={textareaRef}
+                      onPinMessage={handlePinMessage}
+                      isPinned={pinnedMessages.includes(msg.id)}
+                      onCopyMessage={handleCopyMessage}
+                      isHighlighted={isSearchMode}
+                      isFirstUnread={msg.id === firstUnreadId}
+                    />
+                  ))}
+                </React.Fragment>
+              ))}
+
+              <div ref={(el) => {
+                if (el && shouldAutoScroll && !isUserScrolling) {
+                  el.scrollIntoView({ behavior: 'auto', block: 'end' });
+                }
+              }} />
+            </>
+          )}
+        </div>
+
+        {typingUsers.size > 0 && !isUserScrolling && (
+          <div className="flex-shrink-0 px-4 py-1">
+            <div className="flex items-center gap-2">
+              <div className="typing-indicator">
+                <span></span><span></span><span></span>
+              </div>
+              <span className="text-xs text-gray-500 animate-pulse">
+                {Array.from(typingUsers).map(id => {
+                  const userData = companyUsers.find(u => u.user_id === id);
+                  return userData?.full_name?.split(' ')[0];
+                }).join(', ')} печатает...
+              </span>
+            </div>
           </div>
         )}
+
+        {isUserScrolling && !shouldAutoScroll && messages.length > 10 && (
+          <button
+            onClick={() => forceScrollToBottom('smooth')}
+            className="absolute bottom-28 right-4 bg-[#4A6572] text-white rounded-full p-2.5 shadow-lg hover:bg-[#344955] transition-all z-10"
+            style={{ bottom: '110px' }}
+          >
+            <ChevronDown className="w-5 h-5" />
+          </button>
+        )}
+
+        <MessageInput
+          value={newMessage}
+          onChange={handleTextareaChange}
+          onSend={sendMessage}
+          onKeyDown={handleKeyDown}
+          onFileUpload={handleFileUpload}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          isSending={sending}
+          placeholder={replyTo ? `Ответ ${replyTo.user?.user_metadata?.full_name}...` : 'Введите сообщение...'}
+          textareaRef={textareaRef}
+          onQuickReply={handleQuickReply}
+          onMicToggle={toggleRecording}
+          isRecording={isRecording}
+          attachedFiles={attachedFiles}
+          onRemoveFile={handleRemoveFile}
+          mentionSuggestions={mentionSuggestions}
+          onMentionSelect={handleMentionSelect}
+          mentionIndex={mentionIndex}
+        />
       </div>
 
-      {/* Модалка создания канала */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
@@ -2470,7 +2424,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
         </div>
       )}
 
-      {/* Модалка настроек канала */}
       {showChannelSettings && selectedChannel && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto shadow-2xl">
