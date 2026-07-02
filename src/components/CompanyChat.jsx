@@ -1031,11 +1031,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   }, [user?.id]);
 
   // ============================================================
-  // 📨 ЗАГРУЗКА СООБЩЕНИЙ (исправлена - без бесконечного цикла)
+  // 📨 ЗАГРУЗКА СООБЩЕНИЙ
   // ============================================================
 
   const loadMessages = useCallback(async () => {
-    // Предотвращаем повторные вызовы
     if (loadMessagesRef.current) return;
     loadMessagesRef.current = true;
 
@@ -1044,7 +1043,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
       return;
     }
 
-    // Показываем загрузку только при первом запуске
     if (isInitialLoad) {
       setLoading(true);
     }
@@ -1170,7 +1168,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
 
   // Загружаем сообщения только при смене канала или при монтировании
   useEffect(() => {
-    // Сбрасываем флаг загрузки при смене канала
     loadMessagesRef.current = false;
     setIsInitialLoad(true);
     loadMessages();
@@ -1425,7 +1422,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   }, [userCompanyId, showNotification]);
 
   // ============================================================
-  // ⌨️ ОТПРАВКА СООБЩЕНИЯ
+  // ⌨️ ОТПРАВКА СООБЩЕНИЯ (ИСПРАВЛЕНА)
   // ============================================================
 
   const sendMessage = useCallback(async () => {
@@ -1444,36 +1441,73 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
     setSending(true);
     try {
       const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+      const isDirectChat = activeChannel?.startsWith('dm_');
+
+      // Формируем данные для отправки
       const messageData = {
         company_id: safeCompanyId,
         user_id: user.id,
-        content,
+        content: content,
         created_at: new Date().toISOString(),
         reply_to_message_id: replyTo?.id || null,
       };
 
+      // Определяем тип канала
       if (isSystemChannel) {
         messageData.channel = activeChannel;
         messageData.channel_type = 'system';
+        messageData.channel_id = null;
+      } else if (isDirectChat) {
+        messageData.channel_id = activeChannel;
+        messageData.channel_type = 'direct';
+        messageData.channel = null;
       } else {
         messageData.channel_id = activeChannel;
         messageData.channel_type = 'custom';
         messageData.channel = null;
       }
 
-      const { error } = await supabase.from('company_messages').insert([messageData]);
-      if (error) throw error;
+      console.log('📤 Отправка сообщения:', messageData);
+
+      const { data, error } = await supabase
+        .from('company_messages')
+        .insert([messageData])
+        .select();
+
+      if (error) {
+        console.error('❌ Ошибка отправки:', error);
+        showNotification?.('Ошибка отправки: ' + error.message, 'error');
+        return;
+      }
+
+      console.log('✅ Сообщение отправлено:', data);
+
+      // Оптимистическое обновление
+      if (data && data[0]) {
+        const newMsg = {
+          ...data[0],
+          user: { 
+            user_metadata: { 
+              full_name: user?.user_metadata?.full_name || 'Пользователь',
+              role: userRole
+            } 
+          },
+          reactions: [],
+          replied_message: null,
+        };
+        setMessages(prev => [...prev, newMsg]);
+      }
 
       setNewMessage('');
       setReplyTo(null);
       forceScrollToBottom('smooth');
     } catch (err) {
-      console.error('Ошибка отправки:', err);
-      showNotification?.('Не удалось отправить сообщение', 'error');
+      console.error('❌ Критическая ошибка отправки:', err);
+      showNotification?.('Не удалось отправить сообщение: ' + (err.message || 'неизвестная ошибка'), 'error');
     } finally {
       setSending(false);
     }
-  }, [newMessage, user?.id, sending, activeChannel, canWriteToChannel, userCompanyId, replyTo, showNotification, forceScrollToBottom]);
+  }, [newMessage, user?.id, userRole, sending, activeChannel, canWriteToChannel, userCompanyId, replyTo, showNotification, forceScrollToBottom]);
 
   // ============================================================
   // 🖊️ ОБРАБОТКА ТЕКСТОВОГО ПОЛЯ
