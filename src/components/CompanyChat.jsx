@@ -553,7 +553,7 @@ const MessageItem = memo(({
 });
 
 // ============================================================
-// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (ИСПРАВЛЕННАЯ МОБИЛЬНАЯ ВЕРСИЯ)
+// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (ПОЛНОСТЬЮ ИСПРАВЛЕННЫЙ)
 // ============================================================
 
 const ChatSidebar = memo(({
@@ -604,13 +604,14 @@ const ChatSidebar = memo(({
   if (!showSidebar) return null;
 
   const sidebarContent = (
-    <aside className={`${
-      isMobile 
-        ? 'fixed inset-0 w-full z-50' 
-        : 'relative w-72 flex-shrink-0'
-    } bg-white dark:bg-gray-800 flex flex-col h-full`}>
+    <aside className={`
+      ${isMobile 
+        ? 'fixed inset-0 w-full h-full z-50 bg-white dark:bg-gray-800' 
+        : 'relative w-72 flex-shrink-0 bg-white dark:bg-gray-800'
+      } flex flex-col h-full border-r border-gray-200 dark:border-gray-700
+    `}>
       
-      {/* Шапка с профилем и кнопкой закрытия */}
+      {/* Шапка с профилем */}
       <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
         <div className="flex items-center gap-3">
           <Avatar name={currentUser?.user_metadata?.full_name} size="lg" />
@@ -628,7 +629,7 @@ const ChatSidebar = memo(({
           {isMobile && (
             <button 
               onClick={onCloseSidebar} 
-              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors flex-shrink-0"
             >
               <X className="w-6 h-6 text-gray-500" />
             </button>
@@ -650,19 +651,21 @@ const ChatSidebar = memo(({
         </div>
       </div>
 
-      {/* Список каналов */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
-        {/* Кнопка создания канала */}
+      {/* Кнопка создания канала */}
+      <div className="flex-shrink-0 p-2">
         {canCreateChannel && (
           <button
             onClick={onCreateChannel}
-            className="w-full px-3 py-2.5 mb-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"
+            className="w-full px-3 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"
           >
             <Plus className="w-4 h-4" />
             Создать канал
           </button>
         )}
+      </div>
 
+      {/* Список каналов */}
+      <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1 scrollbar-thin">
         {Object.entries(groupedChannels).map(([category, chs]) => (
           <div key={category}>
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-2">
@@ -675,7 +678,10 @@ const ChatSidebar = memo(({
               return (
                 <button
                   key={channel.id}
-                  onClick={() => onChannelSelect(channel.id)}
+                  onClick={() => {
+                    onChannelSelect(channel.id);
+                    if (isMobile) onCloseSidebar();
+                  }}
                   className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                     isActive
                       ? 'bg-[#4A6572] text-white shadow-md'
@@ -722,7 +728,10 @@ const ChatSidebar = memo(({
           {companyUsers?.slice(0, 12).map((u) => (
             <button
               key={u.user_id}
-              onClick={() => onStartDirectChat?.(u)}
+              onClick={() => {
+                onStartDirectChat?.(u);
+                if (isMobile) onCloseSidebar();
+              }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-white dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors shadow-sm border border-gray-200 dark:border-gray-600"
               title={u.full_name}
             >
