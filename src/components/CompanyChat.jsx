@@ -553,7 +553,7 @@ const MessageItem = memo(({
 });
 
 // ============================================================
-// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (С ИСПРАВЛЕННЫМИ ПРОПСАМИ)
+// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (ИСПРАВЛЕННАЯ МОБИЛЬНАЯ ВЕРСИЯ)
 // ============================================================
 
 const ChatSidebar = memo(({
@@ -606,10 +606,11 @@ const ChatSidebar = memo(({
   const sidebarContent = (
     <aside className={`${
       isMobile 
-        ? 'fixed inset-y-0 left-0 w-[88%] max-w-[340px] z-50 shadow-2xl' 
+        ? 'fixed inset-0 w-full z-50' 
         : 'relative w-72 flex-shrink-0'
-    } bg-white dark:bg-gray-800 flex flex-col h-full border-r border-gray-200 dark:border-gray-700`}>
+    } bg-white dark:bg-gray-800 flex flex-col h-full`}>
       
+      {/* Шапка с профилем и кнопкой закрытия */}
       <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
         <div className="flex items-center gap-3">
           <Avatar name={currentUser?.user_metadata?.full_name} size="lg" />
@@ -629,12 +630,12 @@ const ChatSidebar = memo(({
               onClick={onCloseSidebar} 
               className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
             >
-              <X className="w-5 h-5 text-gray-500" />
+              <X className="w-6 h-6 text-gray-500" />
             </button>
           )}
         </div>
 
-        {/* Поиск каналов - всегда виден */}
+        {/* Поиск каналов */}
         <div className="mt-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -649,6 +650,7 @@ const ChatSidebar = memo(({
         </div>
       </div>
 
+      {/* Список каналов */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
         {/* Кнопка создания канала */}
         {canCreateChannel && (
@@ -708,6 +710,7 @@ const ChatSidebar = memo(({
         )}
       </div>
 
+      {/* Пользователи */}
       <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
