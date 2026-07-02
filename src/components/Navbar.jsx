@@ -432,9 +432,9 @@ const Navbar = ({
     );
   };
 
-  return (
+    return (
     <>
-      <nav className="bg-white dark:bg-gray-900 shadow-lg sticky top-0 z-50 w-full">
+      <nav className="hidden md:flex bg-white dark:bg-gray-900 shadow-lg sticky top-0 z-50 w-full">
         <div className="w-full px-2 sm:px-4">
           <div className="flex justify-between items-center h-14 sm:h-16">
             
