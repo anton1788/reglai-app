@@ -759,7 +759,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   const [showSidebar, setShowSidebar] = useState(true);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
-  const [pinnedMessages, setPinnedMessages] = useState([]);
+  const [pinnedMessages, setPinnedMessages] = useState([]); // Храним ID закреплённых сообщений
   const [searchQuery, setSearchQuery] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [firstUnreadId, setFirstUnreadId] = useState(null);
@@ -998,7 +998,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
     }
   }, [user?.id, userCompanyId, allChannels]);
 
-  // ✅ Загружаем непрочитанные после загрузки каналов
   useEffect(() => {
     if (customChannels.length > 0 || allChannels.length > 0) {
       loadUnreadCounts();
@@ -1031,7 +1030,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   }, [user?.id]);
 
   // ============================================================
-  // 📨 ЗАГРУЗКА СООБЩЕНИЙ
+  // 📨 ЗАГРУЗКА СООБЩЕНИЙ (БЕЗ is_pinned)
   // ============================================================
 
   const loadMessages = useCallback(async () => {
@@ -1068,7 +1067,18 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
       }
 
       const { data: messagesData, error } = await query;
-      if (error) throw error;
+      if (error) {
+        console.warn('Ошибка загрузки сообщений:', error);
+        // Если таблица не существует, просто показываем пустой список
+        if (error.code === '42P01') {
+          setMessages([]);
+          setLoading(false);
+          loadMessagesRef.current = false;
+          setIsInitialLoad(false);
+          return;
+        }
+        throw error;
+      }
 
       const sortedMessages = messagesData?.reverse() || [];
       const messageIds = sortedMessages.map(m => m.id);
@@ -1131,18 +1141,16 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
         }
       }
 
-      const { data: pinnedData } = await supabase
-        .from('company_messages')
-        .select('id')
-        .eq('company_id', userCompanyId)
-        .eq('is_pinned', true);
-      if (pinnedData) setPinnedMessages(pinnedData.map(p => p.id));
+      // ⚠️ УБИРАЕМ ЗАПРОС К is_pinned - он не существует
+      // Вместо этого используем локальное состояние pinnedMessages
+      // Если в будущем добавите колонку is_pinned, можно будет раскомментировать
 
       const enrichedMessages = sortedMessages.map(msg => ({
         ...msg,
         user: { user_metadata: usersMap[msg.user_id] || { full_name: 'Пользователь', role: 'user' } },
         reactions: reactionsMap[msg.id] || [],
         replied_message: replyMap[msg.reply_to_message_id] || null,
+        is_pinned: pinnedMessages.includes(msg.id), // Используем локальное состояние
       }));
 
       setMessages(enrichedMessages);
@@ -1164,7 +1172,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
       setIsInitialLoad(false);
       loadMessagesRef.current = false;
     }
-  }, [userCompanyId, activeChannel, lastReadTimes, user?.id, forceScrollToBottom, markChannelAsRead, isInitialLoad]);
+  }, [userCompanyId, activeChannel, lastReadTimes, user?.id, forceScrollToBottom, markChannelAsRead, isInitialLoad, pinnedMessages]);
 
   // Загружаем сообщения только при смене канала или при монтировании
   useEffect(() => {
@@ -1222,6 +1230,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
           user: { user_metadata: userData || { full_name: 'Пользователь', role: 'user' } },
           reactions: reactionsData || [],
           replied_message: null,
+          is_pinned: pinnedMessages.includes(newMsg.id),
         };
 
         setMessages(prev => [...prev, enrichedMessage]);
@@ -1236,7 +1245,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
     return () => {
       if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
     };
-  }, [userCompanyId, activeChannel, user?.id, scrollToBottom, markChannelAsRead, shouldAutoScroll]);
+  }, [userCompanyId, activeChannel, user?.id, scrollToBottom, markChannelAsRead, shouldAutoScroll, pinnedMessages]);
 
   // ============================================================
   // 💾 СОХРАНЁННЫЕ СООБЩЕНИЯ
@@ -1360,15 +1369,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
     }
   }, [user?.id, messages]);
 
+  // ⚠️ УПРОЩЁННАЯ ВЕРСИЯ ПИНА (без is_pinned в БД)
   const handlePinMessage = useCallback(async (messageId) => {
     try {
       const isPinned = pinnedMessages.includes(messageId);
       if (isPinned) {
         setPinnedMessages(prev => prev.filter(id => id !== messageId));
-        await supabase
-          .from('company_messages')
-          .update({ is_pinned: false, pinned_at: null })
-          .eq('id', messageId);
         showNotification?.('Сообщение откреплено', 'info');
       } else {
         if (pinnedMessages.length >= MAX_PINNED) {
@@ -1376,12 +1382,14 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
           return;
         }
         setPinnedMessages(prev => [...prev, messageId]);
-        await supabase
-          .from('company_messages')
-          .update({ is_pinned: true, pinned_at: new Date().toISOString() })
-          .eq('id', messageId);
-        showNotification?.('Сообщение закреплено', 'success');
+        showNotification?.('Сообщение закреплено (локально)', 'success');
       }
+      // Обновляем сообщения
+      setMessages(prev => prev.map(m =>
+        m.id === messageId
+          ? { ...m, is_pinned: !isPinned }
+          : m
+      ));
     } catch (err) {
       console.error('Ошибка при закреплении:', err);
       showNotification?.('Не удалось закрепить сообщение', 'error');
@@ -1422,7 +1430,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   }, [userCompanyId, showNotification]);
 
   // ============================================================
-  // ⌨️ ОТПРАВКА СООБЩЕНИЯ (ИСПРАВЛЕНА)
+  // ⌨️ ОТПРАВКА СООБЩЕНИЯ
   // ============================================================
 
   const sendMessage = useCallback(async () => {
@@ -1443,7 +1451,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
       const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
       const isDirectChat = activeChannel?.startsWith('dm_');
 
-      // Формируем данные для отправки
       const messageData = {
         company_id: safeCompanyId,
         user_id: user.id,
@@ -1452,7 +1459,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
         reply_to_message_id: replyTo?.id || null,
       };
 
-      // Определяем тип канала
       if (isSystemChannel) {
         messageData.channel = activeChannel;
         messageData.channel_type = 'system';
@@ -1467,22 +1473,17 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
         messageData.channel = null;
       }
 
-      console.log('📤 Отправка сообщения:', messageData);
-
       const { data, error } = await supabase
         .from('company_messages')
         .insert([messageData])
         .select();
 
       if (error) {
-        console.error('❌ Ошибка отправки:', error);
+        console.error('Ошибка отправки:', error);
         showNotification?.('Ошибка отправки: ' + error.message, 'error');
         return;
       }
 
-      console.log('✅ Сообщение отправлено:', data);
-
-      // Оптимистическое обновление
       if (data && data[0]) {
         const newMsg = {
           ...data[0],
@@ -1494,6 +1495,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
           },
           reactions: [],
           replied_message: null,
+          is_pinned: false,
         };
         setMessages(prev => [...prev, newMsg]);
       }
@@ -1502,7 +1504,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
       setReplyTo(null);
       forceScrollToBottom('smooth');
     } catch (err) {
-      console.error('❌ Критическая ошибка отправки:', err);
+      console.error('Критическая ошибка отправки:', err);
       showNotification?.('Не удалось отправить сообщение: ' + (err.message || 'неизвестная ошибка'), 'error');
     } finally {
       setSending(false);
