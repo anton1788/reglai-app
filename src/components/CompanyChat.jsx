@@ -552,10 +552,8 @@ const MessageItem = memo(({
   );
 });
 
-// src/components/CompanyChat.jsx - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ
-
 // ============================================================
-// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (АДАПТИВНАЯ ВЕРСИЯ)
+// 📋 КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (ПОЛНОСТЬЮ ИСПРАВЛЕННЫЙ)
 // ============================================================
 
 const ChatSidebar = memo(({
@@ -603,285 +601,292 @@ const ChatSidebar = memo(({
     return groups;
   }, [filteredChannels]);
 
-  // Мобильная версия - как в WhatsApp (слайдер)
-  if (isMobile) {
+  // Десктопная версия
+  if (!isMobile) {
     return (
-      <>
-        {showSidebar && (
-          <div 
-            className="fixed inset-0 bg-black/50 z-40 animate-in fade-in duration-200"
-            onClick={onCloseSidebar} 
-          />
-        )}
-        <aside className={`
-          fixed top-0 left-0 bottom-0 w-[85%] max-w-[320px] z-50 
-          bg-white dark:bg-gray-800 flex flex-col
-          transition-transform duration-300 ease-out
-          ${showSidebar ? 'translate-x-0' : '-translate-x-full'}
-          shadow-2xl
-        `}>
-          {/* Шапка */}
-          <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
-            <div className="flex items-center gap-3">
-              <Avatar name={currentUser?.user_metadata?.full_name} size="lg" />
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 dark:text-white truncate text-sm">
-                  {currentUser?.user_metadata?.full_name || 'Пользователь'}
-                </p>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {currentUserRole || 'Гость'}
-                  </span>
-                  <span className={`w-1.5 h-1.5 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
-                </div>
-              </div>
-              <button 
-                onClick={onCloseSidebar} 
-                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors flex-shrink-0"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            {/* Поиск */}
-            <div className="mt-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  placeholder="Поиск каналов..."
-                  className="w-full pl-9 pr-3 py-2 text-sm bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A6572] placeholder:text-gray-400"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Кнопка создания канала */}
-          <div className="flex-shrink-0 px-4 pt-2">
-            {canCreateChannel && (
-              <button
-                onClick={onCreateChannel}
-                className="w-full px-3 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Создать канал
-              </button>
-            )}
-          </div>
-
-          {/* Список каналов */}
-          <div className="flex-1 overflow-y-auto px-2 pb-1 space-y-0.5 scrollbar-thin">
-            {Object.entries(groupedChannels).map(([category, chs]) => (
-              <div key={category}>
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1.5">
-                  {category}
-                </div>
-                {chs.map((channel) => {
-                  const isActive = activeChannel === channel.id;
-                  const unread = unreadCounts[channel.id] || 0;
-
-                  return (
-                    <button
-                      key={channel.id}
-                      onClick={() => {
-                        onChannelSelect(channel.id);
-                        onCloseSidebar();
-                      }}
-                      className={`w-full text-left px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
-                        isActive
-                          ? 'bg-[#4A6572] text-white shadow-md'
-                          : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">{channel.icon}</span>
-                        <span className="truncate flex-1 text-left">{channel.label || channel.name}</span>
-                        {unread > 0 && (
-                          <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[20px] text-center">
-                            {unread > 9 ? '9+' : unread}
-                          </span>
-                        )}
-                      </div>
-                      {lastReadTimes[channel.id] && (
-                        <div className={`text-[10px] pl-9 mt-0.5 ${isActive ? 'text-white/70' : 'text-gray-400'}`}>
-                          Прочитано: <TimeDisplay date={lastReadTimes[channel.id]} />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-
-            {filteredChannels.length === 0 && (
-              <div className="text-center py-8 text-gray-400 text-sm">
-                <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                Каналы не найдены
-              </div>
-            )}
-          </div>
-
-          {/* Пользователи */}
-          <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
-            <div className="flex items-center justify-between mb-1.5">
-              <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Пользователи ({companyUsers?.length || 0})
-              </h4>
-              <button className="text-xs text-[#4A6572] hover:underline font-medium">Все</button>
-            </div>
-            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto scrollbar-thin">
-              {companyUsers?.slice(0, 12).map((u) => (
-                <button
-                  key={u.user_id}
-                  onClick={() => {
-                    onStartDirectChat?.(u);
-                    onCloseSidebar();
-                  }}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-white dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors shadow-sm border border-gray-200 dark:border-gray-600"
-                  title={u.full_name}
-                >
-                  <Avatar name={u.full_name} size="xs" />
-                  <span className="truncate max-w-[50px] font-medium">{u.full_name}</span>
-                </button>
-              ))}
-              {(companyUsers?.length || 0) > 12 && (
-                <span className="text-xs text-gray-400 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full">
-                  +{companyUsers.length - 12}
+      <aside className="relative w-72 flex-shrink-0 bg-white dark:bg-gray-800 flex flex-col h-full border-r border-gray-200 dark:border-gray-700">
+        {/* Шапка */}
+        <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
+          <div className="flex items-center gap-3">
+            <Avatar name={currentUser?.user_metadata?.full_name} size="lg" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 dark:text-white truncate text-sm">
+                {currentUser?.user_metadata?.full_name || 'Пользователь'}
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {currentUserRole || 'Гость'}
                 </span>
-              )}
+                <span className={`w-1.5 h-1.5 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
+              </div>
             </div>
           </div>
-        </aside>
-      </>
+
+          <div className="mt-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder="Поиск каналов..."
+                className="w-full pl-9 pr-3 py-2 text-sm bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A6572] placeholder:text-gray-400"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Кнопка создания канала */}
+        <div className="flex-shrink-0 px-4 pt-2">
+          {canCreateChannel && (
+            <button
+              onClick={onCreateChannel}
+              className="w-full px-3 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Создать канал
+            </button>
+          )}
+        </div>
+
+        {/* Список каналов */}
+        <div className="flex-1 overflow-y-auto px-2 pb-1 space-y-0.5 scrollbar-thin">
+          {Object.entries(groupedChannels).map(([category, chs]) => (
+            <div key={category}>
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1.5">
+                {category}
+              </div>
+              {chs.map((channel) => {
+                const isActive = activeChannel === channel.id;
+                const unread = unreadCounts[channel.id] || 0;
+
+                return (
+                  <button
+                    key={channel.id}
+                    onClick={() => onChannelSelect(channel.id)}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
+                      isActive
+                        ? 'bg-[#4A6572] text-white shadow-md'
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg">{channel.icon}</span>
+                      <span className="truncate flex-1 text-left">{channel.label || channel.name}</span>
+                      {unread > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[20px] text-center">
+                          {unread > 9 ? '9+' : unread}
+                        </span>
+                      )}
+                    </div>
+                    {lastReadTimes[channel.id] && (
+                      <div className={`text-[10px] pl-9 mt-0.5 ${isActive ? 'text-white/70' : 'text-gray-400'}`}>
+                        Прочитано: <TimeDisplay date={lastReadTimes[channel.id]} />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+
+          {filteredChannels.length === 0 && (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              Каналы не найдены
+            </div>
+          )}
+        </div>
+
+        {/* Пользователи */}
+        <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
+          <div className="flex items-center justify-between mb-1.5">
+            <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Пользователи ({companyUsers?.length || 0})
+            </h4>
+            <button className="text-xs text-[#4A6572] hover:underline font-medium">Все</button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto scrollbar-thin">
+            {companyUsers?.slice(0, 12).map((u) => (
+              <button
+                key={u.user_id}
+                onClick={() => onStartDirectChat?.(u)}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-white dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors shadow-sm border border-gray-200 dark:border-gray-600"
+                title={u.full_name}
+              >
+                <Avatar name={u.full_name} size="xs" />
+                <span className="truncate max-w-[50px] font-medium">{u.full_name}</span>
+              </button>
+            ))}
+            {(companyUsers?.length || 0) > 12 && (
+              <span className="text-xs text-gray-400 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full">
+                +{companyUsers.length - 12}
+              </span>
+            )}
+          </div>
+        </div>
+      </aside>
     );
   }
 
-  // Десктопная версия - как на вашем скриншоте
+  // ============================================================
+  // 📱 МОБИЛЬНАЯ ВЕРСИЯ - САЙДБАР КАК В WHATSAPP
+  // ============================================================
   return (
-    <aside className="relative w-72 flex-shrink-0 bg-white dark:bg-gray-800 flex flex-col h-full border-r border-gray-200 dark:border-gray-700">
-      {/* Шапка */}
-      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
-        <div className="flex items-center gap-3">
-          <Avatar name={currentUser?.user_metadata?.full_name} size="lg" />
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 dark:text-white truncate text-sm">
-              {currentUser?.user_metadata?.full_name || 'Пользователь'}
-            </p>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {currentUserRole || 'Гость'}
-              </span>
-              <span className={`w-1.5 h-1.5 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
+    <>
+      {/* Затемнение */}
+      {showSidebar && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 animate-in fade-in duration-200"
+          onClick={onCloseSidebar} 
+        />
+      )}
+      
+      {/* Сайдбар - выезжает слева */}
+      <aside className={`
+        fixed top-0 left-0 bottom-0 z-50
+        w-[85%] max-w-[320px]
+        bg-white dark:bg-gray-800
+        flex flex-col
+        transition-transform duration-300 ease-out
+        ${showSidebar ? 'translate-x-0' : '-translate-x-full'}
+        shadow-2xl
+      `}>
+        {/* Шапка с профилем и кнопкой закрытия */}
+        <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
+          <div className="flex items-center gap-3">
+            <Avatar name={currentUser?.user_metadata?.full_name} size="lg" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 dark:text-white truncate text-sm">
+                {currentUser?.user_metadata?.full_name || 'Пользователь'}
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {currentUserRole || 'Гость'}
+                </span>
+                <span className={`w-1.5 h-1.5 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
+              </div>
             </div>
-          </div>
-        </div>
-
-        <div className="mt-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Поиск каналов..."
-              className="w-full pl-9 pr-3 py-2 text-sm bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A6572] placeholder:text-gray-400"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Кнопка создания канала */}
-      <div className="flex-shrink-0 px-4 pt-2">
-        {canCreateChannel && (
-          <button
-            onClick={onCreateChannel}
-            className="w-full px-3 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Создать канал
-          </button>
-        )}
-      </div>
-
-      {/* Список каналов */}
-      <div className="flex-1 overflow-y-auto px-2 pb-1 space-y-0.5 scrollbar-thin">
-        {Object.entries(groupedChannels).map(([category, chs]) => (
-          <div key={category}>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1.5">
-              {category}
-            </div>
-            {chs.map((channel) => {
-              const isActive = activeChannel === channel.id;
-              const unread = unreadCounts[channel.id] || 0;
-
-              return (
-                <button
-                  key={channel.id}
-                  onClick={() => onChannelSelect(channel.id)}
-                  className={`w-full text-left px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
-                    isActive
-                      ? 'bg-[#4A6572] text-white shadow-md'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg">{channel.icon}</span>
-                    <span className="truncate flex-1 text-left">{channel.label || channel.name}</span>
-                    {unread > 0 && (
-                      <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[20px] text-center">
-                        {unread > 9 ? '9+' : unread}
-                      </span>
-                    )}
-                  </div>
-                  {lastReadTimes[channel.id] && (
-                    <div className={`text-[10px] pl-9 mt-0.5 ${isActive ? 'text-white/70' : 'text-gray-400'}`}>
-                      Прочитано: <TimeDisplay date={lastReadTimes[channel.id]} />
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-
-        {filteredChannels.length === 0 && (
-          <div className="text-center py-8 text-gray-400 text-sm">
-            <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            Каналы не найдены
-          </div>
-        )}
-      </div>
-
-      {/* Пользователи */}
-      <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
-        <div className="flex items-center justify-between mb-1.5">
-          <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            Пользователи ({companyUsers?.length || 0})
-          </h4>
-          <button className="text-xs text-[#4A6572] hover:underline font-medium">Все</button>
-        </div>
-        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto scrollbar-thin">
-          {companyUsers?.slice(0, 12).map((u) => (
-            <button
-              key={u.user_id}
-              onClick={() => onStartDirectChat?.(u)}
-              className="flex items-center gap-1 px-2 py-1 text-xs bg-white dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors shadow-sm border border-gray-200 dark:border-gray-600"
-              title={u.full_name}
+            <button 
+              onClick={onCloseSidebar} 
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors flex-shrink-0"
             >
-              <Avatar name={u.full_name} size="xs" />
-              <span className="truncate max-w-[50px] font-medium">{u.full_name}</span>
+              <X className="w-5 h-5 text-gray-500" />
             </button>
-          ))}
-          {(companyUsers?.length || 0) > 12 && (
-            <span className="text-xs text-gray-400 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full">
-              +{companyUsers.length - 12}
-            </span>
+          </div>
+
+          {/* Поиск */}
+          <div className="mt-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder="Поиск каналов..."
+                className="w-full pl-9 pr-3 py-2 text-sm bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A6572] placeholder:text-gray-400"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Кнопка создания канала */}
+        <div className="flex-shrink-0 px-4 pt-2">
+          {canCreateChannel && (
+            <button
+              onClick={onCreateChannel}
+              className="w-full px-3 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Создать канал
+            </button>
           )}
         </div>
-      </div>
-    </aside>
+
+        {/* Список каналов */}
+        <div className="flex-1 overflow-y-auto px-2 pb-1 space-y-0.5 scrollbar-thin">
+          {Object.entries(groupedChannels).map(([category, chs]) => (
+            <div key={category}>
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 py-1.5">
+                {category}
+              </div>
+              {chs.map((channel) => {
+                const isActive = activeChannel === channel.id;
+                const unread = unreadCounts[channel.id] || 0;
+
+                return (
+                  <button
+                    key={channel.id}
+                    onClick={() => {
+                      onChannelSelect(channel.id);
+                      onCloseSidebar();
+                    }}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
+                      isActive
+                        ? 'bg-[#4A6572] text-white shadow-md'
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg">{channel.icon}</span>
+                      <span className="truncate flex-1 text-left">{channel.label || channel.name}</span>
+                      {unread > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[20px] text-center">
+                          {unread > 9 ? '9+' : unread}
+                        </span>
+                      )}
+                    </div>
+                    {lastReadTimes[channel.id] && (
+                      <div className={`text-[10px] pl-9 mt-0.5 ${isActive ? 'text-white/70' : 'text-gray-400'}`}>
+                        Прочитано: <TimeDisplay date={lastReadTimes[channel.id]} />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+
+          {filteredChannels.length === 0 && (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              Каналы не найдены
+            </div>
+          )}
+        </div>
+
+        {/* Пользователи */}
+        <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
+          <div className="flex items-center justify-between mb-1.5">
+            <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Пользователи ({companyUsers?.length || 0})
+            </h4>
+            <button className="text-xs text-[#4A6572] hover:underline font-medium">Все</button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto scrollbar-thin">
+            {companyUsers?.slice(0, 12).map((u) => (
+              <button
+                key={u.user_id}
+                onClick={() => {
+                  onStartDirectChat?.(u);
+                  onCloseSidebar();
+                }}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-white dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors shadow-sm border border-gray-200 dark:border-gray-600"
+                title={u.full_name}
+              >
+                <Avatar name={u.full_name} size="xs" />
+                <span className="truncate max-w-[50px] font-medium">{u.full_name}</span>
+              </button>
+            ))}
+            {(companyUsers?.length || 0) > 12 && (
+              <span className="text-xs text-gray-400 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full">
+                +{companyUsers.length - 12}
+              </span>
+            )}
+          </div>
+        </div>
+      </aside>
+    </>
   );
 });
 
