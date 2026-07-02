@@ -148,7 +148,6 @@ const TimeDisplay = memo(({ date, language = 'ru' }) => {
   if (!date) return null;
   const d = new Date(date);
   const now = new Date();
-  const diff = now - d;
   
   // Если сообщение создано сегодня
   if (d.toDateString() === now.toDateString()) {
@@ -1589,28 +1588,28 @@ useEffect(() => {
   // ============================================================
 
   const handleTextareaChange = useCallback((e) => {
-    const value = e.target.value;
-    setNewMessage(value);
-    e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+  const value = e.target.value;
+  setNewMessage(value);
+  e.target.style.height = 'auto';
+  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
 
-    if (value.trim()) {
-      const channel = supabase.channel(`typing:${activeChannel}`);
+  if (value.trim()) {
+    const channel = supabase.channel(`typing:${activeChannel}`);
+    channel.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { user_id: user?.id, user_name: user?.user_metadata?.full_name || 'Пользователь' }
+    });
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
       channel.send({
         type: 'broadcast',
-        event: 'typing',
-        payload: { user_id: user?.id, user_name: user?.user_metadata?.full_name || 'Пользователь' }
+        event: 'typing_stop',
+        payload: { user_id: user?.id }
       });
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = setTimeout(() => {
-        channel.send({
-          type: 'broadcast',
-          event: 'typing_stop',
-          payload: { user_id: user?.id }
-        });
-      }, 1000);
-    }
-  }, [activeChannel, user?.id, user?.user_metadata?.full_name]);
+    }, 1000);
+  }
+}, [activeChannel, user?.id, user?.user_metadata?.full_name]); // ✅ ДОБАВЛЕНА ЗАВИСИМОСТЬ
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
