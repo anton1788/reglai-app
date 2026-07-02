@@ -4,7 +4,7 @@ import {
   Send, Smile, Paperclip, Edit2, Trash2, X, Check,
   Loader2, MessageCircle, User, AlertCircle,
   Plus, Users, Settings, Search, CornerUpLeft, Bookmark, BookmarkCheck,
-  Menu, ChevronDown, ChevronUp, Pin, Copy, Reply,
+  Menu, ChevronDown, Pin, Copy, Reply,
   Mic, MicOff, Image, File, MoreVertical, Zap,
   UserPlus, UserMinus, Bell, Crown
 } from 'lucide-react';
@@ -752,7 +752,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
   const [savedMessages, setSavedMessages] = useState(new Set());
-  // ✅ УДАЛЯЕМ setTypingUsers, оставляем только typingUsers для чтения
   const [typingUsers] = useState(new Set());
   const [unreadCounts, setUnreadCounts] = useState({});
   const [lastReadTimes, setLastReadTimes] = useState({});
@@ -764,6 +763,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   const [searchQuery, setSearchQuery] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [firstUnreadId, setFirstUnreadId] = useState(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // ========== REFS ==========
   const messagesContainerRef = useRef(null);
@@ -775,6 +775,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   const lastScrollTopRef = useRef(0);
   const animationFrameRef = useRef(null);
   const readTimeoutRef = useRef(null);
+  const loadMessagesRef = useRef(null);
 
   // ============================================================
   // 📱 МОБИЛЬНОЕ УСТРОЙСТВО
@@ -1030,12 +1031,24 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
   }, [user?.id]);
 
   // ============================================================
-  // 📨 ЗАГРУЗКА СООБЩЕНИЙ
+  // 📨 ЗАГРУЗКА СООБЩЕНИЙ (исправлена - без бесконечного цикла)
   // ============================================================
 
   const loadMessages = useCallback(async () => {
-    if (!userCompanyId || !activeChannel) return;
-    setLoading(true);
+    // Предотвращаем повторные вызовы
+    if (loadMessagesRef.current) return;
+    loadMessagesRef.current = true;
+
+    if (!userCompanyId || !activeChannel) {
+      loadMessagesRef.current = false;
+      return;
+    }
+
+    // Показываем загрузку только при первом запуске
+    if (isInitialLoad) {
+      setLoading(true);
+    }
+
     try {
       const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
       const isDirectChat = activeChannel?.startsWith('dm_');
@@ -1150,12 +1163,19 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
       console.error('Ошибка загрузки сообщений:', err);
     } finally {
       setLoading(false);
+      setIsInitialLoad(false);
+      loadMessagesRef.current = false;
     }
-  }, [userCompanyId, activeChannel, lastReadTimes, user?.id, forceScrollToBottom, markChannelAsRead]);
+  }, [userCompanyId, activeChannel, lastReadTimes, user?.id, forceScrollToBottom, markChannelAsRead, isInitialLoad]);
 
+  // Загружаем сообщения только при смене канала или при монтировании
   useEffect(() => {
+    // Сбрасываем флаг загрузки при смене канала
+    loadMessagesRef.current = false;
+    setIsInitialLoad(true);
     loadMessages();
-  }, [loadMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChannel]);
 
   // ============================================================
   // 📡 ПОДПИСКА НА НОВЫЕ СООБЩЕНИЯ
@@ -1687,6 +1707,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (readTimeoutRef.current) clearTimeout(readTimeoutRef.current);
+      if (loadMessagesRef.current) loadMessagesRef.current = false;
     };
     return cleanup;
   }, []);
@@ -1781,10 +1802,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, language, showNotification
               onScroll={handleScroll}
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
-              {loading ? (
+              {isInitialLoad && loading ? (
                 <div className="flex flex-col items-center justify-center h-40 gap-3">
                   <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
-                  <span className="text-sm text-gray-500">Загрузка...</span>
+                  <span className="text-sm text-gray-500">Загрузка сообщений...</span>
                 </div>
               ) : messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-40 text-gray-400">
