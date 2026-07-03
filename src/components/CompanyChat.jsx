@@ -1,4 +1,4 @@
-// CompanyChat.jsx - ULTIMATE FULL VERSION (Все ошибки исправлены)
+// CompanyChat.jsx - ПОЛНАЯ ВЕРСИЯ (Сотрудники + Удаление каналов)
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { 
@@ -14,7 +14,7 @@ import {
 import { supabase } from '../utils/supabaseClient';
 
 // ============================================================
-// 1. КОНСТАНТЫ И НАСТРОЙКИ
+// 1. КОНСТАНТЫ
 // ============================================================
 
 const SYSTEM_CHANNELS = [
@@ -31,9 +31,7 @@ const EMOJI_CATEGORIES = {
   'Жесты': ['👋', '🤚', '🖐', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '👈', '👉', '👆', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾'],
   'Сердца': ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟'],
   'Еда': ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🫑', '🌶', '🥒', '🥬', '🥦', '🧄', '🧅', '🍄', '🥜', '🌰', '🍞', '🥐', '🥖', '🫓', '🥨', '🥯', '🥞', '🧇', '🧀', '🍖', '🍗', '🥩', '🥓', '🍔', '🍟', '🍕', '🌭', '🥪', '🌮', '🌯', '🫔', '🥙', '🧆', '🥚', '🍳', '🥘', '🍲', '🫕', '🥣', '🥗', '🍿', '🧈', '🧂', '🥫', '🍱', '🍘', '🍙', '🍚', '🍛', '🍜', '🍝', '🍠', '🍢', '🍣', '🍤', '🍥', '🥮', '🍡', '🥟', '🥠', '🥡', '🦪', '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰', '🧁', '🥧', '🍫', '🍬', '🍭', '🍮', '🍯', '🥛', '🍼', '☕', '🫖', '🍵', '🍶', '🍾', '🍷', '🍸', '🍹', '🍺', '🍻', '🥂', '🥃', '🥤', '🧋', '🧃', '🧉', '🧊'],
-  'Активности': ['🎉', '🎊', '🎈', '🎁', '🎀', '🎭', '🎪', '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🥁', '🎷', '🎺', '🎸', '🎻', '🪕', '🎲', '♟', '🎯', '🎳', '🎮', '🎰', '🧩'],
-  'Природа': ['🌍', '🌎', '🌏', '🌕', '🌖', '🌗', '🌘', '🌑', '🌒', '🌓', '🌔', '🌙', '🌛', '🌜', '☀️', '🌤', '⛅', '🌥', '☁️', '🌦', '🌧', '⛈', '🌩', '🌨', '❄️', '☃️', '⛄', '🌬', '💨', '🌪', '🌈', '☔', '💧', '💦', '🌊'],
-  'Транспорт': ['🚗', '🚕', '🚙', '🚌', '🚎', '🏎', '🚓', '🚑', '🚒', '🚐', '🛻', '🚚', '🚛', '🚜', '🏍', '🛵', '🚲', '🛴', '🛹', '🛼', '🚨', '🚔', '🚍', '🚘', '🚖', '🚡', '🚠', '🚟', '🚃', '🚋', '🚞', '🚝', '🚄', '🚅', '🚈', '🚂', '🚆', '🚇', '🚊', '🚉', '✈️', '🛫', '🛬', '🛩', '💺', '🛰', '🚀', '🛸', '🚁', '🛶', '⛵', '🚤', '🛥', '🛳', '⛴', '🚢']
+  'Активности': ['🎉', '🎊', '🎈', '🎁', '🎀', '🎭', '🎪', '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🥁', '🎷', '🎺', '🎸', '🎻', '🪕', '🎲', '♟', '🎯', '🎳', '🎮', '🎰', '🧩']
 };
 
 const THEMES = {
@@ -55,10 +53,6 @@ const ArrowDown = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
-// ============================================================
-// 3. КОМПОНЕНТ СТАТИСТИКИ
-// ============================================================
-
 const StatCard = memo(({ icon, label, value, color = '#4A6572' }) => (
   <div className="stat-card p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg">
     <div className="flex items-center gap-2">
@@ -72,7 +66,7 @@ const StatCard = memo(({ icon, label, value, color = '#4A6572' }) => (
 ));
 
 // ============================================================
-// 4. КОМПОНЕНТ ЭМОДЗИ-ПИКЕРА
+// 3. КОМПОНЕНТ ЭМОДЗИ-ПИКЕРА
 // ============================================================
 
 const EmojiPicker = memo(({ onSelect, onClose }) => {
@@ -99,7 +93,6 @@ const EmojiPicker = memo(({ onSelect, onClose }) => {
           <X className="w-4 h-4" />
         </button>
       </div>
-      
       <div className="flex gap-1 overflow-x-auto mb-2 pb-2">
         {Object.keys(EMOJI_CATEGORIES).map(category => (
           <button
@@ -111,7 +104,6 @@ const EmojiPicker = memo(({ onSelect, onClose }) => {
           </button>
         ))}
       </div>
-      
       <div className="grid grid-cols-8 gap-1 max-h-48 overflow-y-auto">
         {filteredEmojis.map(emoji => (
           <button
@@ -128,7 +120,7 @@ const EmojiPicker = memo(({ onSelect, onClose }) => {
 });
 
 // ============================================================
-// 5. КОМПОНЕНТ GIF-ПИКЕРА
+// 4. КОМПОНЕНТ GIF-ПИКЕРА
 // ============================================================
 
 const GifPicker = memo(({ onSelect, onClose }) => {
@@ -164,7 +156,6 @@ const GifPicker = memo(({ onSelect, onClose }) => {
           <X className="w-4 h-4" />
         </button>
       </div>
-      
       {loading ? (
         <div className="flex justify-center py-4">
           <Loader2 className="w-6 h-6 animate-spin" />
@@ -190,7 +181,7 @@ const GifPicker = memo(({ onSelect, onClose }) => {
 });
 
 // ============================================================
-// 6. КОМПОНЕНТ ВИДЕОЗВОНКА
+// 5. КОМПОНЕНТ ВИДЕОЗВОНКА
 // ============================================================
 
 const VideoCall = memo(({ onEndCall, targetUser }) => {
@@ -213,9 +204,7 @@ const VideoCall = memo(({ onEndCall, targetUser }) => {
         if (localVideoElement) {
           localVideoElement.srcObject = stream;
         }
-        
         setCallState('connected');
-        
         intervalId = setInterval(() => {
           setDuration(prev => prev + 1);
         }, 1000);
@@ -228,9 +217,7 @@ const VideoCall = memo(({ onEndCall, targetUser }) => {
     initCall();
     
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
+      if (intervalId) clearInterval(intervalId);
       if (localVideoElement && localVideoElement.srcObject) {
         const tracks = localVideoElement.srcObject.getTracks();
         tracks.forEach(t => t.stop());
@@ -256,44 +243,21 @@ const VideoCall = memo(({ onEndCall, targetUser }) => {
   return (
     <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
       <div className="relative w-full max-w-4xl aspect-video">
-        <video
-          ref={remoteVideoRef}
-          className="w-full h-full object-cover rounded-xl"
-          autoPlay
-          playsInline
-        />
-        
+        <video ref={remoteVideoRef} className="w-full h-full object-cover rounded-xl" autoPlay playsInline />
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-4">
-          <button
-            onClick={() => setIsMuted(!isMuted)}
-            className="p-3 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition"
-          >
+          <button onClick={() => setIsMuted(!isMuted)} className="p-3 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition">
             {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </button>
-          <button
-            onClick={onEndCall}
-            className="p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition"
-          >
+          <button onClick={onEndCall} className="p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition">
             <PhoneOff className="w-5 h-5" />
           </button>
-          <button
-            onClick={() => setIsVideoOff(!isVideoOff)}
-            className="p-3 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition"
-          >
+          <button onClick={() => setIsVideoOff(!isVideoOff)} className="p-3 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition">
             {isVideoOff ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
         </div>
-        
         <div className="absolute top-4 right-4 w-48 aspect-video rounded-lg overflow-hidden border-2 border-white/30">
-          <video
-            ref={localVideoRef}
-            className={`w-full h-full object-cover ${isVideoOff ? 'opacity-0' : ''}`}
-            autoPlay
-            playsInline
-            muted
-          />
+          <video ref={localVideoRef} className={`w-full h-full object-cover ${isVideoOff ? 'opacity-0' : ''}`} autoPlay playsInline muted />
         </div>
-        
         <div className="absolute top-4 left-4 text-white">
           <p className="font-bold">{targetUser?.full_name || 'Собеседник'}</p>
           <p className="text-sm opacity-70">
@@ -306,7 +270,7 @@ const VideoCall = memo(({ onEndCall, targetUser }) => {
 });
 
 // ============================================================
-// 7. КОМПОНЕНТ СООБЩЕНИЯ (ПОЛНАЯ ВЕРСИЯ)
+// 6. КОМПОНЕНТ СООБЩЕНИЯ
 // ============================================================
 
 const MessageItem = memo(function({ 
@@ -372,10 +336,7 @@ const MessageItem = memo(function({
   const isGif = msg.content?.includes('giphy.com') || msg.content?.includes('tenor.com');
 
   return (
-    <article 
-      className={`group flex gap-3 ${isOwn ? 'flex-row-reverse' : ''} animate-in fade-in`}
-      onDoubleClick={handleDoubleClick}
-    >
+    <article className={`group flex gap-3 ${isOwn ? 'flex-row-reverse' : ''} animate-in fade-in`} onDoubleClick={handleDoubleClick}>
       <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0 ${isOwn ? 'order-2' : ''}`}>
         <span className="text-white text-xs font-medium">
           {msg.user?.user_metadata?.full_name?.[0]?.toUpperCase() || '?'}
@@ -435,23 +396,14 @@ const MessageItem = memo(function({
                   <p className="text-xs opacity-75 truncate">{msg.replied_message.content}</p>
                 </div>
               )}
-              
               {isGif ? (
-                <img 
-                  src={msg.content.match(/https?:\/\/[^\s]+/)?.[0]} 
-                  alt="GIF" 
-                  className="max-w-full rounded-lg max-h-64"
-                  loading="lazy"
-                />
+                <img src={msg.content.match(/https?:\/\/[^\s]+/)?.[0]} alt="GIF" className="max-w-full rounded-lg max-h-64" loading="lazy" />
               ) : (
                 <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
                   {isLongMessage && !isExpanded ? (
                     <>
                       {formatMessage?.(msg.content.slice(0, 500))}...
-                      <button 
-                        onClick={() => setIsExpanded(true)}
-                        className="text-[#4A6572] dark:text-[#F9AA33] font-medium ml-1"
-                      >
+                      <button onClick={() => setIsExpanded(true)} className="text-[#4A6572] dark:text-[#F9AA33] font-medium ml-1">
                         Показать полностью
                       </button>
                     </>
@@ -472,8 +424,7 @@ const MessageItem = memo(function({
                   )}
                   {msg.is_encrypted && (
                     <div className="mt-1 text-[10px] opacity-50 flex items-center gap-1">
-                      <Shield className="w-3 h-3" />
-                      Зашифровано
+                      <Shield className="w-3 h-3" /> Зашифровано
                     </div>
                   )}
                 </div>
@@ -487,49 +438,29 @@ const MessageItem = memo(function({
             {formattedTime}
             {msg.edited_at && <span className="ml-1 opacity-70">(изм.)</span>}
           </time>
-          
           {!isEditing && !msg.deleted_at && (
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
-              <button 
-                onClick={() => setShowReactionsPicker?.(showReactionsPicker === msg.id ? null : msg.id)}
-                className="p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded-full"
-                title="Реакции"
-              >
+              <button onClick={() => setShowReactionsPicker?.(showReactionsPicker === msg.id ? null : msg.id)} className="p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded-full" title="Реакции">
                 <Smile className="w-3.5 h-3.5 text-gray-500" />
               </button>
-              
-              <button 
-                onClick={() => setShowEmojiPicker?.(showEmojiPicker === msg.id ? null : msg.id)}
-                className="p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded-full"
-                title="Добавить эмодзи"
-              >
+              <button onClick={() => setShowEmojiPicker?.(showEmojiPicker === msg.id ? null : msg.id)} className="p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded-full" title="Добавить эмодзи">
                 <Plus className="w-3.5 h-3.5 text-gray-500" />
               </button>
-              
-              <button 
-                onClick={() => setShowGifPicker?.(showGifPicker === msg.id ? null : msg.id)}
-                className="p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded-full"
-                title="Добавить GIF"
-              >
+              <button onClick={() => setShowGifPicker?.(showGifPicker === msg.id ? null : msg.id)} className="p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded-full" title="Добавить GIF">
                 <span className="text-gray-500 text-sm">🎬</span>
               </button>
-              
               <button onClick={() => onReply?.(msg)} className="p-1 hover:bg-gray-200/50 rounded-full" title="Ответить">
                 <CornerUpLeft className="w-3.5 h-3.5 text-gray-500" />
               </button>
-              
               <button onClick={() => onToggleSave?.(msg.id)} className="p-1 hover:bg-gray-200/50 rounded-full" title="Сохранить">
                 {isSaved ? <BookmarkCheck className="w-3.5 h-3.5 text-[#4A6572]" /> : <Bookmark className="w-3.5 h-3.5 text-gray-500" />}
               </button>
-
               <button onClick={() => onCopyMessage?.(msg.id)} className="p-1 hover:bg-gray-200/50 rounded-full" title="Копировать">
                 <Copy className="w-3.5 h-3.5 text-gray-500" />
               </button>
-              
               <button onClick={handleTranslate} className="p-1 hover:bg-gray-200/50 rounded-full" title="Перевести">
                 <span className="text-gray-500 text-sm">🌐</span>
               </button>
-              
               {canEdit && (
                 <button onClick={() => onStartEdit?.(msg)} className="p-1 hover:bg-blue-100/50 rounded text-blue-500" title="Редактировать">
                   <Edit2 className="w-3.5 h-3.5" />
@@ -598,8 +529,6 @@ const MessageItem = memo(function({
             {Object.entries(reactionCounts).map(([emoji, count]) => {
               const hasReacted = msg.reactions?.some(r => r.emoji === emoji && r.user_id === user?.id);
               const users = reactionUsers[emoji] || [];
-              const showTooltip = users.length > 0;
-              
               return (
                 <button
                   key={`${msg.id}-${emoji}`}
@@ -609,10 +538,10 @@ const MessageItem = memo(function({
                       ? 'bg-[#4A6572]/10 text-[#4A6572] dark:bg-[#F9AA33]/10 dark:text-[#F9AA33]' 
                       : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
                   }`}
-                  title={showTooltip ? users.map(id => {
+                  title={users.map(id => {
                     const u = companyUsers?.find(cu => cu.user_id === id);
                     return u?.full_name || 'Пользователь';
-                  }).join(', ') : ''}
+                  }).join(', ')}
                 >
                   {emoji} <span>{count}</span>
                 </button>
@@ -626,7 +555,7 @@ const MessageItem = memo(function({
 });
 
 // ============================================================
-// 8. КОМПОНЕНТ АНАЛИТИКИ
+// 7. КОМПОНЕНТ АНАЛИТИКИ
 // ============================================================
 
 const ChatAnalytics = memo(({ messages, companyUsers }) => {
@@ -634,11 +563,9 @@ const ChatAnalytics = memo(({ messages, companyUsers }) => {
   
   useEffect(() => {
     if (!messages.length) return;
-    
     const totalMessages = messages.length;
     const activeUsers = new Set(messages.map(m => m.user_id)).size;
     const messagesPerUser = totalMessages / (activeUsers || 1);
-    
     const userMessageCount = {};
     messages.forEach(m => {
       userMessageCount[m.user_id] = (userMessageCount[m.user_id] || 0) + 1;
@@ -647,10 +574,8 @@ const ChatAnalytics = memo(({ messages, companyUsers }) => {
       userMessageCount[a] > userMessageCount[b] ? a : b
     , '');
     const mostActiveUser = companyUsers?.find(u => u.user_id === mostActiveUserId);
-    
     const totalLength = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
     const averageLength = totalLength / (totalMessages || 1);
-    
     const hourCounts = {};
     messages.forEach(m => {
       const hour = new Date(m.created_at).getHours();
@@ -659,7 +584,6 @@ const ChatAnalytics = memo(({ messages, companyUsers }) => {
     const peakHour = Object.keys(hourCounts).reduce((a, b) => 
       hourCounts[a] > hourCounts[b] ? a : b
     , 0);
-    
     const emojiCounts = {};
     messages.forEach(m => {
       if (m.reactions) {
@@ -671,7 +595,6 @@ const ChatAnalytics = memo(({ messages, companyUsers }) => {
     const topEmoji = Object.keys(emojiCounts).reduce((a, b) => 
       emojiCounts[a] > emojiCounts[b] ? a : b
     , '');
-    
     setStats({
       totalMessages,
       activeUsers,
@@ -687,8 +610,7 @@ const ChatAnalytics = memo(({ messages, companyUsers }) => {
   return (
     <div className="analytics-panel p-4 bg-white/50 dark:bg-gray-800/50 rounded-xl">
       <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
-        <Zap className="w-4 h-4 text-[#F9AA33]" />
-        Статистика чата
+        <Zap className="w-4 h-4 text-[#F9AA33]" /> Статистика чата
       </h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <StatCard icon="💬" label="Сообщений" value={stats.totalMessages || 0} />
@@ -705,7 +627,7 @@ const ChatAnalytics = memo(({ messages, companyUsers }) => {
 });
 
 // ============================================================
-// 9. КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ
+// 8. КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (С СОТРУДНИКАМИ И УДАЛЕНИЕМ)
 // ============================================================
 
 const ChatSidebar = memo(function({ 
@@ -715,19 +637,18 @@ const ChatSidebar = memo(function({
   unreadCounts, onThemeChange, currentTheme, themeNames,
   toggleNotifications, notificationsEnabled,
   onSearch, searchResults, onSearchResultClick,
-  onShowAnalytics, showAnalytics
+  onShowAnalytics, showAnalytics,
+  onDeleteChannel, // ДОБАВЛЕНА ФУНКЦИЯ УДАЛЕНИЯ
+  canManageChannels // ДОБАВЛЕН ФЛАГ УПРАВЛЕНИЯ
 }) {
-  // Все хуки должны вызываться до раннего возврата
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Функция форматирования времени для поиска
   const formatTime = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Ранний возврат после всех хуков
   if (!showSidebar) return null;
 
   const userInitial = currentUser?.user_metadata?.full_name?.[0]?.toUpperCase() || '?';
@@ -737,6 +658,12 @@ const ChatSidebar = memo(function({
     setSearchQuery(value);
     if (value.length > 1) {
       onSearch?.(value);
+    }
+  };
+
+  const handleDeleteChannel = (channelId, channelName) => {
+    if (window.confirm(`Удалить канал "${channelName}"? Все сообщения будут удалены без возможности восстановления.`)) {
+      onDeleteChannel?.(channelId);
     }
   };
 
@@ -762,7 +689,6 @@ const ChatSidebar = memo(function({
             >
               {notificationsEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
             </button>
-            
             <button
               onClick={onShowAnalytics}
               className={`p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg ${showAnalytics ? 'bg-[#4A6572]/20' : ''}`}
@@ -770,7 +696,6 @@ const ChatSidebar = memo(function({
             >
               <Zap className="w-4 h-4" />
             </button>
-            
             <div className="relative group">
               <button className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg">
                 <Palette className="w-4 h-4" />
@@ -789,7 +714,6 @@ const ChatSidebar = memo(function({
               </div>
             </div>
           </div>
-          
           {isMobile && (
             <button onClick={onCloseSidebar} className="p-1 hover:bg-gray-200 rounded-lg">
               <X className="w-4 h-4" />
@@ -827,8 +751,7 @@ const ChatSidebar = memo(function({
             onClick={onCreateChannel}
             className="w-full px-3 py-2 bg-[#4A6572] text-white rounded-lg text-xs font-medium flex items-center justify-center gap-2 hover:bg-[#344955] transition-colors"
           >
-            <Plus className="w-4 h-4" />
-            Создать канал
+            <Plus className="w-4 h-4" /> Создать канал
           </button>
         )}
       </div>
@@ -837,45 +760,63 @@ const ChatSidebar = memo(function({
         {channels.map(channel => {
           const isActive = activeChannel === channel.id;
           const unread = unreadCounts[channel.id] || 0;
+          const isCustom = channel.type === 'custom' || channel.type === 'direct';
+          const canDelete = canManageChannels && isCustom;
           
           return (
-            <button
-              key={channel.id}
-              onClick={() => onChannelSelect(channel.id)}
-              className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${
-                isActive 
-                  ? 'bg-[#4A6572] text-white shadow-md' 
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
-              }`}
-            >
-              <span className="text-lg">{channel.icon}</span>
-              <span className="truncate flex-1">{channel.label || channel.name}</span>
-              {unread > 0 && (
-                <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">
-                  {unread}
-                </span>
+            <div key={channel.id} className="relative group">
+              <button
+                onClick={() => onChannelSelect(channel.id)}
+                className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${
+                  isActive 
+                    ? 'bg-[#4A6572] text-white shadow-md' 
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <span className="text-lg">{channel.icon}</span>
+                <span className="truncate flex-1">{channel.label || channel.name}</span>
+                {unread > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">
+                    {unread}
+                  </span>
+                )}
+              </button>
+              {canDelete && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteChannel(channel.id, channel.name);
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500"
+                  title="Удалить канал"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               )}
-            </button>
+            </div>
           );
         })}
       </nav>
       
+      {/* СПИСОК СОТРУДНИКОВ - ВОССТАНОВЛЕН */}
       {companyUsers && companyUsers.length > 0 && (
         <div className="p-3 border-t border-gray-200/50 dark:border-gray-700/50">
           <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span>Пользователи ({companyUsers.length})</span>
+            <span className="flex items-center gap-1">
+              <Users className="w-3 h-3" /> Сотрудники ({companyUsers.length})
+            </span>
             <span className="text-[10px] font-normal">
               {companyUsers.filter(u => u.is_online).length} онлайн
             </span>
           </h4>
           <div className="space-y-1 max-h-32 overflow-y-auto">
-            {companyUsers.slice(0, 10).map(u => (
+            {companyUsers.map(u => (
               <button
                 key={u.user_id}
                 onClick={() => onStartDirectChat?.(u)}
-                className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg flex items-center gap-2"
+                className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg flex items-center gap-2 transition-colors"
               >
-                <div className="relative">
+                <div className="relative flex-shrink-0">
                   <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center">
                     <span className="text-white text-[10px] font-medium">
                       {u.full_name?.[0]?.toUpperCase() || '?'}
@@ -884,7 +825,7 @@ const ChatSidebar = memo(function({
                   <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border-2 border-white dark:border-gray-800 ${u.is_online ? 'bg-green-500' : 'bg-gray-400'}`} />
                 </div>
                 <span className="truncate text-gray-700 dark:text-gray-300">{u.full_name}</span>
-                {u.role === 'manager' && <Shield className="w-3 h-3 text-yellow-500" />}
+                {u.role === 'manager' && <Shield className="w-3 h-3 text-yellow-500 flex-shrink-0" />}
               </button>
             ))}
           </div>
@@ -909,89 +850,71 @@ const ChatSidebar = memo(function({
 });
 
 // ============================================================
-// 10. КОМПОНЕНТ ИИ-АССИСТЕНТА
+// 9. ОСТАЛЬНЫЕ КОМПОНЕНТЫ (ИИ-АССИСТЕНТ, ФАЙЛОВЫЙ МЕНЕДЖЕР)
 // ============================================================
 
-const AIAssistant = memo(({ suggestions, onSelect, onClose }) => {
-  return (
-    <div className="fixed bottom-24 right-4 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4 w-80 z-50 animate-in slide-in-from-bottom-4">
-      <div className="flex justify-between items-center mb-3">
-        <h4 className="font-bold flex items-center gap-2">
-          <Bot className="w-4 h-4 text-yellow-500" />
-          ИИ-помощник
-        </h4>
-        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
-          <X className="w-4 h-4" />
+const AIAssistant = memo(({ suggestions, onSelect, onClose }) => (
+  <div className="fixed bottom-24 right-4 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4 w-80 z-50 animate-in slide-in-from-bottom-4">
+    <div className="flex justify-between items-center mb-3">
+      <h4 className="font-bold flex items-center gap-2">
+        <Bot className="w-4 h-4 text-yellow-500" /> ИИ-помощник
+      </h4>
+      <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+    <div className="space-y-2 max-h-64 overflow-y-auto">
+      {suggestions.map((suggestion, i) => (
+        <button
+          key={i}
+          onClick={() => onSelect?.(suggestion)}
+          className="w-full text-left p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-2"
+        >
+          <Sparkles className="w-3 h-3 text-yellow-500 flex-shrink-0" /> {suggestion}
+        </button>
+      ))}
+    </div>
+    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+      <p className="text-[10px] text-gray-400 text-center">Основано на анализе последних сообщений</p>
+    </div>
+  </div>
+));
+
+const FileManager = memo(({ files, onFileSelect, onFileDelete, onClose }) => (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-2xl max-h-[80vh]">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold flex items-center gap-2">
+          <FolderOpen className="w-5 h-5" /> Файлы чата
+        </h3>
+        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
+          <X className="w-5 h-5" />
         </button>
       </div>
-      <div className="space-y-2 max-h-64 overflow-y-auto">
-        {suggestions.map((suggestion, i) => (
-          <button
-            key={i}
-            onClick={() => onSelect?.(suggestion)}
-            className="w-full text-left p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-2"
-          >
-            <Sparkles className="w-3 h-3 text-yellow-500 flex-shrink-0" />
-            {suggestion}
-          </button>
+      <div className="grid grid-cols-3 gap-3 overflow-y-auto max-h-96">
+        {files.map((file, i) => (
+          <div key={i} className="group relative bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+            <div className="w-full aspect-square bg-gray-200 dark:bg-gray-600 rounded-lg flex items-center justify-center">
+              {file.type?.startsWith('image/') ? (
+                <img src={file.url} alt={file.name} className="w-full h-full object-cover rounded-lg" />
+              ) : (
+                <div className="text-4xl">📄</div>
+              )}
+            </div>
+            <p className="text-xs truncate mt-1">{file.name}</p>
+            <button onClick={() => onFileSelect?.(file)} className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-lg transition" />
+            <button onClick={() => onFileDelete?.(file.id)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition">
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
         ))}
       </div>
-      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-        <p className="text-[10px] text-gray-400 text-center">Основано на анализе последних сообщений</p>
-      </div>
     </div>
-  );
-});
+  </div>
+));
 
 // ============================================================
-// 11. КОМПОНЕНТ ФАЙЛОВОГО МЕНЕДЖЕРА
-// ============================================================
-
-const FileManager = memo(({ files, onFileSelect, onFileDelete, onClose }) => {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-2xl max-h-[80vh]">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold flex items-center gap-2">
-            <FolderOpen className="w-5 h-5" />
-            Файлы чата
-          </h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <div className="grid grid-cols-3 gap-3 overflow-y-auto max-h-96">
-          {files.map((file, i) => (
-            <div key={i} className="group relative bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-              <div className="w-full aspect-square bg-gray-200 dark:bg-gray-600 rounded-lg flex items-center justify-center">
-                {file.type?.startsWith('image/') ? (
-                  <img src={file.url} alt={file.name} className="w-full h-full object-cover rounded-lg" />
-                ) : (
-                  <div className="text-4xl">📄</div>
-                )}
-              </div>
-              <p className="text-xs truncate mt-1">{file.name}</p>
-              <button
-                onClick={() => onFileSelect?.(file)}
-                className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-lg transition"
-              />
-              <button
-                onClick={() => onFileDelete?.(file.id)}
-                className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-});
-
-// ============================================================
-// 12. ОСНОВНОЙ КОМПОНЕНТ (ПОЛНАЯ ВЕРСИЯ)
+// 10. ОСНОВНОЙ КОМПОНЕНТ
 // ============================================================
 
 const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotification }) => {
@@ -1060,7 +983,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     if (!isMobile) setShowSidebar(true);
   }, [isMobile]);
 
-  // Проверка соединения
   useEffect(() => {
     const checkConnection = async () => {
       try {
@@ -1172,6 +1094,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     return channel.canWrite?.includes(userRole) || false;
   }, [userRole]);
 
+  const canManageChannels = userRole === 'manager' || userRole === 'supply_admin';
+
   const currentChannel = allChannels.find(c => c.id === activeChannel);
 
   // ===== ЗАГРУЗКА ДАННЫХ =====
@@ -1188,7 +1112,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           last_read_at: now,
           updated_at: now
         }, { onConflict: 'user_id,channel_id' });
-      
       setUnreadCounts(prev => ({ ...prev, [channelId]: 0 }));
     } catch (err) {
       console.error('Ошибка отметки прочитанного:', err);
@@ -1237,7 +1160,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           counts[channelId] = count;
         }
       }
-      
       setUnreadCounts(counts);
     } catch (err) {
       console.error('Ошибка загрузки непрочитанных:', err);
@@ -1375,6 +1297,44 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     loadMessages();
   }, [loadMessages]);
 
+  // ===== УДАЛЕНИЕ КАНАЛА =====
+  const deleteChannel = useCallback(async (channelId) => {
+    if (!channelId) return;
+    const channel = customChannels.find(c => c.id === channelId);
+    if (!channel) return;
+    
+    try {
+      // Удаляем все сообщения в канале
+      await supabase
+        .from('company_messages')
+        .delete()
+        .eq('channel_id', channelId);
+      
+      // Удаляем участников канала
+      await supabase
+        .from('channel_members')
+        .delete()
+        .eq('channel_id', channelId);
+      
+      // Удаляем сам канал
+      const { error } = await supabase
+        .from('company_channels')
+        .delete()
+        .eq('id', channelId);
+      
+      if (error) throw error;
+      
+      setCustomChannels(prev => prev.filter(c => c.id !== channelId));
+      if (activeChannel === channelId) {
+        setActiveChannel('general');
+      }
+      showNotification?.('Канал удалён', 'success');
+    } catch (err) {
+      console.error('Ошибка удаления канала:', err);
+      showNotification?.('Не удалось удалить канал', 'error');
+    }
+  }, [customChannels, activeChannel, showNotification]);
+
   // ===== ОТПРАВКА СООБЩЕНИЙ =====
   const sendMessage = useCallback(async (content) => {
     const text = content || newMessage.trim();
@@ -1431,30 +1391,20 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
-      
       mediaRecorderRef.current.ondataavailable = (event) => {
         audioChunksRef.current.push(event.data);
       };
-      
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const fileName = `voice_${Date.now()}.webm`;
         const filePath = `${userCompanyId}/voice/${fileName}`;
-        
-        const { error } = await supabase.storage
-          .from('chat-attachments')
-          .upload(filePath, audioBlob);
-        
+        const { error } = await supabase.storage.from('chat-attachments').upload(filePath, audioBlob);
         if (!error) {
-          const { data: { publicUrl } } = supabase.storage
-            .from('chat-attachments')
-            .getPublicUrl(filePath);
-          
+          const { data: { publicUrl } } = supabase.storage.from('chat-attachments').getPublicUrl(filePath);
           setNewMessage(prev => prev + `\n🎤 Голосовое сообщение: ${publicUrl}`);
           showNotification?.('Голосовое сообщение записано', 'success');
         }
       };
-      
       mediaRecorderRef.current.start();
       setIsRecording(true);
     } catch (err) {
@@ -1477,7 +1427,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       setSearchResults([]);
       return;
     }
-    
     try {
       const { data } = await supabase
         .from('company_messages')
@@ -1493,12 +1442,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           .from('company_users')
           .select('user_id, full_name')
           .in('user_id', userIds);
-        
         const usersMap = (usersData || []).reduce((acc, u) => {
           acc[u.user_id] = { user_metadata: { full_name: u.full_name } };
           return acc;
         }, {});
-        
         setSearchResults(data.map(m => ({
           ...m,
           user: usersMap[m.user_id] || { user_metadata: { full_name: 'Пользователь' } }
@@ -1535,7 +1482,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       showNotification?.('Нужно больше сообщений для анализа', 'info');
       return;
     }
-    
     setIsAIAssistantOpen(true);
     try {
       const suggestions = [
@@ -1573,11 +1519,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const translateMessage = useCallback(async (messageId) => {
     const message = messages.find(m => m.id === messageId);
     if (!message) return;
-    
     try {
       const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(message.content)}&langpair=ru|en`);
       const data = await response.json();
-      
       if (data.responseData) {
         showNotification?.('Сообщение переведено', 'success');
       }
@@ -1592,7 +1536,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     if (!user?.id) return;
     const message = messages.find(m => m.id === messageId);
     const hasReacted = message?.reactions?.some(r => r.emoji === emoji && r.user_id === user.id);
-    
     try {
       if (hasReacted) {
         await supabase
@@ -1601,7 +1544,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           .eq('message_id', messageId)
           .eq('user_id', user.id)
           .eq('emoji', emoji);
-        
         setMessages(prev => prev.map(m => 
           m.id === messageId 
             ? { ...m, reactions: m.reactions.filter(r => !(r.emoji === emoji && r.user_id === user.id)) }
@@ -1611,7 +1553,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         await supabase
           .from('message_reactions')
           .insert({ message_id: messageId, user_id: user.id, emoji, created_at: new Date().toISOString() });
-        
         setMessages(prev => prev.map(m => 
           m.id === messageId 
             ? { ...m, reactions: [...m.reactions, { emoji, user_id: user.id }] }
@@ -1691,20 +1632,16 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const handleFileUpload = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file || !userCompanyId) return;
-    
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       showNotification?.('Файл слишком большой (макс. 10MB)', 'error');
       return;
     }
-    
     try {
       const fileName = `${userCompanyId}/${Date.now()}_${file.name.replace(/[^a-z0-9.-]/gi, '_')}`;
       const { error: uploadError } = await supabase.storage.from('chat-attachments').upload(fileName, file);
       if (uploadError) throw uploadError;
-      
       const { data: { publicUrl } } = supabase.storage.from('chat-attachments').getPublicUrl(fileName);
-      
       setSharedFiles(prev => [...prev, {
         id: Date.now(),
         name: file.name,
@@ -1714,7 +1651,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         uploadedAt: new Date().toISOString(),
         uploadedBy: user?.id
       }]);
-      
       setNewMessage(prev => prev + `\n📎 ${file.name}: ${publicUrl}`);
       showNotification?.('Файл прикреплён', 'success');
     } catch (err) {
@@ -1749,7 +1685,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         exportedAt: new Date().toISOString(),
         version: '1.0'
       };
-      
       const json = JSON.stringify(data, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -1779,7 +1714,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     const now = Date.now();
     if (now - lastTypingTime < 2000) return;
     setLastTypingTime(now);
-    
     const typingChannel = supabase.channel(`typing:${activeChannel}`);
     typingChannel.send({
       type: 'broadcast',
@@ -1820,7 +1754,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         .update({ content, edited_at: new Date().toISOString() })
         .eq('id', messageId)
         .eq('user_id', user?.id);
-      
       setEditingMessageId(null);
       setEditText('');
       setMessages(prev => prev.map(m => 
@@ -1838,7 +1771,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     setEditText('');
   }, []);
 
-  // ===== УДАЛЕНИЕ =====
+  // ===== УДАЛЕНИЕ СООБЩЕНИЯ =====
   const deleteMessage = useCallback(async (messageId) => {
     if (!window.confirm('Удалить сообщение?')) return;
     try {
@@ -1847,7 +1780,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', messageId)
         .eq('user_id', user?.id);
-      
       setMessages(prev => prev.filter(m => m.id !== messageId));
       showNotification?.('Сообщение удалено', 'info');
     } catch (err) {
@@ -1993,7 +1925,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           channels={allChannels}
           activeChannel={activeChannel}
           onChannelSelect={handleChannelSelect}
-          canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
+          canCreateChannel={canManageChannels}
           onCreateChannel={() => setShowCreateModal(true)}
           connectionStatus={connectionStatus}
           isMobile={isMobile}
@@ -2033,6 +1965,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           onSearchResultClick={onSearchResultClick}
           onShowAnalytics={() => setShowAnalytics(prev => !prev)}
           showAnalytics={showAnalytics}
+          onDeleteChannel={deleteChannel}
+          canManageChannels={canManageChannels}
         />
 
         {(!isMobile || !showSidebar) && (
@@ -2046,7 +1980,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                     <Menu className="w-5 h-5" />
                   </button>
                 )}
-                
                 <div className="flex items-center gap-2 sm:gap-3">
                   <span className="text-xl sm:text-2xl bg-gray-100 dark:bg-gray-700 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
                     {currentChannel?.icon || '💬'}
@@ -2061,42 +1994,21 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                   </div>
                 </div>
               </div>
-              
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowFileManager(true)}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                  title="Файлы"
-                >
+                <button onClick={() => setShowFileManager(true)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="Файлы">
                   <FolderOpen className="w-4 h-4" />
                 </button>
-                
                 {companyUsers.filter(u => u.is_online).length > 0 && (
-                  <button
-                    onClick={() => startVideoCall(companyUsers.find(u => u.is_online))}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                    title="Видеозвонок"
-                  >
+                  <button onClick={() => startVideoCall(companyUsers.find(u => u.is_online))} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="Видеозвонок">
                     <Video className="w-4 h-4" />
                   </button>
                 )}
-                
-                <button
-                  onClick={exportChat}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                  title="Экспорт"
-                >
+                <button onClick={exportChat} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="Экспорт">
                   <Download className="w-4 h-4" />
                 </button>
-                
-                <button
-                  onClick={getAISuggestion}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                  title="ИИ-помощник"
-                >
+                <button onClick={getAISuggestion} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="ИИ-помощник">
                   <Sparkles className="w-4 h-4 text-yellow-500" />
                 </button>
-                
                 <div className="flex items-center gap-2 text-xs font-medium bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full"
                   style={{ backgroundColor: theme.bgTertiary }}
                 >
@@ -2107,9 +2019,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
             </header>
 
             {showAnalytics && (
-              <div className="flex-shrink-0 p-3 border-b border-gray-200/50 dark:border-gray-700/50"
-                style={{ backgroundColor: theme.bgSecondary }}
-              >
+              <div className="flex-shrink-0 p-3 border-b border-gray-200/50 dark:border-gray-700/50" style={{ backgroundColor: theme.bgSecondary }}>
                 <ChatAnalytics messages={messages} companyUsers={companyUsers} />
               </div>
             )}
@@ -2141,8 +2051,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                   {pinnedMessages.length > 0 && (
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-2 border border-yellow-200 dark:border-yellow-800">
                       <div className="flex items-center gap-2 text-xs font-medium text-yellow-700 dark:text-yellow-300">
-                        <Pin className="w-3 h-3" />
-                        Закрепленные сообщения ({pinnedMessages.length})
+                        <Pin className="w-3 h-3" /> Закрепленные сообщения ({pinnedMessages.length})
                       </div>
                       {pinnedMessages.map(id => {
                         const msg = messages.find(m => m.id === id);
@@ -2154,7 +2063,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                       })}
                     </div>
                   )}
-                  
                   {messages.map(msg => (
                     <MessageItem
                       key={msg.id}
@@ -2218,9 +2126,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
             >
               <div className="mb-2 flex items-center gap-2">
                 <div className="typing-indicator">
-                  <span></span>
-                  <span></span>
-                  <span></span>
+                  <span></span><span></span><span></span>
                 </div>
                 <span className="text-xs animate-pulse" style={{ color: theme.textSecondary }}>
                   Кто-то печатает...
@@ -2247,9 +2153,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
               )}
               
               <div className="flex items-end gap-2">
-                <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
-                  style={{ color: theme.textSecondary }}
-                >
+                <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50" style={{ color: theme.textSecondary }}>
                   <Paperclip className="w-5 h-5" />
                   <input type="file" onChange={handleFileUpload} className="hidden" accept="image/*,.pdf,.doc,.docx,.webm,.mp4" />
                 </label>
@@ -2326,8 +2230,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                     onChange={(e) => setIsEncrypted(e.target.checked)}
                     className="w-3 h-3"
                   />
-                  <Shield className="w-3 h-3" />
-                  Шифрование
+                  <Shield className="w-3 h-3" /> Шифрование
                 </label>
               </div>
             </div>
@@ -2368,10 +2271,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
       {/* Видеозвонок */}
       {videoCall && (
-        <VideoCall
-          onEndCall={endVideoCall}
-          targetUser={videoCall}
-        />
+        <VideoCall onEndCall={endVideoCall} targetUser={videoCall} />
       )}
 
       {/* Файловый менеджер */}
