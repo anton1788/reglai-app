@@ -1,4 +1,4 @@
-// CompanyChat.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ (Без ошибок ESLint)
+// CompanyChat.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ (Удален setSelectedChannel и добавлены недостающие импорты)
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { 
@@ -638,7 +638,8 @@ const ChatSidebar = memo(function({
   onSearch, searchResults, onSearchResultClick,
   onShowAnalytics, showAnalytics,
   onDeleteChannel,
-  canManageChannels
+  canManageChannels,
+  lastReadTimes
 }) {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -667,6 +668,22 @@ const ChatSidebar = memo(function({
   };
 
   const hasUsers = companyUsers && companyUsers.length > 0;
+
+  const formatLastRead = (date) => {
+    if (!date) return null;
+    const now = new Date();
+    const readDate = new Date(date);
+    const diffMs = now - readDate;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'только что';
+    if (diffMins < 60) return `${diffMins} мин назад`;
+    if (diffHours < 24) return `${diffHours} ч назад`;
+    if (diffDays < 7) return `${diffDays} дн назад`;
+    return readDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+  };
 
   return (
     <aside className={`${isMobile ? 'absolute z-40 w-64 h-full' : 'w-64'} border-r border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30 flex flex-col`}>
@@ -763,23 +780,32 @@ const ChatSidebar = memo(function({
           const unread = unreadCounts[channel.id] || 0;
           const isCustom = channel.type === 'custom' || channel.type === 'direct';
           const canDelete = canManageChannels && isCustom;
+          const lastRead = lastReadTimes?.[channel.id];
+          const lastReadText = formatLastRead(lastRead);
           
           return (
             <div key={channel.id} className="relative group">
               <button
                 onClick={() => onChannelSelect(channel.id)}
-                className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${
+                className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium flex flex-col gap-1 transition-all ${
                   isActive 
                     ? 'bg-[#4A6572] text-white shadow-md' 
                     : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
                 }`}
               >
-                <span className="text-lg">{channel.icon}</span>
-                <span className="truncate flex-1">{channel.label || channel.name}</span>
-                {unread > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">
-                    {unread}
-                  </span>
+                <div className="flex items-center gap-3 w-full">
+                  <span className="text-lg">{channel.icon}</span>
+                  <span className="truncate flex-1">{channel.label || channel.name}</span>
+                  {unread > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">
+                      {unread}
+                    </span>
+                  )}
+                </div>
+                {lastReadText && (
+                  <div className="text-[10px] opacity-60 pl-8">
+                    Прочитано: {lastReadText}
+                  </div>
                 )}
               </button>
               {canDelete && (
@@ -944,11 +970,18 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
   const [showGifPicker, setShowGifPicker] = useState(null);
   const [companyUsers, setCompanyUsers] = useState([]);
-  const [connectionStatus] = useState('connected'); // Убрана setConnectionStatus
+  const [connectionStatus, setConnectionStatus] = useState('connected');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showChannelSettings, setShowChannelSettings] = useState(false);
+  // eslint-disable-next-line no-unused-vars
+  const [selectedChannel, setSelectedChannel] = useState(null);
+  const [channelMembers, setChannelMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
   const [savedMessages, setSavedMessages] = useState(new Set());
-  const [unreadCounts] = useState({}); // Убрана setUnreadCounts
+  const [typingUsers, setTypingUsers] = useState(new Set());
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const [lastReadTimes, setLastReadTimes] = useState({});
   const [isMobile, setIsMobile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -958,7 +991,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [isEncrypted, setIsEncrypted] = useState(true);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [videoCall, setVideoCall] = useState(null);
@@ -974,6 +1006,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const typingTimeoutRef = useRef(null);
   const scrollTimeoutRef = useRef(null);
   const isUserScrollingRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
   const animationFrameRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -995,6 +1028,20 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   useEffect(() => {
     if (!isMobile) setShowSidebar(true);
   }, [isMobile]);
+
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const { data, error } = await supabase.from('companies').select('id').limit(1);
+        setConnectionStatus(error || !data ? 'error' : 'connected');
+      } catch {
+        setConnectionStatus('error');
+      }
+    };
+    checkConnection();
+    const interval = setInterval(checkConnection, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // ===== ОСНОВНЫЕ ФУНКЦИИ =====
   
@@ -1024,8 +1071,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     const container = messagesContainerRef.current;
     const { scrollTop, scrollHeight, clientHeight } = container;
     const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-    const isScrollingUp = scrollTop < (container.dataset.lastScrollTop || 0);
-    container.dataset.lastScrollTop = scrollTop;
+    const isScrollingUp = scrollTop < lastScrollTopRef.current;
+    lastScrollTopRef.current = scrollTop;
     
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = requestAnimationFrame(() => {
@@ -1097,50 +1144,95 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
   const currentChannel = allChannels.find(c => c.id === activeChannel);
 
-  // ===== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ =====
-  useEffect(() => {
-    const loadUsers = async () => {
-      if (!userCompanyId) {
-        console.log('Нет companyId для загрузки пользователей');
-        return;
-      }
-      try {
-        console.log('Загрузка пользователей для компании:', userCompanyId);
+  // ===== ЗАГРУЗКА ДАННЫХ =====
+  
+  const markChannelAsRead = useCallback(async (channelId) => {
+    if (!user?.id || !channelId) return;
+    try {
+      const now = new Date().toISOString();
+      await supabase
+        .from('channel_read_status')
+        .upsert({
+          user_id: user.id,
+          channel_id: channelId,
+          last_read_at: now,
+          updated_at: now
+        }, { onConflict: 'user_id,channel_id' });
+      setUnreadCounts(prev => ({ ...prev, [channelId]: 0 }));
+      setLastReadTimes(prev => ({ ...prev, [channelId]: new Date(now) }));
+    } catch (err) {
+      console.error('Ошибка отметки прочитанного:', err);
+    }
+  }, [user?.id]);
+
+  const loadUnreadCounts = useCallback(async () => {
+    if (!user?.id || !userCompanyId) return;
+    try {
+      const { data: readData } = await supabase
+        .from('channel_read_status')
+        .select('channel_id, last_read_at')
+        .eq('user_id', user.id);
+      
+      const readMap = {};
+      readData?.forEach(item => {
+        readMap[item.channel_id] = new Date(item.last_read_at);
+      });
+      setLastReadTimes(readMap);
+      
+      const channels = allChannels.map(ch => ch.id);
+      const counts = {};
+      
+      for (const channelId of channels) {
+        const lastRead = readMap[channelId] || new Date(0);
+        let query = supabase
+          .from('company_messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('company_id', userCompanyId)
+          .is('deleted_at', null)
+          .gt('created_at', lastRead.toISOString())
+          .neq('user_id', user.id);
         
-        const { data, error } = await supabase
-          .from('company_users')
-          .select('*')
-          .eq('company_id', userCompanyId);
+        const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === channelId);
+        const isDirectChat = channelId?.startsWith('dm_');
         
-        if (error) {
-          console.error('Ошибка загрузки пользователей:', error);
-          setCompanyUsers([
-            { 
-              user_id: user?.id || 'current', 
-              full_name: user?.user_metadata?.full_name || 'Текущий пользователь', 
-              role: userRole || 'user',
-              is_online: true 
-            }
-          ]);
-          return;
+        if (isSystemChannel) {
+          query = query.eq('channel', channelId).eq('channel_type', 'system');
+        } else if (isDirectChat) {
+          query = query.eq('channel_id', channelId).eq('channel_type', 'direct');
+        } else {
+          query = query.eq('channel_id', channelId).eq('channel_type', 'custom');
         }
         
-        console.log('Загружено пользователей:', data?.length || 0);
+        const { count, error } = await query;
+        if (!error && count > 0) {
+          counts[channelId] = count;
+        }
+      }
+      setUnreadCounts(counts);
+    } catch (err) {
+      console.error('Ошибка загрузки непрочитанных:', err);
+    }
+  }, [user?.id, userCompanyId, allChannels]);
+
+  // Загрузка пользователей
+  useEffect(() => {
+    const loadUsers = async () => {
+      if (!userCompanyId) return;
+      try {
+        const { data, error } = await supabase
+          .from('company_users')
+          .select('user_id, full_name, role, phone, is_online')
+          .eq('company_id', userCompanyId)
+          .eq('is_active', true);
+        
+        if (error) throw error;
         setCompanyUsers(data || []);
       } catch (err) {
         console.error('Ошибка загрузки пользователей:', err);
-        setCompanyUsers([
-          { 
-            user_id: user?.id || 'current', 
-            full_name: user?.user_metadata?.full_name || 'Текущий пользователь', 
-            role: userRole || 'user',
-            is_online: true 
-          }
-        ]);
       }
     };
     loadUsers();
-  }, [userCompanyId, user, userRole]);
+  }, [userCompanyId]);
 
   // Загрузка каналов
   useEffect(() => {
@@ -1153,93 +1245,105 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           .eq('company_id', userCompanyId)
           .eq('is_archived', false);
         
-        if (error) {
-          console.error('Ошибка загрузки каналов:', error);
-          return;
-        }
+        if (error) throw error;
         setCustomChannels(data || []);
+        setTimeout(() => loadUnreadCounts(), 100);
       } catch (err) {
         console.error('Ошибка загрузки каналов:', err);
       }
     };
     loadCustomChannels();
-  }, [userCompanyId]);
+  }, [userCompanyId, loadUnreadCounts]);
 
   // Загрузка сообщений
   const loadMessages = useCallback(async () => {
     if (!userCompanyId || !activeChannel) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+      const isDirectChat = activeChannel?.startsWith('dm_');
+      
+      let query = supabase
         .from('company_messages')
         .select('*')
         .eq('company_id', userCompanyId)
+        .is('deleted_at', null)
         .order('created_at', { ascending: true })
         .limit(100);
       
-      if (error) {
-        console.error('Ошибка загрузки сообщений:', error);
-        setMessages([]);
-        return;
+      if (isSystemChannel) {
+        query = query.eq('channel', activeChannel).eq('channel_type', 'system');
+      } else if (isDirectChat) {
+        query = query.eq('channel_id', activeChannel).eq('channel_type', 'direct');
+      } else {
+        query = query.eq('channel_id', activeChannel).eq('channel_type', 'custom');
       }
       
-      const enrichedMessages = (data || []).map(msg => ({
+      const { data: messagesData, error } = await query;
+      if (error) throw error;
+      
+      const messageIds = messagesData?.map(m => m.id) || [];
+      let reactionsMap = {};
+      if (messageIds.length > 0) {
+        const { data: reactionsData } = await supabase
+          .from('message_reactions')
+          .select('message_id, emoji, user_id')
+          .in('message_id', messageIds);
+        if (reactionsData) {
+          reactionsMap = reactionsData.reduce((acc, r) => {
+            if (!acc[r.message_id]) acc[r.message_id] = [];
+            acc[r.message_id].push({ emoji: r.emoji, user_id: r.user_id });
+            return acc;
+          }, {});
+        }
+      }
+      
+      const userIds = [...new Set(messagesData?.map(m => m.user_id).filter(Boolean))];
+      let usersMap = {};
+      if (userIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from('company_users')
+          .select('user_id, full_name, role')
+          .in('user_id', userIds);
+        usersMap = (usersData || []).reduce((acc, u) => {
+          acc[u.user_id] = { full_name: u.full_name, role: u.role };
+          return acc;
+        }, {});
+      }
+      
+      const { data: pinnedData } = await supabase
+        .from('company_messages')
+        .select('id')
+        .eq('company_id', userCompanyId)
+        .eq('is_pinned', true);
+      
+      if (pinnedData) {
+        setPinnedMessages(pinnedData.map(p => p.id));
+      }
+      
+      const enrichedMessages = (messagesData || []).map(msg => ({
         ...msg,
-        user: { 
-          user_metadata: { 
-            full_name: companyUsers.find(u => u.user_id === msg.user_id)?.full_name || 'Пользователь' 
-          } 
-        },
-        reactions: [],
-        replied_message: null
+        user: { user_metadata: usersMap[msg.user_id] || { full_name: 'Пользователь', role: 'user' } },
+        reactions: reactionsMap[msg.id] || [],
+        replied_message: null,
+        is_encrypted: msg.is_encrypted || false,
+        is_pinned: pinnedData?.some(p => p.id === msg.id) || false
       }));
       
       setMessages(enrichedMessages);
       setTimeout(() => forceScrollToBottom('auto'), 150);
+      markChannelAsRead(activeChannel);
     } catch (err) {
       console.error('Ошибка загрузки сообщений:', err);
       showNotification?.('Ошибка загрузки чата', 'error');
     } finally {
       setLoading(false);
     }
-  }, [userCompanyId, activeChannel, companyUsers, showNotification, forceScrollToBottom]);
+  }, [userCompanyId, activeChannel, showNotification, forceScrollToBottom, markChannelAsRead]);
 
   useEffect(() => {
     loadMessages();
   }, [loadMessages]);
-
-  // ===== УДАЛЕНИЕ КАНАЛА =====
-  const deleteChannel = useCallback(async (channelId) => {
-    if (!channelId) return;
-    const channel = customChannels.find(c => c.id === channelId);
-    if (!channel) return;
-    
-    try {
-      const { error } = await supabase
-        .from('company_channels')
-        .delete()
-        .eq('id', channelId);
-      
-      if (error) {
-        console.error('Ошибка удаления канала:', error);
-        setCustomChannels(prev => prev.filter(c => c.id !== channelId));
-        if (activeChannel === channelId) {
-          setActiveChannel('general');
-        }
-        showNotification?.('Канал удалён локально', 'info');
-        return;
-      }
-      
-      setCustomChannels(prev => prev.filter(c => c.id !== channelId));
-      if (activeChannel === channelId) {
-        setActiveChannel('general');
-      }
-      showNotification?.('Канал удалён', 'success');
-    } catch (err) {
-      console.error('Ошибка удаления канала:', err);
-      showNotification?.('Не удалось удалить канал', 'error');
-    }
-  }, [customChannels, activeChannel, showNotification]);
 
   // ===== ОТПРАВКА СООБЩЕНИЙ =====
   const sendMessage = useCallback(async (content) => {
@@ -1252,31 +1356,33 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     
     setSending(true);
     try {
+      const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+      const isDirectChat = activeChannel?.startsWith('dm_');
+      
       const messageData = {
         company_id: userCompanyId,
         user_id: user.id,
         content: text,
         created_at: new Date().toISOString(),
-        channel: activeChannel,
-        channel_type: 'system'
+        reply_to_message_id: replyTo?.id || null,
+        is_encrypted: false
       };
       
-      const { error } = await supabase.from('company_messages').insert([messageData]);
-      if (error) {
-        console.error('Ошибка отправки:', error);
-        const tempMessage = {
-          ...messageData,
-          id: Date.now().toString(),
-          user: { user_metadata: { full_name: user?.user_metadata?.full_name || 'Вы' } },
-          reactions: []
-        };
-        setMessages(prev => [...prev, tempMessage]);
-        setNewMessage('');
-        setReplyTo(null);
-        forceScrollToBottom('smooth');
-        showNotification?.('Сообщение добавлено локально', 'info');
-        return;
+      if (isSystemChannel) {
+        messageData.channel = activeChannel;
+        messageData.channel_type = 'system';
+      } else if (isDirectChat) {
+        messageData.channel_id = activeChannel;
+        messageData.channel_type = 'direct';
+        messageData.channel = null;
+      } else {
+        messageData.channel_id = activeChannel;
+        messageData.channel_type = 'custom';
+        messageData.channel = null;
       }
+      
+      const { error } = await supabase.from('company_messages').insert([messageData]);
+      if (error) throw error;
       
       setNewMessage('');
       setReplyTo(null);
@@ -1289,152 +1395,231 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [newMessage, user?.id, sending, activeChannel, canWriteToChannel, userCompanyId, replyTo, showNotification, forceScrollToBottom]);
 
-  // ===== ГОЛОСОВЫЕ СООБЩЕНИЯ =====
-  const startRecording = useCallback(async () => {
+  // ===== ОСТАЛЬНЫЕ ФУНКЦИИ =====
+  
+  const loadChannelMembers = useCallback(async (channelId) => {
+    if (!channelId) return;
+    setLoadingMembers(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
-      };
-      mediaRecorderRef.current.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const fileName = `voice_${Date.now()}.webm`;
-        const filePath = `${userCompanyId}/voice/${fileName}`;
-        const { error } = await supabase.storage.from('chat-attachments').upload(filePath, audioBlob);
-        if (!error) {
-          const { data: { publicUrl } } = supabase.storage.from('chat-attachments').getPublicUrl(filePath);
-          setNewMessage(prev => prev + `\n🎤 Голосовое сообщение: ${publicUrl}`);
-          showNotification?.('Голосовое сообщение записано', 'success');
-        }
-      };
-      mediaRecorderRef.current.start();
-      setIsRecording(true);
-    } catch (err) {
-      console.error('Ошибка записи:', err);
-      showNotification?.('Нет доступа к микрофону', 'error');
-    }
-  }, [userCompanyId, showNotification]);
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      setIsRecording(false);
-    }
-  }, [isRecording]);
-
-  // ===== ПОИСК =====
-  const searchMessages = useCallback(async (query) => {
-    if (!query || query.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    try {
-      const { data } = await supabase
-        .from('company_messages')
-        .select('id, content, created_at, user_id')
-        .eq('company_id', userCompanyId)
-        .ilike('content', `%${query}%`)
-        .limit(20);
+      const { data, error } = await supabase
+        .from('channel_members')
+        .select('user_id, role, joined_at')
+        .eq('channel_id', channelId);
       
-      setSearchResults(data || []);
-    } catch (err) {
-      console.error('Ошибка поиска:', err);
-    }
-  }, [userCompanyId]);
-
-  const onSearchResultClick = useCallback((messageId) => {
-    const message = messages.find(m => m.id === messageId);
-    if (message) {
-      const index = messages.indexOf(message);
-      if (index > -1) {
-        const container = messagesContainerRef.current;
-        if (container) {
-          const messageElements = container.querySelectorAll('article');
-          if (messageElements[index]) {
-            messageElements[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
-            messageElements[index].classList.add('bg-yellow-100', 'dark:bg-yellow-900/30');
-            setTimeout(() => {
-              messageElements[index].classList.remove('bg-yellow-100', 'dark:bg-yellow-900/30');
-            }, 2000);
-          }
-        }
+      if (error) throw error;
+      
+      const userIds = data?.map(m => m.user_id) || [];
+      let usersMap = {};
+      if (userIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from('company_users')
+          .select('user_id, full_name, role')
+          .in('user_id', userIds);
+        usersMap = (usersData || []).reduce((acc, u) => {
+          acc[u.user_id] = { full_name: u.full_name, role: u.role };
+          return acc;
+        }, {});
       }
+      
+      const membersWithUsers = (data || []).map(m => ({
+        ...m,
+        user: usersMap[m.user_id] || { full_name: 'Пользователь', role: 'user' }
+      }));
+      
+      setChannelMembers(membersWithUsers);
+    } catch (err) {
+      console.error('Ошибка загрузки участников:', err);
+      showNotification?.('Не удалось загрузить участников', 'error');
+    } finally {
+      setLoadingMembers(false);
     }
-  }, [messages]);
+  }, [showNotification]);
 
-  // ===== ИИ-АССИСТЕНТ =====
-  const getAISuggestion = useCallback(async () => {
-    if (messages.length < 3) {
-      showNotification?.('Нужно больше сообщений для анализа', 'info');
-      return;
-    }
-    setIsAIAssistantOpen(true);
-    setAiSuggestions([
-      '💡 Попробуйте обсудить детали проекта подробнее',
-      '📋 Не забудьте согласовать сроки выполнения',
-      '🤝 Предложите встречу для обсуждения ключевых вопросов',
-      '📊 Приложите актуальные данные и отчеты'
-    ]);
-  }, [messages, showNotification]);
-
-  const selectAISuggestion = useCallback((suggestion) => {
-    setNewMessage(prev => prev + ' ' + suggestion);
-    setIsAIAssistantOpen(false);
-    textareaRef.current?.focus();
-  }, []);
-
-  // ===== ВИДЕОЗВОНКИ =====
-  const startVideoCall = useCallback((targetUser) => {
-    setVideoCall(targetUser);
-  }, []);
-
-  const endVideoCall = useCallback(() => {
-    setVideoCall(null);
-  }, []);
-
-  // ===== ПЕРЕВОД =====
-  const translateMessage = useCallback(async (messageId) => {
-    const message = messages.find(m => m.id === messageId);
-    if (!message) return;
+  const addChannelMember = useCallback(async (channelId, userId) => {
+    if (!channelId || !userId) return;
     try {
-      const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(message.content)}&langpair=ru|en`);
-      const data = await response.json();
-      if (data.responseData) {
-        showNotification?.('Сообщение переведено', 'success');
-      }
+      const { error } = await supabase
+        .from('channel_members')
+        .insert({ channel_id: channelId, user_id: userId, role: 'member' });
+      
+      if (error) throw error;
+      
+      await loadChannelMembers(channelId);
+      showNotification?.('Участник добавлен', 'success');
     } catch (err) {
-      console.error('Ошибка перевода:', err);
-      showNotification?.('Не удалось перевести', 'error');
+      console.error('Ошибка добавления участника:', err);
+      showNotification?.('Не удалось добавить участника', 'error');
     }
-  }, [messages, showNotification]);
+  }, [loadChannelMembers, showNotification]);
 
-  // ===== РЕАКЦИИ =====
+  const removeChannelMember = useCallback(async (channelId, userId) => {
+    if (!channelId || !userId) return;
+    try {
+      const { error } = await supabase
+        .from('channel_members')
+        .delete()
+        .eq('channel_id', channelId)
+        .eq('user_id', userId);
+      
+      if (error) throw error;
+      
+      await loadChannelMembers(channelId);
+      showNotification?.('Участник удалён', 'info');
+    } catch (err) {
+      console.error('Ошибка удаления участника:', err);
+      showNotification?.('Не удалось удалить участника', 'error');
+    }
+  }, [loadChannelMembers, showNotification]);
+
+  const deleteChannel = useCallback(async (channelId) => {
+    if (!channelId) return;
+    const channel = customChannels.find(c => c.id === channelId);
+    if (!channel) return;
+    if (!window.confirm(`Удалить канал "${channel.name}"? Все сообщения в канале будут удалены.`)) return;
+    
+    try {
+      await supabase.from('company_messages').delete().eq('channel_id', channelId);
+      await supabase.from('channel_members').delete().eq('channel_id', channelId);
+      
+      const { error } = await supabase.from('company_channels').delete().eq('id', channelId);
+      if (error) throw error;
+      
+      setCustomChannels(prev => prev.filter(c => c.id !== channelId));
+      if (activeChannel === channelId) {
+        setActiveChannel('general');
+      }
+      showNotification?.('Канал удалён', 'success');
+    } catch (err) {
+      console.error('Ошибка удаления канала:', err);
+      showNotification?.('Не удалось удалить канал', 'error');
+    }
+  }, [customChannels, activeChannel, showNotification]);
+
+  const handleCreateChannel = useCallback(async (channelData) => {
+    if (!userCompanyId || !user?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('company_channels')
+        .insert([{
+          company_id: userCompanyId,
+          name: channelData.name,
+          description: channelData.description,
+          icon: channelData.icon || '💬',
+          is_private: channelData.is_private || false,
+          created_by: user.id,
+          created_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      await supabase.from('channel_members').insert({
+        channel_id: data.id,
+        user_id: user.id,
+        role: 'admin'
+      });
+      
+      if (channelData.is_private && channelData.memberIds?.length) {
+        await supabase.from('channel_members').insert(
+          channelData.memberIds.map(userId => ({
+            channel_id: data.id,
+            user_id: userId,
+            role: 'member'
+          }))
+        );
+      }
+      
+      setCustomChannels(prev => [...prev, data]);
+      setActiveChannel(data.id);
+      showNotification?.('Канал создан', 'success');
+    } catch (err) {
+      console.error('Ошибка создания канала:', err);
+      showNotification?.('Не удалось создать канал', 'error');
+    }
+  }, [userCompanyId, user?.id, showNotification]);
+
+  const startEdit = useCallback((message) => {
+    setEditingMessageId(message.id);
+    setEditText(message.content);
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  }, []);
+  
+  const saveEdit = useCallback(async (messageId) => {
+    const content = editText.trim();
+    if (!content) return;
+    try {
+      await supabase
+        .from('company_messages')
+        .update({ content, edited_at: new Date().toISOString() })
+        .eq('id', messageId)
+        .eq('user_id', user?.id);
+      setEditingMessageId(null);
+      setEditText('');
+      setMessages(prev => prev.map(m => 
+        m.id === messageId ? { ...m, content, edited_at: new Date().toISOString() } : m
+      ));
+      showNotification?.('Сообщение обновлено', 'success');
+    } catch (err) {
+      console.error('Ошибка редактирования:', err);
+      showNotification?.('Не удалось обновить сообщение', 'error');
+    }
+  }, [editText, user?.id, showNotification]);
+  
+  const cancelEdit = useCallback(() => {
+    setEditingMessageId(null);
+    setEditText('');
+  }, []);
+
+  const deleteMessage = useCallback(async (messageId) => {
+    if (!window.confirm('Удалить сообщение?')) return;
+    try {
+      await supabase
+        .from('company_messages')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', messageId)
+        .eq('user_id', user?.id);
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      showNotification?.('Сообщение удалено', 'info');
+    } catch (err) {
+      console.error('Ошибка удаления:', err);
+      showNotification?.('Не удалось удалить сообщение', 'error');
+    }
+  }, [user?.id, showNotification]);
+
   const toggleReaction = useCallback(async (messageId, emoji) => {
     if (!user?.id) return;
     const message = messages.find(m => m.id === messageId);
-    if (!message) return;
-    
-    const hasReacted = message.reactions?.some(r => r.emoji === emoji && r.user_id === user.id);
-    
-    if (hasReacted) {
-      setMessages(prev => prev.map(m => 
-        m.id === messageId 
-          ? { ...m, reactions: m.reactions.filter(r => !(r.emoji === emoji && r.user_id === user.id)) }
-          : m
-      ));
-    } else {
-      setMessages(prev => prev.map(m => 
-        m.id === messageId 
-          ? { ...m, reactions: [...(m.reactions || []), { emoji, user_id: user.id }] }
-          : m
-      ));
+    const hasReacted = message?.reactions?.some(r => r.emoji === emoji && r.user_id === user.id);
+    try {
+      if (hasReacted) {
+        await supabase
+          .from('message_reactions')
+          .delete()
+          .eq('message_id', messageId)
+          .eq('user_id', user.id)
+          .eq('emoji', emoji);
+        setMessages(prev => prev.map(m => 
+          m.id === messageId 
+            ? { ...m, reactions: m.reactions.filter(r => !(r.emoji === emoji && r.user_id === user.id)) }
+            : m
+        ));
+      } else {
+        await supabase
+          .from('message_reactions')
+          .insert({ message_id: messageId, user_id: user.id, emoji, created_at: new Date().toISOString() });
+        setMessages(prev => prev.map(m => 
+          m.id === messageId 
+            ? { ...m, reactions: [...m.reactions, { emoji, user_id: user.id }] }
+            : m
+        ));
+      }
+      setShowReactionsPicker(null);
+      setShowEmojiPicker(null);
+      setShowGifPicker(null);
+    } catch (err) {
+      console.error('Ошибка реакции:', err);
     }
-    setShowReactionsPicker(null);
-    setShowEmojiPicker(null);
-    setShowGifPicker(null);
   }, [user?.id, messages]);
 
   const reactWithGif = useCallback(async (messageId, gifUrl) => {
@@ -1443,10 +1628,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     setShowGifPicker(null);
   }, [sendMessage]);
 
-  // ===== СОХРАНЕНИЕ СООБЩЕНИЙ =====
   const toggleSaveMessage = useCallback(async (messageId) => {
     if (!user?.id) return;
     if (savedMessages.has(messageId)) {
+      await supabase.from('saved_messages').delete().eq('message_id', messageId).eq('user_id', user.id);
       setSavedMessages(prev => {
         const newSet = new Set(prev);
         newSet.delete(messageId);
@@ -1454,16 +1639,68 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       });
       showNotification?.('Сообщение удалено из сохранённых', 'info');
     } else {
+      await supabase.from('saved_messages').insert({ message_id: messageId, user_id: user.id, saved_at: new Date() });
       setSavedMessages(prev => new Set([...prev, messageId]));
       showNotification?.('Сообщение сохранено', 'success');
     }
   }, [user?.id, savedMessages, showNotification]);
 
-  // ===== ЗАКРЕПЛЕНИЕ =====
+  const handleReply = useCallback((message) => {
+    setReplyTo(message);
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  }, []);
+
+  const handleTyping = useCallback(() => {
+    if (!user?.id || !activeChannel) return;
+    const now = Date.now();
+    if (now - lastTypingTime < 2000) return;
+    setLastTypingTime(now);
+    
+    const typingChannel = supabase.channel(`typing:${activeChannel}`);
+    typingChannel.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { user_id: user.id, user_name: user.user_metadata?.full_name || 'Пользователь' }
+    });
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      typingChannel.send({
+        type: 'broadcast',
+        event: 'typing_stop',
+        payload: { user_id: user.id }
+      });
+    }, 1000);
+  }, [user?.id, activeChannel, user?.user_metadata?.full_name, lastTypingTime]);
+
+  // Подписка на события печати
+  useEffect(() => {
+    if (!activeChannel) return;
+    const typingChannel = supabase.channel(`typing:${activeChannel}`);
+    typingChannel
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload.user_id !== user?.id) {
+          setTypingUsers(prev => new Set([...prev, payload.user_id]));
+          setTimeout(() => {
+            setTypingUsers(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(payload.user_id);
+              return newSet;
+            });
+          }, 2000);
+        }
+      })
+      .subscribe();
+    return () => { typingChannel.unsubscribe(); };
+  }, [activeChannel, user?.id]);
+
   const handlePinMessage = useCallback(async (messageId) => {
     try {
       if (pinnedMessages.includes(messageId)) {
         setPinnedMessages(prev => prev.filter(id => id !== messageId));
+        await supabase
+          .from('company_messages')
+          .update({ is_pinned: false, pinned_at: null })
+          .eq('id', messageId);
         showNotification?.('Сообщение откреплено', 'info');
       } else {
         if (pinnedMessages.length >= 5) {
@@ -1471,6 +1708,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           return;
         }
         setPinnedMessages(prev => [...prev, messageId]);
+        await supabase
+          .from('company_messages')
+          .update({ is_pinned: true, pinned_at: new Date().toISOString() })
+          .eq('id', messageId);
         showNotification?.('Сообщение закреплено', 'success');
       }
     } catch (err) {
@@ -1479,7 +1720,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [pinnedMessages, showNotification]);
 
-  // ===== КОПИРОВАНИЕ =====
   const handleCopyMessage = useCallback((messageId) => {
     const message = messages.find(m => m.id === messageId);
     if (message?.content) {
@@ -1488,7 +1728,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [messages, showNotification]);
 
-  // ===== ЗАГРУЗКА ФАЙЛОВ =====
   const handleFileUpload = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file || !userCompanyId) return;
@@ -1520,7 +1759,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     e.target.value = '';
   }, [userCompanyId, user?.id, showNotification]);
 
-  // ===== ЭКСПОРТ ЧАТА =====
   const exportChat = useCallback(async () => {
     try {
       const data = {
@@ -1558,36 +1796,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     if (isMobile) setShowSidebar(false);
   }, [isMobile]);
 
-  const handleTyping = useCallback(() => {
-    if (!user?.id || !activeChannel) return;
-    const now = Date.now();
-    if (now - lastTypingTime < 2000) return;
-    setLastTypingTime(now);
-    
-    // Отправка события печати
-    const typingChannel = supabase.channel(`typing:${activeChannel}`);
-    typingChannel.send({
-      type: 'broadcast',
-      event: 'typing',
-      payload: { 
-        user_id: user.id, 
-        user_name: user?.user_metadata?.full_name || 'Пользователь' 
-      }
-    });
-    
-    // Сброс таймера
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-    typingTimeoutRef.current = setTimeout(() => {
-      typingChannel.send({
-        type: 'broadcast',
-        event: 'typing_stop',
-        payload: { user_id: user.id }
-      });
-    }, 1000);
-  }, [user?.id, activeChannel, lastTypingTime, user?.user_metadata?.full_name]);
-
   const handleTextareaChange = useCallback((e) => {
     const value = e.target.value;
     setNewMessage(value);
@@ -1596,142 +1804,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     if (value.trim()) handleTyping();
   }, [handleTyping]);
 
-  // ===== РЕДАКТИРОВАНИЕ =====
-  const startEdit = useCallback((message) => {
-    setEditingMessageId(message.id);
-    setEditText(message.content);
-    setTimeout(() => textareaRef.current?.focus(), 50);
-  }, []);
-  
-  const saveEdit = useCallback(async (messageId) => {
-    const content = editText.trim();
-    if (!content) return;
-    try {
-      setMessages(prev => prev.map(m => 
-        m.id === messageId ? { ...m, content, edited_at: new Date().toISOString() } : m
-      ));
-      setEditingMessageId(null);
-      setEditText('');
-      showNotification?.('Сообщение обновлено', 'success');
-    } catch (err) {
-      console.error('Ошибка редактирования:', err);
-      showNotification?.('Не удалось обновить сообщение', 'error');
-    }
-  }, [editText, showNotification]);
-  
-  const cancelEdit = useCallback(() => {
-    setEditingMessageId(null);
-    setEditText('');
-  }, []);
-
-  // ===== УДАЛЕНИЕ СООБЩЕНИЯ =====
-  const deleteMessage = useCallback(async (messageId) => {
-    if (!window.confirm('Удалить сообщение?')) return;
-    try {
-      setMessages(prev => prev.filter(m => m.id !== messageId));
-      showNotification?.('Сообщение удалено', 'info');
-    } catch (err) {
-      console.error('Ошибка удаления:', err);
-      showNotification?.('Не удалось удалить сообщение', 'error');
-    }
-  }, [showNotification]);
-
-  // ===== УПРАВЛЕНИЕ КАНАЛАМИ =====
-  const handleCreateChannel = useCallback(async (channelData) => {
-    if (!userCompanyId || !user?.id) return;
-    try {
-      const { data, error } = await supabase
-        .from('company_channels')
-        .insert([{
-          company_id: userCompanyId,
-          name: channelData.name,
-          description: channelData.description,
-          icon: channelData.icon || '💬',
-          is_private: channelData.is_private || false,
-          created_by: user.id,
-          created_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
-      
-      if (error) {
-        console.error('Ошибка создания канала:', error);
-        const newChannel = {
-          id: Date.now().toString(),
-          name: channelData.name,
-          description: channelData.description,
-          icon: channelData.icon || '💬',
-          is_private: channelData.is_private || false,
-          created_by: user.id,
-          created_at: new Date().toISOString()
-        };
-        setCustomChannels(prev => [...prev, newChannel]);
-        setActiveChannel(newChannel.id);
-        showNotification?.('Канал создан локально', 'success');
-        return;
-      }
-      
-      setCustomChannels(prev => [...prev, data]);
-      setActiveChannel(data.id);
-      showNotification?.('Канал создан', 'success');
-    } catch (err) {
-      console.error('Ошибка создания канала:', err);
-      showNotification?.('Не удалось создать канал', 'error');
-    }
-  }, [userCompanyId, user?.id, showNotification]);
-
-  // ===== ПОДПИСКА =====
-  useEffect(() => {
-    if (!userCompanyId || !activeChannel) return;
-    if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
-    
-    // Сохраняем ref для очистки
-    const currentTypingTimeout = typingTimeoutRef.current;
-    
-    subscriptionRef.current = supabase
-      .channel(`messages:${activeChannel}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'company_messages',
-        filter: `company_id=eq.${userCompanyId}`
-      }, async (payload) => {
-        const newMsg = payload.new;
-        if (newMsg.deleted_at) return;
-        
-        const enrichedMessage = {
-          ...newMsg,
-          user: { 
-            user_metadata: { 
-              full_name: companyUsers.find(u => u.user_id === newMsg.user_id)?.full_name || 'Пользователь' 
-            } 
-          },
-          reactions: []
-        };
-        
-        setMessages(prev => [...prev, enrichedMessage]);
-        setTimeout(() => scrollToBottom('smooth'), 50);
-      })
-      .subscribe();
-    
-    return () => {
-      if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
-      // Очищаем таймер
-      if (currentTypingTimeout) {
-        clearTimeout(currentTypingTimeout);
-      }
-    };
-  }, [userCompanyId, activeChannel, companyUsers, scrollToBottom]);
-
-  // ===== ТАЙМЕРЫ =====
-  useEffect(() => {
-    return () => {
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, []);
-
-  // ===== ОБРАБОТЧИК КЛАВИШ =====
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -1755,16 +1827,219 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [editingMessageId, saveEdit, sendMessage, cancelEdit]);
 
+  const toggleSidebar = useCallback(() => {
+    setShowSidebar(prev => !prev);
+  }, []);
+
+  // ===== ПОИСК =====
+  const searchMessages = useCallback(async (query) => {
+    if (!query || query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const { data } = await supabase
+        .from('company_messages')
+        .select('id, content, created_at, user_id')
+        .eq('company_id', userCompanyId)
+        .ilike('content', `%${query}%`)
+        .is('deleted_at', null)
+        .limit(20);
+      
+      if (data) {
+        const userIds = [...new Set(data.map(m => m.user_id))];
+        const { data: usersData } = await supabase
+          .from('company_users')
+          .select('user_id, full_name')
+          .in('user_id', userIds);
+        const usersMap = (usersData || []).reduce((acc, u) => {
+          acc[u.user_id] = { user_metadata: { full_name: u.full_name } };
+          return acc;
+        }, {});
+        setSearchResults(data.map(m => ({
+          ...m,
+          user: usersMap[m.user_id] || { user_metadata: { full_name: 'Пользователь' } }
+        })));
+      }
+    } catch (err) {
+      console.error('Ошибка поиска:', err);
+    }
+  }, [userCompanyId]);
+
+  const onSearchResultClick = useCallback((messageId) => {
+    const message = messages.find(m => m.id === messageId);
+    if (message) {
+      const index = messages.indexOf(message);
+      if (index > -1) {
+        const container = messagesContainerRef.current;
+        if (container) {
+          const messageElements = container.querySelectorAll('article');
+          if (messageElements[index]) {
+            messageElements[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            messageElements[index].classList.add('bg-yellow-100', 'dark:bg-yellow-900/30');
+            setTimeout(() => {
+              messageElements[index].classList.remove('bg-yellow-100', 'dark:bg-yellow-900/30');
+            }, 2000);
+          }
+        }
+      }
+    }
+  }, [messages]);
+
+  // ===== ИИ-АССИСТЕНТ =====
+  const getAISuggestion = useCallback(async () => {
+    if (messages.length < 3) {
+      showNotification?.('Нужно больше сообщений для анализа', 'info');
+      return;
+    }
+    setIsAIAssistantOpen(true);
+    setAiSuggestions([
+      '💡 Попробуйте обсудить детали проекта подробнее',
+      '📋 Не забудьте согласовать сроки выполнения',
+      '🤝 Предложите встречу для обсуждения ключевых вопросов',
+      '📊 Приложите актуальные данные и отчеты',
+      '✅ Подведите итоги обсуждения и зафиксируйте решения'
+    ]);
+  }, [messages, showNotification]);
+
+  const selectAISuggestion = useCallback((suggestion) => {
+    setNewMessage(prev => prev + ' ' + suggestion);
+    setIsAIAssistantOpen(false);
+    textareaRef.current?.focus();
+  }, []);
+
+  // ===== ВИДЕОЗВОНКИ =====
+  const startVideoCall = useCallback((targetUser) => {
+    setVideoCall(targetUser);
+  }, []);
+
+  const endVideoCall = useCallback(() => {
+    setVideoCall(null);
+  }, []);
+
+  // ===== ПЕРЕВОД =====
+  const translateMessage = useCallback(async (messageId) => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+    try {
+      const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(message.content)}&langpair=ru|en`);
+      const data = await response.json();
+      if (data.responseData) {
+        showNotification?.('Сообщение переведено', 'success');
+      }
+    } catch (err) {
+      console.error('Ошибка перевода:', err);
+      showNotification?.('Не удалось перевести', 'error');
+    }
+  }, [messages, showNotification]);
+
+  // ===== ГОЛОСОВЫЕ СООБЩЕНИЯ =====
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+      mediaRecorderRef.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const fileName = `voice_${Date.now()}.webm`;
+        const filePath = `${userCompanyId}/voice/${fileName}`;
+        const { error } = await supabase.storage.from('chat-attachments').upload(filePath, audioBlob);
+        if (!error) {
+          const { data: { publicUrl } } = supabase.storage.from('chat-attachments').getPublicUrl(filePath);
+          setNewMessage(prev => prev + `\n🎤 Голосовое сообщение: ${publicUrl}`);
+          showNotification?.('Голосовое сообщение записано', 'success');
+        }
+      };
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Ошибка записи:', err);
+      showNotification?.('Нет доступа к микрофону', 'error');
+    }
+  }, [userCompanyId, showNotification]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+    }
+  }, [isRecording]);
+
+  // ===== ПОДПИСКА =====
+  useEffect(() => {
+    if (!userCompanyId || !activeChannel) return;
+    if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
+    
+    const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+    const filter = isSystemChannel 
+      ? `company_id=eq.${userCompanyId} AND channel=eq.${activeChannel} AND channel_type=eq.system`
+      : `channel_id=eq.${activeChannel}`;
+    
+    subscriptionRef.current = supabase
+      .channel(`messages:${activeChannel}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'company_messages',
+        filter: filter
+      }, async (payload) => {
+        const newMsg = payload.new;
+        if (newMsg.deleted_at) return;
+        
+        const msgChannelId = newMsg.channel_id || newMsg.channel;
+        if (activeChannel !== msgChannelId && newMsg.user_id !== user?.id) {
+          setUnreadCounts(prev => ({
+            ...prev,
+            [msgChannelId]: (prev[msgChannelId] || 0) + 1
+          }));
+        }
+        
+        const { data: userData } = await supabase
+          .from('company_users')
+          .select('full_name, role')
+          .eq('user_id', newMsg.user_id)
+          .single();
+        
+        const { data: reactionsData } = await supabase
+          .from('message_reactions')
+          .select('emoji, user_id')
+          .eq('message_id', newMsg.id);
+        
+        const enrichedMessage = {
+          ...newMsg,
+          user: { user_metadata: userData || { full_name: 'Пользователь', role: 'user' } },
+          reactions: reactionsData || [],
+          replied_message: null,
+          is_encrypted: newMsg.is_encrypted || false
+        };
+        
+        setMessages(prev => [...prev, enrichedMessage]);
+        setTimeout(() => scrollToBottom('smooth'), 50);
+      })
+      .subscribe();
+    
+    return () => {
+      if (subscriptionRef.current) subscriptionRef.current.unsubscribe();
+    };
+  }, [userCompanyId, activeChannel, user?.id, scrollToBottom]);
+
+  // ===== ТАЙМЕРЫ =====
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, []);
+
   // ===== RENDER =====
-  const theme = THEMES[currentTheme] || THEMES.dark;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden transition-colors duration-300"
-      style={{
-        backgroundColor: theme.bg,
-        color: theme.text
-      }}
-    >
+    <div className="flex flex-col h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         <ChatSidebar
           channels={allChannels}
@@ -1775,7 +2050,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           connectionStatus={connectionStatus}
           isMobile={isMobile}
           showSidebar={showSidebar}
-          onCloseSidebar={() => setShowSidebar(false)}
+          onCloseSidebar={toggleSidebar}
           currentUserRole={userRole}
           companyUsers={companyUsers}
           currentUser={user}
@@ -1800,6 +2075,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
             if (isMobile) setShowSidebar(false);
           }}
           unreadCounts={unreadCounts}
+          lastReadTimes={lastReadTimes}
           onThemeChange={setCurrentTheme}
           currentTheme={currentTheme}
           themeNames={Object.keys(THEMES)}
@@ -1816,12 +2092,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
         {(!isMobile || !showSidebar) && (
           <div className="flex-1 flex flex-col min-w-0 h-full">
-            <header className="flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between"
-              style={{ backgroundColor: theme.bgSecondary }}
-            >
+            <header className="flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
               <div className="flex items-center gap-2 sm:gap-3">
                 {isMobile && !showSidebar && (
-                  <button onClick={() => setShowSidebar(true)} className="p-2 hover:bg-gray-100 rounded-lg">
+                  <button onClick={toggleSidebar} className="p-2 hover:bg-gray-100 rounded-lg">
                     <Menu className="w-5 h-5" />
                   </button>
                 )}
@@ -1830,10 +2104,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                     {currentChannel?.icon || '💬'}
                   </span>
                   <div>
-                    <h2 className="font-bold text-sm sm:text-base" style={{ color: theme.text }}>
+                    <h2 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
                       {currentChannel?.label || currentChannel?.name}
                     </h2>
-                    <p className="text-xs hidden sm:block" style={{ color: theme.textSecondary }}>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
                       {currentChannel?.description}
                     </p>
                   </div>
@@ -1854,9 +2128,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                 <button onClick={getAISuggestion} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="ИИ-помощник">
                   <Sparkles className="w-4 h-4 text-yellow-500" />
                 </button>
-                <div className="flex items-center gap-2 text-xs font-medium bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full"
-                  style={{ backgroundColor: theme.bgTertiary }}
-                >
+                <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
                   <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   <span>{messages.length}</span>
                 </div>
@@ -1864,7 +2136,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
             </header>
 
             {showAnalytics && (
-              <div className="flex-shrink-0 p-3 border-b border-gray-200/50 dark:border-gray-700/50" style={{ backgroundColor: theme.bgSecondary }}>
+              <div className="flex-shrink-0 p-3 border-b border-gray-200/50 dark:border-gray-700/50 bg-white/50 dark:bg-gray-800/50">
                 <ChatAnalytics messages={messages} companyUsers={companyUsers} />
               </div>
             )}
@@ -1873,18 +2145,15 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
               ref={messagesContainerRef}
               className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4"
               onScroll={handleScroll}
-              style={{ 
-                WebkitOverflowScrolling: 'touch',
-                backgroundColor: theme.bg
-              }}
+              style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {loading ? (
                 <div className="flex flex-col items-center justify-center h-40 gap-3">
                   <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
-                  <span className="text-sm" style={{ color: theme.textSecondary }}>Загрузка...</span>
+                  <span className="text-sm text-gray-500">Загрузка...</span>
                 </div>
               ) : messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40" style={{ color: theme.textSecondary }}>
+                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
                   <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
                     <MessageCircle className="w-8 h-8 opacity-50" />
                   </div>
@@ -1898,6 +2167,14 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                       <div className="flex items-center gap-2 text-xs font-medium text-yellow-700 dark:text-yellow-300">
                         <Pin className="w-3 h-3" /> Закрепленные сообщения ({pinnedMessages.length})
                       </div>
+                      {pinnedMessages.map(id => {
+                        const msg = messages.find(m => m.id === id);
+                        return msg ? (
+                          <div key={id} className="text-xs truncate opacity-70 mt-1">
+                            {msg.content?.slice(0, 50)}...
+                          </div>
+                        ) : null;
+                      })}
                     </div>
                   )}
                   {messages.map(msg => (
@@ -1914,7 +2191,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                       onCancelEdit={cancelEdit}
                       onDelete={deleteMessage}
                       onToggleReaction={toggleReaction}
-                      onReply={setReplyTo}
+                      onReply={handleReply}
                       onToggleSave={toggleSaveMessage}
                       isSaved={savedMessages.has(msg.id)}
                       showReactionsPicker={showReactionsPicker}
@@ -1955,12 +2232,23 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
               </button>
             )}
 
-            <div className="flex-shrink-0 p-3 sm:p-4 border-t border-gray-200/50 dark:border-gray-700/50"
-              style={{ 
-                backgroundColor: theme.bgSecondary,
-                borderColor: theme.border
-              }}
-            >
+            <div className="flex-shrink-0 p-3 sm:p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm">
+              {typingUsers.size > 0 && (
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <span className="text-xs text-gray-500 animate-pulse">
+                    {Array.from(typingUsers).map(id => {
+                      const userData = companyUsers.find(u => u.user_id === id);
+                      return userData?.full_name?.split(' ')[0];
+                    }).join(', ')} печатает...
+                  </span>
+                </div>
+              )}
+              
               {replyTo && (
                 <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex justify-between items-start border-l-4 border-[#4A6572]">
                   <div className="flex-1 min-w-0">
@@ -1970,18 +2258,18 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                         Ответ {replyTo.user?.user_metadata?.full_name || 'пользователю'}:
                       </span>
                     </div>
-                    <p className="text-xs truncate mt-1" style={{ color: theme.textSecondary }}>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate mt-1">
                       {replyTo.content?.slice(0, 80)}
                     </p>
                   </div>
                   <button onClick={() => setReplyTo(null)} className="p-1 hover:bg-gray-200 rounded-lg">
-                    <X className="w-4 h-4" style={{ color: theme.textSecondary }} />
+                    <X className="w-4 h-4 text-gray-500" />
                   </button>
                 </div>
               )}
               
               <div className="flex items-end gap-2">
-                <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50" style={{ color: theme.textSecondary }}>
+                <label className="p-2.5 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300">
                   <Paperclip className="w-5 h-5" />
                   <input type="file" onChange={handleFileUpload} className="hidden" accept="image/*,.pdf,.doc,.docx,.webm,.mp4" />
                 </label>
@@ -1990,14 +2278,14 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                   onClick={isRecording ? stopRecording : startRecording}
                   className={`p-2.5 rounded-xl transition-all ${isRecording ? 'bg-red-500 animate-pulse' : 'hover:bg-gray-100 dark:hover:bg-gray-700/50'}`}
                 >
-                  {isRecording ? <MicOff className="w-5 h-5 text-white" /> : <Mic className="w-5 h-5" style={{ color: theme.textSecondary }} />}
+                  {isRecording ? <MicOff className="w-5 h-5 text-white" /> : <Mic className="w-5 h-5" />}
                 </button>
                 
                 <button
                   onClick={() => setShowEmojiPicker(prev => prev === 'input' ? null : 'input')}
                   className="p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700/50"
                 >
-                  <Smile className="w-5 h-5" style={{ color: theme.textSecondary }} />
+                  <Smile className="w-5 h-5" />
                 </button>
 
                 <div className="flex-1 relative">
@@ -2007,15 +2295,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                     onChange={handleTextareaChange}
                     onKeyDown={handleKeyDown}
                     placeholder={replyTo ? `Ответ ${replyTo.user?.user_metadata?.full_name}...` : (t?.('chat.placeholder') || 'Введите сообщение...')}
-                    className="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-[#4A6572] resize-none text-sm"
+                    className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700/50 border border-gray-200/50 dark:border-gray-600/50 rounded-xl focus:ring-2 focus:ring-[#4A6572] resize-none text-sm"
                     rows={1}
-                    style={{ 
-                      minHeight: '44px', 
-                      maxHeight: '120px',
-                      backgroundColor: theme.bgTertiary,
-                      color: theme.text,
-                      borderColor: theme.border
-                    }}
+                    style={{ minHeight: '44px', maxHeight: '120px' }}
                   />
                 </div>
 
@@ -2045,28 +2327,17 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                 </div>
               )}
               
-              <div className="mt-2 flex items-center justify-between text-[10px]" style={{ color: theme.textSecondary }}>
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> — отправить
-                  <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ml-2">Shift+Enter</kbd> — новая строка
-                  <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ml-2">/</kbd> — поиск
-                </div>
-                <label className="flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isEncrypted}
-                    onChange={(e) => setIsEncrypted(e.target.checked)}
-                    className="w-3 h-3"
-                  />
-                  <Shield className="w-3 h-3" /> Шифрование
-                </label>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 dark:text-gray-500">
+                <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">Enter</kbd> — отправить
+                <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ml-2">Shift+Enter</kbd> — новая строка
+                <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded ml-2">/</kbd> — поиск
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Модальное окно создания канала */}
+      {/* Модальные окна */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
@@ -2083,6 +2354,91 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                   setShowCreateModal(false);
                 }
               }} className="px-4 py-2 bg-[#4A6572] text-white rounded-lg">Создать</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showChannelSettings && selectedChannel && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">Управление каналом: {selectedChannel.name}</h3>
+              <button onClick={() => setShowChannelSettings(false)} className="p-1 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <h4 className="font-medium mb-2">Участники ({channelMembers.length})</h4>
+              {loadingMembers ? (
+                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin" /></div>
+              ) : channelMembers.length === 0 ? (
+                <p className="text-sm text-gray-500">Нет участников</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {channelMembers.map(member => {
+                    const isCreator = selectedChannel.created_by === member.user_id;
+                    const canRemove = !isCreator && (userRole === 'manager' || userRole === 'supply_admin');
+                    return (
+                      <div key={member.user_id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="font-medium">{member.user?.full_name || 'Пользователь'}</p>
+                          <p className="text-xs text-gray-500">{member.role}{isCreator && ' (создатель)'}</p>
+                        </div>
+                        {canRemove && (
+                          <button
+                            onClick={() => removeChannelMember(selectedChannel.id, member.user_id)}
+                            className="p-1 text-red-500 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            
+            <div>
+              <h4 className="font-medium mb-2">Добавить участника</h4>
+              <select className="w-full p-2 border rounded-lg mb-3" id="newMemberSelect">
+                <option value="">-- Выберите пользователя --</option>
+                {companyUsers
+                  .filter(u => !channelMembers.some(m => m.user_id === u.user_id))
+                  .map(u => (
+                    <option key={u.user_id} value={u.user_id}>{u.full_name} ({u.role})</option>
+                  ))
+                }
+              </select>
+              <button
+                onClick={() => {
+                  const select = document.getElementById('newMemberSelect');
+                  const userId = select?.value;
+                  if (userId) {
+                    addChannelMember(selectedChannel.id, userId);
+                    select.value = '';
+                  }
+                }}
+                className="w-full py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955]"
+              >
+                Добавить
+              </button>
+            </div>
+            
+            <div className="mt-6 pt-4 border-t">
+              <button
+                onClick={() => {
+                  if (confirm(`Удалить канал "${selectedChannel.name}"?`)) {
+                    deleteChannel(selectedChannel.id);
+                    setShowChannelSettings(false);
+                  }
+                }}
+                className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Удалить канал
+              </button>
             </div>
           </div>
         </div>
