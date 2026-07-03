@@ -1,4 +1,4 @@
-// CompanyChat.jsx - ПОЛНАЯ ВЕРСИЯ (Сотрудники + Удаление каналов)
+// CompanyChat.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ (Список сотрудников)
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { 
@@ -627,7 +627,7 @@ const ChatAnalytics = memo(({ messages, companyUsers }) => {
 });
 
 // ============================================================
-// 8. КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (С СОТРУДНИКАМИ И УДАЛЕНИЕМ)
+// 8. КОМПОНЕНТ БОКОВОЙ ПАНЕЛИ (С СОТРУДНИКАМИ)
 // ============================================================
 
 const ChatSidebar = memo(function({ 
@@ -638,8 +638,8 @@ const ChatSidebar = memo(function({
   toggleNotifications, notificationsEnabled,
   onSearch, searchResults, onSearchResultClick,
   onShowAnalytics, showAnalytics,
-  onDeleteChannel, // ДОБАВЛЕНА ФУНКЦИЯ УДАЛЕНИЯ
-  canManageChannels // ДОБАВЛЕН ФЛАГ УПРАВЛЕНИЯ
+  onDeleteChannel,
+  canManageChannels
 }) {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -666,6 +666,9 @@ const ChatSidebar = memo(function({
       onDeleteChannel?.(channelId);
     }
   };
+
+  // Проверка, есть ли пользователи
+  const hasUsers = companyUsers && companyUsers.length > 0;
 
   return (
     <aside className={`${isMobile ? 'absolute z-40 w-64 h-full' : 'w-64'} border-r border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30 flex flex-col`}>
@@ -798,23 +801,32 @@ const ChatSidebar = memo(function({
         })}
       </nav>
       
-      {/* СПИСОК СОТРУДНИКОВ - ВОССТАНОВЛЕН */}
-      {companyUsers && companyUsers.length > 0 && (
-        <div className="p-3 border-t border-gray-200/50 dark:border-gray-700/50">
-          <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-1">
-              <Users className="w-3 h-3" /> Сотрудники ({companyUsers.length})
-            </span>
-            <span className="text-[10px] font-normal">
+      {/* ===== СПИСОК СОТРУДНИКОВ - ПОЛНАЯ ВЕРСИЯ ===== */}
+      <div className="p-3 border-t border-gray-200/50 dark:border-gray-700/50">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1">
+            <Users className="w-3 h-3" /> 
+            Сотрудники {hasUsers ? `(${companyUsers.length})` : ''}
+          </h4>
+          {hasUsers && (
+            <span className="text-[10px] font-normal text-green-500">
               {companyUsers.filter(u => u.is_online).length} онлайн
             </span>
-          </h4>
-          <div className="space-y-1 max-h-32 overflow-y-auto">
+          )}
+        </div>
+        
+        {!hasUsers ? (
+          <div className="text-center py-4 text-xs text-gray-400">
+            <Loader2 className="w-4 h-4 animate-spin mx-auto mb-1" />
+            Загрузка сотрудников...
+          </div>
+        ) : (
+          <div className="space-y-1 max-h-48 overflow-y-auto">
             {companyUsers.map(u => (
               <button
                 key={u.user_id}
                 onClick={() => onStartDirectChat?.(u)}
-                className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg flex items-center gap-2 transition-colors"
+                className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg flex items-center gap-2 transition-colors group"
               >
                 <div className="relative flex-shrink-0">
                   <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center">
@@ -824,13 +836,16 @@ const ChatSidebar = memo(function({
                   </div>
                   <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border-2 border-white dark:border-gray-800 ${u.is_online ? 'bg-green-500' : 'bg-gray-400'}`} />
                 </div>
-                <span className="truncate text-gray-700 dark:text-gray-300">{u.full_name}</span>
+                <span className="truncate text-gray-700 dark:text-gray-300 flex-1">{u.full_name}</span>
                 {u.role === 'manager' && <Shield className="w-3 h-3 text-yellow-500 flex-shrink-0" />}
+                {u.user_id === currentUser?.id && (
+                  <span className="text-[8px] text-gray-400 flex-shrink-0">(вы)</span>
+                )}
               </button>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
       
       <div className="p-3 border-t border-gray-200/50 dark:border-gray-700/50">
         <div className="flex items-center justify-between text-xs">
@@ -850,7 +865,7 @@ const ChatSidebar = memo(function({
 });
 
 // ============================================================
-// 9. ОСТАЛЬНЫЕ КОМПОНЕНТЫ (ИИ-АССИСТЕНТ, ФАЙЛОВЫЙ МЕНЕДЖЕР)
+// 9. ОСТАЛЬНЫЕ КОМПОНЕНТЫ
 // ============================================================
 
 const AIAssistant = memo(({ suggestions, onSelect, onClose }) => (
@@ -1166,25 +1181,35 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [user?.id, userCompanyId, allChannels]);
 
-  // Загрузка пользователей
+  // ===== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ =====
   useEffect(() => {
     const loadUsers = async () => {
-      if (!userCompanyId) return;
+      if (!userCompanyId) {
+        console.log('Нет companyId для загрузки пользователей');
+        return;
+      }
       try {
+        console.log('Загрузка пользователей для компании:', userCompanyId);
         const { data, error } = await supabase
           .from('company_users')
           .select('user_id, full_name, role, phone, is_online')
           .eq('company_id', userCompanyId)
           .eq('is_active', true);
         
-        if (error) throw error;
+        if (error) {
+          console.error('Ошибка загрузки пользователей:', error);
+          throw error;
+        }
+        
+        console.log('Загружено пользователей:', data?.length || 0);
         setCompanyUsers(data || []);
       } catch (err) {
         console.error('Ошибка загрузки пользователей:', err);
+        showNotification?.('Не удалось загрузить список сотрудников', 'error');
       }
     };
     loadUsers();
-  }, [userCompanyId]);
+  }, [userCompanyId, showNotification]);
 
   // Загрузка каналов
   useEffect(() => {
@@ -1304,19 +1329,16 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     if (!channel) return;
     
     try {
-      // Удаляем все сообщения в канале
       await supabase
         .from('company_messages')
         .delete()
         .eq('channel_id', channelId);
       
-      // Удаляем участников канала
       await supabase
         .from('channel_members')
         .delete()
         .eq('channel_id', channelId);
       
-      // Удаляем сам канал
       const { error } = await supabase
         .from('company_channels')
         .delete()
