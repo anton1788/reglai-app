@@ -1,4 +1,4 @@
-// CompanyChat.jsx - Полностью исправленная версия
+// CompanyChat.jsx - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { 
@@ -88,6 +88,40 @@ const MessageItem = memo(function({
       onToggleReaction?.(msg.id, '❤️');
     }
   };
+
+  // Если сообщение удалено - показываем заглушку
+  if (msg.deleted_at) {
+    return (
+      <article className={`group flex gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
+        <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0 ${isOwn ? 'order-2' : ''}`}>
+          <span className="text-white text-xs font-medium">
+            {msg.user?.user_metadata?.full_name?.[0]?.toUpperCase() || '?'}
+          </span>
+        </div>
+        <div className={`max-w-[85%] md:max-w-[75%] ${isOwn ? 'order-1' : ''}`}>
+          {!isOwn && (
+            <div className="flex items-center gap-2 mb-1 pl-1">
+              <span className="text-xs font-bold text-[#4A6572] dark:text-[#F9AA33]">
+                {msg.user?.user_metadata?.full_name || 'Пользователь'}
+              </span>
+            </div>
+          )}
+          <div className={`relative rounded-2xl px-4 py-2.5 shadow-sm ${
+            isOwn 
+              ? 'bg-gray-400 text-white rounded-br-md' 
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-bl-md border border-gray-200 dark:border-gray-600'
+          }`}>
+            <em className="text-sm italic">Сообщение удалено</em>
+          </div>
+          <div className={`flex items-center gap-2 mt-1 text-xs ${isOwn ? 'justify-end' : ''}`}>
+            <time className="text-gray-400 dark:text-gray-500">
+              {formattedTime}
+            </time>
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article 
@@ -478,7 +512,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   
-  // Только pinnedMessages
   const [pinnedMessages, setPinnedMessages] = useState([]);
   
   const messagesContainerRef = useRef(null);
@@ -489,6 +522,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const isUserScrollingRef = useRef(false);
   const lastScrollTopRef = useRef(0);
   const animationFrameRef = useRef(null);
+  const bottomRef = useRef(null);
 
   // Обновляем ref при изменении состояния
   useEffect(() => {
@@ -533,11 +567,11 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     return () => clearInterval(interval);
   }, []);
 
-  // Обработчик скролла с использованием requestAnimationFrame для плавности
+  // Обработчик скролла
   const handleScroll = useCallback(() => {
-    if (!messagesContainerRef.current) return;
-    
     const container = messagesContainerRef.current;
+    if (!container) return;
+    
     const { scrollTop, scrollHeight, clientHeight } = container;
     const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
     const isScrollingUp = scrollTop < lastScrollTopRef.current;
@@ -565,7 +599,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
 
   // Плавная прокрутка вниз
   const scrollToBottom = useCallback((behavior = 'smooth') => {
-    if (!messagesContainerRef.current) return;
+    const container = messagesContainerRef.current;
+    if (!container) return;
     if (!shouldAutoScroll || isUserScrollingRef.current) return;
     
     if (animationFrameRef.current) {
@@ -573,34 +608,31 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
     
     animationFrameRef.current = requestAnimationFrame(() => {
-      if (messagesContainerRef.current && (!isUserScrollingRef.current || behavior === 'auto')) {
-        messagesContainerRef.current.scrollTo({
-          top: messagesContainerRef.current.scrollHeight,
+      if (container && (!isUserScrollingRef.current || behavior === 'auto')) {
+        container.scrollTo({
+          top: container.scrollHeight,
           behavior: behavior
         });
       }
     });
   }, [shouldAutoScroll]);
 
-  // Принудительная прокрутка вниз (игнорирует флаг)
+  // Принудительная прокрутка вниз
   const forceScrollToBottom = useCallback((behavior = 'smooth') => {
-    if (!messagesContainerRef.current) return;
+    const container = messagesContainerRef.current;
+    if (!container) return;
     
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    
-    animationFrameRef.current = requestAnimationFrame(() => {
-      if (messagesContainerRef.current) {
-        messagesContainerRef.current.scrollTo({
-          top: messagesContainerRef.current.scrollHeight,
-          behavior: behavior
-        });
-      }
-    });
+    // Сброс флагов перед прокруткой
     setShouldAutoScroll(true);
     setIsUserScrolling(false);
     isUserScrollingRef.current = false;
+    
+    setTimeout(() => {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: behavior
+      });
+    }, 50);
   }, []);
 
   // Форматирование времени
@@ -610,7 +642,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     return date.toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
   }, [language]);
 
-  // Форматирование сообщения с ссылками и упоминаниями
+  // Форматирование сообщения
   const formatMessage = useCallback((text) => {
     if (!text) return null;
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -626,7 +658,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     });
   }, []);
 
-  // Все каналы (системные + пользовательские)
+  // Все каналы
   const allChannels = useMemo(() => {
     const system = SYSTEM_CHANNELS.filter(ch => {
       if (!ch.canView) return true;
@@ -709,6 +741,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
           .select('id', { count: 'exact', head: true })
           .eq('company_id', userCompanyId)
           .is('deleted_at', null)
+          .eq('is_deleted', false)
           .gt('created_at', lastRead.toISOString())
           .neq('user_id', user.id);
         
@@ -818,6 +851,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         .select('*')
         .eq('company_id', userCompanyId)
         .is('deleted_at', null)
+        .eq('is_deleted', false)
         .order('created_at', { ascending: true })
         .limit(100);
       
@@ -901,7 +935,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         .from('company_messages')
         .select('id')
         .eq('company_id', userCompanyId)
-        .eq('is_pinned', true);
+        .eq('is_pinned', true)
+        .eq('is_deleted', false);
       
       if (pinnedData) {
         setPinnedMessages(pinnedData.map(p => p.id));
@@ -956,7 +991,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         filter: filter
       }, async (payload) => {
         const newMsg = payload.new;
-        if (newMsg.deleted_at) return;
+        if (newMsg.deleted_at || newMsg.is_deleted) return;
         
         const msgChannelId = newMsg.channel_id || newMsg.channel;
         if (activeChannel !== msgChannelId && newMsg.user_id !== user?.id) {
@@ -989,6 +1024,21 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         setTimeout(() => {
           scrollToBottom('smooth');
         }, 50);
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'company_messages',
+        filter: filter
+      }, (payload) => {
+        const updatedMsg = payload.new;
+        if (updatedMsg.deleted_at || updatedMsg.is_deleted) {
+          setMessages(prev => prev.map(m => 
+            m.id === updatedMsg.id 
+              ? { ...m, deleted_at: updatedMsg.deleted_at, content: '[Сообщение удалено]' }
+              : m
+          ));
+        }
       })
       .subscribe();
     
@@ -1109,12 +1159,14 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         user_id: user.id,
         content: content,
         created_at: new Date().toISOString(),
+        is_deleted: false,
         reply_to_message_id: replyTo?.id || null
       };
       
       if (isSystemChannel) {
         messageData.channel = activeChannel;
         messageData.channel_type = 'system';
+        messageData.channel_id = null;
       } else if (isDirectChat) {
         messageData.channel_id = activeChannel;
         messageData.channel_type = 'direct';
@@ -1336,19 +1388,43 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     if (!window.confirm('Удалить сообщение?')) return;
     
     try {
-      await supabase
-        .from('company_messages')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', messageId)
-        .eq('user_id', user?.id);
+      // Проверка прав
+      const message = messages.find(m => m.id === messageId);
+      if (!message) return;
       
-      setMessages(prev => prev.filter(m => m.id !== messageId));
+      const canDelete = message.user_id === user?.id || 
+                        userRole === 'manager' || 
+                        userRole === 'supply_admin';
+      
+      if (!canDelete) {
+        showNotification?.('У вас нет прав на удаление этого сообщения', 'error');
+        return;
+      }
+      
+      const { error } = await supabase
+        .from('company_messages')
+        .update({ 
+          deleted_at: new Date().toISOString(),
+          is_deleted: true,
+          content: '[Сообщение удалено]' 
+        })
+        .eq('id', messageId);
+      
+      if (error) throw error;
+      
+      // Мягкое удаление - обновляем сообщение
+      setMessages(prev => prev.map(m => 
+        m.id === messageId 
+          ? { ...m, deleted_at: new Date().toISOString(), is_deleted: true, content: '[Сообщение удалено]' }
+          : m
+      ));
+      
       showNotification?.('Сообщение удалено', 'info');
     } catch (err) {
       console.error('Ошибка удаления:', err);
       showNotification?.('Не удалось удалить сообщение', 'error');
     }
-  }, [user?.id, showNotification]);
+  }, [user?.id, userRole, messages, showNotification]);
 
   // Реакция на сообщение
   const toggleReaction = useCallback(async (messageId, emoji) => {
@@ -1388,8 +1464,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [user?.id, messages]);
 
-  // ========== НОВЫЕ ФУНКЦИИ ==========
-  
   // Закрепить сообщение
   const handlePinMessage = useCallback(async (messageId) => {
     try {
@@ -1421,7 +1495,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   // Копировать сообщение
   const handleCopyMessage = useCallback((messageId) => {
     const message = messages.find(m => m.id === messageId);
-    if (message && message.content) {
+    if (message && message.content && !message.deleted_at) {
       navigator.clipboard.writeText(message.content);
       showNotification?.('Текст скопирован в буфер обмена', 'success');
     }
@@ -1563,7 +1637,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
               
               <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
                 <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>{messages.length}</span>
+                <span>{messages.filter(m => !m.deleted_at).length}</span>
               </div>
             </header>
 
@@ -1617,11 +1691,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                       onCopyMessage={handleCopyMessage}
                     />
                   ))}
-                  <div ref={(el) => {
-                    if (el && shouldAutoScroll && !isUserScrolling) {
-                      el.scrollIntoView({ behavior: 'auto', block: 'end' });
-                    }
-                  }} />
+                  <div ref={bottomRef} />
                 </>
               )}
             </div>
