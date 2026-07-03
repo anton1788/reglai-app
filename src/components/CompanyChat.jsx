@@ -973,8 +973,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [connectionStatus, setConnectionStatus] = useState('connected');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
-  // eslint-disable-next-line no-unused-vars
-  const [selectedChannel, setSelectedChannel] = useState(null);
+  const [selectedChannel] = useState(null);
   const [channelMembers, setChannelMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
