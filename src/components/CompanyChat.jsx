@@ -714,59 +714,91 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [user?.id, customChannels, isMobile]);
 
-  // Загрузка непрочитанных сообщений
   const loadUnreadCounts = useCallback(async () => {
-    if (!user?.id || !userCompanyId) return;
+  if (!user?.id || !userCompanyId) return;
+  
+  try {
+    // Получаем время последнего прочтения
+    const { data: readData } = await supabase
+      .from('channel_read_status')
+      .select('channel_id, last_read_at')
+      .eq('user_id', user.id);
     
-    try {
-      const { data: readData } = await supabase
-        .from('channel_read_status')
-        .select('channel_id, last_read_at')
-        .eq('user_id', user.id);
+    const readMap = {};
+    readData?.forEach(item => {
+      readMap[item.channel_id] = new Date(item.last_read_at);
+    });
+    setLastReadTimes(readMap);
+    
+    const channels = allChannels.map(ch => ch.id);
+    const counts = {};
+    
+    // Получаем все системные каналы
+    const systemChannelIds = channels.filter(id => 
+      SYSTEM_CHANNELS.some(ch => ch.id === id)
+    );
+    
+    // Получаем все пользовательские каналы
+    const customChannelIds = channels.filter(id => 
+      !SYSTEM_CHANNELS.some(ch => ch.id === id)
+    );
+    
+    // Запрос для системных каналов
+    if (systemChannelIds.length > 0) {
+      // Строим условия для каждого системного канала
+      const orConditions = systemChannelIds.map(id => {
+        const lastRead = readMap[id] || new Date(0);
+        return `and(channel.eq.${id},created_at.gt.${lastRead.toISOString()})`;
+      }).join(',');
       
-      const readMap = {};
-      readData?.forEach(item => {
-        readMap[item.channel_id] = new Date(item.last_read_at);
-      });
-      setLastReadTimes(readMap);
-      
-      const channels = allChannels.map(ch => ch.id);
-      const counts = {};
-      
-      for (const channelId of channels) {
-        const lastRead = readMap[channelId] || new Date(0);
+      if (orConditions) {
+        const { data: systemData, error: systemError } = await supabase
+          .from('company_messages')
+          .select('channel, id')
+          .eq('company_id', userCompanyId)
+          .eq('channel_type', 'system')
+          .is('deleted_at', null)
+          .eq('is_deleted', false)
+          .neq('user_id', user.id)
+          .or(orConditions);
         
-        let query = supabase
+        if (!systemError && systemData) {
+          // Группируем по каналам
+          systemData.forEach(msg => {
+            const channelId = msg.channel;
+            if (!counts[channelId]) counts[channelId] = 0;
+            counts[channelId]++;
+          });
+        }
+      }
+    }
+    
+    // Запрос для пользовательских каналов
+    if (customChannelIds.length > 0) {
+      for (const channelId of customChannelIds) {
+        const lastRead = readMap[channelId] || new Date(0);
+        const { count, error } = await supabase
           .from('company_messages')
           .select('id', { count: 'exact', head: true })
           .eq('company_id', userCompanyId)
+          .eq('channel_id', channelId)
+          .eq('channel_type', channelId.startsWith('dm_') ? 'direct' : 'custom')
           .is('deleted_at', null)
           .eq('is_deleted', false)
           .gt('created_at', lastRead.toISOString())
           .neq('user_id', user.id);
         
-        const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === channelId);
-        const isDirectChat = channelId?.startsWith('dm_');
-        
-        if (isSystemChannel) {
-          query = query.eq('channel', channelId).eq('channel_type', 'system');
-        } else if (isDirectChat) {
-          query = query.eq('channel_id', channelId).eq('channel_type', 'direct');
-        } else {
-          query = query.eq('channel_id', channelId).eq('channel_type', 'custom');
-        }
-        
-        const { count, error } = await query;
         if (!error && count > 0) {
           counts[channelId] = count;
         }
       }
-      
-      setUnreadCounts(counts);
-    } catch (err) {
-      console.error('Ошибка загрузки непрочитанных:', err);
     }
-  }, [user?.id, userCompanyId, allChannels]);
+    
+    setUnreadCounts(counts);
+  } catch (err) {
+    console.error('Ошибка загрузки непрочитанных:', err);
+  }
+}, [user?.id, userCompanyId, allChannels]);
 
   // Отметка канала как прочитанного
   const markChannelAsRead = useCallback(async (channelId) => {
