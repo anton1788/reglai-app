@@ -1,4 +1,4 @@
-// CompanyChat.jsx - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ
+// CompanyChat.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ (без is_deleted)
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { 
@@ -622,7 +622,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     const container = messagesContainerRef.current;
     if (!container) return;
     
-    // Сброс флагов перед прокруткой
     setShouldAutoScroll(true);
     setIsUserScrolling(false);
     isUserScrollingRef.current = false;
@@ -714,91 +713,63 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [user?.id, customChannels, isMobile]);
 
+  // Загрузка непрочитанных сообщений (УПРОЩЕННАЯ ВЕРСИЯ)
   const loadUnreadCounts = useCallback(async () => {
-  if (!user?.id || !userCompanyId) return;
-  
-  try {
-    // Получаем время последнего прочтения
-    const { data: readData } = await supabase
-      .from('channel_read_status')
-      .select('channel_id, last_read_at')
-      .eq('user_id', user.id);
+    if (!user?.id || !userCompanyId) return;
     
-    const readMap = {};
-    readData?.forEach(item => {
-      readMap[item.channel_id] = new Date(item.last_read_at);
-    });
-    setLastReadTimes(readMap);
-    
-    const channels = allChannels.map(ch => ch.id);
-    const counts = {};
-    
-    // Получаем все системные каналы
-    const systemChannelIds = channels.filter(id => 
-      SYSTEM_CHANNELS.some(ch => ch.id === id)
-    );
-    
-    // Получаем все пользовательские каналы
-    const customChannelIds = channels.filter(id => 
-      !SYSTEM_CHANNELS.some(ch => ch.id === id)
-    );
-    
-    // Запрос для системных каналов
-    if (systemChannelIds.length > 0) {
-      // Строим условия для каждого системного канала
-      const orConditions = systemChannelIds.map(id => {
-        const lastRead = readMap[id] || new Date(0);
-        return `and(channel.eq.${id},created_at.gt.${lastRead.toISOString()})`;
-      }).join(',');
+    try {
+      const { data: readData } = await supabase
+        .from('channel_read_status')
+        .select('channel_id, last_read_at')
+        .eq('user_id', user.id);
       
-      if (orConditions) {
-        const { data: systemData, error: systemError } = await supabase
-          .from('company_messages')
-          .select('channel, id')
-          .eq('company_id', userCompanyId)
-          .eq('channel_type', 'system')
-          .is('deleted_at', null)
-          .eq('is_deleted', false)
-          .neq('user_id', user.id)
-          .or(orConditions);
-        
-        if (!systemError && systemData) {
-          // Группируем по каналам
-          systemData.forEach(msg => {
-            const channelId = msg.channel;
-            if (!counts[channelId]) counts[channelId] = 0;
-            counts[channelId]++;
-          });
-        }
-      }
-    }
-    
-    // Запрос для пользовательских каналов
-    if (customChannelIds.length > 0) {
-      for (const channelId of customChannelIds) {
+      const readMap = {};
+      readData?.forEach(item => {
+        readMap[item.channel_id] = new Date(item.last_read_at);
+      });
+      setLastReadTimes(readMap);
+      
+      const channels = allChannels.map(ch => ch.id);
+      const counts = {};
+      
+      for (const channelId of channels) {
         const lastRead = readMap[channelId] || new Date(0);
-        const { count, error } = await supabase
-          .from('company_messages')
-          .select('id', { count: 'exact', head: true })
-          .eq('company_id', userCompanyId)
-          .eq('channel_id', channelId)
-          .eq('channel_type', channelId.startsWith('dm_') ? 'direct' : 'custom')
-          .is('deleted_at', null)
-          .eq('is_deleted', false)
-          .gt('created_at', lastRead.toISOString())
-          .neq('user_id', user.id);
         
-        if (!error && count > 0) {
-          counts[channelId] = count;
+        try {
+          let query = supabase
+            .from('company_messages')
+            .select('id')
+            .eq('company_id', userCompanyId)
+            .is('deleted_at', null)
+            .gt('created_at', lastRead.toISOString())
+            .neq('user_id', user.id);
+          
+          const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === channelId);
+          const isDirectChat = channelId?.startsWith('dm_');
+          
+          if (isSystemChannel) {
+            query = query.eq('channel', channelId).eq('channel_type', 'system');
+          } else if (isDirectChat) {
+            query = query.eq('channel_id', channelId).eq('channel_type', 'direct');
+          } else {
+            query = query.eq('channel_id', channelId).eq('channel_type', 'custom');
+          }
+          
+          const { data, error } = await query;
+          
+          if (!error && data && data.length > 0) {
+            counts[channelId] = data.length;
+          }
+        } catch (err) {
+          console.warn(`Ошибка для канала ${channelId}:`, err);
         }
       }
+      
+      setUnreadCounts(counts);
+    } catch (err) {
+      console.error('Ошибка загрузки непрочитанных:', err);
     }
-    
-    setUnreadCounts(counts);
-  } catch (err) {
-    console.error('Ошибка загрузки непрочитанных:', err);
-  }
-}, [user?.id, userCompanyId, allChannels]);
+  }, [user?.id, userCompanyId, allChannels]);
 
   // Отметка канала как прочитанного
   const markChannelAsRead = useCallback(async (channelId) => {
@@ -883,7 +854,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         .select('*')
         .eq('company_id', userCompanyId)
         .is('deleted_at', null)
-        .eq('is_deleted', false)
         .order('created_at', { ascending: true })
         .limit(100);
       
@@ -962,13 +932,11 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         }
       }
       
-      // Загрузка закрепленных сообщений
       const { data: pinnedData } = await supabase
         .from('company_messages')
         .select('id')
         .eq('company_id', userCompanyId)
-        .eq('is_pinned', true)
-        .eq('is_deleted', false);
+        .eq('is_pinned', true);
       
       if (pinnedData) {
         setPinnedMessages(pinnedData.map(p => p.id));
@@ -1023,7 +991,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         filter: filter
       }, async (payload) => {
         const newMsg = payload.new;
-        if (newMsg.deleted_at || newMsg.is_deleted) return;
+        if (newMsg.deleted_at) return;
         
         const msgChannelId = newMsg.channel_id || newMsg.channel;
         if (activeChannel !== msgChannelId && newMsg.user_id !== user?.id) {
@@ -1064,7 +1032,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         filter: filter
       }, (payload) => {
         const updatedMsg = payload.new;
-        if (updatedMsg.deleted_at || updatedMsg.is_deleted) {
+        if (updatedMsg.deleted_at) {
           setMessages(prev => prev.map(m => 
             m.id === updatedMsg.id 
               ? { ...m, deleted_at: updatedMsg.deleted_at, content: '[Сообщение удалено]' }
@@ -1165,7 +1133,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     return () => { typingChannel.unsubscribe(); };
   }, [activeChannel, user?.id]);
 
-  // Отправка сообщения
+  // Отправка сообщения (БЕЗ is_deleted)
   const sendMessage = useCallback(async () => {
     const content = newMessage.trim();
     if (!content || !user?.id || sending) return;
@@ -1191,7 +1159,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         user_id: user.id,
         content: content,
         created_at: new Date().toISOString(),
-        is_deleted: false,
         reply_to_message_id: replyTo?.id || null
       };
       
@@ -1415,12 +1382,11 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     setEditText('');
   }, []);
 
-  // Удаление сообщения
+  // Удаление сообщения (БЕЗ is_deleted)
   const deleteMessage = useCallback(async (messageId) => {
     if (!window.confirm('Удалить сообщение?')) return;
     
     try {
-      // Проверка прав
       const message = messages.find(m => m.id === messageId);
       if (!message) return;
       
@@ -1437,17 +1403,15 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
         .from('company_messages')
         .update({ 
           deleted_at: new Date().toISOString(),
-          is_deleted: true,
           content: '[Сообщение удалено]' 
         })
         .eq('id', messageId);
       
       if (error) throw error;
       
-      // Мягкое удаление - обновляем сообщение
       setMessages(prev => prev.map(m => 
         m.id === messageId 
-          ? { ...m, deleted_at: new Date().toISOString(), is_deleted: true, content: '[Сообщение удалено]' }
+          ? { ...m, deleted_at: new Date().toISOString(), content: '[Сообщение удалено]' }
           : m
       ));
       
