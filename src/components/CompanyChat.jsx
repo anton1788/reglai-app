@@ -56,14 +56,34 @@ const ArrowDown = ({ className = "w-5 h-5" }) => (
 const TimeDisplay = ({ date, className = "text-xs text-gray-400" }) => {
   const formatted = useMemo(() => {
     if (!date) return '';
+    
     const d = new Date(date);
+    // Проверка на валидность даты
+    if (isNaN(d.getTime())) {
+      console.warn('⚠️ Невалидная дата:', date);
+      return '';
+    }
+    
     const now = new Date();
-    const isToday = d.toDateString() === now.toDateString();
+    
+    // ИСПРАВЛЕНИЕ: Сравниваем по локальным компонентам даты, а не по toDateString()
+    const isToday = d.getFullYear() === now.getFullYear() &&
+                    d.getMonth() === now.getMonth() &&
+                    d.getDate() === now.getDate();
     
     if (isToday) {
-      return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleTimeString('ru-RU', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
     }
-    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    
+    return d.toLocaleDateString('ru-RU', { 
+      day: 'numeric', 
+      month: 'short', 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
   }, [date]);
 
   return <time className={className}>{formatted}</time>;
@@ -1036,20 +1056,24 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, showNotification }) => 
         }, 50);
       })
       .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'company_messages',
-        filter: filter
-      }, (payload) => {
-        const updatedMsg = payload.new;
-        if (updatedMsg.deleted_at) {
-          setMessages(prev => prev.map(m => 
-            m.id === updatedMsg.id 
-              ? { ...m, deleted_at: updatedMsg.deleted_at, content: '[Сообщение удалено]' }
-              : m
-          ));
-        }
-      })
+  event: 'UPDATE',
+  schema: 'public',
+  table: 'company_messages',
+  filter: filter
+}, (payload) => {
+  const updatedMsg = payload.new;
+  if (updatedMsg.deleted_at) {
+    // ИСПРАВЛЕНИЕ: Удаляем из массива, а не обновляем
+    setMessages(prev => prev.filter(m => m.id !== updatedMsg.id));
+  } else {
+    // Если сообщение просто отредактировано (не удалено) - обновляем его
+    setMessages(prev => prev.map(m => 
+      m.id === updatedMsg.id 
+        ? { ...m, ...updatedMsg }
+        : m
+    ));
+  }
+})
       .subscribe();
     
     return () => {
@@ -1393,44 +1417,51 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, showNotification }) => 
   }, []);
 
   // Удаление сообщения
-  const deleteMessage = useCallback(async (messageId) => {
-    if (!window.confirm('Удалить сообщение?')) return;
-    
-    try {
-      const message = messages.find(m => m.id === messageId);
-      if (!message) return;
-      
-      const canDelete = message.user_id === user?.id || 
-                        userRole === 'manager' || 
-                        userRole === 'supply_admin';
-      
-      if (!canDelete) {
-        showNotification?.('У вас нет прав на удаление этого сообщения', 'error');
-        return;
-      }
-      
-      const { error } = await supabase
-        .from('company_messages')
-        .update({ 
-          deleted_at: new Date().toISOString(),
-          content: '[Сообщение удалено]' 
-        })
-        .eq('id', messageId);
-      
-      if (error) throw error;
-      
-      setMessages(prev => prev.map(m => 
-        m.id === messageId 
-          ? { ...m, deleted_at: new Date().toISOString(), content: '[Сообщение удалено]' }
-          : m
-      ));
-      
-      showNotification?.('Сообщение удалено', 'info');
-    } catch (err) {
-      console.error('Ошибка удаления:', err);
-      showNotification?.('Не удалось удалить сообщение', 'error');
+const deleteMessage = useCallback(async (messageId) => {
+  if (!window.confirm('Удалить сообщение?')) return;
+  
+  try {
+    const message = messages.find(m => m.id === messageId);
+    if (!message) {
+      console.warn('Сообщение не найдено в массиве:', messageId);
+      return;
     }
-  }, [user?.id, userRole, messages, showNotification]);
+    
+    const canDelete = message.user_id === user?.id || 
+                      userRole === 'manager' || 
+                      userRole === 'supply_admin';
+    
+    if (!canDelete) {
+      showNotification?.('У вас нет прав на удаление этого сообщения', 'error');
+      return;
+    }
+    
+    console.log('🗑️ Удаляем сообщение:', messageId);
+    
+    const { error } = await supabase
+      .from('company_messages')
+      .update({ 
+        deleted_at: new Date().toISOString(),
+        content: '[Сообщение удалено]' 
+      })
+      .eq('id', messageId);
+    
+    if (error) {
+      console.error('❌ Ошибка Supabase при удалении:', error);
+      throw error;
+    }
+    
+    console.log('✅ Сообщение удалено из базы');
+    
+    // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Удаляем сообщение из локального массива
+    setMessages(prev => prev.filter(m => m.id !== messageId));
+    
+    showNotification?.('Сообщение удалено', 'info');
+  } catch (err) {
+    console.error('Ошибка удаления:', err);
+    showNotification?.('Не удалось удалить сообщение: ' + (err.message || 'неизвестная ошибка'), 'error');
+  }
+}, [user?.id, userRole, messages, showNotification]);
 
   // Реакция на сообщение
   const toggleReaction = useCallback(async (messageId, emoji) => {
