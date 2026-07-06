@@ -1,10 +1,9 @@
-// CompanyChat.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ (без is_deleted)
-
+// CompanyChat.jsx - ПОЛНАЯ ВЕРСИЯ (ВСЕ ФУНКЦИИ + УЛУЧШЕНИЯ)
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { 
   Send, Smile, Paperclip, Edit2, Trash2, X, Check, 
-  AtSign, Loader2, MessageCircle, Shield, User, AlertCircle,
-  Plus, Users, Settings, Search, CornerUpLeft, Bookmark, BookmarkCheck, Menu
+  Loader2, MessageCircle, Plus, Settings, Search, CornerUpLeft, 
+  Bookmark, BookmarkCheck, Menu, FileText, Pin, Download
 } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 
@@ -14,7 +13,7 @@ const SYSTEM_CHANNELS = [
     id: 'general', 
     label: '# Общий', 
     icon: '💬', 
-    description: 'Общие вопросы',
+    description: 'Общие вопросы компании',
     canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
     canWrite: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client']
   },
@@ -22,7 +21,7 @@ const SYSTEM_CHANNELS = [
     id: 'supply', 
     label: '📦 Снабжение', 
     icon: '📦', 
-    description: 'Закупки и материалы',
+    description: 'Закупки, материалы, логистика',
     canView: ['manager', 'supply_admin'],
     canWrite: ['manager', 'supply_admin']
   },
@@ -30,7 +29,7 @@ const SYSTEM_CHANNELS = [
     id: 'foremen', 
     label: '👷 Прорабы', 
     icon: '👷', 
-    description: 'Для прорабов',
+    description: 'Оперативные вопросы на объектах',
     canView: ['manager', 'master', 'foreman'],
     canWrite: ['manager', 'master', 'foreman']
   },
@@ -38,18 +37,37 @@ const SYSTEM_CHANNELS = [
     id: 'announcements', 
     label: '📢 Объявления', 
     icon: '📢', 
-    description: 'Важные объявления',
+    description: 'Важные новости и приказы',
     canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
     canWrite: ['manager', 'supply_admin']
   }
 ];
 
-// ========== КОМПОНЕНТ СТРЕЛКИ ВНИЗ ==========
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🔥', '👀'];
+
+// ========== ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ==========
+
 const ArrowDown = ({ className = "w-5 h-5" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
   </svg>
 );
+
+const TimeDisplay = ({ date, className = "text-xs text-gray-400" }) => {
+  const formatted = useMemo(() => {
+    if (!date) return '';
+    const d = new Date(date);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    
+    if (isToday) {
+      return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }, [date]);
+
+  return <time className={className}>{formatted}</time>;
+};
 
 // ========== КОМПОНЕНТ СООБЩЕНИЯ ==========
 const MessageItem = memo(function({ 
@@ -57,11 +75,9 @@ const MessageItem = memo(function({
   onStartEdit, onSaveEdit, onCancelEdit, onDelete, 
   onToggleReaction, onReply, onToggleSave, isSaved,
   showReactionsPicker, setShowReactionsPicker, 
-  formatMessage, formatTime, language, textareaRef, companyUsers,
+  formatMessage, textareaRef, companyUsers,
   onPinMessage, isPinned, onCopyMessage
 }) {
-  const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
-  
   const reactionCounts = useMemo(() => {
     if (!msg.reactions?.length) return {};
     return msg.reactions.reduce((acc, r) => {
@@ -79,17 +95,13 @@ const MessageItem = memo(function({
     return [...msg.content.matchAll(mentionRegex)].map(m => m[1]);
   }, [msg.content]);
 
-  const formattedTime = useMemo(() => {
-    return formatTime?.(msg.created_at, language);
-  }, [msg.created_at, language, formatTime]);
-
   const handleDoubleClick = () => {
     if (!msg.deleted_at && !isEditing) {
       onToggleReaction?.(msg.id, '❤️');
     }
   };
 
-  // Если сообщение удалено - показываем заглушку
+  // Если сообщение удалено
   if (msg.deleted_at) {
     return (
       <article className={`group flex gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
@@ -114,9 +126,7 @@ const MessageItem = memo(function({
             <em className="text-sm italic">Сообщение удалено</em>
           </div>
           <div className={`flex items-center gap-2 mt-1 text-xs ${isOwn ? 'justify-end' : ''}`}>
-            <time className="text-gray-400 dark:text-gray-500">
-              {formattedTime}
-            </time>
+            <TimeDisplay date={msg.created_at} className="text-gray-400 dark:text-gray-500" />
           </div>
         </div>
       </article>
@@ -207,10 +217,8 @@ const MessageItem = memo(function({
         </div>
         
         <div className={`flex items-center gap-2 mt-1 text-xs ${isOwn ? 'justify-end' : ''}`}>
-          <time className="text-gray-400 dark:text-gray-500">
-            {formattedTime}
-            {msg.edited_at && <span className="ml-1 opacity-70">(изм.)</span>}
-          </time>
+          <TimeDisplay date={msg.created_at} className="text-gray-400 dark:text-gray-500" />
+          {msg.edited_at && <span className="text-gray-400 dark:text-gray-500 opacity-70">(изм.)</span>}
           
           {!isEditing && !msg.deleted_at && (
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -234,9 +242,7 @@ const MessageItem = memo(function({
               </button>
 
               <button onClick={() => onCopyMessage?.(msg.id)} className="p-1 hover:bg-gray-200/50 rounded-full">
-                <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                </svg>
+                <FileText className="w-3.5 h-3.5 text-gray-500" />
               </button>
               
               {canEdit && (
@@ -251,9 +257,7 @@ const MessageItem = memo(function({
               )}
               {onPinMessage && (
                 <button onClick={() => onPinMessage?.(msg.id)} className="p-1 hover:bg-yellow-100/50 rounded text-yellow-500">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
+                  <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-current' : ''}`} />
                 </button>
               )}
             </div>
@@ -482,7 +486,7 @@ const ChatSidebar = memo(function({
 });
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
-const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotification }) => {
+const CompanyChat = ({ user, userCompanyId, userRole, t, showNotification }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [activeChannel, setActiveChannel] = useState('general');
@@ -513,6 +517,13 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   
   const [pinnedMessages, setPinnedMessages] = useState([]);
+  
+  // Поиск
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  
+  // Drag & Drop
+  const [isDragging, setIsDragging] = useState(false);
   
   const messagesContainerRef = useRef(null);
   const textareaRef = useRef(null);
@@ -634,13 +645,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }, 50);
   }, []);
 
-  // Форматирование времени
-  const formatTime = useCallback((dateString, lang = language) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-  }, [language]);
-
   // Форматирование сообщения
   const formatMessage = useCallback((text) => {
     if (!text) return null;
@@ -673,6 +677,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     
     return [...system, ...custom];
   }, [customChannels, userRole, user?.id]);
+
+  // Фильтрация сообщений по поиску
+  const displayedMessages = useMemo(() => {
+    if (!searchQuery) return messages;
+    return messages.filter(m => m.content?.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [messages, searchQuery]);
 
   // Проверка прав на запись в канал
   const canWriteToChannel = useCallback((channelId) => {
@@ -713,7 +723,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [user?.id, customChannels, isMobile]);
 
-  // Загрузка непрочитанных сообщений (УПРОЩЕННАЯ ВЕРСИЯ)
+  // Загрузка непрочитанных сообщений
   const loadUnreadCounts = useCallback(async () => {
     if (!user?.id || !userCompanyId) return;
     
@@ -1133,7 +1143,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     return () => { typingChannel.unsubscribe(); };
   }, [activeChannel, user?.id]);
 
-  // Отправка сообщения (БЕЗ is_deleted)
+  // Отправка сообщения
   const sendMessage = useCallback(async () => {
     const content = newMessage.trim();
     if (!content || !user?.id || sending) return;
@@ -1382,7 +1392,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     setEditText('');
   }, []);
 
-  // Удаление сообщения (БЕЗ is_deleted)
+  // Удаление сообщения
   const deleteMessage = useCallback(async (messageId) => {
     if (!window.confirm('Удалить сообщение?')) return;
     
@@ -1497,9 +1507,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
     }
   }, [messages, showNotification]);
 
-  // Загрузка файла
+  // Загрузка файла (Drag & Drop + кнопка)
   const handleFileUpload = useCallback(async (e) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files?.[0] || e.dataTransfer?.files[0];
     if (!file || !userCompanyId) return;
     
     const maxSize = 10 * 1024 * 1024;
@@ -1520,7 +1530,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
       console.error('Ошибка загрузки:', err);
       showNotification?.('Не удалось загрузить файл', 'error');
     }
-    e.target.value = '';
+    if (e.target) e.target.value = '';
   }, [userCompanyId, showNotification]);
 
   // Обработка текстового поля
@@ -1631,34 +1641,85 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                 </div>
               </div>
               
-              <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
-                <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>{messages.filter(m => !m.deleted_at).length}</span>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setShowSearch(!showSearch)}
+                  className={`p-2 rounded-lg transition-colors ${showSearch ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-500'}`}
+                >
+                  <Search className="w-5 h-5" />
+                </button>
+                <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
+                  <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <span>{messages.filter(m => !m.deleted_at).length}</span>
+                </div>
               </div>
             </header>
 
+            {/* Поиск */}
+            {showSearch && (
+              <div className="p-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-20 shadow-md">
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                  <input 
+                    type="text" 
+                    placeholder="Поиск по сообщениям..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-10 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    autoFocus
+                  />
+                  <button onClick={() => {setShowSearch(false); setSearchQuery('')}} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
+                    <X size={16}/>
+                  </button>
+                </div>
+                {searchQuery && (
+                  <div className="text-xs text-gray-500 mt-1 px-2">Найдено сообщений: {displayedMessages.length}</div>
+                )}
+              </div>
+            )}
+
             <div 
               ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4"
+              className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 relative"
               onScroll={handleScroll}
               style={{ WebkitOverflowScrolling: 'touch' }}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                handleFileUpload(e);
+              }}
             >
+              {isDragging && (
+                <div className="absolute inset-0 z-30 bg-blue-500/10 border-4 border-blue-500 border-dashed m-4 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                  <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl flex flex-col items-center">
+                    <Download size={48} className="text-blue-500 mb-2"/>
+                    <p className="font-bold text-lg">Отпустите файл для отправки</p>
+                  </div>
+                </div>
+              )}
+
               {loading ? (
                 <div className="flex flex-col items-center justify-center h-40 gap-3">
                   <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
                   <span className="text-sm text-gray-500">Загрузка...</span>
                 </div>
-              ) : messages.length === 0 ? (
+              ) : displayedMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-40 text-gray-400">
                   <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
                     <MessageCircle className="w-8 h-8 opacity-50" />
                   </div>
-                  <p className="font-medium text-base sm:text-lg">Нет сообщений</p>
-                  <p className="text-xs sm:text-sm mt-1 opacity-70">Начните обсуждение!</p>
+                  <p className="font-medium text-base sm:text-lg">
+                    {searchQuery ? 'Ничего не найдено' : 'Нет сообщений'}
+                  </p>
+                  <p className="text-xs sm:text-sm mt-1 opacity-70">
+                    {searchQuery ? 'Попробуйте изменить запрос' : 'Начните обсуждение!'}
+                  </p>
                 </div>
               ) : (
                 <>
-                  {messages.map(msg => (
+                  {displayedMessages.map(msg => (
                     <MessageItem
                       key={msg.id}
                       msg={msg}
@@ -1678,8 +1739,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, language, showNotificat
                       showReactionsPicker={showReactionsPicker}
                       setShowReactionsPicker={setShowReactionsPicker}
                       formatMessage={formatMessage}
-                      formatTime={formatTime}
-                      language={language}
                       textareaRef={textareaRef}
                       companyUsers={companyUsers}
                       onPinMessage={handlePinMessage}
