@@ -116,42 +116,10 @@ const MessageItem = memo(function({
   }, [msg.content]);
 
   const handleDoubleClick = () => {
-    if (!msg.deleted_at && !isEditing) {
-      onToggleReaction?.(msg.id, '❤️');
-    }
-  };
-
-  // Если сообщение удалено
-  if (msg.deleted_at) {
-    return (
-      <article className={`group flex gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
-        <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0 ${isOwn ? 'order-2' : ''}`}>
-          <span className="text-white text-xs font-medium">
-            {msg.user?.user_metadata?.full_name?.[0]?.toUpperCase() || '?'}
-          </span>
-        </div>
-        <div className={`max-w-[85%] md:max-w-[75%] ${isOwn ? 'order-1' : ''}`}>
-          {!isOwn && (
-            <div className="flex items-center gap-2 mb-1 pl-1">
-              <span className="text-xs font-bold text-[#4A6572] dark:text-[#F9AA33]">
-                {msg.user?.user_metadata?.full_name || 'Пользователь'}
-              </span>
-            </div>
-          )}
-          <div className={`relative rounded-2xl px-4 py-2.5 shadow-sm ${
-            isOwn 
-              ? 'bg-gray-400 text-white rounded-br-md' 
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-bl-md border border-gray-200 dark:border-gray-600'
-          }`}>
-            <em className="text-sm italic">Сообщение удалено</em>
-          </div>
-          <div className={`flex items-center gap-2 mt-1 text-xs ${isOwn ? 'justify-end' : ''}`}>
-            <TimeDisplay date={msg.created_at} className="text-gray-400 dark:text-gray-500" />
-          </div>
-        </div>
-      </article>
-    );
+  if (!isEditing) {
+    onToggleReaction?.(msg.id, '❤️');
   }
+};
 
   return (
     <article 
@@ -240,7 +208,7 @@ const MessageItem = memo(function({
           <TimeDisplay date={msg.created_at} className="text-gray-400 dark:text-gray-500" />
           {msg.edited_at && <span className="text-gray-400 dark:text-gray-500 opacity-70">(изм.)</span>}
           
-          {!isEditing && !msg.deleted_at && (
+          {!isEditing && (
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button 
                 onClick={() => setShowReactionsPicker?.(showReactionsPicker === msg.id ? null : msg.id)}
@@ -770,7 +738,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, showNotification }) => 
             .from('company_messages')
             .select('id')
             .eq('company_id', userCompanyId)
-            .is('deleted_at', null)
             .gt('created_at', lastRead.toISOString())
             .neq('user_id', user.id);
           
@@ -883,7 +850,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, showNotification }) => 
         .from('company_messages')
         .select('*')
         .eq('company_id', userCompanyId)
-        .is('deleted_at', null)
         .order('created_at', { ascending: true })
         .limit(100);
       
@@ -1055,24 +1021,30 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, showNotification }) => 
           scrollToBottom('smooth');
         }, 50);
       })
-      .on('postgres_changes', {
+     .on('postgres_changes', {
   event: 'UPDATE',
   schema: 'public',
   table: 'company_messages',
   filter: filter
 }, (payload) => {
   const updatedMsg = payload.new;
-  if (updatedMsg.deleted_at) {
-    // ИСПРАВЛЕНИЕ: Удаляем из массива, а не обновляем
-    setMessages(prev => prev.filter(m => m.id !== updatedMsg.id));
-  } else {
-    // Если сообщение просто отредактировано (не удалено) - обновляем его
-    setMessages(prev => prev.map(m => 
-      m.id === updatedMsg.id 
-        ? { ...m, ...updatedMsg }
-        : m
-    ));
-  }
+  // Обновляем только отредактированные сообщения (не удалённые)
+  setMessages(prev => prev.map(m => 
+    m.id === updatedMsg.id 
+      ? { ...m, ...updatedMsg }
+      : m
+  ));
+})
+// ⭐ ДОБАВЬТЕ ОБРАБОТЧИК DELETE СРАЗУ ПОСЛЕ UPDATE
+.on('postgres_changes', {
+  event: 'DELETE',
+  schema: 'public',
+  table: 'company_messages',
+  filter: filter
+}, (payload) => {
+  const deletedMsg = payload.old;
+  console.log('🗑️ Получено DELETE:', deletedMsg.id);
+  setMessages(prev => prev.filter(m => m.id !== deletedMsg.id));
 })
       .subscribe();
     
@@ -1416,50 +1388,45 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, showNotification }) => 
     setEditText('');
   }, []);
 
-  // Удаление сообщения
+  // Удаление сообщения — ФИЗИЧЕСКОЕ УДАЛЕНИЕ (DELETE, а не UPDATE!)
 const deleteMessage = useCallback(async (messageId) => {
   if (!window.confirm('Удалить сообщение?')) return;
   
   try {
     const message = messages.find(m => m.id === messageId);
-    if (!message) {
-      console.warn('Сообщение не найдено в массиве:', messageId);
-      return;
-    }
+    if (!message) return;
     
     const canDelete = message.user_id === user?.id || 
                       userRole === 'manager' || 
                       userRole === 'supply_admin';
     
     if (!canDelete) {
-      showNotification?.('У вас нет прав на удаление этого сообщения', 'error');
+      showNotification?.('У вас нет прав на удаление', 'error');
       return;
     }
     
-    console.log('🗑️ Удаляем сообщение:', messageId);
+    console.log('🗑️ Физически удаляем сообщение:', messageId);
     
+    // ⭐ ФИЗИЧЕСКОЕ УДАЛЕНИЕ — это делает DELETE запрос, а не PATCH
     const { error } = await supabase
       .from('company_messages')
-      .update({ 
-        deleted_at: new Date().toISOString(),
-        content: '[Сообщение удалено]' 
-      })
+      .delete()
       .eq('id', messageId);
     
     if (error) {
-      console.error('❌ Ошибка Supabase при удалении:', error);
+      console.error('❌ Ошибка удаления:', error);
       throw error;
     }
     
-    console.log('✅ Сообщение удалено из базы');
+    console.log('✅ Удалено из базы');
     
-    // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Удаляем сообщение из локального массива
+    // Удаляем из локального массива
     setMessages(prev => prev.filter(m => m.id !== messageId));
+    showNotification?.('Сообщение удалено', 'success');
     
-    showNotification?.('Сообщение удалено', 'info');
   } catch (err) {
-    console.error('Ошибка удаления:', err);
-    showNotification?.('Не удалось удалить сообщение: ' + (err.message || 'неизвестная ошибка'), 'error');
+    console.error('Ошибка:', err);
+    showNotification?.('Не удалось удалить: ' + (err.message || 'ошибка'), 'error');
   }
 }, [user?.id, userRole, messages, showNotification]);
 
@@ -1532,7 +1499,7 @@ const deleteMessage = useCallback(async (messageId) => {
   // Копировать сообщение
   const handleCopyMessage = useCallback((messageId) => {
     const message = messages.find(m => m.id === messageId);
-    if (message && message.content && !message.deleted_at) {
+    if (message && message.content) {
       navigator.clipboard.writeText(message.content);
       showNotification?.('Текст скопирован в буфер обмена', 'success');
     }
@@ -1681,7 +1648,7 @@ const deleteMessage = useCallback(async (messageId) => {
                 </button>
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
                   <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  <span>{messages.filter(m => !m.deleted_at).length}</span>
+                  <span>{messages.length}</span>
                 </div>
               </div>
             </header>
