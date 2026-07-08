@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import SuperAdminKPIDashboard from './SuperAdminKPIDashboard';
 import SuperAdminAnalyticsDashboard from './SuperAdminAnalyticsDashboard';
+import SuperAdminFeedbackDashboard from './SuperAdmin/SuperAdminFeedbackDashboard';
 import { 
   Shield, Users, Ban, CheckCircle, BarChart3, Search, ChevronDown, 
   Filter, RefreshCw, Edit3, Trash2, AlertTriangle, X, ArrowLeft, Building2,
-  DollarSign, TrendingUp, Gift, Target
+  DollarSign, TrendingUp, Gift, Target, MessageCircle
 } from 'lucide-react';
 
 // ============================================================================
@@ -703,7 +704,8 @@ const renderNavigation = () => {
     { id: 'companies', label: t('companies'), icon: Building2 },
     { id: 'tariffs', label: 'Тарифы', icon: DollarSign },
     { id: 'analytics', label: t('analytics'), icon: TrendingUp },
-    { id: 'kpi', label: 'KPI Дашборд', icon: Target }
+    { id: 'kpi', label: 'KPI Дашборд', icon: Target },
+    { id: 'feedback', label: '📋 Отзывы', icon: MessageCircle }
   ];
 
   return (
@@ -724,6 +726,7 @@ const renderNavigation = () => {
               else if (item.id === 'tariffs') navigateTo('tariffs', 'Тарифы');
               else if (item.id === 'analytics') navigateTo('analytics', t('analytics'));
               else if (item.id === 'kpi') navigateTo('kpi', 'KPI Дашборд');
+              else if (item.id === 'feedback') navigateTo('feedback', '📋 Отзывы');
             }}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               isActive
@@ -1344,6 +1347,48 @@ const renderNavigation = () => {
     t={t}
   />
 )}
+    </>
+  );
+}
+
+// ============================================================================
+// RENDER: FEEDBACK VIEW
+// ============================================================================
+
+if (activeView === 'feedback') {
+  return (
+    <>
+      <div ref={mainRef} className="max-w-7xl mx-auto p-4" aria-live="polite">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
+          {/* Header with Back Button */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={goToOverview}
+                className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 
+                         hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                {t('back')}
+              </button>
+              <div className="p-2.5 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
+                <MessageCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">📋 Отзывы</h1>
+            </div>
+          </div>
+
+          {/* Navigation */}
+          {renderNavigation()}
+          
+          {/* ⭐ КОМПОНЕНТ FEEDBACK ДАШБОРДА */}
+          <SuperAdminFeedbackDashboard
+            supabase={supabase}
+            showNotification={showNotification}
+            t={t}
+          />
+        </div>
+      </div>
     </>
   );
 }

@@ -2,6 +2,8 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import ChatNavItem from './components/ChatNavItem';
+// В App.jsx, в секции импортов
+import TesterFeedbackForm from './components/Feedback/TesterFeedbackForm';
 // === ТАРИФЫ И КВОТЫ ===
 import TariffSelector from './components/TariffSelector';
 import QuotaUsage from './components/QuotaUsage';
@@ -1177,6 +1179,8 @@ const [updateInfo, setUpdateInfo] = useState(null);
 const [showUpdateModal, setShowUpdateModal] = useState(false);
 const [waitingWorker, setWaitingWorker] = useState(null);
 const [showSettings, setShowSettings] = useState(false);
+// В App.jsx, в секции useState
+const [showFeedbackForm, setShowFeedbackForm] = useState(false);
 
   // ─────────────────────────────────────────────────────────
   // 🎯 FOCUS MANAGEMENT (Pattern #3)
@@ -5801,6 +5805,33 @@ const renderAnalyticsDashboard = () => {
     );
   };
 
+  {/* ✅ ДОБАВИТЬ СЕКЦИЮ С ОБРАТНОЙ СВЯЗЬЮ */}
+        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+            <MessageCircle className="w-5 h-5 text-[#4A6572]" />
+            Обратная связь
+          </h3>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => {
+                // Проверяем, что пользователь авторизован
+                if (!user || !userCompanyId) {
+                  showNotification('Пожалуйста, войдите в систему', 'warning');
+                  return;
+                }
+                setShowFeedbackForm(true);
+              }}
+              className="px-4 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Расширенный отзыв
+            </button>
+            <p className="text-xs text-gray-500 dark:text-gray-400 self-center">
+              📝 Расскажите нам, что можно улучшить
+            </p>
+          </div>
+        </div>
+
   const renderNotifications = () => (
     <div className="fixed top-4 right-4 z-50 space-y-2">
       {notifications.map((notification) => (
@@ -7626,6 +7657,21 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   isOpen={showPrivacyPolicyModal}
   onClose={() => setShowPrivacyPolicyModal(false)}
 />
+{showFeedbackForm && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[10000] fade-enter">
+    <TesterFeedbackForm
+      user={user}
+      userCompanyId={userCompanyId}
+      onClose={() => setShowFeedbackForm(false)}
+      onSuccess={() => {
+        setShowFeedbackForm(false);
+        showNotification('Спасибо за ваш отзыв!', 'success');
+      }}
+      showNotification={showNotification}
+      t={t}
+    />
+  </div>
+)}
   </ErrorBoundary>
 );
 };
