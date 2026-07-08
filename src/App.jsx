@@ -5805,32 +5805,6 @@ const renderAnalyticsDashboard = () => {
     );
   };
 
-  {/* ✅ ДОБАВИТЬ СЕКЦИЮ С ОБРАТНОЙ СВЯЗЬЮ */}
-        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-            <MessageCircle className="w-5 h-5 text-[#4A6572]" />
-            Обратная связь
-          </h3>
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => {
-                // Проверяем, что пользователь авторизован
-                if (!user || !userCompanyId) {
-                  showNotification('Пожалуйста, войдите в систему', 'warning');
-                  return;
-                }
-                setShowFeedbackForm(true);
-              }}
-              className="px-4 py-2.5 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
-            >
-              <MessageCircle className="w-4 h-4" />
-              Расширенный отзыв
-            </button>
-            <p className="text-xs text-gray-500 dark:text-gray-400 self-center">
-              📝 Расскажите нам, что можно улучшить
-            </p>
-          </div>
-        </div>
 
   const renderNotifications = () => (
     <div className="fixed top-4 right-4 z-50 space-y-2">

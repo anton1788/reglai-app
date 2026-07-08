@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import SuperAdminKPIDashboard from './SuperAdminKPIDashboard';
 import SuperAdminAnalyticsDashboard from './SuperAdminAnalyticsDashboard';
-import FeedbackDashboard from './FeedbackDashboard'; // ← существующий путь
+import SuperAdminFeedbackDashboard from './SuperAdminFeedbackDashboard';
 import { 
   Shield, Users, Ban, CheckCircle, BarChart3, Search, ChevronDown, 
   Filter, RefreshCw, Edit3, Trash2, AlertTriangle, X, ArrowLeft, Building2,
@@ -1383,7 +1383,6 @@ if (activeView === 'feedback') {
           
           {/* ⭐ КОМПОНЕНТ FEEDBACK ДАШБОРДА */}
           <SuperAdminFeedbackDashboard
-            supabase={supabase}
             showNotification={showNotification}
             t={t}
           />
