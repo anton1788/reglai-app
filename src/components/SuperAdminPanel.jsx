@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import SuperAdminKPIDashboard from './SuperAdminKPIDashboard';
 import SuperAdminAnalyticsDashboard from './SuperAdminAnalyticsDashboard';
-import SuperAdminFeedbackDashboard from './SuperAdmin/SuperAdminFeedbackDashboard';
+import FeedbackDashboard from './FeedbackDashboard'; // ← существующий путь
 import { 
   Shield, Users, Ban, CheckCircle, BarChart3, Search, ChevronDown, 
   Filter, RefreshCw, Edit3, Trash2, AlertTriangle, X, ArrowLeft, Building2,
