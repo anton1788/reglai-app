@@ -15,7 +15,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { supabase } from '../../utils/supabaseClient';
+import { supabase } from '../utils/supabaseClient';
 
 const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
   const [feedbacks, setFeedbacks] = useState([]);
