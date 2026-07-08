@@ -474,7 +474,7 @@ const ChatSidebar = memo(function({
 });
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
-const CompanyChat = ({ user, userCompanyId, userRole, t, showNotification }) => {
+const CompanyChat = ({ user, userCompanyId, userRole, t, showNotification, onUnreadCountChange }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [activeChannel, setActiveChannel] = useState('general');
@@ -527,6 +527,14 @@ const CompanyChat = ({ user, userCompanyId, userRole, t, showNotification }) => 
   useEffect(() => {
     isUserScrollingRef.current = isUserScrolling;
   }, [isUserScrolling]);
+
+  // Сообщаем родительскому компоненту об изменении количества непрочитанных
+useEffect(() => {
+  if (onUnreadCountChange) {
+    const totalUnread = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
+    onUnreadCountChange(totalUnread);
+  }
+}, [unreadCounts, onUnreadCountChange]);
 
   // Определение мобильного устройства
   useEffect(() => {

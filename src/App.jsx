@@ -1,6 +1,7 @@
 // src/App.jsx
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
+import ChatNavItem from './components/ChatNavItem';
 // === ТАРИФЫ И КВОТЫ ===
 import TariffSelector from './components/TariffSelector';
 import QuotaUsage from './components/QuotaUsage';
@@ -1061,6 +1062,8 @@ const [churnReasons, setChurnReasons] = useState([]);
 const [initialViewSet, setInitialViewSet] = useState(false); 
 const [selectedClientId, setSelectedClientId] = useState(null);
 const [isSubmitting, setIsSubmitting] = useState(false);
+// 📊 Chat Unread Count State
+const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
 // 🧪 A/B Testing State
 const [abTestVariants, setABTestVariants] = useState({
@@ -6542,6 +6545,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   supabase={supabase}
   // ✅ НОВЫЙ ПРОП
   mergeableCount={mergeableCount}
+  chatUnreadCount={chatUnreadCount}
 />
       {/* 📊 ПРОГРЕСС ОНБОРДИНГА - ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ НЕ ЗАВЕРШЕН */}
 {user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (
@@ -7075,6 +7079,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             t={t}
             language={language}
             showNotification={showNotification}
+            onUnreadCountChange={setChatUnreadCount}
           />
         )}
         

@@ -44,7 +44,8 @@ const Navbar = ({
   companyId = null,
   supabase = null,
   mergeableCount = 0,
-  onSyncOffline = null
+  onSyncOffline = null,
+  chatUnreadCount = 0
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -826,6 +827,11 @@ const Navbar = ({
                         {mergeableCount}
                       </span>
                     )}
+                    {item.id === 'chat' && chatUnreadCount > 0 && (  // ← ДОБАВИТЬ ЭТОТ БЛОК
+  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center animate-pulse">
+    {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+  </span>
+)}
                   </button>
                 );
               })}
@@ -911,6 +917,11 @@ const Navbar = ({
                           {mergeableCount}
                         </span>
                       )}
+                      {item.id === 'chat' && chatUnreadCount > 0 && (  // ← ДОБАВИТЬ ЭТОТ БЛОК
+  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+    {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+  </span>
+)}
                     </button>
                   );
                 })}
@@ -1070,6 +1081,11 @@ const Navbar = ({
                         {mergeableCount}
                       </span>
                     )}
+                    {item.id === 'chat' && chatUnreadCount > 0 && (  // ← ДОБАВИТЬ ЭТОТ БЛОК
+  <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0 animate-pulse">
+    {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+  </span>
+)}
                   </button>
                 );
               })}
