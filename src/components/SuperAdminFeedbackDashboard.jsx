@@ -14,7 +14,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { supabase } from '../utils/supabaseClient';
+import { supabase } from '../../utils/supabaseClient';
 
 const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
   const [feedbacks, setFeedbacks] = useState([]);
@@ -36,7 +36,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
   const loadAllFeedback = useCallback(async () => {
     setLoading(true);
     try {
-      // 🔥 ИСПРАВЛЕНО: Убираем вложенные select, используем простой запрос
+      // 🔥 ИСПРАВЛЕНО: Простой запрос без вложенных данных
       const { data, error } = await supabase
         .from('tester_feedback')
         .select('*')
@@ -44,22 +44,9 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
 
       if (error) throw error;
 
-      // Загружаем пользователей и компании отдельно для обогащения данных
-      const userIds = data?.map(f => f.user_id).filter(Boolean) || [];
+      // Получаем список уникальных company_id
       const companyIds = data?.map(f => f.company_id || f.user_company_id).filter(Boolean) || [];
-
-      let usersMap = {};
       let companiesMap = {};
-
-      if (userIds.length > 0) {
-        const { data: usersData } = await supabase
-          .from('auth.users')
-          .select('id, email, user_metadata')
-          .in('id', userIds);
-        if (usersData) {
-          usersMap = Object.fromEntries(usersData.map(u => [u.id, u]));
-        }
-      }
 
       if (companyIds.length > 0) {
         const { data: companiesData } = await supabase
@@ -71,10 +58,11 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
         }
       }
 
-      // Обогащаем данные
+      // Обогащаем данные (без auth.users)
       const enrichedData = data?.map(f => ({
         ...f,
-        users: usersMap[f.user_id] || null,
+        // Используем user_email из таблицы
+        user_display_name: f.user_email?.split('@')[0] || 'Unknown',
         companies: companiesMap[f.company_id || f.user_company_id] || null
       })) || [];
 
@@ -121,7 +109,8 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
 
   const exportToExcel = useCallback(() => {
     const exportData = feedbacks.map(f => ({
-      'Пользователь': f.users?.user_metadata?.full_name || f.users?.email || f.user_email || 'Unknown',
+      'Email': f.user_email || 'Unknown',
+      'Пользователь': f.user_display_name || 'Unknown',
       'Компания': f.companies?.name || 'Unknown',
       'Статус': f.status === 'completed' ? 'Завершён' : f.status === 'sent' ? 'Отправлен' : 'Ожидает',
       'Рейтинг': f.rating || '',
@@ -172,9 +161,8 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
           f.pain_points?.toLowerCase().includes(term) ||
           f.feature_requests?.toLowerCase().includes(term) ||
           f.feedback_text?.toLowerCase().includes(term) ||
-          f.users?.user_metadata?.full_name?.toLowerCase().includes(term) ||
-          f.users?.email?.toLowerCase().includes(term) ||
           f.user_email?.toLowerCase().includes(term) ||
+          f.user_display_name?.toLowerCase().includes(term) ||
           f.companies?.name?.toLowerCase().includes(term)
         );
       }
@@ -342,7 +330,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
                   <div className="flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-400 mb-1">
                     <span className="flex items-center gap-1">
                       <User className="w-3 h-3" />
-                      {feedback.users?.user_metadata?.full_name || feedback.users?.email || feedback.user_email || 'Unknown'}
+                      {feedback.user_display_name || feedback.user_email || 'Unknown'}
                     </span>
                     <span className="flex items-center gap-1">
                       <Building className="w-3 h-3" />
