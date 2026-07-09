@@ -226,6 +226,67 @@ feature_used: 'Функция использована',
 currentPlan: 'Текущий план:',
 'tariffSelector.title': 'Управление тарифом',
 
+// ─── ОТЗЫВЫ (FEEDBACK) ──────────────────────────────────────────────
+feedback: {
+  title: '📝 Оставить отзыв',
+  subtitle: 'Ваше мнение поможет нам стать лучше',
+  rating: 'Оцените приложение',
+  ratingLabels: ['Ужасно', 'Плохо', 'Нормально', 'Хорошо', 'Отлично'],
+  yourFeedback: 'Ваш отзыв',
+  placeholder: 'Расскажите, что вам нравится или что можно улучшить...',
+  send: 'Отправить отзыв',
+  sending: 'Отправка...',
+  thankYou: '✅ Спасибо за ваш отзыв!',
+  error: '❌ Не удалось отправить отзыв. Попробуйте позже.',
+  loginRequired: 'Пожалуйста, войдите в систему',
+  ratingRequired: 'Пожалуйста, оцените приложение',
+  textRequired: 'Пожалуйста, напишите ваш отзыв',
+  charCount: '{current}/{max}',
+  successMessage: 'Ваш отзыв поможет нам стать лучше ❤️',
+  
+  // Расширенная форма (3 шага)
+  extended: {
+    step1: {
+      title: 'Ваше мнение',
+      rating: 'Оцените приложение',
+      placeholder: 'Что вам нравится? Что можно улучшить?'
+    },
+    step2: {
+      title: 'Детали',
+      likes: 'Что понравилось больше всего?',
+      likesPlaceholder: 'Например: удобный интерфейс, быстрая работа...',
+      painPoints: 'С какими проблемами столкнулись?',
+      painPointsPlaceholder: 'Что было сложно или неудобно?',
+      mostUsedFeatures: 'Какие функции используете чаще всего?',
+      bugs: 'Встречали ли баги или ошибки?',
+      bugsPlaceholder: 'Опишите, что пошло не так...',
+      wishes: 'Что добавить/улучшить в первую очередь?',
+      wishesPlaceholder: 'Ваши идеи по улучшению...'
+    },
+    step3: {
+      title: 'Финальные вопросы',
+      competitors: 'Что заставит вас перейти с конкурентов на Реглай PRO?',
+      competitorsPlaceholder: 'Какие преимущества для вас важны?',
+      price: 'Сколько вы готовы платить в месяц?',
+      priceOptions: ['500 ₽', '990 ₽', '1490 ₽', '1990 ₽', 'Другое'],
+      followUp: 'Хочу получать follow-up письма с вопросами',
+      followUpEmail: 'your@email.com',
+      followUpHint: 'Мы отправим вам дополнительные вопросы для улучшения продукта'
+    },
+    buttons: {
+      next: 'Далее',
+      back: 'Назад',
+      send: 'Отправить отзыв',
+      sending: 'Отправка...'
+    },
+    progress: {
+      step1: 'Оценка',
+      step2: 'Детали',
+      step3: 'Финальные вопросы'
+    }
+  }
+},
+
 // ─── Календарь: Месяцы и дни недели ──────────────────────────────
 months: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
 monthsShort: ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'],
@@ -1100,6 +1161,67 @@ RateLimit: 'Rate Limit',
 feature_used: 'Feature used',
 currentPlan: 'Current plan:',
 'tariffSelector.title': 'Tariff Management',
+
+// ─── FEEDBACK ──────────────────────────────────────────────────────────
+feedback: {
+  title: '📝 Leave Feedback',
+  subtitle: 'Your opinion helps us improve',
+  rating: 'Rate the app',
+  ratingLabels: ['Terrible', 'Poor', 'Average', 'Good', 'Excellent'],
+  yourFeedback: 'Your feedback',
+  placeholder: 'Tell us what you like or what could be improved...',
+  send: 'Send Feedback',
+  sending: 'Sending...',
+  thankYou: '✅ Thank you for your feedback!',
+  error: '❌ Failed to send feedback. Please try again later.',
+  loginRequired: 'Please log in to the system',
+  ratingRequired: 'Please rate the app',
+  textRequired: 'Please write your feedback',
+  charCount: '{current}/{max}',
+  successMessage: 'Your feedback helps us improve ❤️',
+  
+  // Extended form (3 steps)
+  extended: {
+    step1: {
+      title: 'Your Opinion',
+      rating: 'Rate the app',
+      placeholder: 'What do you like? What could be improved?'
+    },
+    step2: {
+      title: 'Details',
+      likes: 'What did you like most?',
+      likesPlaceholder: 'E.g.: user-friendly interface, fast performance...',
+      painPoints: 'What problems did you encounter?',
+      painPointsPlaceholder: 'What was difficult or inconvenient?',
+      mostUsedFeatures: 'Which features do you use most often?',
+      bugs: 'Did you encounter any bugs or errors?',
+      bugsPlaceholder: 'Describe what went wrong...',
+      wishes: 'What should be added/improved first?',
+      wishesPlaceholder: 'Your ideas for improvement...'
+    },
+    step3: {
+      title: 'Final Questions',
+      competitors: 'What would make you switch from competitors to Reglai PRO?',
+      competitorsPlaceholder: 'What advantages are important to you?',
+      price: 'How much are you willing to pay per month?',
+      priceOptions: ['500 ₽', '990 ₽', '1490 ₽', '1990 ₽', 'Other'],
+      followUp: 'I want to receive follow-up emails with questions',
+      followUpEmail: 'your@email.com',
+      followUpHint: 'We will send you additional questions to improve the product'
+    },
+    buttons: {
+      next: 'Next',
+      back: 'Back',
+      send: 'Send Feedback',
+      sending: 'Sending...'
+    },
+    progress: {
+      step1: 'Rating',
+      step2: 'Details',
+      step3: 'Final Questions'
+    }
+  }
+},
 
 // ─── Supply actions ─────────────────────────────────────────────────────
 supplyDecision: 'How to process request?',
