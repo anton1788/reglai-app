@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import ChatNavItem from './components/ChatNavItem';
 import TesterFeedbackForm from './components/Feedback/TesterFeedbackForm';
+// После других импортов
+import FeedbackButton from './components/Feedback/FeedbackButton';
 // === ТАРИФЫ И КВОТЫ ===
 import TariffSelector from './components/TariffSelector';
 import QuotaUsage from './components/QuotaUsage';
@@ -7677,6 +7679,16 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   isOpen={showPrivacyPolicyModal}
   onClose={() => setShowPrivacyPolicyModal(false)}
 />
+
+{/* 🆕 Кнопка отзыва для всех пользователей */}
+    {user && !isSuperAdmin(userRole, user?.user_metadata) && (
+      <FeedbackButton
+        user={user}
+        userCompanyId={userCompanyId}
+        showNotification={showNotification}
+        t={t}
+      />
+    )}
 {showFeedbackForm && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[10000] fade-enter">
     <TesterFeedbackForm
