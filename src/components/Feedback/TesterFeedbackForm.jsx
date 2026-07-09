@@ -1,4 +1,3 @@
-// src/components/Feedback/TesterFeedbackForm.jsx
 import React, { useState } from 'react';
 import { supabase } from '../../utils/supabaseClient';
 import { 
@@ -24,8 +23,8 @@ const TesterFeedbackForm = ({
   userCompanyId, 
   onClose, 
   onSuccess,
-  showNotification,
-  t = (key) => key // ⬅️ Добавляем дефолтную функцию перевода
+  showNotification
+  // t убран, так как не используется
 }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -53,9 +52,8 @@ const TesterFeedbackForm = ({
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      // Проверяем, что пользователь авторизован
       if (!user?.id || !userCompanyId) {
-        showNotification(t('userNotAuthorized') || 'Ошибка: пользователь не авторизован', 'error');
+        showNotification('Ошибка: пользователь не авторизован', 'error');
         return;
       }
 
@@ -73,25 +71,25 @@ const TesterFeedbackForm = ({
 
       if (error) throw error;
 
-      showNotification(t('feedbackThanks') || '✅ Спасибо за ваш отзыв! Он очень важен для нас.', 'success');
+      showNotification('✅ Спасибо за ваш отзыв! Он очень важен для нас.', 'success');
       onSuccess?.();
       onClose?.();
     } catch (err) {
       console.error('Feedback error:', err);
-      showNotification(t('feedbackError') || '❌ Ошибка отправки. Попробуйте позже.', 'error');
+      showNotification('❌ Ошибка отправки. Попробуйте позже.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // Рендер шагов
+  // ШАГ 1
   const renderStep1 = () => (
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           <span className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-yellow-500" />
-            {t('firstImpression') || 'Что понравилось больше всего?'}
+            Что понравилось больше всего?
           </span>
         </label>
         <textarea
@@ -99,7 +97,7 @@ const TesterFeedbackForm = ({
           onChange={(e) => setFormData(prev => ({ ...prev, first_impression: e.target.value }))}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           rows="2"
-          placeholder={t('firstImpressionPlaceholder') || "Например: удобный интерфейс, быстрая работа, понятная навигация..."}
+          placeholder="Например: удобный интерфейс, быстрая работа, понятная навигация..."
         />
       </div>
 
@@ -107,7 +105,7 @@ const TesterFeedbackForm = ({
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           <span className="flex items-center gap-2">
             <Bug className="w-4 h-4 text-red-500" />
-            {t('painPoints') || 'С какими проблемами столкнулись?'}
+            С какими проблемами столкнулись?
           </span>
         </label>
         <textarea
@@ -115,7 +113,7 @@ const TesterFeedbackForm = ({
           onChange={(e) => setFormData(prev => ({ ...prev, pain_points: e.target.value }))}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           rows="2"
-          placeholder={t('painPointsPlaceholder') || "Опишите трудности, с которыми столкнулись..."}
+          placeholder="Опишите трудности, с которыми столкнулись..."
         />
       </div>
 
@@ -123,7 +121,7 @@ const TesterFeedbackForm = ({
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           <span className="flex items-center gap-2">
             <Users className="w-4 h-4 text-blue-500" />
-            {t('mostUsedFeatures') || 'Какие функции используете чаще всего?'}
+            Какие функции используете чаще всего?
           </span>
         </label>
         <textarea
@@ -131,19 +129,20 @@ const TesterFeedbackForm = ({
           onChange={(e) => setFormData(prev => ({ ...prev, most_used_features: e.target.value }))}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           rows="2"
-          placeholder={t('mostUsedFeaturesPlaceholder') || "Создание заявок, просмотр статусов, работа со складом..."}
+          placeholder="Создание заявок, просмотр статусов, работа со складом..."
         />
       </div>
     </div>
   );
 
+  // ШАГ 2
   const renderStep2 = () => (
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           <span className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-orange-500" />
-            {t('bugsFound') || 'Встречали ли баги или ошибки?'}
+            Встречали ли баги или ошибки?
           </span>
         </label>
         <textarea
@@ -151,7 +150,7 @@ const TesterFeedbackForm = ({
           onChange={(e) => setFormData(prev => ({ ...prev, bugs_found: e.target.value }))}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           rows="2"
-          placeholder={t('bugsFoundPlaceholder') || "Опишите любые ошибки или неполадки..."}
+          placeholder="Опишите любые ошибки или неполадки..."
         />
       </div>
 
@@ -159,7 +158,7 @@ const TesterFeedbackForm = ({
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           <span className="flex items-center gap-2">
             <Lightbulb className="w-4 h-4 text-yellow-500" />
-            {t('featureRequests') || 'Что добавить/улучшить в первую очередь?'}
+            Что добавить/улучшить в первую очередь?
           </span>
         </label>
         <textarea
@@ -167,7 +166,7 @@ const TesterFeedbackForm = ({
           onChange={(e) => setFormData(prev => ({ ...prev, feature_requests: e.target.value }))}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           rows="2"
-          placeholder={t('featureRequestsPlaceholder') || "Какие функции вы хотели бы видеть в первую очередь..."}
+          placeholder="Какие функции вы хотели бы видеть в первую очередь..."
         />
       </div>
 
@@ -175,7 +174,7 @@ const TesterFeedbackForm = ({
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           <span className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-purple-500" />
-            {t('competitorsQuestion') || 'Что заставит вас перейти с конкурентов на Реглай PRO?'}
+            Что заставит вас перейти с конкурентов на Реглай PRO?
           </span>
         </label>
         <textarea
@@ -183,19 +182,20 @@ const TesterFeedbackForm = ({
           onChange={(e) => setFormData(prev => ({ ...prev, competitors: e.target.value }))}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           rows="2"
-          placeholder={t('competitorsPlaceholder') || "Например: более низкая цена, удобный интерфейс, интеграции..."}
+          placeholder="Например: более низкая цена, удобный интерфейс, интеграции..."
         />
       </div>
     </div>
   );
 
+  // ШАГ 3
   const renderStep3 = () => (
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           <span className="flex items-center gap-2">
             <DollarSign className="w-4 h-4 text-green-500" />
-            {t('priceQuestion') || 'Сколько вы готовы платить в месяц?'}
+            Сколько вы готовы платить в месяц?
           </span>
         </label>
         <div className="grid grid-cols-2 gap-2">
@@ -223,12 +223,12 @@ const TesterFeedbackForm = ({
 
       <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4">
         <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-          {t('rateScale') || 'Оцените по шкале 1-5:'}
+          Оцените по шкале 1-5:
         </h4>
         <div className="space-y-3">
           <div>
             <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-              <span>{t('easeOfUse') || 'Простота использования'}</span>
+              <span>Простота использования</span>
               <span>{formData.ease_of_use}/5</span>
             </div>
             <input
@@ -246,7 +246,7 @@ const TesterFeedbackForm = ({
 
           <div>
             <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-              <span>{t('overallSatisfaction') || 'Общая удовлетворённость'}</span>
+              <span>Общая удовлетворённость</span>
               <span>{formData.overall_satisfaction}/5</span>
             </div>
             <input
@@ -264,7 +264,7 @@ const TesterFeedbackForm = ({
 
           <div>
             <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-              <span>{t('wouldRecommend') || 'Готовность рекомендовать (NPS)'}</span>
+              <span>Готовность рекомендовать (NPS)</span>
               <span>{formData.would_recommend}/10</span>
             </div>
             <input
@@ -292,10 +292,10 @@ const TesterFeedbackForm = ({
           <div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <MessageCircle className="w-5 h-5 text-[#4A6572]" />
-              {t('extendedFeedback') || 'Расширенный отзыв'}
+              Расширенный отзыв
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('step') || 'Шаг'} {step} {t('of') || 'из'} 3 • {t('helpUsImprove') || 'Помогите нам стать лучше'}
+              Шаг {step} из 3 • Помогите нам стать лучше
             </p>
           </div>
           <button
@@ -333,7 +333,7 @@ const TesterFeedbackForm = ({
               step === 1 ? 'invisible' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
-            {t('back') || 'Назад'}
+            Назад
           </button>
           
           {step < 3 ? (
@@ -341,7 +341,7 @@ const TesterFeedbackForm = ({
               onClick={() => setStep(prev => Math.min(3, prev + 1))}
               className="px-6 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors font-medium"
             >
-              {t('next') || 'Далее'} →
+              Далее →
             </button>
           ) : (
             <button
@@ -352,12 +352,12 @@ const TesterFeedbackForm = ({
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  {t('sending') || 'Отправка...'}
+                  Отправка...
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  {t('sendFeedback') || 'Отправить отзыв'}
+                  Отправить отзыв
                 </>
               )}
             </button>
