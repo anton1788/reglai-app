@@ -24,7 +24,6 @@ const TesterFeedbackForm = ({
   onClose, 
   onSuccess,
   showNotification
-  // t убран, так как не используется
 }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
