@@ -6,8 +6,8 @@
 export const PROMO_CONFIG = {
   'FRIEND2024': {
     planId: 'pro',
-    expiresAt: '2026-12-31T23:59:59Z',  // продлил до 2026
-    maxUses: 100,                         // увеличил лимит
+    expiresAt: '2026-12-31T23:59:59Z',
+    maxUses: 100,
     usedBy: [],
     description: 'Партнерский доступ (Профессиональный)',
     isActive: true,
@@ -34,7 +34,7 @@ export const PROMO_CONFIG = {
     createdBy: 'admin@reglai.ru',
     createdAt: '2024-01-01'
   },
-  'ПОЛЬЗУЙСЯ': {  // ← добавил ваш промокод
+  'ПОЛЬЗУЙСЯ': {
     planId: 'pro',
     expiresAt: '2030-12-31T23:59:59Z',
     maxUses: 1000,
@@ -46,7 +46,7 @@ export const PROMO_CONFIG = {
   }
 };
 
-// ========== СИНХРОНИЗАЦИЯ КОНФИГА С БД (ПОЛНАЯ ВЕРСИЯ) ==========
+// ========== СИНХРОНИЗАЦИЯ КОНФИГА С БД ==========
 export const syncPromoCodesToDB = async (supabase) => {
   console.log('🔄 [SYNC] Начинаем синхронизацию промокодов...');
   let synced = 0;
@@ -70,18 +70,21 @@ export const syncPromoCodesToDB = async (supabase) => {
       
       // 2. Если нет - создаём новый промокод
       if (!existing) {
+        // 🔥 ИСПРАВЛЕНО: используем правильные названия колонок
         const { error: insertError } = await supabase
           .from('promo_codes')
           .insert([{
             code: code,
-            plan_id: config.planId,
+            plan_id: config.planId,           // ← plan_id вместо plan_tier
             max_uses: config.maxUses,
             used_count: config.usedBy.length,
             expires_at: config.expiresAt,
             description: config.description,
             is_active: config.isActive,
             created_by: config.createdBy,
-            created_at: config.createdAt || new Date().toISOString()
+            created_at: config.createdAt || new Date().toISOString(),
+            discount_type: 'percent',          // ← обязательное поле
+            discount_value: 100                // ← обязательное поле
           }]);
         
         if (insertError) {
@@ -121,38 +124,6 @@ export const syncPromoCodesToDB = async (supabase) => {
             synced++;
           }
         }
-        
-        // ✅ 4. СИНХРОНИЗАЦИЯ ДАТ ДЛЯ АКТИВИРОВАННЫХ КОМПАНИЙ (НОВОЕ!)
-        const { data: companies, error: companiesError } = await supabase
-          .from('companies')
-          .select('id, name')
-          .eq('promo_code_used', code);
-        
-        if (companiesError) {
-          console.error(`❌ Ошибка поиска компаний для ${code}:`, companiesError);
-        } else if (companies && companies.length > 0) {
-          console.log(`📅 Обновляем даты для ${companies.length} компаний (${code})...`);
-          
-          for (const company of companies) {
-            const { error: updateDateError } = await supabase
-              .from('companies')
-              .update({
-                plan_expires_at: config.expiresAt
-              })
-              .eq('id', company.id);
-            
-            if (updateDateError) {
-              console.error(`❌ Ошибка обновления даты для компании ${company.id}:`, updateDateError);
-              errors++;
-            } else {
-              datesUpdated++;
-            }
-          }
-          
-          if (datesUpdated > 0) {
-            console.log(`✅ Обновлены даты для ${datesUpdated} компаний`);
-          }
-        }
       }
       
     } catch (err) {
@@ -161,24 +132,24 @@ export const syncPromoCodesToDB = async (supabase) => {
     }
   }
   
-  console.log(`📊 [SYNC] Завершено: создано/обновлено ${synced} промокодов, обновлено дат у ${datesUpdated} компаний, ошибок ${errors}`);
+  console.log(`📊 [SYNC] Завершено: создано/обновлено ${synced} промокодов, ошибок ${errors}`);
   return { synced, errors, datesUpdated };
 };
 
-// ========== ПРОВЕРКА ПРОМОКОДА (СНАЧАЛА КОНФИГ, ПОТОМ БД) ==========
+// ========== ПРОВЕРКА ПРОМОКОДА ==========
 export const validatePromoCode = async (supabase, code, companyId, userId) => {
   console.log('🔍 [validatePromoCode] Проверка:', { code, companyId, userId });
   
   let promo = null;
   let source = null;
   
-  // 1️⃣ СНАЧАЛА проверяем конфиг (код) - самый свежий
+  // 1️⃣ СНАЧАЛА проверяем конфиг
   if (PROMO_CONFIG[code.toUpperCase()]) {
     promo = PROMO_CONFIG[code.toUpperCase()];
     source = 'config';
     console.log('✅ Найден в КОНФИГЕ:', promo);
   } 
-  // 2️⃣ Если в конфиге нет — проверяем БД (для обратной совместимости)
+  // 2️⃣ Если в конфиге нет — проверяем БД
   else {
     const { data, error } = await supabase
       .from('promo_codes')
@@ -216,24 +187,6 @@ export const validatePromoCode = async (supabase, code, companyId, userId) => {
     return { valid: false, error: 'Лимит использований промокода исчерпан' };
   }
   
-  // Проверка, не использовала ли компания
-  if (source === 'database') {
-    const { data: existingUsage } = await supabase
-      .from('company_promo_usage')
-      .select('id')
-      .eq('company_id', companyId)
-      .eq('promo_code', code.toUpperCase())
-      .maybeSingle();
-    
-    if (existingUsage) {
-      return { valid: false, error: 'Ваша компания уже использовала этот промокод' };
-    }
-  } else if (source === 'config') {
-    if (promo.usedBy.includes(companyId)) {
-      return { valid: false, error: 'Ваша компания уже использовала этот промокод' };
-    }
-  }
-  
   // Проверка прав (только владелец компании)
   const { data: companyData, error: companyError } = await supabase
     .from('companies')
@@ -255,7 +208,7 @@ export const validatePromoCode = async (supabase, code, companyId, userId) => {
   };
 };
 
-// ========== АКТИВАЦИЯ ПРОМОКОДА (ОСНОВНАЯ) ==========
+// ========== АКТИВАЦИЯ ПРОМОКОДА ==========
 export const activatePromoPlan = async (supabase, code, companyId, userId, userEmail) => {
   console.log('🚀 [activatePromoPlan] Начало:', { code, companyId, userId });
   
@@ -267,15 +220,17 @@ export const activatePromoPlan = async (supabase, code, companyId, userId, userE
   }
   
   try {
-    // Обновляем компанию
+    // 🔥 ИСПРАВЛЕНО: используем правильные названия колонок
     const { error: updateError } = await supabase
       .from('companies')
       .update({
         plan_tier: validation.planId,
         plan_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
         promo_code_used: code.toUpperCase(),
-        promo_activated_at: new Date().toISOString(),
-        promo_activated_by: userId,
+        promo_applied_at: new Date().toISOString(),
+        promo_discount_percent: validation.source === 'config' 
+          ? (PROMO_CONFIG[code.toUpperCase()]?.discount_percent || 0)
+          : validation.promoData?.discount_percent || 0,
         updated_at: new Date().toISOString()
       })
       .eq('id', companyId);
@@ -290,44 +245,44 @@ export const activatePromoPlan = async (supabase, code, companyId, userId, userE
       }
     }
     
-    // Записываем в БД использование (если таблица существует)
+    // Увеличиваем счётчик в БД
+    try {
+      const { error: updateCountError } = await supabase
+        .from('promo_codes')
+        .update({
+          used_count: (validation.source === 'database' ? validation.promoData?.used_count || 0 : 0) + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('code', code.toUpperCase());
+      
+      if (updateCountError) {
+        console.warn('⚠️ Не удалось обновить счётчик использований:', updateCountError.message);
+      }
+    } catch (err) {
+      console.warn('⚠️ Ошибка обновления счётчика:', err.message);
+    }
+    
+    // 🔥 ИСПРАВЛЕНО: запись в audit_logs с правильными полями
     try {
       await supabase
-        .from('company_promo_usage')
+        .from('audit_logs')
         .insert([{
           company_id: companyId,
-          promo_code: code.toUpperCase(),
-          activated_by: userId,
-          activated_at: new Date().toISOString()
+          user_id: userId,
+          user_email: userEmail,
+          action_type: 'promo_code_activated',
+          entity_type: 'company',
+          entity_id: companyId,
+          new_value: JSON.stringify({
+            promo_code: code,
+            plan: validation.planId,
+            expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          }),
+          created_at: new Date().toISOString()
         }]);
     } catch (err) {
-      console.warn('⚠️ Не удалось записать usage (таблица может отсутствовать):', err.message);
+      console.warn('⚠️ Не удалось записать в аудит:', err.message);
     }
-    
-    // Увеличиваем счётчик в БД (если есть RPC)
-    try {
-      await supabase.rpc('increment_promo_usage', { p_code: code.toUpperCase() });
-    } catch (err) {
-      console.warn('⚠️ RPC increment_promo_usage не найден:', err.message);
-    }
-    
-    // Логируем в аудит
-    await supabase
-      .from('audit_logs')
-      .insert([{
-        company_id: companyId,
-        user_id: userId,
-        user_email: userEmail,
-        action_type: 'promo_code_activated',
-        entity_type: 'company',
-        entity_id: companyId,
-        new_value: JSON.stringify({
-          promo_code: code,
-          plan: validation.planId,
-          expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-        }),
-        created_at: new Date().toISOString()
-      }]);
     
     return { 
       success: true, 
@@ -354,7 +309,7 @@ export const checkUserPromoCode = async (supabase, companyId) => {
   try {
     const { data, error } = await supabase
       .from('companies')
-      .select('promo_code_used, promo_activated_at, plan_tier')
+      .select('promo_code_used, promo_applied_at, plan_tier')
       .eq('id', companyId)
       .single();
     
@@ -363,7 +318,7 @@ export const checkUserPromoCode = async (supabase, companyId) => {
     return {
       hasPromo: !!data?.promo_code_used,
       promoCode: data?.promo_code_used,
-      activatedAt: data?.promo_activated_at,
+      activatedAt: data?.promo_applied_at,
       currentPlan: data?.plan_tier
     };
   } catch (err) {
