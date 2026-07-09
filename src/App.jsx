@@ -2,7 +2,6 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import ChatNavItem from './components/ChatNavItem';
-// В App.jsx, в секции импортов
 import TesterFeedbackForm from './components/Feedback/TesterFeedbackForm';
 // === ТАРИФЫ И КВОТЫ ===
 import TariffSelector from './components/TariffSelector';
@@ -1066,6 +1065,7 @@ const [selectedClientId, setSelectedClientId] = useState(null);
 const [isSubmitting, setIsSubmitting] = useState(false);
 // 📊 Chat Unread Count State
 const [chatUnreadCount, setChatUnreadCount] = useState(0);
+const [newFeedbackCount, setNewFeedbackCount] = useState(0);
 
 // 🧪 A/B Testing State
 const [abTestVariants, setABTestVariants] = useState({
@@ -4608,6 +4608,51 @@ useEffect(() => {
   loadPlan();
 }, [userCompanyId, supabase, userRole, user, isSuperAdmin]);
 
+// 📝 Отслеживание новых отзывов для супер-админа
+useEffect(() => {
+  if (userRole !== 'super_admin') return;
+
+  // Загружаем количество непросмотренных отзывов
+  const loadNewFeedbackCount = async () => {
+    const { count, error } = await supabase
+      .from('tester_feedback')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+    
+    if (!error) {
+      setNewFeedbackCount(count || 0);
+    }
+  };
+
+  loadNewFeedbackCount();
+
+  // Подписываемся на новые отзывы
+  const channel = supabase
+    .channel('tester_feedback_changes')
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'tester_feedback'
+      },
+      () => {
+        setNewFeedbackCount(prev => prev + 1);
+        showNotification(
+          '📝 Поступил новый отзыв!',
+          'info',
+          false,
+          () => setCurrentView('superAdmin')
+        );
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [userRole, userCompanyId, showNotification, supabase, setCurrentView]);
+
 // Добавьте этот useEffect в App.jsx после loadPlan
 useEffect(() => {
   const checkTrialExpired = async () => {
@@ -6551,6 +6596,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   // ✅ НОВЫЙ ПРОП
   mergeableCount={mergeableCount}
   chatUnreadCount={chatUnreadCount}
+  newFeedbackCount={newFeedbackCount}
 />
       {/* 📊 ПРОГРЕСС ОНБОРДИНГА - ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ НЕ ЗАВЕРШЕН */}
 {user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (

@@ -13,7 +13,8 @@ import {
   Calculator,
   FileText,
   Settings,
-  FolderOpen
+  FolderOpen,
+  Star
 } from 'lucide-react';
 import { getCompanyPlan } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
@@ -45,7 +46,8 @@ const Navbar = ({
   supabase = null,
   mergeableCount = 0,
   onSyncOffline = null,
-  chatUnreadCount = 0
+  chatUnreadCount = 0,
+  newFeedbackCount = 0
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -645,6 +647,19 @@ const Navbar = ({
                         </button>
                       )}
                     </div>
+                    {/* ← ДОБАВИТЬ ЗДЕСЬ КНОПКУ ДЛЯ СУПЕР-АДМИНА */}
+{newFeedbackCount > 0 && userRole === 'super_admin' && (
+  <button
+    onClick={() => { onNavigate?.('/superAdmin'); }}
+    className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+    aria-label="Новые отзывы"
+  >
+    <Star className="w-5 h-5 text-yellow-500" />
+    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+      {newFeedbackCount > 99 ? '99+' : newFeedbackCount}
+    </span>
+  </button>
+)}
                     <div className="max-h-96 overflow-y-auto">
                       {notifications.length === 0 ? (
                         <div className="p-6 text-center text-gray-500 dark:text-gray-400">
