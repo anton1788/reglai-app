@@ -1,4 +1,3 @@
-// src/components/SuperAdmin/SuperAdminFeedbackDashboard.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   MessageCircle,
@@ -37,29 +36,59 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
   const loadAllFeedback = useCallback(async () => {
     setLoading(true);
     try {
+      // 🔥 ИСПРАВЛЕНО: Убираем вложенные select, используем простой запрос
       const { data, error } = await supabase
         .from('tester_feedback')
-        .select(`
-          *,
-          users:user_id (email, user_metadata),
-          companies:company_id (name)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      setFeedbacks(data || []);
+      // Загружаем пользователей и компании отдельно для обогащения данных
+      const userIds = data?.map(f => f.user_id).filter(Boolean) || [];
+      const companyIds = data?.map(f => f.company_id || f.user_company_id).filter(Boolean) || [];
+
+      let usersMap = {};
+      let companiesMap = {};
+
+      if (userIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from('auth.users')
+          .select('id, email, user_metadata')
+          .in('id', userIds);
+        if (usersData) {
+          usersMap = Object.fromEntries(usersData.map(u => [u.id, u]));
+        }
+      }
+
+      if (companyIds.length > 0) {
+        const { data: companiesData } = await supabase
+          .from('companies')
+          .select('id, name')
+          .in('id', companyIds);
+        if (companiesData) {
+          companiesMap = Object.fromEntries(companiesData.map(c => [c.id, c]));
+        }
+      }
+
+      // Обогащаем данные
+      const enrichedData = data?.map(f => ({
+        ...f,
+        users: usersMap[f.user_id] || null,
+        companies: companiesMap[f.company_id || f.user_company_id] || null
+      })) || [];
+
+      setFeedbacks(enrichedData);
 
       // Расчёт статистики
-      const completed = data?.filter(f => f.status === 'completed') || [];
-      const pending = data?.filter(f => f.status === 'pending') || [];
-      const sent = data?.filter(f => f.status === 'sent') || [];
+      const completed = enrichedData?.filter(f => f.status === 'completed') || [];
+      const pending = enrichedData?.filter(f => f.status === 'pending') || [];
+      const sent = enrichedData?.filter(f => f.status === 'sent') || [];
 
       const avgEase = completed.reduce((acc, f) => acc + (f.ease_of_use || 0), 0) / (completed.length || 1);
       const avgSat = completed.reduce((acc, f) => acc + (f.overall_satisfaction || 0), 0) / (completed.length || 1);
       const avgNps = completed.reduce((acc, f) => acc + (f.would_recommend || 0), 0) / (completed.length || 1);
 
-      // Распределение цен
       const priceDist = {};
       completed.forEach(f => {
         const price = f.price_option || 'Не указано';
@@ -67,7 +96,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
       });
 
       setStats({
-        total: data?.length || 0,
+        total: enrichedData?.length || 0,
         completed: completed.length,
         pending: pending.length,
         sent: sent.length,
@@ -79,7 +108,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
     } catch (err) {
       console.error('Load feedback error:', err);
       if (showNotification) {
-        showNotification('Ошибка загрузки', 'error');
+        showNotification('Ошибка загрузки отзывов', 'error');
       }
     } finally {
       setLoading(false);
@@ -92,16 +121,18 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
 
   const exportToExcel = useCallback(() => {
     const exportData = feedbacks.map(f => ({
-      'Пользователь': f.users?.user_metadata?.full_name || f.users?.email || 'Unknown',
+      'Пользователь': f.users?.user_metadata?.full_name || f.users?.email || f.user_email || 'Unknown',
       'Компания': f.companies?.name || 'Unknown',
       'Статус': f.status === 'completed' ? 'Завершён' : f.status === 'sent' ? 'Отправлен' : 'Ожидает',
+      'Рейтинг': f.rating || '',
+      'Отзыв': f.feedback_text || '',
       'Первое впечатление': f.first_impression || '',
       'Проблемы': f.pain_points || '',
-      'Используемые функции': f.most_used_features || '',
-      'Баг-репорты': f.bugs_found || '',
-      'Пожелания': f.feature_requests || '',
+      'Используемые функции': f.most_used_features_text || f.most_used_features || '',
+      'Баг-репорты': f.bugs_found || f.bugs || '',
+      'Пожелания': f.feature_requests || f.wishes || '',
       'Конкуренты': f.competitors || '',
-      'Готов платить': f.price_option || '',
+      'Готов платить': f.price_option || f.price_range || '',
       'Простота (1-5)': f.ease_of_use || '',
       'Удовлетворённость (1-5)': f.overall_satisfaction || '',
       'NPS (0-10)': f.would_recommend || '',
@@ -140,8 +171,10 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
           f.first_impression?.toLowerCase().includes(term) ||
           f.pain_points?.toLowerCase().includes(term) ||
           f.feature_requests?.toLowerCase().includes(term) ||
+          f.feedback_text?.toLowerCase().includes(term) ||
           f.users?.user_metadata?.full_name?.toLowerCase().includes(term) ||
           f.users?.email?.toLowerCase().includes(term) ||
+          f.user_email?.toLowerCase().includes(term) ||
           f.companies?.name?.toLowerCase().includes(term)
         );
       }
@@ -309,12 +342,17 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
                   <div className="flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-400 mb-1">
                     <span className="flex items-center gap-1">
                       <User className="w-3 h-3" />
-                      {feedback.users?.user_metadata?.full_name || feedback.users?.email || 'Unknown'}
+                      {feedback.users?.user_metadata?.full_name || feedback.users?.email || feedback.user_email || 'Unknown'}
                     </span>
                     <span className="flex items-center gap-1">
                       <Building className="w-3 h-3" />
                       {feedback.companies?.name || 'Unknown'}
                     </span>
+                    {feedback.rating && (
+                      <span className="flex items-center gap-1 text-yellow-500">
+                        ⭐ {feedback.rating}/5
+                      </span>
+                    )}
                     {feedback.price_option && (
                       <span className="flex items-center gap-1 text-green-600">
                         <DollarSign className="w-3 h-3" />
@@ -329,46 +367,64 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
                   >
                     {expandedId === feedback.id ? (
                       <div className="space-y-3 text-sm text-gray-700 dark:text-gray-300">
-                        <div>
-                          <span className="font-medium">💡 Первое впечатление:</span>
-                          <p className="mt-1">{feedback.first_impression || '—'}</p>
-                        </div>
-                        <div>
-                          <span className="font-medium">😟 Проблемы:</span>
-                          <p className="mt-1">{feedback.pain_points || '—'}</p>
-                        </div>
-                        <div>
-                          <span className="font-medium">⚡ Используемые функции:</span>
-                          <p className="mt-1">{feedback.most_used_features || '—'}</p>
-                        </div>
-                        <div>
-                          <span className="font-medium">🐛 Баги:</span>
-                          <p className="mt-1">{feedback.bugs_found || '—'}</p>
-                        </div>
-                        <div>
-                          <span className="font-medium">💡 Пожелания:</span>
-                          <p className="mt-1">{feedback.feature_requests || '—'}</p>
-                        </div>
-                        <div>
-                          <span className="font-medium">🏆 Конкуренты:</span>
-                          <p className="mt-1">{feedback.competitors || '—'}</p>
-                        </div>
+                        {feedback.feedback_text && (
+                          <div>
+                            <span className="font-medium">📝 Отзыв:</span>
+                            <p className="mt-1">{feedback.feedback_text}</p>
+                          </div>
+                        )}
+                        {feedback.first_impression && (
+                          <div>
+                            <span className="font-medium">💡 Первое впечатление:</span>
+                            <p className="mt-1">{feedback.first_impression}</p>
+                          </div>
+                        )}
+                        {feedback.pain_points && (
+                          <div>
+                            <span className="font-medium">😟 Проблемы:</span>
+                            <p className="mt-1">{feedback.pain_points}</p>
+                          </div>
+                        )}
+                        {feedback.most_used_features_text && (
+                          <div>
+                            <span className="font-medium">⚡ Используемые функции:</span>
+                            <p className="mt-1">{feedback.most_used_features_text}</p>
+                          </div>
+                        )}
+                        {(feedback.bugs_found || feedback.bugs) && (
+                          <div>
+                            <span className="font-medium">🐛 Баги:</span>
+                            <p className="mt-1">{feedback.bugs_found || feedback.bugs}</p>
+                          </div>
+                        )}
+                        {(feedback.feature_requests || feedback.wishes) && (
+                          <div>
+                            <span className="font-medium">💡 Пожелания:</span>
+                            <p className="mt-1">{feedback.feature_requests || feedback.wishes}</p>
+                          </div>
+                        )}
+                        {feedback.competitors && (
+                          <div>
+                            <span className="font-medium">🏆 Конкуренты:</span>
+                            <p className="mt-1">{feedback.competitors}</p>
+                          </div>
+                        )}
                         <div className="flex gap-4 text-xs">
-                          <span>Простота: {feedback.ease_of_use || '—'}/5</span>
-                          <span>Удовлетворённость: {feedback.overall_satisfaction || '—'}/5</span>
-                          <span>NPS: {feedback.would_recommend || '—'}/10</span>
+                          {feedback.ease_of_use && <span>Простота: {feedback.ease_of_use}/5</span>}
+                          {feedback.overall_satisfaction && <span>Удовлетворённость: {feedback.overall_satisfaction}/5</span>}
+                          {feedback.would_recommend && <span>NPS: {feedback.would_recommend}/10</span>}
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-1">
-                        {feedback.first_impression && (
+                        {feedback.feedback_text && (
                           <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-1">
-                            💡 {feedback.first_impression}
+                            📝 {feedback.feedback_text}
                           </p>
                         )}
-                        {feedback.feature_requests && (
+                        {feedback.first_impression && (
                           <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
-                            💡 {feedback.feature_requests}
+                            💡 {feedback.first_impression}
                           </p>
                         )}
                       </div>
