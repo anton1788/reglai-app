@@ -56,19 +56,37 @@ const TesterFeedbackForm = ({
         return;
       }
 
+      // ✅ ПРАВИЛЬНЫЙ ЗАПРОС - все колонки существуют
       const { error } = await supabase
         .from('tester_feedback')
         .insert([{
           user_id: user.id,
-          company_id: userCompanyId,
-          ...formData,
+          user_email: user.email,
+          user_company_id: userCompanyId,
+          company_id: userCompanyId,           // ← добавил
+          rating: formData.overall_satisfaction || 4,
+          feedback_text: formData.first_impression || '',
+          first_impression: formData.first_impression || '',
+          pain_points: formData.pain_points || '',
+          most_used_features_text: formData.most_used_features || '',
+          bugs_found: formData.bugs_found || '',
+          feature_requests: formData.feature_requests || '',
+          competitors: formData.competitors || '',
+          price_option: formData.price_option || '',
+          price_willing_to_pay: formData.price_willing_to_pay || null,
+          ease_of_use: formData.ease_of_use || 4,
+          would_recommend: formData.would_recommend || 8,
+          overall_satisfaction: formData.overall_satisfaction || 4,
           status: 'completed',
           completed_at: new Date().toISOString(),
           user_agent: navigator.userAgent,
           referrer: document.referrer || window.location.href
         }]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Ошибка:', error);
+        throw error;
+      }
 
       showNotification('✅ Спасибо за ваш отзыв! Он очень важен для нас.', 'success');
       onSuccess?.();
