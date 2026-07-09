@@ -113,6 +113,7 @@ const FeedbackButton = ({ user, userCompanyId, showNotification, t }) => {
     setStep(1);
   };
 
+  // ШАГ 1: Оценка и отзыв
   const renderStep1 = () => (
     <>
       <div className="mb-4">
@@ -169,6 +170,7 @@ const FeedbackButton = ({ user, userCompanyId, showNotification, t }) => {
     </>
   );
 
+  // ШАГ 2: Детали
   const renderStep2 = () => (
     <>
       <button
@@ -265,6 +267,7 @@ const FeedbackButton = ({ user, userCompanyId, showNotification, t }) => {
     </>
   );
 
+  // ШАГ 3: Финальные вопросы
   const renderStep3 = () => (
     <>
       <button
@@ -357,6 +360,7 @@ const FeedbackButton = ({ user, userCompanyId, showNotification, t }) => {
 
   return (
     <>
+      {/* Кнопка открытия */}
       <button
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 z-40 p-4 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-110 group"
@@ -367,6 +371,7 @@ const FeedbackButton = ({ user, userCompanyId, showNotification, t }) => {
         <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
       </button>
 
+      {/* Модальное окно */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 fade-enter"
@@ -379,6 +384,7 @@ const FeedbackButton = ({ user, userCompanyId, showNotification, t }) => {
         >
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
+              {/* Заголовок */}
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   <Heart className="w-5 h-5 text-red-500" />
@@ -395,6 +401,7 @@ const FeedbackButton = ({ user, userCompanyId, showNotification, t }) => {
                 </button>
               </div>
 
+              {/* Прогресс */}
               <div className="flex gap-1 mb-4">
                 {[1, 2, 3].map((s) => (
                   <div
@@ -406,6 +413,7 @@ const FeedbackButton = ({ user, userCompanyId, showNotification, t }) => {
                 ))}
               </div>
 
+              {/* Шаги */}
               {step === 1 && renderStep1()}
               {step === 2 && renderStep2()}
               {step === 3 && renderStep3()}
