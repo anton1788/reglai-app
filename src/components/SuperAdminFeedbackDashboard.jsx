@@ -14,7 +14,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { supabase } from '../../utils/supabaseClient';
+import { supabase } from '../utils/supabaseClient';  // ← ИСПРАВЛЕННЫЙ ПУТЬ
 
 const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
   const [feedbacks, setFeedbacks] = useState([]);
@@ -36,7 +36,6 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
   const loadAllFeedback = useCallback(async () => {
     setLoading(true);
     try {
-      // 🔥 ИСПРАВЛЕНО: Простой запрос без вложенных данных
       const { data, error } = await supabase
         .from('tester_feedback')
         .select('*')
@@ -44,7 +43,6 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
 
       if (error) throw error;
 
-      // Получаем список уникальных company_id
       const companyIds = data?.map(f => f.company_id || f.user_company_id).filter(Boolean) || [];
       let companiesMap = {};
 
@@ -58,17 +56,14 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
         }
       }
 
-      // Обогащаем данные (без auth.users)
       const enrichedData = data?.map(f => ({
         ...f,
-        // Используем user_email из таблицы
         user_display_name: f.user_email?.split('@')[0] || 'Unknown',
         companies: companiesMap[f.company_id || f.user_company_id] || null
       })) || [];
 
       setFeedbacks(enrichedData);
 
-      // Расчёт статистики
       const completed = enrichedData?.filter(f => f.status === 'completed') || [];
       const pending = enrichedData?.filter(f => f.status === 'pending') || [];
       const sent = enrichedData?.filter(f => f.status === 'sent') || [];
