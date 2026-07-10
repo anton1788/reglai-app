@@ -47,7 +47,8 @@ const Navbar = ({
   mergeableCount = 0,
   onSyncOffline = null,
   chatUnreadCount = 0,
-  newFeedbackCount = 0
+  newFeedbackCount = 0,
+  unreadNotifCount = 0
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -684,6 +685,20 @@ const Navbar = ({
                 )}
               </div>
 
+               {/* 🔔 НОВАЯ ИКОНКА УВЕДОМЛЕНИЙ С СЧЁТЧИКОМ (вставить сюда) */}
+              <button
+                onClick={() => onNavigate?.('/notifications')}
+                className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                title="Мои уведомления"
+              >
+                <Bell className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                {unreadNotifCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white dark:border-gray-800 shadow-sm">
+                    {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                  </span>
+                )}
+              </button>
+
               {/* Переключение темы */}
               <button
                 onClick={onToggleTheme}
@@ -1054,6 +1069,26 @@ const Navbar = ({
                   </button>
                 </div>
               </div>
+
+               <button
+                onClick={() => {
+                  onNavigate?.('/notifications');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm rounded-lg transition-colors ${
+                  currentPage === 'notifications'
+                    ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+              >
+                <Bell className="w-5 h-5 flex-shrink-0" />
+                <span className="flex-1 text-left truncate">Мои уведомления</span>
+                {unreadNotifCount > 0 && (
+                  <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0 animate-pulse">
+                    {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                  </span>
+                )}
+              </button>
 
               {filteredNavItems.map((item) => {
                 const Icon = item.icon;

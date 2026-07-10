@@ -945,6 +945,7 @@ const App = () => {
   // ─────────────────────────────────────────────────────────
   const [language, setLanguage] = useState('ru');
   const [theme, setTheme] = useState('system');
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [currentView, setCurrentView] = useState('create');
   const [applications, setApplications] = useState([]);
   const [allApplications, setAllApplications] = useState([]);
@@ -1690,6 +1691,52 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // ============================================================
+  // 🔔 ПОДПИСКА НА НОВЫЕ УВЕДОМЛЕНИЯ (Realtime) - ВСТАВИТЬ СЮДА
+  // ============================================================
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // 1. Загружаем текущее количество непрочитанных
+    loadUnreadNotifications();
+
+    // 2. Подписываемся на канал изменений в таблице user_notifications
+    const channel = supabase
+      .channel('notifications_channel')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'user_notifications',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          // Когда супер-админ отвечает, у пользователя всплывает тост!
+          const newNotif = payload.new;
+          
+          showNotification(
+            `${newNotif.title}: ${newNotif.message}`,
+            'info', // Тип уведомления (голубой)
+            false,
+            () => {
+               // Если хотите - можете перенаправить пользователя на страницу уведомлений
+               // setCurrentView('notifications'); 
+            }
+          );
+          
+          // Увеличиваем счётчик на 1
+          setUnreadNotifCount(prev => prev + 1);
+        }
+      )
+      .subscribe();
+
+    // Отписка при размонтировании компонента или смене пользователя
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, showNotification, loadUnreadNotifications]);
 
   // ─────────────────────────────────────────────────────────
   // 🚫 BLOCKED PARAM CHECK
@@ -2625,6 +2672,17 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
     showNotification('❌ Ошибка при назначении руководителя: ' + err.message, 'error');
   }
 };
+
+ const loadUnreadNotifications = useCallback(async () => {
+    if (!user?.id) return;
+    const { count, error } = await supabase
+      .from('user_notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('is_read', false);
+    
+    if (!error) setUnreadNotifCount(count || 0);
+  }, [user?.id]);
 
   // ─────────────────────────────────────────────────────────
   // 🛒 CART MANAGEMENT
@@ -6599,6 +6657,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   mergeableCount={mergeableCount}
   chatUnreadCount={chatUnreadCount}
   newFeedbackCount={newFeedbackCount}
+  unreadNotifCount={unreadNotifCount} 
 />
       {/* 📊 ПРОГРЕСС ОНБОРДИНГА - ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ НЕ ЗАВЕРШЕН */}
 {user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (

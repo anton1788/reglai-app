@@ -1385,6 +1385,7 @@ if (activeView === 'feedback') {
           <SuperAdminFeedbackDashboard
             showNotification={showNotification}
             t={t}
+            currentUser={currentUser}
           />
         </div>
       </div>

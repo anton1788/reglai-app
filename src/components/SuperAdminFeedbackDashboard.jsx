@@ -15,18 +15,18 @@ import {
   Reply,
   Send,
   X,
-  Mail
+  Bell // <--- Добавили иконку колокольчика для UI
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../utils/supabaseClient';
 
-const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
+const SuperAdminFeedbackDashboard = ({ showNotification, t, currentUser }) => {
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedId, setExpandedId] = useState(null);
-  const [replyModal, setReplyModal] = useState(null); // { feedbackId, userEmail, userName }
+  const [replyModal, setReplyModal] = useState(null); 
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
   const [stats, setStats] = useState({
@@ -43,6 +43,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
   const loadAllFeedback = useCallback(async () => {
     setLoading(true);
     try {
+      // Загружаем все поля, включая user_id, если оно есть в таблице
       const { data, error } = await supabase
         .from('tester_feedback')
         .select('*')
@@ -110,7 +111,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
   }, [loadAllFeedback]);
 
   // ============================================================
-  // 📧 ОТПРАВКА ОТВЕТА
+  // 📧 ОТПРАВКА ОТВЕТА (ВНУТРЕННЕЕ УВЕДОМЛЕНИЕ)
   // ============================================================
   const sendReply = async () => {
     if (!replyModal || !replyText.trim()) {
@@ -125,8 +126,8 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
         .from('feedback_replies')
         .insert([{
           feedback_id: replyModal.feedbackId,
-          admin_id: replyModal.adminId || null,
-          admin_email: replyModal.adminEmail || 'admin@reglay.pro',
+          admin_id: currentUser?.id || null,
+          admin_email: currentUser?.email || 'admin@reglay.pro',
           reply_text: replyText.trim(),
           created_at: new Date().toISOString()
         }]);
@@ -144,6 +145,34 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
 
       if (updateError) throw updateError;
 
+      // ============================================================
+      // 🔥 НОВАЯ ЛОГИКА: ОТПРАВЛЯЕМ ВНУТРЕННЕЕ УВЕДОМЛЕНИЕ
+      // ============================================================
+      if (replyModal.userId) {
+        const { error: notifError } = await supabase
+          .from('user_notifications')
+          .insert([{
+            user_id: replyModal.userId, // ID пользователя, оставившего отзыв
+            company_id: replyModal.userCompanyId || null, // Если известна компания
+            type: 'feedback_reply',
+            title: '📩 Новый ответ на ваш отзыв',
+            message: `Администратор ответил: "${replyText.trim().substring(0, 80)}${replyText.length > 80 ? '...' : ''}"`,
+            related_data: {
+              feedback_id: replyModal.feedbackId,
+              reply_text: replyText.trim(),
+              admin_name: currentUser?.user_metadata?.full_name || 'Администратор'
+            },
+            is_read: false
+          }]);
+
+        if (notifError) {
+          console.warn('Не удалось отправить уведомление (не критично):', notifError);
+        }
+      } else {
+        console.warn('Не удалось отправить уведомление: нет user_id у отзыва');
+      }
+      // ============================================================
+
       // 3. Обновляем локальный список
       setFeedbacks(prev => prev.map(f => 
         f.id === replyModal.feedbackId 
@@ -151,7 +180,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
           : f
       ));
 
-      showNotification(`✅ Ответ отправлен пользователю ${replyModal.userName}`, 'success');
+      showNotification(`✅ Ответ отправлен пользователю ${replyModal.userName} (уведомление внутри приложения)`, 'success');
       
       // 4. Закрываем модалку
       setReplyModal(null);
@@ -174,6 +203,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
   const exportToExcel = useCallback(() => {
     const exportData = feedbacks.map(f => ({
       'Email': f.user_email || 'Unknown',
+      'ID Пользователя': f.user_id || 'Unknown', // Добавили для отладки
       'Пользователь': f.user_display_name || 'Unknown',
       'Компания': f.companies?.name || 'Unknown',
       'Статус': f.status === 'completed' ? 'Завершён' : f.status === 'sent' ? 'Отправлен' : 'Ожидает',
@@ -256,7 +286,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-lg">
-                <Reply className="w-5 h-5 text-white" />
+                <Bell className="w-5 h-5 text-white" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">
@@ -297,10 +327,9 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
             </div>
 
             <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <Mail className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+              <Bell className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-gray-600 dark:text-gray-400">
-                Ответ будет отправлен на почту пользователя: <br />
-                <span className="font-medium">{replyModal.userEmail}</span>
+                Ответ появится в разделе <b>"Уведомления"</b> внутри личного кабинета пользователя.
               </p>
             </div>
           </div>
@@ -329,7 +358,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  Отправить ответ
+                  Отправить
                 </>
               )}
             </button>
@@ -350,7 +379,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
 
   return (
     <div className="max-w-7xl mx-auto p-4 page-enter space-y-6">
-      {/* Header - без изменений */}
+      {/* Header */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -381,7 +410,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
         </div>
       </div>
 
-      {/* Stats - без изменений */}
+      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow border border-gray-200/50 dark:border-gray-700/50 text-center">
           <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
@@ -413,7 +442,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
         </div>
       </div>
 
-      {/* Price Distribution - без изменений */}
+      {/* Price Distribution */}
       {Object.keys(stats.priceDistribution).length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200/50 dark:border-gray-700/50 p-4">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
@@ -431,7 +460,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
         </div>
       )}
 
-      {/* Filters - без изменений */}
+      {/* Filters */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200/50 dark:border-gray-700/50 p-4">
         <div className="flex flex-wrap gap-3">
           <div className="flex gap-2 overflow-x-auto">
@@ -465,7 +494,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
         </div>
       </div>
 
-      {/* Feedback List - С КНОПКОЙ ОТВЕТИТЬ */}
+      {/* Feedback List */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200/50 dark:border-gray-700/50 divide-y divide-gray-200/50 dark:divide-gray-700/50">
         {filteredFeedbacks.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
@@ -601,10 +630,12 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
                   <button
                     onClick={() => setReplyModal({
                       feedbackId: feedback.id,
+                      userId: feedback.user_id, // <--- ПЕРЕДАЕМ ID ПОЛЬЗОВАТЕЛЯ
+                      userCompanyId: feedback.company_id || feedback.user_company_id, // <--- Передаём компанию
                       userEmail: feedback.user_email,
                       userName: feedback.user_display_name || feedback.user_email,
-                      adminId: null, // можно передать ID админа
-                      adminEmail: 'admin@reglay.pro'
+                      adminId: currentUser?.id,
+                      adminEmail: currentUser?.email || 'admin@reglay.pro'
                     })}
                     className="flex-shrink-0 px-3 py-1.5 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors flex items-center gap-1.5 text-sm"
                   >
