@@ -255,6 +255,23 @@ of: 'из',
 next: 'Далее',
 back: 'Назад',
 
+// ─── ОТЗЫВЫ (FEEDBACK) ДЛЯ ПЛАВАЮЩЕЙ КНОПКИ ─────────────────────
+feedback: {
+  title: '📝 Оставить отзыв',
+  rating: 'Оцените приложение',
+  ratingLabels: ['Ужасно', 'Плохо', 'Нормально', 'Хорошо', 'Отлично'],
+  yourFeedback: 'Ваш отзыв',
+  placeholder: 'Расскажите, что вам нравится или что можно улучшить...',
+  send: 'Отправить отзыв',
+  sending: 'Отправка...',
+  thankYou: '✅ Спасибо за ваш отзыв!',
+  error: '❌ Не удалось отправить отзыв. Попробуйте позже.',
+  loginRequired: 'Пожалуйста, войдите в систему',
+  ratingRequired: 'Пожалуйста, оцените приложение',
+  textRequired: 'Пожалуйста, напишите ваш отзыв',
+  successMessage: 'Ваш отзыв поможет нам стать лучше ❤️'
+},
+
 // ─── Календарь: Месяцы и дни недели ──────────────────────────────
 months: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
 monthsShort: ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'],
@@ -1823,6 +1840,23 @@ activationDate: 'Activation date',
 expirationDate: 'Expiration date',
 currentUsage: 'Usage',
 extendPlan: 'Extend plan',
+
+// ─── FEEDBACK (FOR FLOATING BUTTON) ─────────────────────────────
+feedback: {
+  title: '📝 Leave Feedback',
+  rating: 'Rate the app',
+  ratingLabels: ['Terrible', 'Poor', 'Average', 'Good', 'Excellent'],
+  yourFeedback: 'Your feedback',
+  placeholder: 'Tell us what you like or what could be improved...',
+  send: 'Send Feedback',
+  sending: 'Sending...',
+  thankYou: '✅ Thank you for your feedback!',
+  error: '❌ Failed to send feedback. Please try again later.',
+  loginRequired: 'Please log in to the system',
+  ratingRequired: 'Please rate the app',
+  textRequired: 'Please write your feedback',
+  successMessage: 'Your feedback helps us improve ❤️'
+},
 
 // ─── 🆕 NEW: Churn Modal & Common (added) ───────────────────────────
 churnModal: {
