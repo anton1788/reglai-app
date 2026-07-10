@@ -118,7 +118,7 @@ const FeedbackButton = ({ user, userCompanyId, showNotification, t }) => {
     <>
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          {t('feedback.rating')}
+          {t?.('feedback.rating') || 'Оцените приложение'}
         </label>
         <div className="flex gap-2 justify-center">
           {[1, 2, 3, 4, 5].map((star) => (
@@ -146,12 +146,12 @@ const FeedbackButton = ({ user, userCompanyId, showNotification, t }) => {
 
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          {t('feedback.yourFeedback')}
+          {t?.('feedback.yourFeedback') || 'Ваш отзыв'}
         </label>
         <textarea
           value={feedbackText}
           onChange={(e) => setFeedbackText(e.target.value)}
-          placeholder={t('feedback.placeholder')}
+          placeholder={t?.('feedback.placeholder') || 'Расскажите, что вам нравится или что можно улучшить...'}
           className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none min-h-[100px]"
           maxLength={1000}
         />
@@ -364,8 +364,8 @@ const FeedbackButton = ({ user, userCompanyId, showNotification, t }) => {
       <button
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 z-40 p-4 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-110 group"
-        aria-label={t('feedback.title')}
-        title={t('feedback.title')}
+        aria-label="Оставить отзыв"
+title="Оставить отзыв"
       >
         <MessageCircle className="w-6 h-6 group-hover:rotate-12 transition-transform" />
         <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
