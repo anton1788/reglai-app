@@ -3,7 +3,6 @@
 // ============================================================
 
 export const PROMO_CONFIG = {
-  // === СТАРЫЕ ПРОМОКОДЫ ===
   'FRIEND2024': {
     planId: 'pro',
     expiresAt: '2026-12-31T23:59:59Z',
@@ -48,8 +47,6 @@ export const PROMO_CONFIG = {
     createdBy: 'admin@reglai.ru',
     createdAt: '2026-04-08'
   },
-
-  // === НОВЫЕ ПРОМОКОДЫ ===
   'FREE3M': {
     planId: 'pro',
     expiresAt: '2026-12-31T23:59:59Z',
@@ -130,14 +127,13 @@ export const PROMO_CONFIG = {
 };
 
 // ============================================================
-// 🔄 СИНХРОНИЗАЦИЯ КОНФИГА С БД (ОДНА ВЕРСИЯ!)
+// 🔄 СИНХРОНИЗАЦИЯ КОНФИГА С БД
 // ============================================================
 
 export const syncPromoCodesToDB = async (supabaseClient) => {
   console.log('🔄 [SYNC] Начинаем синхронизацию промокодов...');
   let synced = 0;
   let errors = 0;
-  let datesUpdated = 0;
   
   for (const [code, config] of Object.entries(PROMO_CONFIG)) {
     try {
@@ -213,7 +209,7 @@ export const syncPromoCodesToDB = async (supabaseClient) => {
   }
   
   console.log(`📊 [SYNC] Завершено: создано/обновлено ${synced} промокодов, ошибок ${errors}`);
-  return { synced, errors, datesUpdated };
+  return { synced, errors };
 };
 
 // ============================================================
