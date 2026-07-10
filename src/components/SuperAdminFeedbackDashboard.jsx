@@ -11,10 +11,14 @@ import {
   AlertCircle,
   CheckCircle,
   RefreshCw,
-  DollarSign
+  DollarSign,
+  Reply,
+  Send,
+  X,
+  Mail
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { supabase } from '../utils/supabaseClient';  // ← ИСПРАВЛЕННЫЙ ПУТЬ
+import { supabase } from '../utils/supabaseClient';
 
 const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
   const [feedbacks, setFeedbacks] = useState([]);
@@ -22,6 +26,9 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedId, setExpandedId] = useState(null);
+  const [replyModal, setReplyModal] = useState(null); // { feedbackId, userEmail, userName }
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     completed: 0,
@@ -102,6 +109,68 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
     loadAllFeedback();
   }, [loadAllFeedback]);
 
+  // ============================================================
+  // 📧 ОТПРАВКА ОТВЕТА
+  // ============================================================
+  const sendReply = async () => {
+    if (!replyModal || !replyText.trim()) {
+      showNotification('Введите текст ответа', 'warning');
+      return;
+    }
+
+    setSendingReply(true);
+    try {
+      // 1. Сохраняем ответ в БД
+      const { error: insertError } = await supabase
+        .from('feedback_replies')
+        .insert([{
+          feedback_id: replyModal.feedbackId,
+          admin_id: replyModal.adminId || null,
+          admin_email: replyModal.adminEmail || 'admin@reglay.pro',
+          reply_text: replyText.trim(),
+          created_at: new Date().toISOString()
+        }]);
+
+      if (insertError) throw insertError;
+
+      // 2. Обновляем статус feedback на 'sent'
+      const { error: updateError } = await supabase
+        .from('tester_feedback')
+        .update({ 
+          status: 'sent',
+          replied_at: new Date().toISOString()
+        })
+        .eq('id', replyModal.feedbackId);
+
+      if (updateError) throw updateError;
+
+      // 3. Обновляем локальный список
+      setFeedbacks(prev => prev.map(f => 
+        f.id === replyModal.feedbackId 
+          ? { ...f, status: 'sent', replied_at: new Date().toISOString() }
+          : f
+      ));
+
+      showNotification(`✅ Ответ отправлен пользователю ${replyModal.userName}`, 'success');
+      
+      // 4. Закрываем модалку
+      setReplyModal(null);
+      setReplyText('');
+      
+      // 5. Перезагружаем данные
+      await loadAllFeedback();
+
+    } catch (err) {
+      console.error('Error sending reply:', err);
+      showNotification('❌ Ошибка отправки ответа: ' + err.message, 'error');
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  // ============================================================
+  // 📋 ЭКСПОРТ В EXCEL
+  // ============================================================
   const exportToExcel = useCallback(() => {
     const exportData = feedbacks.map(f => ({
       'Email': f.user_email || 'Unknown',
@@ -121,7 +190,8 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
       'Удовлетворённость (1-5)': f.overall_satisfaction || '',
       'NPS (0-10)': f.would_recommend || '',
       'Дата создания': new Date(f.created_at).toLocaleString('ru-RU'),
-      'Дата завершения': f.completed_at ? new Date(f.completed_at).toLocaleString('ru-RU') : ''
+      'Дата завершения': f.completed_at ? new Date(f.completed_at).toLocaleString('ru-RU') : '',
+      'Ответ отправлен': f.replied_at ? new Date(f.replied_at).toLocaleString('ru-RU') : ''
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -138,9 +208,9 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
       case 'completed': 
         return <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full">✅ Завершён</span>;
       case 'sent': 
-        return <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full">📧 Отправлен</span>;
+        return <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full">📧 Ответ отправлен</span>;
       case 'pending': 
-        return <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full">⏳ Ожидает</span>;
+        return <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full">⏳ Ожидает ответа</span>;
       default: 
         return <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-800 rounded-full">{status}</span>;
     }
@@ -165,6 +235,110 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
     });
   }, [feedbacks, filter, searchTerm]);
 
+  // ============================================================
+  // 🪟 МОДАЛЬНОЕ ОКНО ОТВЕТА
+  // ============================================================
+  const renderReplyModal = () => {
+    if (!replyModal) return null;
+
+    return (
+      <div 
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setReplyModal(null);
+            setReplyText('');
+          }
+        }}
+      >
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-lg">
+                <Reply className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  Ответ на отзыв
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {replyModal.userName || replyModal.userEmail}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setReplyModal(null);
+                setReplyText('');
+              }}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-4 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Текст ответа
+              </label>
+              <textarea
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Напишите ответ на отзыв пользователя..."
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none min-h-[150px]"
+                maxLength={2000}
+              />
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-right mt-1">
+                {replyText.length}/2000
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <Mail className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                Ответ будет отправлен на почту пользователя: <br />
+                <span className="font-medium">{replyModal.userEmail}</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 rounded-b-2xl">
+            <button
+              onClick={() => {
+                setReplyModal(null);
+                setReplyText('');
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+            >
+              Отмена
+            </button>
+            <button
+              onClick={sendReply}
+              disabled={sendingReply || !replyText.trim()}
+              className="px-4 py-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-lg hover:shadow-lg transition-all font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              {sendingReply ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Отправка...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  Отправить ответ
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -176,7 +350,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
 
   return (
     <div className="max-w-7xl mx-auto p-4 page-enter space-y-6">
-      {/* Header */}
+      {/* Header - без изменений */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -207,7 +381,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats - без изменений */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow border border-gray-200/50 dark:border-gray-700/50 text-center">
           <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
@@ -239,7 +413,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
         </div>
       </div>
 
-      {/* Price Distribution */}
+      {/* Price Distribution - без изменений */}
       {Object.keys(stats.priceDistribution).length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200/50 dark:border-gray-700/50 p-4">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
@@ -257,7 +431,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Filters - без изменений */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200/50 dark:border-gray-700/50 p-4">
         <div className="flex flex-wrap gap-3">
           <div className="flex gap-2 overflow-x-auto">
@@ -291,7 +465,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
         </div>
       </div>
 
-      {/* Feedback List */}
+      {/* Feedback List - С КНОПКОЙ ОТВЕТИТЬ */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200/50 dark:border-gray-700/50 divide-y divide-gray-200/50 dark:divide-gray-700/50">
         {filteredFeedbacks.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
@@ -307,7 +481,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
                   {feedback.status === 'completed' ? (
                     <CheckCircle className="w-5 h-5 text-green-500" />
                   ) : feedback.status === 'sent' ? (
-                    <Clock className="w-5 h-5 text-blue-500" />
+                    <Mail className="w-5 h-5 text-blue-500" />
                   ) : (
                     <AlertCircle className="w-5 h-5 text-yellow-500" />
                   )}
@@ -421,11 +595,31 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
                     </span>
                   </button>
                 </div>
+
+                {/* 🔥 КНОПКА "ОТВЕТИТЬ" */}
+                {feedback.status !== 'sent' && (
+                  <button
+                    onClick={() => setReplyModal({
+                      feedbackId: feedback.id,
+                      userEmail: feedback.user_email,
+                      userName: feedback.user_display_name || feedback.user_email,
+                      adminId: null, // можно передать ID админа
+                      adminEmail: 'admin@reglay.pro'
+                    })}
+                    className="flex-shrink-0 px-3 py-1.5 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors flex items-center gap-1.5 text-sm"
+                  >
+                    <Reply className="w-3.5 h-3.5" />
+                    Ответить
+                  </button>
+                )}
               </div>
             </div>
           ))
         )}
       </div>
+
+      {/* Модальное окно ответа */}
+      {renderReplyModal()}
     </div>
   );
 };
