@@ -252,6 +252,7 @@ export default defineConfig({
       'react-router-dom',
       '@supabase/supabase-js',
       'recharts',
+      'recharts/es', 
       'xlsx',
       'jspdf',
       'lucide-react'
