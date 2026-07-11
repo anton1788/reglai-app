@@ -4484,7 +4484,33 @@ useEffect(() => {
   }
 }, [user, userCompanyId, userRole, isAdminMode, showNotification]);
 
- useEffect(() => {
+  // 📩 ЗАГРУЗКА УВЕДОМЛЕНИЙ (ВСТАВИТЬ ПОСЛЕ loadApplications)
+  const loadNotifications = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      // Преобразуем дату в читаемый формат для UI
+      const formattedData = data?.map(n => ({
+        ...n,
+        time: new Date(n.created_at).toLocaleString('ru-RU')
+      })) || [];
+
+      setNotifications(formattedData);
+      
+    } catch (err) {
+      console.error('Ошибка загрузки уведомлений:', err);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
   // ✅ Загружаем только если есть пользователь и компания
   if (user && userCompanyId) {
     // ✅ Всегда загружаем страницу 1 при монтировании
@@ -4492,9 +4518,41 @@ useEffect(() => {
       setPage(1);
     } else {
       loadApplications(1);
+      loadNotifications(); // ← ДОБАВЛЕНА ЗАГРУЗКА УВЕДОМЛЕНИЙ
     }
   }
-}, [user, userCompanyId, userRole, isAdminMode]); // ✅ Убрали page из зависимостей
+}, [user, userCompanyId, userRole, isAdminMode, loadNotifications])
+
+  // 📡 ПОДПИСКА НА НОВЫЕ УВЕДОМЛЕНИЯ В РЕАЛЬНОМ ВРЕМЕНИ
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel('notifications_channel')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          const newNotif = {
+            ...payload.new,
+            time: new Date(payload.new.created_at).toLocaleString('ru-RU')
+          };
+          setNotifications(prev => [newNotif, ...prev]);
+          // Показываем всплывающее уведомление
+          showNotification(newNotif.title + ': ' + newNotif.message, 'info');
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, showNotification]);
 
 // 💰 Load company plan & quota (ОБНОВЛЁННАЯ ВЕРСИЯ)
 useEffect(() => {
@@ -6587,7 +6645,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   theme={theme}
   onToggleTheme={toggleTheme}
   onToggleLanguage={handleLanguageChange}
-  notifications={[]}
+  notifications={notifications}
   pendingApprovalsCount={pendingApprovals?.length || 0}
   cartItemsCount={formData.cart?.length || 0}
   isAdminMode={isAdminMode}

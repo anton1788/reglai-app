@@ -241,7 +241,7 @@ const Navbar = ({
     return icons[planId] || '📦';
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   // Все пункты навигации в зависимости от роли и тарифа
   const getNavItems = () => {
