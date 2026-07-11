@@ -982,6 +982,8 @@ const App = () => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const notificationId = useRef(0);
   const fileInputRef = useRef(null);
@@ -6658,6 +6660,17 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   chatUnreadCount={chatUnreadCount}
   newFeedbackCount={newFeedbackCount}
 />
+
+ onNotificationClick={(notif) => {
+    setSelectedNotification(notif);
+    setShowNotificationModal(true);
+  }}
+  selectedNotification={selectedNotification}
+  showNotificationModal={showNotificationModal}
+  onCloseNotificationModal={() => {
+    setShowNotificationModal(false);
+    setSelectedNotification(null);
+  }}
       {/* 📊 ПРОГРЕСС ОНБОРДИНГА - ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ НЕ ЗАВЕРШЕН */}
 {user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (
   <div className="max-w-7xl mx-auto px-4 pt-2">

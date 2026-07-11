@@ -47,7 +47,11 @@ const Navbar = ({
   mergeableCount = 0,
   onSyncOffline = null,
   chatUnreadCount = 0,
-  newFeedbackCount = 0
+  newFeedbackCount = 0,
+  onNotificationClick,
+  selectedNotification,
+  showNotificationModal,
+  onCloseNotificationModal
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -669,10 +673,17 @@ const Navbar = ({
                       ) : (
                         notifications.map(notif => (
                           <div 
-                            key={notif.id} 
-                            className={`p-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${!notif.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                            onClick={() => onMarkNotificationRead?.(notif.id)}
-                          >
+  key={notif.id} 
+  className={`p-3 ... cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${!notif.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+  onClick={() => {
+    // Если есть функция открытия модалки, вызываем её
+    if (onNotificationClick) {
+      onNotificationClick(notif);
+    } else {
+      onMarkNotificationRead?.(notif.id);
+    }
+  }}
+>
                             <p className="text-sm font-medium text-gray-900 dark:text-white">{notif.title}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{notif.message}</p>
                             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{notif.time}</p>
@@ -1142,6 +1153,54 @@ const Navbar = ({
         userCompany={companyName}
         userRole={userRole}
       />
+            {/* 🆕 Модальное окно просмотра уведомления */}
+      {showNotificationModal && selectedNotification && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] fade-enter"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              onCloseNotificationModal?.();
+            }
+          }}
+        >
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                {selectedNotification.title}
+              </h3>
+              <button
+                onClick={onCloseNotificationModal}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl mb-4">
+              <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                {selectedNotification.message}
+              </p>
+            </div>
+            
+            <p className="text-xs text-gray-400 dark:text-gray-500 text-right">
+              {selectedNotification.time || new Date(selectedNotification.created_at).toLocaleString('ru-RU')}
+            </p>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => {
+                  // Помечаем прочитанным при закрытии
+                  onMarkNotificationRead?.(selectedNotification.id);
+                  onCloseNotificationModal?.();
+                }}
+                className="px-6 py-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-xl hover:shadow-lg transition-all font-medium"
+              >
+                Прочитано
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
