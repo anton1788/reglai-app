@@ -6659,9 +6659,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   mergeableCount={mergeableCount}
   chatUnreadCount={chatUnreadCount}
   newFeedbackCount={newFeedbackCount}
-/>
-
- onNotificationClick={(notif) => {
+  onNotificationClick={(notif) => {
     setSelectedNotification(notif);
     setShowNotificationModal(true);
   }}
@@ -6671,6 +6669,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     setShowNotificationModal(false);
     setSelectedNotification(null);
   }}
+/>
       {/* 📊 ПРОГРЕСС ОНБОРДИНГА - ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ НЕ ЗАВЕРШЕН */}
 {user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (
   <div className="max-w-7xl mx-auto px-4 pt-2">
