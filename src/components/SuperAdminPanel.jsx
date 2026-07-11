@@ -753,7 +753,7 @@ const renderNavigation = () => {
        <button
         onClick={async () => {
           const { syncPromoCodesToDB } = await import('../utils/promoManager');
-          await syncPromoCodesToDB(supabase);
+          await syncPromoCodesToDB(supabase, currentUser?.id);
           showNotification('✅ Промокоды синхронизированы!', 'success');
           loadData();
         }}
