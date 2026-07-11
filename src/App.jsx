@@ -6672,7 +6672,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           setShowNotificationModal(false);
           setSelectedNotification(null);
         }}
-      /
+      >
 {user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (
   <div className="max-w-7xl mx-auto px-4 pt-2">
     <OnboardingProgress
@@ -6702,6 +6702,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     />
   </div>
 )}
+</Navbar>
       <main className="py-6">
                 {/* Умный поиск - показываем не всем */}
         {user && (userRole === 'manager' || userRole === 'director' || userRole === 'accountant' || userRole === 'supply_admin') && (
