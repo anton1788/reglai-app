@@ -79,20 +79,24 @@ export const syncPromoCodesToDB = async (supabaseClient, userId = null) => {
   
   for (const [code, config] of Object.entries(PROMO_CONFIG)) {
     try {
-      // Проверяем существование
+      console.log(`📝 Обработка ${code}...`);
+      
+      // Проверяем, есть ли уже промокод
       const { data: existing, error: findError } = await supabaseClient
         .from('promo_codes')
-        .select('id')
+        .select('id, code')
         .eq('code', code)
         .maybeSingle();
       
-      if (findError && findError.code !== 'PGRST116') {
+      if (findError) {
         console.error(`❌ Ошибка поиска ${code}:`, findError);
         errors++;
         continue;
       }
       
       // ✅ ТОЛЬКО ТЕ ПОЛЯ, КОТОРЫЕ ЕСТЬ В ТАБЛИЦЕ!
+      // ❌ НЕТ used_by!
+      // ❌ НЕТ created_by с EMAIL!
       const promoData = {
         code: code,
         plan_id: config.planId,
@@ -109,11 +113,10 @@ export const syncPromoCodesToDB = async (supabaseClient, userId = null) => {
         updated_at: new Date().toISOString()
       };
       
-      // ❌ НЕТ ПОЛЯ used_by! ❌ НЕТ created_by с EMAIL!
-      
-      console.log(`📝 ${code}:`, JSON.stringify(promoData));
+      console.log(`📦 Данные для ${code}:`, JSON.stringify(promoData, null, 2));
       
       if (!existing) {
+        // ➕ СОЗДАЁМ
         const { error: insertError } = await supabaseClient
           .from('promo_codes')
           .insert([promoData]);
@@ -122,41 +125,43 @@ export const syncPromoCodesToDB = async (supabaseClient, userId = null) => {
           console.error(`❌ Ошибка создания ${code}:`, insertError);
           errors++;
         } else {
-          console.log(`✅ Создан: ${code}`);
+          console.log(`✅ Создан промокод: ${code}`);
           synced++;
         }
       } else {
-        // Обновляем только нужные поля
+        // 🔄 ОБНОВЛЯЕМ (только изменяемые поля)
+        const updateData = {
+          plan_id: config.planId,
+          max_uses: config.maxUses,
+          expires_at: config.expiresAt,
+          discount_percent: config.discountPercent || 0,
+          discount_value: config.discountPercent || 0,
+          description: config.description || '',
+          is_active: config.isActive ?? true,
+          updated_at: new Date().toISOString()
+        };
+        
         const { error: updateError } = await supabaseClient
           .from('promo_codes')
-          .update({
-            plan_id: config.planId,
-            max_uses: config.maxUses,
-            expires_at: config.expiresAt,
-            discount_percent: config.discountPercent || 0,
-            discount_value: config.discountPercent || 0,
-            description: config.description || '',
-            is_active: config.isActive ?? true,
-            updated_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq('code', code);
         
         if (updateError) {
           console.error(`❌ Ошибка обновления ${code}:`, updateError);
           errors++;
         } else {
-          console.log(`🔄 Обновлён: ${code}`);
+          console.log(`🔄 Обновлён промокод: ${code}`);
           synced++;
         }
       }
       
     } catch (err) {
-      console.error(`❌ Ошибка ${code}:`, err);
+      console.error(`❌ Критическая ошибка при обработке ${code}:`, err);
       errors++;
     }
   }
   
-  console.log(`📊 ИТОГ: создано/обновлено ${synced}, ошибок ${errors}`);
+  console.log(`📊 [SYNC] Завершено: создано/обновлено ${synced}, ошибок ${errors}`);
   return { synced, errors };
 };
 
@@ -170,10 +175,13 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
   let promo = null;
   let source = null;
   
+  // 1️⃣ Сначала проверяем конфиг
   if (PROMO_CONFIG[code.toUpperCase()]) {
     promo = PROMO_CONFIG[code.toUpperCase()];
     source = 'config';
-  } else {
+  } 
+  // 2️⃣ Если нет - проверяем БД
+  else {
     const { data, error } = await supabaseClient
       .from('promo_codes')
       .select('*')
@@ -191,6 +199,7 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
     return { valid: false, error: 'Промокод не найден' };
   }
   
+  // Проверка срока действия
   const expiresAt = source === 'config' 
     ? new Date(promo.expiresAt)
     : new Date(promo.expires_at);
@@ -199,6 +208,7 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
     return { valid: false, error: 'Срок действия промокода истек' };
   }
   
+  // Проверка лимита
   const maxUses = source === 'config' ? promo.maxUses : promo.max_uses;
   const usedCount = source === 'config' ? 0 : (promo.used_count || 0);
   
@@ -206,7 +216,7 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
     return { valid: false, error: 'Лимит использований промокода исчерпан' };
   }
   
-  // Проверка использования компанией
+  // Проверка, не использовала ли компания
   const { data: existingUsage } = await supabaseClient
     .from('company_promo_usage')
     .select('id')
@@ -218,7 +228,7 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
     return { valid: false, error: 'Ваша компания уже использовала этот промокод' };
   }
   
-  // Проверка прав (только владелец)
+  // Проверка прав (только владелец компании)
   const { data: companyData, error: companyError } = await supabaseClient
     .from('companies')
     .select('is_company_owner')
@@ -244,7 +254,7 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
 // ============================================================
 
 export const activatePromoPlan = async (supabaseClient, code, companyId, userId, userEmail) => {
-  console.log('🚀 [activatePromoPlan] Начало:', { code, companyId, userId, userEmail });
+  console.log('🚀 [activatePromoPlan] Начало:', { code, companyId, userId });
   
   const validation = await validatePromoCode(supabaseClient, code, companyId, userId);
   
@@ -257,6 +267,7 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
     const planId = validation.planId;
     const codeUpper = code.toUpperCase();
     
+    // Рассчитываем дату окончания
     let expiresAt = new Date();
     if (codeUpper === 'FREE3M') {
       expiresAt.setMonth(expiresAt.getMonth() + 3);
