@@ -237,7 +237,7 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
 };
 
 // ============================================================
-// 🚀 АКТИВАЦИЯ ПРОМОКОДА (С ИСПОЛЬЗОВАНИЕМ userEmail)
+// 🚀 АКТИВАЦИЯ ПРОМОКОДА
 // ============================================================
 
 export const activatePromoPlan = async (supabaseClient, code, companyId, userId, userEmail) => {
@@ -308,14 +308,14 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
       console.warn('⚠️ RPC increment_promo_usage не найден:', err.message);
     }
     
-    // ✅ ЛОГИРУЕМ В АУДИТ С userEmail
+    // Логируем в аудит
     try {
       await supabaseClient
         .from('audit_logs')
         .insert([{
           company_id: companyId,
           user_id: userId,
-          user_email: userEmail,  // ← ИСПОЛЬЗУЕМ ПАРАМЕТР
+          user_email: userEmail,
           action_type: 'promo_code_activated',
           entity_type: 'company',
           entity_id: companyId,
