@@ -6585,92 +6585,94 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-bl from-[#F9AA33]/5 to-transparent rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-[#4A6572]/5 to-transparent rounded-full blur-3xl"></div>
       </div>
-      <Navbar
-  user={user}
-  companyName={userCompany}
-  userRole={userRole}
-  onLogout={handleLogout}
-  onNavigate={(path) => {
-    console.log('🔍 Навигация:', path);
-    
-    // 🏠 ГЛАВНАЯ - умное перенаправление по ролям
-     if (path === '/') {
-    setCurrentView('dashboard');
-    return;
-    }
-    else if (path === '/estimates') setCurrentView('estimates');
-    else if (path === '/reports') setCurrentView('reports');
-    else if (path === '/integration') setCurrentView('integration');
-    else if (path === '/applications') setCurrentView('inwork');
-    else if (path === '/projects') setCurrentView('projects');
-    else if (path === '/applications/new') setCurrentView('create');
-    else if (path === '/warehouse') setCurrentView('warehouse');
-    else if (path === '/clients') setCurrentView('clients');
-    else if (path === '/analytics') setCurrentView('analytics');
-    else if (path === '/profile') setCurrentView('profile');
-    else if (path === '/documents') setCurrentView('documents');
-    else if (path === '/chat') setCurrentView('chat');
-    else if (path === '/calendar') setCurrentView('calendar');
-    else if (path === '/settings') setCurrentView('settings');
-    else if (path === '/tariffs') setCurrentView('tariffs');
-    else if (path === '/companyProfile') setCurrentView('companyProfile');
-    else if (path === '/inwork') setCurrentView('inwork');
-    else if (path === '/history') setCurrentView('history');
-    else if (path === '/approvals') setCurrentView('approvals');
-    else if (path === '/employees') setCurrentView('employees');
-    else if (path === '/api') setCurrentView('api');
-    else if (path === '/audit') setCurrentView('audit');
-    else if (path === '/tasks') setCurrentView('tasks');
-    else if (path === '/help') setCurrentView('help');
-    else if (path === '/superAdmin') setCurrentView('superAdmin');
-    else if (path === '/crm-sales') setCurrentView('crm-sales');
-    else if (path === '/merge') setCurrentView('merge');
-    else if (path === '/search') {
-      const params = new URLSearchParams(path.split('?')[1]);
-      const query = params.get('q');
-      if (query) {
-        setSearchTerm(query);
-        setCurrentView('inwork');
-      }
-    }
-    // Для заказчика
-    else if (path === '/client') setCurrentView('clientDashboard');
-    else if (path === '/client/documents') setCurrentView('clientDocuments');
-    else if (path === '/client/chat') setCurrentView('clientChat');
-  }}
-  currentPage={currentView}
-  onInvite={() => setShowInviteModal(true)}
-  onOpenTariffs={() => setCurrentView('tariffs')}
-  onOpenCompanyProfile={() => setCurrentView('companyProfile')}
-  isOnline={isOnline}
-  offlineDraftsCount={offlineDrafts.length}
-  theme={theme}
-  onToggleTheme={toggleTheme}
-  onToggleLanguage={handleLanguageChange}
-  notifications={notifications}
-  pendingApprovalsCount={pendingApprovals?.length || 0}
-  cartItemsCount={formData.cart?.length || 0}
-  isAdminMode={isAdminMode}
-  onToggleAdminMode={() => setIsAdminMode(false)}
-  isCompanyOwner={isCompanyOwner}
-  companyId={userCompanyId}
-  supabase={supabase}
-  // ✅ НОВЫЙ ПРОП
-  mergeableCount={mergeableCount}
-  chatUnreadCount={chatUnreadCount}
-  newFeedbackCount={newFeedbackCount}
-  onNotificationClick={(notif) => {
-    setSelectedNotification(notif);
-    setShowNotificationModal(true);
-  }}
-  selectedNotification={selectedNotification}
-  showNotificationModal={showNotificationModal}
-  onCloseNotificationModal={() => {
-    setShowNotificationModal(false);
-    setSelectedNotification(null);
-  }}
-/>
-      {/* 📊 ПРОГРЕСС ОНБОРДИНГА - ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ НЕ ЗАВЕРШЕН */}
+           <Navbar
+        user={user}
+        companyName={userCompany}
+        userRole={userRole}
+        onLogout={handleLogout}
+        onNavigate={(path) => {
+          console.log('🔍 Навигация:', path);
+          if (path === '/') { setCurrentView('dashboard'); return; }
+          else if (path === '/estimates') setCurrentView('estimates');
+          else if (path === '/reports') setCurrentView('reports');
+          else if (path === '/integration') setCurrentView('integration');
+          else if (path === '/applications') setCurrentView('inwork');
+          else if (path === '/projects') setCurrentView('projects');
+          else if (path === '/applications/new') setCurrentView('create');
+          else if (path === '/warehouse') setCurrentView('warehouse');
+          else if (path === '/clients') setCurrentView('clients');
+          else if (path === '/analytics') setCurrentView('analytics');
+          else if (path === '/profile') setCurrentView('profile');
+          else if (path === '/documents') setCurrentView('documents');
+          else if (path === '/chat') setCurrentView('chat');
+          else if (path === '/calendar') setCurrentView('calendar');
+          else if (path === '/settings') setCurrentView('settings');
+          else if (path === '/tariffs') setCurrentView('tariffs');
+          else if (path === '/companyProfile') setCurrentView('companyProfile');
+          else if (path === '/inwork') setCurrentView('inwork');
+          else if (path === '/history') setCurrentView('history');
+          else if (path === '/approvals') setCurrentView('approvals');
+          else if (path === '/employees') setCurrentView('employees');
+          else if (path === '/api') setCurrentView('api');
+          else if (path === '/audit') setCurrentView('audit');
+          else if (path === '/tasks') setCurrentView('tasks');
+          else if (path === '/help') setCurrentView('help');
+          else if (path === '/superAdmin') setCurrentView('superAdmin');
+          else if (path === '/crm-sales') setCurrentView('crm-sales');
+          else if (path === '/merge') setCurrentView('merge');
+          else if (path === '/search') {
+            const params = new URLSearchParams(path.split('?')[1]);
+            const query = params.get('q');
+            if (query) {
+              setSearchTerm(query);
+              setCurrentView('inwork');
+            }
+          }
+          else if (path === '/client') setCurrentView('clientDashboard');
+          else if (path === '/client/documents') setCurrentView('clientDocuments');
+          else if (path === '/client/chat') setCurrentView('clientChat');
+        }}
+        currentPage={currentView}
+        onInvite={() => setShowInviteModal(true)}
+        onOpenTariffs={() => setCurrentView('tariffs')}
+        onOpenCompanyProfile={() => setCurrentView('companyProfile')}
+        isOnline={isOnline}
+        offlineDraftsCount={offlineDrafts.length}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onToggleLanguage={handleLanguageChange}
+        notifications={notifications}
+        pendingApprovalsCount={pendingApprovals?.length || 0}
+        cartItemsCount={formData.cart?.length || 0}
+        isAdminMode={isAdminMode}
+        onToggleAdminMode={() => setIsAdminMode(false)}
+        isCompanyOwner={isCompanyOwner}
+        companyId={userCompanyId}
+        supabase={supabase}
+        mergeableCount={mergeableCount}
+        chatUnreadCount={chatUnreadCount}
+        newFeedbackCount={newFeedbackCount}
+        onMarkNotificationRead={async (id) => {
+          await supabase.from('user_notifications').update({ is_read: true }).eq('id', id);
+          setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+        }}
+        onClearNotifications={async () => {
+          await supabase.from('user_notifications').update({ is_read: true }).eq('user_id', user.id);
+          setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+        }}
+
+        // 🚀 ВОТ ЭТИ 4 СТРОКИ ДОЛЖНЫ БЫТЬ ВНУТРИ, ПЕРЕД ПОСЛЕДНЕЙ СКОБКОЙ />
+        onNotificationClick={(notif) => {
+          setSelectedNotification(notif);
+          setShowNotificationModal(true);
+        }}
+        selectedNotification={selectedNotification}
+        showNotificationModal={showNotificationModal}
+        onCloseNotificationModal={() => {
+          setShowNotificationModal(false);
+          setSelectedNotification(null);
+        }}
+      /
 {user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (
   <div className="max-w-7xl mx-auto px-4 pt-2">
     <OnboardingProgress
