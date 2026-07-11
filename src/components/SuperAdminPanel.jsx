@@ -1381,10 +1381,87 @@ if (activeView === 'feedback') {
           {/* Navigation */}
           {renderNavigation()}
           
-          {/* ⭐ КОМПОНЕНТ FEEDBACK ДАШБОРДА */}
+          {/* ⭐ ПЕРЕДАЁМ ФУНКЦИЮ ОБРАБОТКИ ОТВЕТА СЮДА */}
           <SuperAdminFeedbackDashboard
             showNotification={showNotification}
             t={t}
+            onSendReply={async (feedbackId, replyText, userEmail, userName) => {
+              try {
+                // 1. Сначала получаем ID пользователя, которому отвечаем, и его company_id
+                const { data: userData, error: userError } = await supabase
+                  .from('company_users')
+                  .select('user_id, company_id')
+                  .eq('user_email', userEmail) // Убедись, что у тебя есть колонка user_email в таблице company_users
+                  .maybeSingle();
+
+                if (userError) throw userError;
+
+                // Если пользователь найден, создаем ему уведомление
+                if (userData) {
+                  // 2. Сохраняем сам ответ в таблицу ответов (как и было)
+                  const { error: insertError } = await supabase
+                    .from('feedback_replies')
+                    .insert([{
+                      feedback_id: feedbackId,
+                      admin_id: currentUser?.id,
+                      admin_email: currentUser?.email || 'admin@reglay.pro',
+                      reply_text: replyText.trim(),
+                      created_at: new Date().toISOString()
+                    }]);
+                  if (insertError) throw insertError;
+
+                  // 3. Обновляем статус отзыва
+                  const { error: updateError } = await supabase
+                    .from('tester_feedback')
+                    .update({ 
+                      status: 'sent',
+                      replied_at: new Date().toISOString()
+                    })
+                    .eq('id', feedbackId);
+                  if (updateError) throw updateError;
+
+                  // ==========================================================
+                  // 🚀 ГЛАВНОЕ: СОЗДАЁМ УВЕДОМЛЕНИЕ ДЛЯ ПОЛЬЗОВАТЕЛЯ В ПРИЛОЖЕНИИ
+                  // ==========================================================
+                  const { error: notifError } = await supabase
+                    .from('notifications')
+                    .insert([{
+                      user_id: userData.user_id,           // Кому отправляем
+                      company_id: userData.company_id,     // Компания пользователя
+                      title: 'Ответ на ваш отзыв',
+                      message: `Администратор ответил на ваш отзыв: "${replyText.substring(0, 50)}${replyText.length > 50 ? '...' : ''}"`,
+                      type: 'feedback_reply',
+                      is_read: false,
+                      created_at: new Date().toISOString()
+                    }]);
+                    
+                  if (notifError) {
+                    console.warn('Уведомление не отправилось, но ответ сохранён:', notifError);
+                  }
+
+                  showNotification(`✅ Ответ отправлен пользователю ${userName} (уведомление в приложении)`, 'success');
+                } else {
+                  // Если пользователь не найден в системе, просто сохраняем ответ
+                  await supabase.from('feedback_replies').insert([{
+                    feedback_id: feedbackId,
+                    admin_id: currentUser?.id,
+                    admin_email: currentUser?.email || 'admin@reglay.pro',
+                    reply_text: replyText.trim(),
+                    created_at: new Date().toISOString()
+                  }]);
+                  await supabase.from('tester_feedback').update({ status: 'sent', replied_at: new Date().toISOString() }).eq('id', feedbackId);
+                  showNotification(`✅ Ответ сохранён, но пользователь ${userName} не найден в системе`, 'warning');
+                }
+
+                loadData(); // Обновляем список
+                return { success: true };
+                
+              } catch (err) {
+                console.error('Ошибка сохранения ответа:', err);
+                showNotification('❌ Ошибка сохранения ответа', 'error');
+                return { success: false };
+              }
+            }}
           />
         </div>
       </div>
