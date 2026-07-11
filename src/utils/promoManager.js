@@ -79,9 +79,10 @@ export const syncPromoCodesToDB = async (supabaseClient, userId = null) => {
   
   for (const [code, config] of Object.entries(PROMO_CONFIG)) {
     try {
+      // Проверяем существование
       const { data: existing, error: findError } = await supabaseClient
         .from('promo_codes')
-        .select('id, code, max_uses, plan_id, is_active, expires_at')
+        .select('id')
         .eq('code', code)
         .maybeSingle();
       
@@ -91,6 +92,7 @@ export const syncPromoCodesToDB = async (supabaseClient, userId = null) => {
         continue;
       }
       
+      // ✅ ТОЛЬКО ТЕ ПОЛЯ, КОТОРЫЕ ЕСТЬ В ТАБЛИЦЕ!
       const promoData = {
         code: code,
         plan_id: config.planId,
@@ -102,10 +104,14 @@ export const syncPromoCodesToDB = async (supabaseClient, userId = null) => {
         discount_value: config.discountPercent || 0,
         description: config.description || '',
         is_active: config.isActive ?? true,
-        created_by: userId || null,
+        created_by: userId || null,  // ← ТОЛЬКО UUID!
         created_at: config.createdAt ? new Date(config.createdAt).toISOString() : new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
+      
+      // ❌ НЕТ ПОЛЯ used_by! ❌ НЕТ created_by с EMAIL!
+      
+      console.log(`📝 ${code}:`, JSON.stringify(promoData));
       
       if (!existing) {
         const { error: insertError } = await supabaseClient
@@ -116,42 +122,41 @@ export const syncPromoCodesToDB = async (supabaseClient, userId = null) => {
           console.error(`❌ Ошибка создания ${code}:`, insertError);
           errors++;
         } else {
-          console.log(`✅ Создан промокод: ${code}`);
+          console.log(`✅ Создан: ${code}`);
           synced++;
         }
       } else {
-        const updateData = {
-          plan_id: config.planId,
-          max_uses: config.maxUses,
-          expires_at: config.expiresAt,
-          discount_percent: config.discountPercent || 0,
-          discount_value: config.discountPercent || 0,
-          description: config.description || '',
-          is_active: config.isActive ?? true,
-          updated_at: new Date().toISOString()
-        };
-        
+        // Обновляем только нужные поля
         const { error: updateError } = await supabaseClient
           .from('promo_codes')
-          .update(updateData)
+          .update({
+            plan_id: config.planId,
+            max_uses: config.maxUses,
+            expires_at: config.expiresAt,
+            discount_percent: config.discountPercent || 0,
+            discount_value: config.discountPercent || 0,
+            description: config.description || '',
+            is_active: config.isActive ?? true,
+            updated_at: new Date().toISOString()
+          })
           .eq('code', code);
         
         if (updateError) {
           console.error(`❌ Ошибка обновления ${code}:`, updateError);
           errors++;
         } else {
-          console.log(`🔄 Обновлён промокод: ${code}`);
+          console.log(`🔄 Обновлён: ${code}`);
           synced++;
         }
       }
       
     } catch (err) {
-      console.error(`❌ Критическая ошибка при обработке ${code}:`, err);
+      console.error(`❌ Ошибка ${code}:`, err);
       errors++;
     }
   }
   
-  console.log(`📊 [SYNC] Завершено: создано/обновлено ${synced}, ошибок ${errors}`);
+  console.log(`📊 ИТОГ: создано/обновлено ${synced}, ошибок ${errors}`);
   return { synced, errors };
 };
 
@@ -168,7 +173,6 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
   if (PROMO_CONFIG[code.toUpperCase()]) {
     promo = PROMO_CONFIG[code.toUpperCase()];
     source = 'config';
-    console.log('✅ Найден в КОНФИГЕ:', promo);
   } else {
     const { data, error } = await supabaseClient
       .from('promo_codes')
@@ -180,7 +184,6 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
     if (!error && data) {
       promo = data;
       source = 'database';
-      console.log('✅ Найден в БД:', promo);
     }
   }
   
@@ -327,7 +330,6 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
           }),
           created_at: new Date().toISOString()
         }]);
-      console.log(`📝 Аудит записан для ${userEmail}`);
     } catch (err) {
       console.warn('⚠️ Не удалось записать аудит:', err.message);
     }
@@ -407,10 +409,6 @@ export const getActivePromoCodes = () => {
     .filter(([, config]) => config.isActive)
     .map(([code, config]) => ({ code, ...config }));
 };
-
-// ============================================================
-// 📦 ЭКСПОРТ ПО УМОЛЧАНИЮ
-// ============================================================
 
 export default {
   PROMO_CONFIG,
