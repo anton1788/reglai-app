@@ -109,8 +109,8 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
     loadAllFeedback();
   }, [loadAllFeedback]);
 
-   // ============================================================
-  // 📧 ОТПРАВКА ОТВЕТА (ИСПРАВЛЕННАЯ 400 ОШИБКА)
+    // ============================================================
+  // 📧 ОТПРАВКА ОТВЕТА (С УВЕДОМЛЕНИЕМ ПОЛЬЗОВАТЕЛЮ)
   // ============================================================
   const sendReply = async () => {
     if (!replyModal || !replyText.trim()) {
@@ -123,7 +123,7 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
       const cleanReply = replyText.trim();
       const feedbackId = replyModal.feedbackId;
 
-      // 1. Сохраняем ответ в БД
+      // 1. Сохраняем ответ в БД (feedback_replies)
       const { error: insertError } = await supabase
         .from('feedback_replies')
         .insert([{
@@ -133,45 +133,60 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
           reply_text: cleanReply,
           created_at: new Date().toISOString()
         }]);
-
       if (insertError) throw insertError;
 
       // 2. Обновляем статус feedback на 'sent'
-      // ВАЖНО: Убрали replied_at, чтобы не ломать запрос
       const { error: updateError } = await supabase
         .from('tester_feedback')
-        .update({ 
-          status: 'sent'
-        })
+        .update({ status: 'sent' })
         .eq('id', feedbackId);
-
       if (updateError) throw updateError;
 
-      // 3. Обновляем локальный список
-      setFeedbacks(prev => prev.map(f => 
-        f.id === feedbackId 
-          ? { ...f, status: 'sent' }
-          : f
-      ));
+      // ==========================================================
+      // 🚀 3. ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ ПОЛЬЗОВАТЕЛЮ В ПРИЛОЖЕНИЕ
+      // ==========================================================
+      // Сначала получаем ID пользователя, которому отвечаем
+      const { data: userData, error: userError } = await supabase
+        .from('tester_feedback')
+        .select('user_id, user_company_id')
+        .eq('id', feedbackId)
+        .single();
 
+      if (userError) {
+        console.warn('Не удалось получить user_id для уведомления:', userError);
+      } else if (userData?.user_id) {
+        // Если user_id найден, создаём уведомление в таблице notifications
+        const { error: notifError } = await supabase
+          .from('notifications')
+          .insert([{
+            user_id: userData.user_id,
+            company_id: userData.user_company_id,
+            title: 'Ответ на ваш отзыв',
+            message: `Администратор ответил: "${cleanReply.substring(0, 80)}${cleanReply.length > 80 ? '...' : ''}"`,
+            type: 'feedback_reply',
+            is_read: false,
+            created_at: new Date().toISOString()
+          }]);
+
+        if (notifError) {
+          console.warn('Уведомление не отправилось, но ответ сохранён:', notifError);
+        }
+      }
+
+      // 4. Обновляем локальный список
+      setFeedbacks(prev => prev.map(f => 
+        f.id === feedbackId ? { ...f, status: 'sent' } : f
+      ));
+      
       showNotification(`✅ Ответ отправлен пользователю ${replyModal.userName}`, 'success');
       
-      // 4. Закрываем модалку
       setReplyModal(null);
       setReplyText('');
-      
-      // 5. Перезагружаем данные
       await loadAllFeedback();
 
     } catch (err) {
       console.error('Error sending reply:', err);
-      
-      // Смотрим на ошибку от Supabase более детально
-      let errorMessage = '❌ Ошибка отправки ответа';
-      if (err?.message) errorMessage += ': ' + err.message;
-      if (err?.details) errorMessage += ' (' + err.details + ')';
-      
-      showNotification(errorMessage, 'error');
+      showNotification('❌ Ошибка отправки ответа: ' + err.message, 'error');
     } finally {
       setSendingReply(false);
     }
