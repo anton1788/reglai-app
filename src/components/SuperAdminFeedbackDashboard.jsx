@@ -109,8 +109,8 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
     loadAllFeedback();
   }, [loadAllFeedback]);
 
-  // ============================================================
-  // 📧 ОТПРАВКА ОТВЕТА
+   // ============================================================
+  // 📧 ОТПРАВКА ОТВЕТА (ИСПРАВЛЕННАЯ 400 ОШИБКА)
   // ============================================================
   const sendReply = async () => {
     if (!replyModal || !replyText.trim()) {
@@ -120,34 +120,37 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
 
     setSendingReply(true);
     try {
+      const cleanReply = replyText.trim();
+      const feedbackId = replyModal.feedbackId;
+
       // 1. Сохраняем ответ в БД
       const { error: insertError } = await supabase
         .from('feedback_replies')
         .insert([{
-          feedback_id: replyModal.feedbackId,
+          feedback_id: feedbackId,
           admin_id: replyModal.adminId || null,
           admin_email: replyModal.adminEmail || 'admin@reglay.pro',
-          reply_text: replyText.trim(),
+          reply_text: cleanReply,
           created_at: new Date().toISOString()
         }]);
 
       if (insertError) throw insertError;
 
       // 2. Обновляем статус feedback на 'sent'
+      // ВАЖНО: Убрали replied_at, чтобы не ломать запрос
       const { error: updateError } = await supabase
         .from('tester_feedback')
         .update({ 
-          status: 'sent',
-          replied_at: new Date().toISOString()
+          status: 'sent'
         })
-        .eq('id', replyModal.feedbackId);
+        .eq('id', feedbackId);
 
       if (updateError) throw updateError;
 
       // 3. Обновляем локальный список
       setFeedbacks(prev => prev.map(f => 
-        f.id === replyModal.feedbackId 
-          ? { ...f, status: 'sent', replied_at: new Date().toISOString() }
+        f.id === feedbackId 
+          ? { ...f, status: 'sent' }
           : f
       ));
 
@@ -162,12 +165,17 @@ const SuperAdminFeedbackDashboard = ({ showNotification, t }) => {
 
     } catch (err) {
       console.error('Error sending reply:', err);
-      showNotification('❌ Ошибка отправки ответа: ' + err.message, 'error');
+      
+      // Смотрим на ошибку от Supabase более детально
+      let errorMessage = '❌ Ошибка отправки ответа';
+      if (err?.message) errorMessage += ': ' + err.message;
+      if (err?.details) errorMessage += ' (' + err.details + ')';
+      
+      showNotification(errorMessage, 'error');
     } finally {
       setSendingReply(false);
     }
   };
-
   // ============================================================
   // 📋 ЭКСПОРТ В EXCEL
   // ============================================================
