@@ -6652,9 +6652,31 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         mergeableCount={mergeableCount}
         chatUnreadCount={chatUnreadCount}
         newFeedbackCount={newFeedbackCount}
-        onMarkNotificationRead={async (id) => {
-          await supabase.from('user_notifications').update({ is_read: true }).eq('id', id);
-          setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+               onMarkNotificationRead={async (id) => {
+          if (!id) {
+            console.error('❌ [Notifications] ID уведомления не передан!');
+            return;
+          }
+          
+          try {
+            // 1. Обновляем в Базе Данных
+            const { error } = await supabase
+              .from('user_notifications')
+              .update({ is_read: true })
+              .eq('id', id);
+              
+            if (error) throw error;
+
+            // 2. Мгновенно обновляем локальный список (чтобы красная точка погасла)
+            setNotifications(prev => prev.map(n => 
+              n.id === id ? { ...n, is_read: true } : n
+            ));
+            
+            console.log('✅ Уведомление помечено прочитанным:', id);
+            
+          } catch (err) {
+            console.error('❌ Ошибка при пометке уведомления:', err);
+          }
         }}
         onClearNotifications={async () => {
           await supabase.from('user_notifications').update({ is_read: true }).eq('user_id', user.id);
