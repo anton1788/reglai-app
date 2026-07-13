@@ -43,23 +43,34 @@ const QuotaUsage = ({
   const [upgradeBenefits, setUpgradeBenefits] = useState(null);
 
   const loadQuotaData = useCallback(async () => {
+    // ✅ ФИКС: Проверяем, что userCompanyId - строка
     if (!userCompanyId || !supabase) return;
+    
+    // ✅ Преобразуем в строку, если это объект
+    const companyId = typeof userCompanyId === 'string' 
+      ? userCompanyId 
+      : userCompanyId?.toString?.() || null;
+    
+    if (!companyId || companyId === '[object Object]') {
+      console.warn('QuotaUsage: некорректный companyId:', userCompanyId);
+      setLoading(false);
+      return;
+    }
     
     try {
       setLoading(true);
       setError(null);
       
       const [quotaData, statsData, planData] = await Promise.all([
-        checkQuota(supabase, userCompanyId),
-        getUsageStats(supabase, userCompanyId),
-        getCompanyPlan(supabase, userCompanyId)
+        checkQuota(supabase, companyId),
+        getUsageStats(supabase, companyId),
+        getCompanyPlan(supabase, companyId)
       ]);
       
       setQuota(quotaData);
       setStats(statsData);
       setPlan(planData);
       
-      // Получаем преимущества апгрейда
       if (planData?.id) {
         const benefits = getTariffUpgradeBenefits(planData.id);
         setUpgradeBenefits(benefits);
@@ -145,12 +156,10 @@ const QuotaUsage = ({
   const isEnterprisePlan = planId === 'enterprise';
   const planData = TARIFF_PLANS[planId] || TARIFF_PLANS.basic;
   
-  // Вычисляем проценты использования
   const dailyPercent = quota?.dailyLimit ? (quota.dailyUsage / quota.dailyLimit) * 100 : 0;
   const monthlyPercent = quota?.monthlyLimit ? (quota.monthlyUsage / quota.monthlyLimit) * 100 : 0;
   const usersPercent = planData.maxUsers > 0 ? ((stats?.users || 0) / planData.maxUsers) * 100 : 0;
 
-  // Получаем цвет для динамических классов
   const planColor = getPlanColor(planId);
 
   return (
