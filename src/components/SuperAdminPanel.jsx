@@ -469,6 +469,7 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
  const [showPromoModal, setShowPromoModal] = useState(false);
 const [showPromoManager, setShowPromoManager] = useState(false);
 const [activatingPromo, setActivatingPromo] = useState(false);
+// eslint-disable-next-line no-unused-vars
 const [tariffStats, setTariffStats] = useState(null);
   
   const mainRef = useRef(null);
@@ -526,170 +527,138 @@ useEffect(() => {
     return { total, active, blocked: total - active, roles, companiesCount: companies.length };
   }, [employees, companies]);
 
-  // Handle promo activation
-  // Handle promo activation
-const handleActivatePromo = useCallback(async (promoCode) => {
-  console.log('🔍 1. Введённый промокод (оригинал):', promoCode);
-  console.log('🔍 2. Длина промокода:', promoCode?.length);
-  console.log('🔍 3. Код символов:', [...(promoCode || '')].map(c => c.charCodeAt(0)));
-  
-  if (!promoCode || !promoCode.trim()) {
-    showNotification('Введите код промокода', 'error');
-    return;
-  }
-  
-  setActivatingPromo(true);
-  try {
-    // Проверяем ВСЕ промокоды в БД (без фильтрации)
-    const { data: allPromoCodes, error: allError } = await supabase
-      .from('promo_codes')
-      .select('*');
+  // ============================================================
+  // 🚀 ИСПРАВЛЕННАЯ АКТИВАЦИЯ ПРОМОКОДА
+  // ============================================================
+  const handleActivatePromo = useCallback(async (promoCode) => {
+    console.log('🔍 1. Введённый промокод (оригинал):', promoCode);
     
-    console.log('📋 ВСЕ промокоды в БД:', allPromoCodes);
-    
-    if (allError) {
-      console.error('Ошибка загрузки промокодов:', allError);
-      showNotification('Ошибка загрузки промокодов', 'error');
-      setActivatingPromo(false);
+    if (!promoCode || !promoCode.trim()) {
+      showNotification('Введите код промокода', 'error');
       return;
     }
     
-    // Ищем промокод (точное совпадение, БЕЗ toUpperCase!)
-    const promoData = allPromoCodes?.find(p => p.code === promoCode.trim());
-    
-    console.log('📦 Результат поиска (find):', promoData);
-    
-    if (!promoData) {
-      showNotification(`Промокод "${promoCode}" не найден`, 'error');
-      setActivatingPromo(false);
-      return;
-    }
-    
-    console.log('✅ Промокод найден:', promoData);
-    
-    // Проверяем активность
-    if (!promoData.is_active) {
-      showNotification('Промокод деактивирован', 'error');
-      setActivatingPromo(false);
-      return;
-    }
-    
-    // Проверяем срок действия
-    if (promoData.expires_at && new Date(promoData.expires_at) < new Date()) {
-      showNotification('Срок действия промокода истёк', 'error');
-      setActivatingPromo(false);
-      return;
-    }
-    
-    // Проверяем лимит использований
-    if (promoData.max_uses && promoData.used_count >= promoData.max_uses) {
-      showNotification('Промокод уже использован максимальное количество раз', 'error');
-      setActivatingPromo(false);
-      return;
-    }
-    
-    // Получаем company_id текущего пользователя
-    const { data: companyUser, error: companyError } = await supabase
-      .from('company_users')
-      .select('company_id')
-      .eq('user_id', currentUser?.id)
-      .maybeSingle();
-    
-    console.log('🏢 Компания пользователя:', companyUser);
-    
-    if (companyError || !companyUser) {
-      showNotification('Компания не найдена', 'error');
-      setActivatingPromo(false);
-      return;
-    }
-    
-    // Проверяем, не использовал ли пользователь уже этот промокод
-    if (promoData.used_by?.includes(companyUser.company_id)) {
-      showNotification('Ваша компания уже использовала этот промокод', 'error');
-      setActivatingPromo(false);
-      return;
-    }
-    
-    // Определяем ID тарифа (поддержка всех 5 тарифов)
-    const tariffPlanId = promoData.tariff_plan_id || promoData.plan_id || 'pro';
-    console.log('📊 Тариф для активации:', tariffPlanId);
-    
-    // Проверяем, существует ли такой тариф
-    if (!TARIFF_PLANS[tariffPlanId]) {
-      showNotification(`Тариф "${tariffPlanId}" не найден`, 'error');
-      setActivatingPromo(false);
-      return;
-    }
-    
-    // Обновляем компанию
-    const { error: updateCompanyError } = await supabase
-      .from('companies')
-      .update({
-        plan_tier: tariffPlanId,
+    setActivatingPromo(true);
+    try {
+      // Проверяем ВСЕ промокоды в БД
+      const { data: allPromoCodes, error: allError } = await supabase
+        .from('promo_codes')
+        .select('*');
+      
+      if (allError) {
+        console.error('Ошибка загрузки промокодов:', allError);
+        showNotification('Ошибка загрузки промокодов', 'error');
+        setActivatingPromo(false);
+        return;
+      }
+      
+      // Ищем промокод (точное совпадение)
+      const promoData = allPromoCodes?.find(p => p.code === promoCode.trim());
+      
+      if (!promoData) {
+        showNotification(`Промокод "${promoCode}" не найден`, 'error');
+        setActivatingPromo(false);
+        return;
+      }
+      
+      console.log('✅ Промокод найден:', promoData);
+      
+      // Проверяем активность
+      if (!promoData.is_active) {
+        showNotification('Промокод деактивирован', 'error');
+        setActivatingPromo(false);
+        return;
+      }
+      
+      // Проверяем срок действия
+      if (promoData.expires_at && new Date(promoData.expires_at) < new Date()) {
+        showNotification('Срок действия промокода истёк', 'error');
+        setActivatingPromo(false);
+        return;
+      }
+      
+      // Проверяем лимит использований
+      if (promoData.max_uses && promoData.used_count >= promoData.max_uses) {
+        showNotification('Промокод уже использован максимальное количество раз', 'error');
+        setActivatingPromo(false);
+        return;
+      }
+      
+      // Получаем company_id текущего пользователя
+      const { data: companyUser, error: companyError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', currentUser?.id)
+        .maybeSingle();
+      
+      if (companyError || !companyUser) {
+        showNotification('Компания не найдена', 'error');
+        setActivatingPromo(false);
+        return;
+      }
+      
+      // ✅ Проверяем, что company_id - это строка
+      const companyId = typeof companyUser.company_id === 'string' 
+        ? companyUser.company_id 
+        : String(companyUser.company_id);
+      
+      console.log('🏢 Company ID:', companyId);
+      
+      // ✅ ОБНОВЛЯЕМ ТОЛЬКО СУЩЕСТВУЮЩИЕ ПОЛЯ
+      // В таблице companies есть поля:
+      // - plan_tier ✅
+      // - plan_expires_at ✅
+      // - promo_code_used ✅
+      // - promo_applied_at ✅ (вместо promo_activated_at)
+      // - promo_discount_percent ✅
+      // - updated_at ✅
+      const updateData = {
+        plan_tier: promoData.plan_id || 'pro',
         plan_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
         promo_code_used: promoData.code,
-        promo_activated_at: new Date().toISOString(),
-        promo_activated_by: currentUser?.id,
+        promo_applied_at: new Date().toISOString(),
+        promo_discount_percent: promoData.discount_percent || 0,
         updated_at: new Date().toISOString()
-      })
-      .eq('id', companyUser.company_id);
-    
-    if (updateCompanyError) {
-      console.error('❌ Ошибка обновления компании:', updateCompanyError);
-      showNotification('Ошибка обновления компании: ' + updateCompanyError.message, 'error');
-      setActivatingPromo(false);
-      return;
-    }
-    
-    // Обновляем счётчик использований промокода
-    const { error: updatePromoError } = await supabase
-      .from('promo_codes')
-      .update({
-        used_count: (promoData.used_count || 0) + 1,
-        used_by: [...(promoData.used_by || []), companyUser.company_id],
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', promoData.id);
-    
-    if (updatePromoError) {
-      console.error('❌ Ошибка обновления промокода:', updatePromoError);
-    }
-    
-    showNotification(`✅ Промокод "${promoData.code}" успешно активирован! Тариф обновлён.`, 'success');
-    setShowPromoModal(false);
-    
-    // Перезагружаем данные
-    loadData();
-    
-    // Обновляем статистику тарифов
-    const { data: companies } = await supabase
-      .from('companies')
-      .select('plan_tier');
-    
-    if (companies) {
-      const stats = {
-        total: companies.length,
-        byPlan: {}
       };
-      Object.keys(TARIFF_PLANS).forEach(planId => {
-        stats.byPlan[planId] = 0;
-      });
-      companies.forEach(company => {
-        const plan = company.plan_tier || 'basic';
-        if (stats.byPlan[plan] !== undefined) {
-          stats.byPlan[plan]++;
-        }
-      });
-      setTariffStats(stats);
+      
+      console.log('📝 Обновляем компанию:', updateData);
+      
+      const { error: updateCompanyError } = await supabase
+        .from('companies')
+        .update(updateData)
+        .eq('id', companyId);
+      
+      if (updateCompanyError) {
+        console.error('❌ Ошибка обновления компании:', updateCompanyError);
+        showNotification('Ошибка обновления компании: ' + updateCompanyError.message, 'error');
+        setActivatingPromo(false);
+        return;
+      }
+      
+      // Обновляем счётчик использований промокода
+      const { error: updatePromoError } = await supabase
+        .from('promo_codes')
+        .update({
+          used_count: (promoData.used_count || 0) + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', promoData.id);
+      
+      if (updatePromoError) {
+        console.error('❌ Ошибка обновления промокода:', updatePromoError);
+      }
+      
+      showNotification(`✅ Промокод "${promoData.code}" успешно активирован! Тариф обновлён.`, 'success');
+      setShowPromoModal(false);
+      loadData();
+      
+    } catch (err) {
+      console.error('❌ Критическая ошибка активации промокода:', err);
+      showNotification('Ошибка активации промокода: ' + err.message, 'error');
+    } finally {
+      setActivatingPromo(false);
     }
-    
-  } catch (err) {
-    console.error('❌ Критическая ошибка активации промокода:', err);
-    showNotification('Ошибка активации промокода: ' + err.message, 'error');
-  } finally {
-    setActivatingPromo(false);
-  }
-}, [supabase, currentUser, showNotification, loadData]);
+  }, [supabase, currentUser, showNotification, loadData]);
 
   // Navigation with tariff support
   const navigateTo = useCallback((view, title) => {
