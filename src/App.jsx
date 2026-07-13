@@ -7039,22 +7039,23 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         )}
         
         {currentView === 'calendar' && (
-          <CalendarView
-            supabase={supabase}
-            userCompanyId={userCompanyId}
-            user={user}
-            userRole={userRole}
-            t={t}
-            language={language}
-            showNotification={showNotification}
-            onEventClick={(type, data) => {
-              if (type === 'application') {
-                setSelectedApplication(data);
-                setShowReceiveModal(true);
-              }
-            }}
-          />
-        )}
+  <CalendarView
+    supabase={supabase}
+    userCompanyId={userCompanyId}
+    user={user}
+    userRole={userRole}
+    userCompany={userCompany}   // ← ДОБАВИТЬ ЭТУ СТРОКУ
+    t={t}
+    language={language}
+    showNotification={showNotification}
+    onEventClick={(type, data) => {
+      if (type === 'application') {
+        setSelectedApplication(data);
+        setShowReceiveModal(true);
+      }
+    }}
+  />
+)}
         
         {currentView === 'inwork' && (
           <ApplicationList
