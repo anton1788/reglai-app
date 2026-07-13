@@ -528,7 +528,7 @@ useEffect(() => {
   }, [employees, companies]);
 
   const handleActivatePromo = useCallback(async (promoCode) => {
-  console.log('🔍 1. Введённый промокод (оригинал):', promoCode);
+  console.log('🔍 Введённый промокод:', promoCode);
   
   if (!promoCode || !promoCode.trim()) {
     showNotification('Введите код промокода', 'error');
@@ -537,20 +537,14 @@ useEffect(() => {
   
   setActivatingPromo(true);
   try {
-    const { data: allPromoCodes, error: allError } = await supabase
+    // 1️⃣ Получаем промокод из БД
+    const { data: promoData, error: promoError } = await supabase
       .from('promo_codes')
-      .select('*');
+      .select('*')
+      .eq('code', promoCode.trim())
+      .single();
     
-    if (allError) {
-      console.error('Ошибка загрузки промокодов:', allError);
-      showNotification('Ошибка загрузки промокодов', 'error');
-      setActivatingPromo(false);
-      return;
-    }
-    
-    const promoData = allPromoCodes?.find(p => p.code === promoCode.trim());
-    
-    if (!promoData) {
+    if (promoError || !promoData) {
       showNotification(`Промокод "${promoCode}" не найден`, 'error');
       setActivatingPromo(false);
       return;
@@ -558,6 +552,7 @@ useEffect(() => {
     
     console.log('✅ Промокод найден:', promoData);
     
+    // 2️⃣ Проверки
     if (!promoData.is_active) {
       showNotification('Промокод деактивирован', 'error');
       setActivatingPromo(false);
@@ -571,11 +566,12 @@ useEffect(() => {
     }
     
     if (promoData.max_uses && promoData.used_count >= promoData.max_uses) {
-      showNotification('Промокод уже использован максимальное количество раз', 'error');
+      showNotification('Лимит использований исчерпан', 'error');
       setActivatingPromo(false);
       return;
     }
     
+    // 3️⃣ Получаем компанию пользователя
     const { data: companyUser, error: companyError } = await supabase
       .from('company_users')
       .select('company_id')
@@ -594,12 +590,11 @@ useEffect(() => {
     
     console.log('🏢 Company ID:', companyId);
     
-    // ✅ ПРАВИЛЬНЫЙ ФОРМАТ ДЛЯ TIMESTAMP
     const now = new Date();
     const expiresAt = new Date(now);
     expiresAt.setFullYear(expiresAt.getFullYear() + 1);
     
-    // ✅ ИСПОЛЬЗУЕМ toISOString() для timestamp
+    // 4️⃣ Обновляем компанию
     const updateData = {
       plan_tier: promoData.plan_id || 'pro',
       plan_expires_at: expiresAt.toISOString(),
@@ -609,9 +604,8 @@ useEffect(() => {
       updated_at: now.toISOString()
     };
     
-    console.log('📝 Обновляем компанию:', JSON.stringify(updateData, null, 2));
+    console.log('📝 Обновляем компанию:', updateData);
     
-    // ✅ ПРЯМОЙ ЗАПРОС БЕЗ SELECT
     const { error: updateCompanyError } = await supabase
       .from('companies')
       .update(updateData)
@@ -619,36 +613,53 @@ useEffect(() => {
     
     if (updateCompanyError) {
       console.error('❌ Ошибка обновления компании:', updateCompanyError);
-      console.error('❌ Данные:', updateData);
-      showNotification('Ошибка обновления компании: ' + updateCompanyError.message, 'error');
+      showNotification('Ошибка обновления компании', 'error');
       setActivatingPromo(false);
       return;
     }
     
-    // Обновляем счётчик использований промокода
-    const { error: updatePromoError } = await supabase
+    // 5️⃣ ✅ ОБНОВЛЯЕМ СЧЁТЧИК - ПРЯМОЙ ЗАПРОС С RETURNING
+    const newUsedCount = (promoData.used_count || 0) + 1;
+    
+    console.log(`📊 Обновляем счётчик: ${promoData.used_count} → ${newUsedCount}`);
+    
+    const { data: updatedPromo, error: updatePromoError } = await supabase
       .from('promo_codes')
       .update({
-        used_count: (promoData.used_count || 0) + 1,
+        used_count: newUsedCount,
         updated_at: now.toISOString()
       })
-      .eq('id', promoData.id);
+      .eq('id', promoData.id)
+      .select();  // ✅ ДОБАВЛЯЕМ .select() ЧТОБЫ ВЕРНУТЬ ОБНОВЛЁННЫЕ ДАННЫЕ
     
     if (updatePromoError) {
       console.error('❌ Ошибка обновления промокода:', updatePromoError);
+      showNotification('⚠️ Промокод активирован, но счётчик не обновлён', 'warning');
+    } else {
+      console.log('✅ Счётчик обновлён! Новые данные:', updatedPromo);
+      console.log(`✅ Теперь used_count = ${updatedPromo?.[0]?.used_count || newUsedCount}`);
     }
     
-    showNotification(`✅ Промокод "${promoData.code}" успешно активирован!`, 'success');
+    showNotification(`✅ Промокод "${promoData.code}" активирован!`, 'success');
     setShowPromoModal(false);
+    
+    // 6️⃣ Перезагружаем данные
     loadData();
     
+    // 7️⃣ Обновляем список промокодов в менеджере
+    if (showPromoManager) {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('refreshPromoCodes'));
+      }, 500);
+    }
+    
   } catch (err) {
-    console.error('❌ Критическая ошибка:', err);
-    showNotification('Ошибка активации промокода: ' + err.message, 'error');
+    console.error('❌ Ошибка:', err);
+    showNotification('Ошибка активации: ' + err.message, 'error');
   } finally {
     setActivatingPromo(false);
   }
-}, [supabase, currentUser, showNotification, loadData]);
+}, [supabase, currentUser, showNotification, loadData, showPromoManager]);
 
   // Navigation with tariff support
   const navigateTo = useCallback((view, title) => {
