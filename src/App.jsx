@@ -384,6 +384,37 @@ const GLOBAL_STYLES = `
     gap: 12px;
   }
 }
+
+  /* iOS/Safari фиксы для модальных окон */
+@supports (-webkit-touch-callout: none) {
+  .fixed.inset-0 {
+    height: -webkit-fill-available;
+  }
+  
+  /* Фикс для модальных окон на iPhone */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100vh;
+    height: -webkit-fill-available;
+    min-height: -webkit-fill-available;
+  }
+  
+  .modal-content {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(-webkit-fill-available - 2rem);
+  }
+}
+
+/* Отключение зума на инпутах для iOS */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important; /* Предотвращает автоматический зум на iOS */
+  }
+}
 `;
 
 
@@ -1877,27 +1908,53 @@ useEffect(() => {
   }
 }, [user, userRole, currentUserPermissions.canCreate]);
 
-  useEffect(() => {
-    const checkInvitation = async () => {
-      if (signupEmail && signupEmail.includes('@')) {
-        const { data } = await supabase
-          .from('invitations')
-          .select('company_id, companies(name)')
-          .eq('email', signupEmail.toLowerCase())
-          .eq('accepted', false)
-          .maybeSingle();
-        if (data?.companies?.name) {
-          setInvitedCompany(data.companies.name);
-          setSignupCompanyName(data.companies.name);
-        } else {
-          setInvitedCompany(null);
-        }
-      } else {
-        setInvitedCompany(null);
+  // Добавьте useCallback в начале файла (в секции useCallback)
+const checkInvitation = useCallback(async (email) => {
+  if (!email || !email.includes('@')) {
+    setInvitedCompany(null);
+    // ✅ НЕ очищаем название компании, если пользователь его уже ввел
+    if (!signupCompanyName) {
+      setSignupCompanyName('');
+    }
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('invitations')
+      .select('company_id, companies(name)')
+      .eq('email', email.toLowerCase().trim())
+      .eq('accepted', false)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Ошибка проверки приглашения:', error);
+      setInvitedCompany(null);
+      return;
+    }
+
+    if (data?.companies?.name) {
+      setInvitedCompany(data.companies.name);
+      setSignupCompanyName(data.companies.name);
+    } else {
+      setInvitedCompany(null);
+      // ✅ НЕ ОЧИЩАЕМ поле, если пользователь уже ввел название вручную
+      if (!signupCompanyName || signupCompanyName === invitedCompany) {
+        setSignupCompanyName('');
       }
-    };
-    checkInvitation();
-  }, [signupEmail]);
+    }
+  } catch (err) {
+    console.error('Ошибка проверки приглашения:', err);
+    setInvitedCompany(null);
+  }
+}, [supabase, signupCompanyName, invitedCompany]);
+
+// И ОСТАВЬТЕ useEffect для автоматической проверки при монтировании
+useEffect(() => {
+  if (signupEmail && signupEmail.includes('@')) {
+    checkInvitation(signupEmail);
+  }
+}, [signupEmail]);
 
   const tutorialSteps = [
     t('tutorialStep1'),
@@ -2381,6 +2438,26 @@ const checkForUpdates = useCallback(async () => {
           }
         }
       });
+
+      // ✅ Проверка, что company_id сохранился в метаданных
+if (authData?.user) {
+  const { data: userData } = await supabase.auth.getUser();
+  console.log('User metadata:', userData?.user?.user_metadata);
+  
+  // Если company_id не сохранился - обновить принудительно
+  if (!userData?.user?.user_metadata?.company_id) {
+    await supabase.auth.updateUser({
+      data: {
+        company_id: targetCompanyId,
+        company_name: invitedCompanyName || signupCompanyName.trim(),
+        role: finalRole,
+        full_name: signupFullName,
+        phone: signupPhone
+      }
+    });
+    console.log('✅ company_id принудительно обновлен');
+  }
+}
 
       if (authError) {
         console.error('Ошибка регистрации:', authError);
@@ -4377,7 +4454,10 @@ useEffect(() => {
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
-  if (!user || !userCompanyId) return;
+  if (!user || !userCompanyId) {
+    console.warn('⚠️ loadApplications: нет user или companyId');
+    return;
+  }
   
   // Проверка кэша
   const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
@@ -6043,7 +6123,12 @@ const renderAnalyticsDashboard = () => {
                 id="signup-email"
                 type="email"
                 value={signupEmail}
-                onChange={(e) => setSignupEmail(e.target.value)}
+                onChange={(e) => {
+                  const newEmail = e.target.value;
+                  setSignupEmail(newEmail);
+                  // ✅ Автоматическая проверка приглашения при вводе email
+                  checkInvitation(newEmail);
+                }}
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder="you@example.com"
                 required
@@ -6082,23 +6167,32 @@ const renderAnalyticsDashboard = () => {
               />
             </div>
 
-            {/* Компания */}
-            {!invitedCompany && (
-              <div>
-                <label htmlFor="signup-company" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Название компании *
-                </label>
-                <input
-                  id="signup-company"
-                  type="text"
-                  value={signupCompanyName}
-                  onChange={(e) => setSignupCompanyName(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="ООО СтройГрупп"
-                  required={!invitedCompany}
-                />
-              </div>
-            )}
+            {/* Компания - показываем всегда, но с подсказкой если приглашен */}
+            <div>
+              <label htmlFor="signup-company" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Название компании *
+              </label>
+              <input
+                id="signup-company"
+                type="text"
+                value={signupCompanyName}
+                onChange={(e) => setSignupCompanyName(e.target.value)}
+                className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                  invitedCompany 
+                    ? 'border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/20' 
+                    : 'border-gray-300 dark:border-gray-600'
+                }`}
+                placeholder="ООО СтройГрупп"
+                readOnly={!!invitedCompany}
+                required={!invitedCompany}
+              />
+              {invitedCompany && (
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  Вы приглашены в компанию "{invitedCompany}"
+                </p>
+              )}
+            </div>
 
             {/* Пароль */}
             <div>
@@ -6149,7 +6243,6 @@ const renderAnalyticsDashboard = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      console.log('Opening privacy policy modal');
                       setShowPrivacyPolicyModal(true);
                     }}
                     className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium inline-flex items-center gap-0.5"

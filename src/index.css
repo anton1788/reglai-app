@@ -17,6 +17,76 @@ html, body, #root {
   padding: 0 !important;
 }
 
+/* ============================================
+   FIXES FOR MOBILE DEVICES (iOS/Android)
+   ============================================ */
+
+/* 1. Модальные окна - правильная высота на iOS */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100vh;
+  height: -webkit-fill-available;
+  min-height: -webkit-fill-available;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  max-height: calc(100vh - 2rem);
+  max-height: calc(-webkit-fill-available - 2rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 2. Отключение зума на инпутах для iOS */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* 3. Плавная прокрутка для модальных окон */
+.modal-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* 4. Увеличенные touch-цели для мобильных */
+@media (max-width: 768px) {
+  button,
+  [role="button"],
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* 5. Исправление для input на iOS (прозрачный фон) */
+input,
+textarea {
+  -webkit-appearance: none;
+  appearance: none;
+  background-clip: padding-box;
+}
+
+/* 6. Исправление для select на iOS */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
 /* Навигация всегда сверху */
 nav, 
 header,
@@ -109,4 +179,57 @@ textarea {
   input, textarea {
     -webkit-text-size-adjust: 100%;
   }
+}
+
+/* ========== СТИЛИ ДЛЯ ЧАТА ========== */
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #e4e6eb;
+  border-radius: 18px;
+  width: fit-content;
+}
+
+.dark .typing-indicator {
+  background: #3a3b3c;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  background: #65676b;
+  border-radius: 50%;
+  animation: typing 1.4s infinite;
+}
+
+.dark .typing-indicator span {
+  background: #b0b3b8;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+.message-bubble {
+  transition: transform 0.1s ease;
+}
+
+.message-bubble:active {
+  transform: scale(0.98);
 }
