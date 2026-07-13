@@ -249,7 +249,9 @@ const CalendarView = ({
     setError(null);
     
     try {
-      // Загрузка заявок
+      // ============================================================
+      // 🔥 ЗАГРУЗКА ЗАЯВОК (applications) — поле planned_date
+      // ============================================================
       const { data: applications, error: appError } = await supabase
         .from('applications')
         .select(`
@@ -269,24 +271,28 @@ const CalendarView = ({
 
       if (appError) throw appError;
 
-      // Загрузка задач
+      // ============================================================
+      // 🔥 ЗАГРУЗКА ЗАДАЧ (tasks) — поле due_date (НЕ deadline!)
+      // ============================================================
       let tasks = [];
       try {
         const { data: tasksData } = await supabase
           .from('tasks')
-          .select('id, title, deadline, assigned_to, status, priority, description, created_at')
+          .select('id, title, due_date, assigned_to, status, priority, description, created_at')
           .eq('company_id', userCompanyId)
-          .not('deadline', 'is', null);
+          .not('due_date', 'is', null);  // ← используем due_date
         
         tasks = tasksData || [];
       } catch (taskErr) {
         console.warn('Таблица tasks не найдена:', taskErr);
       }
 
-      // Формирование событий
+      // ============================================================
+      // 🔥 ФОРМИРОВАНИЕ СОБЫТИЙ
+      // ============================================================
       const calendarEvents = [];
 
-      // События из заявок
+      // --- События из заявок (applications) ---
       applications?.forEach(app => {
         const startDate = app.planned_date ? new Date(app.planned_date) : new Date(app.created_at);
         const lastStatus = app.status_history?.[app.status_history.length - 1];
@@ -318,16 +324,16 @@ const CalendarView = ({
         });
       });
 
-      // События из задач
+      // --- События из задач (tasks) с полем due_date ---
       tasks?.forEach(task => {
-        const deadline = new Date(task.deadline);
-        const isOverdue = task.status !== 'completed' && deadline < new Date();
+        const dueDate = new Date(task.due_date);  // ← используем due_date
+        const isOverdue = task.status !== 'completed' && dueDate < new Date();
 
         calendarEvents.push({
           id: `task-${task.id}`,
           title: task.title || 'Задача',
-          start: deadline,
-          end: new Date(deadline.getTime() + 60 * 60 * 1000),
+          start: dueDate,
+          end: new Date(dueDate.getTime() + 60 * 60 * 1000),
           type: 'task',
           isOverdue,
           status: task.status || 'pending',
@@ -358,21 +364,18 @@ const CalendarView = ({
   useEffect(() => {
     let result = events;
     
-    // Фильтр по объектам
     if (filterSettings.objects.length > 0) {
       result = result.filter(e => 
         filterSettings.objects.includes(e.objectName || e.title)
       );
     }
     
-    // Фильтр по статусам
     if (filterSettings.statuses.length > 0) {
       result = result.filter(e => 
         filterSettings.statuses.includes(e.status)
       );
     }
     
-    // Фильтр по типам
     if (filterSettings.types.length > 0) {
       result = result.filter(e => 
         filterSettings.types.includes(e.type)
@@ -419,7 +422,6 @@ const CalendarView = ({
       transition: 'transform 0.2s ease, box-shadow 0.2s ease'
     };
 
-    // Просрочка
     if (event.isOverdue) {
       return {
         style: {
@@ -431,7 +433,6 @@ const CalendarView = ({
       };
     }
 
-    // Цвет по объекту
     let objectColor = getObjectColor(event.objectName || event.title);
     let lightColor = getLightColor(objectColor);
     const isDark = isDarkColor(objectColor);
@@ -502,6 +503,7 @@ const CalendarView = ({
       e.id === event.id ? { ...e, start, end } : e
     ));
     
+    // Обновление даты в БД
     if (event.type === 'application' && event.application) {
       try {
         const { error } = await supabase
@@ -517,6 +519,25 @@ const CalendarView = ({
       } catch (err) {
         console.error('Ошибка обновления даты:', err);
         showNotification('Не удалось обновить дату', 'error');
+      }
+    }
+    
+    // Обновление даты задачи (due_date)
+    if (event.type === 'task' && event.task) {
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update({ 
+            due_date: start.toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', event.task.id);
+        
+        if (error) throw error;
+        showNotification(`📅 Дата задачи "${event.title}" обновлена`, 'success');
+      } catch (err) {
+        console.error('Ошибка обновления даты задачи:', err);
+        showNotification('Не удалось обновить дату задачи', 'error');
       }
     }
   }, [supabase, showNotification]);
@@ -877,6 +898,7 @@ const CalendarView = ({
         />
       </div>
 
+      {/* Модальное окно события */}
       {selectedEvent && (
         <div 
           className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 fade-enter"
