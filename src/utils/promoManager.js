@@ -1,9 +1,8 @@
 // ============================================================
-// 📦 КОНФИГУРАЦИЯ ПРОМОКОДОВ (ОБНОВЛЁННАЯ)
+// 📦 КОНФИГУРАЦИЯ ПРОМОКОДОВ
 // ============================================================
 
 export const PROMO_CONFIG = {
-  // ✅ БЕСПЛАТНЫЙ ДОСТУП НА 3 МЕСЯЦА
   'FREE3M': {
     planId: 'pro',
     expiresAt: '2026-12-31T23:59:59Z',
@@ -15,8 +14,6 @@ export const PROMO_CONFIG = {
     createdBy: 'admin@reglai.ru',
     createdAt: '2026-06-28'
   },
-  
-  // ✅ СКИДКА 50% НА 6 МЕСЯЦЕВ
   'HALF6M': {
     planId: 'business',
     expiresAt: '2026-12-31T23:59:59Z',
@@ -28,8 +25,6 @@ export const PROMO_CONFIG = {
     createdBy: 'admin@reglai.ru',
     createdAt: '2026-06-28'
   },
-  
-  // ✅ ПАРТНЁРСКИЙ ДОСТУП (ГОДОВОЙ)
   'PARTNER2026': {
     planId: 'enterprise',
     expiresAt: '2027-06-28T23:59:59Z',
@@ -41,8 +36,6 @@ export const PROMO_CONFIG = {
     createdBy: 'admin@reglai.ru',
     createdAt: '2026-06-28'
   },
-  
-  // ✅ БЕСПЛАТНЫЙ ТЕСТОВЫЙ ДОСТУП (7 ДНЕЙ)
   'TEST7D': {
     planId: 'pro',
     expiresAt: '2026-12-31T23:59:59Z',
@@ -54,8 +47,6 @@ export const PROMO_CONFIG = {
     createdBy: 'admin@reglai.ru',
     createdAt: '2026-06-28'
   },
-  
-  // ✅ СКИДКА 30% ДЛЯ СТАРТАПОВ (ГОД)
   'STARTUP30': {
     planId: 'business',
     expiresAt: '2027-06-28T23:59:59Z',
@@ -67,8 +58,6 @@ export const PROMO_CONFIG = {
     createdBy: 'admin@reglai.ru',
     createdAt: '2026-06-28'
   },
-  
-  // ✅ СКИДКА 20% ДЛЯ НОВЫХ КЛИЕНТОВ
   'WELCOME20': {
     planId: 'pro',
     expiresAt: '2026-12-31T23:59:59Z',
@@ -80,8 +69,6 @@ export const PROMO_CONFIG = {
     createdBy: 'admin@reglai.ru',
     createdAt: '2026-06-28'
   },
-  
-  // ✅ БЕСПЛАТНЫЙ ДОСТУП ДЛЯ НЕКОММЕРЧЕСКИХ ОРГАНИЗАЦИЙ
   'NGO2026': {
     planId: 'pro',
     expiresAt: '2027-06-28T23:59:59Z',
@@ -107,7 +94,6 @@ export const syncPromoCodesToDB = async (supabaseClient) => {
   
   for (const [code, config] of Object.entries(PROMO_CONFIG)) {
     try {
-      // 1. Проверяем, есть ли уже промокод в БД
       const { data: existing, error: findError } = await supabaseClient
         .from('promo_codes')
         .select('id, code, used_count')
@@ -120,7 +106,6 @@ export const syncPromoCodesToDB = async (supabaseClient) => {
         continue;
       }
       
-      // 2. Если нет - создаём новый промокод
       if (!existing) {
         const { error: insertError } = await supabaseClient
           .from('promo_codes')
@@ -144,9 +129,7 @@ export const syncPromoCodesToDB = async (supabaseClient) => {
           console.log(`✅ Создан промокод: ${code} (скидка ${config.discountPercent || 0}%)`);
           synced++;
         }
-      } 
-      // 3. Если есть - обновляем существующий
-      else {
+      } else {
         const needUpdate = 
           existing.max_uses !== config.maxUses ||
           existing.plan_id !== config.planId ||
@@ -175,7 +158,7 @@ export const syncPromoCodesToDB = async (supabaseClient) => {
           }
         }
         
-        // 4. СИНХРОНИЗАЦИЯ ДАТ ДЛЯ АКТИВИРОВАННЫХ КОМПАНИЙ
+        // Синхронизация дат для активированных компаний
         const { data: companies, error: companiesError } = await supabaseClient
           .from('companies')
           .select('id, name')
@@ -229,14 +212,11 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
   let promo = null;
   let source = null;
   
-  // 1️⃣ СНАЧАЛА проверяем конфиг (код) - самый свежий
   if (PROMO_CONFIG[code.toUpperCase()]) {
     promo = PROMO_CONFIG[code.toUpperCase()];
     source = 'config';
     console.log('✅ Найден в КОНФИГЕ:', promo);
-  } 
-  // 2️⃣ Если в конфиге нет — проверяем БД (для обратной совместимости)
-  else {
+  } else {
     const { data, error } = await supabaseClient
       .from('promo_codes')
       .select('*')
@@ -252,11 +232,9 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
   }
   
   if (!promo) {
-    console.error('❌ Промокод не найден');
     return { valid: false, error: 'Промокод не найден' };
   }
   
-  // Проверка срока действия
   const expiresAt = source === 'config' 
     ? new Date(promo.expiresAt)
     : new Date(promo.expires_at);
@@ -265,7 +243,6 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
     return { valid: false, error: 'Срок действия промокода истек' };
   }
   
-  // Проверка лимита
   const maxUses = source === 'config' ? promo.maxUses : promo.max_uses;
   const usedCount = source === 'config' ? promo.usedBy.length : (promo.used_count || 0);
   
@@ -273,7 +250,6 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
     return { valid: false, error: 'Лимит использований промокода исчерпан' };
   }
   
-  // Проверка, не использовала ли компания
   if (source === 'database') {
     const { data: existingUsage } = await supabaseClient
       .from('company_promo_usage')
@@ -291,7 +267,6 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
     }
   }
   
-  // Проверка прав (только владелец компании)
   const { data: companyData, error: companyError } = await supabaseClient
     .from('companies')
     .select('is_company_owner')
@@ -299,7 +274,6 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
     .single();
   
   if (companyError || companyData?.is_company_owner !== userId) {
-    console.error('❌ Не владелец компании');
     return { valid: false, error: 'Только владелец компании может активировать промокод' };
   }
   
@@ -320,7 +294,6 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
 export const activatePromoPlan = async (supabaseClient, code, companyId, userId, userEmail) => {
   console.log('🚀 [activatePromoPlan] Начало:', { code, companyId, userId });
   
-  // Валидация
   const validation = await validatePromoCode(supabaseClient, code, companyId, userId);
   
   if (!validation.valid) {
@@ -332,9 +305,7 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
     const planId = validation.planId;
     const codeUpper = code.toUpperCase();
     
-    // 🆕 Рассчитываем дату окончания в зависимости от типа промокода
     let expiresAt = new Date();
-    
     if (codeUpper === 'FREE3M') {
       expiresAt.setMonth(expiresAt.getMonth() + 3);
     } else if (codeUpper === 'HALF6M' || codeUpper === 'STARTUP30') {
@@ -346,13 +317,11 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
     } else if (codeUpper === 'WELCOME20') {
       expiresAt.setMonth(expiresAt.getMonth() + 2);
     } else {
-      // По умолчанию: 1 месяц
       expiresAt.setMonth(expiresAt.getMonth() + 1);
     }
     
     const expiresAtISO = expiresAt.toISOString();
     
-    // Обновляем компанию
     const { error: updateError } = await supabaseClient
       .from('companies')
       .update({
@@ -368,7 +337,6 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
     
     if (updateError) throw updateError;
     
-    // Обновляем использователи в конфиге
     if (validation.source === 'config') {
       const promoConfig = PROMO_CONFIG[codeUpper];
       if (promoConfig && !promoConfig.usedBy.includes(companyId)) {
@@ -376,7 +344,6 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
       }
     }
     
-    // Записываем в БД использование (если таблица существует)
     try {
       await supabaseClient
         .from('company_promo_usage')
@@ -390,12 +357,10 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
       console.warn('⚠️ Не удалось записать usage (таблица может отсутствовать):', err.message);
     }
     
-    // Увеличиваем счётчик в БД (если есть RPC)
     try {
       await supabaseClient.rpc('increment_promo_usage', { p_code: codeUpper });
     } catch (err) {
       console.warn('⚠️ RPC increment_promo_usage не найден:', err.message);
-      // Пытаемся обновить напрямую
       try {
         await supabaseClient
           .from('promo_codes')
@@ -409,7 +374,6 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
       }
     }
     
-    // Логируем в аудит
     await supabaseClient
       .from('audit_logs')
       .insert([{
@@ -435,9 +399,7 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
       enterprise: 'Корпоративный'
     };
     
-    const discountText = discountPercent === 100 
-      ? 'БЕСПЛАТНО' 
-      : `со скидкой ${discountPercent}%`;
+    const discountText = discountPercent === 100 ? 'БЕСПЛАТНО' : `со скидкой ${discountPercent}%`;
     
     return { 
       success: true, 
@@ -487,24 +449,19 @@ export const checkUserPromoCode = async (supabaseClient, companyId) => {
   }
 };
 
-// 🆕 Получить информацию о промокоде по коду
 export const getPromoInfo = (code) => {
   const upperCode = code?.toUpperCase();
   return PROMO_CONFIG[upperCode] || null;
 };
 
-// 🆕 Проверить, активен ли промокод
 export const isPromoActive = (code) => {
   const promo = getPromoInfo(code);
   if (!promo) return false;
-  
   const now = new Date();
   const expiresAt = new Date(promo.expiresAt);
-  
   return promo.isActive && expiresAt > now && promo.usedBy.length < promo.maxUses;
 };
 
-// 🆕 Получить все активные промокоды
 export const getActivePromoCodes = () => {
   return Object.entries(PROMO_CONFIG)
     .filter(([, config]) => config.isActive)
@@ -513,10 +470,6 @@ export const getActivePromoCodes = () => {
       ...config
     }));
 };
-
-// ============================================================
-// 📦 ЭКСПОРТ ПО УМОЛЧАНИЮ
-// ============================================================
 
 export default {
   PROMO_CONFIG,
