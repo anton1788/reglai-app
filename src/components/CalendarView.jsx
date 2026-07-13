@@ -29,6 +29,11 @@ import CalendarFilters from './CalendarFilters';
 import CalendarHeatmap from './CalendarHeatmap';
 import { getObjectColor, getLightColor, isDarkColor } from '../utils/calendarColors';
 
+// ============================================================
+// 🔥 ПРИНУДИТЕЛЬНАЯ УСТАНОВКА РУССКОЙ ЛОКАЛИ
+// ============================================================
+moment.locale('ru');
+
 // ========== СТИЛИ ==========
 const CALENDAR_STYLES = `
   .reglai-calendar .rbc-toolbar {
@@ -201,10 +206,25 @@ const CalendarView = ({
   const containerRef = useRef(null);
   const calendarRef = useRef(null);
 
-  // ===== ЛОКАЛИЗАЦИЯ =====
+  // ============================================================
+  // 🔥 ЛОКАЛИЗАЦИЯ — ПРИНУДИТЕЛЬНО РУССКИЙ
+  // ============================================================
   const localizer = useMemo(() => {
-    moment.locale(language === 'ru' ? 'ru' : 'en');
+    // Всегда используем русскую локаль
+    moment.locale('ru');
     return momentLocalizer(moment);
+  }, []); // ← пустой массив, чтобы не пересоздавался
+
+  // ============================================================
+  // 🔥 УСТАНОВКА ЛОКАЛИ ПРИ ИЗМЕНЕНИИ ЯЗЫКА
+  // ============================================================
+  useEffect(() => {
+    // Всегда русский язык для календаря
+    moment.locale('ru');
+    
+    // Принудительно обновляем календарь
+    setDate(prev => new Date(prev));
+    setFilteredEvents(prev => [...prev]);
   }, [language]);
 
   // ===== ИНЪЕКЦИЯ СТИЛЕЙ =====
@@ -214,12 +234,6 @@ const CalendarView = ({
     document.head.appendChild(styleEl);
     return () => document.head.removeChild(styleEl);
   }, []);
-
-  // ===== УСТАНОВКА ЛОКАЛИ =====
-  useEffect(() => {
-    moment.locale(language === 'ru' ? 'ru' : 'en');
-    setDate(prev => new Date(prev));
-  }, [language]);
 
   // ===== УВЕДОМЛЕНИЯ =====
   const { forceCheck, notifiedEvents } = useCalendarNotifications({
@@ -272,7 +286,7 @@ const CalendarView = ({
       if (appError) throw appError;
 
       // ============================================================
-      // 🔥 ЗАГРУЗКА ЗАДАЧ (tasks) — поле due_date (НЕ deadline!)
+      // 🔥 ЗАГРУЗКА ЗАДАЧ (tasks) — поле due_date
       // ============================================================
       let tasks = [];
       try {
@@ -280,7 +294,7 @@ const CalendarView = ({
           .from('tasks')
           .select('id, title, due_date, assigned_to, status, priority, description, created_at')
           .eq('company_id', userCompanyId)
-          .not('due_date', 'is', null);  // ← используем due_date
+          .not('due_date', 'is', null);
         
         tasks = tasksData || [];
       } catch (taskErr) {
@@ -326,7 +340,7 @@ const CalendarView = ({
 
       // --- События из задач (tasks) с полем due_date ---
       tasks?.forEach(task => {
-        const dueDate = new Date(task.due_date);  // ← используем due_date
+        const dueDate = new Date(task.due_date);
         const isOverdue = task.status !== 'completed' && dueDate < new Date();
 
         calendarEvents.push({
@@ -458,36 +472,51 @@ const CalendarView = ({
     };
   }, []);
 
-  // ===== ФОРМАТЫ =====
-  const formats = useMemo(() => ({
-    weekdayFormat: (date, culture, localizer) => 
-      localizer.format(date, 'ddd', culture).toUpperCase(),
-    dayFormat: (date) => moment(date).format('DD'),
-    dayHeaderFormat: (date) => moment(date).format('DD ddd'),
-    monthHeaderFormat: (date) => moment(date).format('MMMM YYYY'),
-    agendaHeaderFormat: ({ start, end }, culture, localizer) =>
-      `${localizer.format(start, 'LL', culture)} — ${localizer.format(end, 'LL', culture)}`
-  }), []);
+  
+  // ============================================================
+// 🔥 ФОРМАТЫ — РУССКИЕ
+// ============================================================
+const formats = useMemo(() => ({
+  weekdayFormat: (date) => {
+    // Принудительно русские дни недели
+    const weekdays = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    return weekdays[date.getDay()];
+  },
+  dayFormat: (date) => {
+    return moment(date).locale('ru').format('DD');
+  },
+  dayHeaderFormat: (date) => {
+    return moment(date).locale('ru').format('DD ddd');
+  },
+  monthHeaderFormat: (date) => {
+    return moment(date).locale('ru').format('MMMM YYYY');
+  },
+  agendaHeaderFormat: ({ start, end }) => {
+    return `${moment(start).locale('ru').format('LL')} — ${moment(end).locale('ru').format('LL')}`;
+  }
+}), []);
 
-  // ===== СООБЩЕНИЯ =====
+  // ============================================================
+  // 🔥 СООБЩЕНИЯ — РУССКИЕ
+  // ============================================================
   const messages = useMemo(() => ({
-    allDay: t('allDay') || 'Весь день',
-    previous: t('previous') || 'Назад',
-    next: t('next') || 'Вперёд',
-    today: t('today') || 'Сегодня',
-    month: t('month') || 'Месяц',
-    week: t('week') || 'Неделя',
-    day: t('day') || 'День',
-    agenda: t('agenda') || 'Список',
-    date: t('date') || 'Дата',
-    time: t('time') || 'Время',
-    event: t('event') || 'Событие',
-    noEventsInRange: t('noEvents') || 'Нет событий',
-    showMore: (count) => `+${count} ${t('more') || 'ещё'}`,
-    work_week: language === 'ru' ? 'Рабочая неделя' : 'Work week',
-    yesterday: language === 'ru' ? 'Вчера' : 'Yesterday',
-    tomorrow: language === 'ru' ? 'Завтра' : 'Tomorrow'
-  }), [t, language]);
+    allDay: 'Весь день',
+    previous: 'Назад',
+    next: 'Вперёд',
+    today: 'Сегодня',
+    month: 'Месяц',
+    week: 'Неделя',
+    day: 'День',
+    agenda: 'Список',
+    date: 'Дата',
+    time: 'Время',
+    event: 'Событие',
+    noEventsInRange: 'Нет событий',
+    showMore: (count) => `+${count} ещё`,
+    work_week: 'Рабочая неделя',
+    yesterday: 'Вчера',
+    tomorrow: 'Завтра'
+  }), []);
 
   // ===== ОБРАБОТЧИКИ СОБЫТИЙ =====
   const handleSelectEvent = useCallback((event) => {
@@ -600,11 +629,18 @@ const CalendarView = ({
     );
   }, [filteredEvents]);
 
-  // ===== КАСТОМНАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ =====
+  // ============================================================
+  // 🔥 КАСТОМНАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ — РУССКАЯ
+  // ============================================================
   const CustomToolbar = useCallback((toolbar) => {
     const goToBack = () => toolbar.onNavigate('PREV');
     const goToNext = () => toolbar.onNavigate('NEXT');
     const goToToday = () => toolbar.onNavigate('TODAY');
+
+    // Месяц на русском
+    const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+    const currentDate = new Date(toolbar.label);
+    const monthLabel = `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
 
     return (
       <div className="rbc-toolbar flex flex-wrap items-center justify-between gap-2 p-3 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-200/50 dark:border-gray-700/50">
@@ -612,17 +648,17 @@ const CalendarView = ({
           <button
             onClick={goToBack}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            aria-label={t('previous')}
+            aria-label="Назад"
           >
             <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
           </button>
           <span className="font-semibold text-gray-900 dark:text-white min-w-[140px] text-center">
-            {moment(toolbar.label).format('MMMM YYYY')}
+            {monthLabel}
           </span>
           <button
             onClick={goToNext}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            aria-label={t('next')}
+            aria-label="Вперёд"
           >
             <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-300" />
           </button>
@@ -634,28 +670,31 @@ const CalendarView = ({
             className="px-3 py-1.5 text-sm font-medium bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-lg hover:shadow-md transition-shadow flex items-center gap-1"
           >
             <CalendarIcon className="w-4 h-4" />
-            {t('today')}
+            Сегодня
           </button>
           
           <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
-            {['month', 'week', 'day'].map((v) => (
-              <button
-                key={v}
-                onClick={() => toolbar.onView(v)}
-                className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                  toolbar.view === v
-                    ? 'bg-[#4A6572] text-white'
-                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
-                }`}
-              >
-                {t(v)}
-              </button>
-            ))}
+            {['month', 'week', 'day'].map((v) => {
+              const labels = { month: 'Месяц', week: 'Неделя', day: 'День' };
+              return (
+                <button
+                  key={v}
+                  onClick={() => toolbar.onView(v)}
+                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                    toolbar.view === v
+                      ? 'bg-[#4A6572] text-white'
+                      : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {labels[v]}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
     );
-  }, [t]);
+  }, []);
 
   // ===== КНОПКИ БЫСТРОГО ДЕЙСТВИЯ =====
   const renderQuickActions = () => (
@@ -819,7 +858,7 @@ const CalendarView = ({
       <div className="flex items-center justify-center h-96 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin text-[#4A6572] mx-auto mb-3" />
-          <p className="text-gray-600 dark:text-gray-400">{t('loadingCalendar') || 'Загрузка календаря...'}</p>
+          <p className="text-gray-600 dark:text-gray-400">Загрузка календаря...</p>
         </div>
       </div>
     );
@@ -836,7 +875,7 @@ const CalendarView = ({
             onClick={loadCalendarEvents}
             className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors"
           >
-            {t('retry') || 'Повторить'}
+            Повторить
           </button>
         </div>
       </div>
@@ -936,9 +975,9 @@ const CalendarView = ({
                 <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                   <Clock className="w-4 h-4" />
                   <span>
-                    {moment(selectedEvent.start).format('DD.MM.YYYY HH:mm')}
+                    {moment(selectedEvent.start).locale('ru').format('DD.MM.YYYY HH:mm')}
                     {selectedEvent.end && selectedEvent.end.getTime() !== selectedEvent.start.getTime() && (
-                      ` — ${moment(selectedEvent.end).format('HH:mm')}`
+                      ` — ${moment(selectedEvent.end).locale('ru').format('HH:mm')}`
                     )}
                   </span>
                 </div>
@@ -998,7 +1037,7 @@ const CalendarView = ({
                 
                 <button
                   onClick={() => {
-                    const text = `${selectedEvent.title}\n${moment(selectedEvent.start).format('DD.MM.YYYY HH:mm')}\n${selectedEvent.foreman ? `Прораб: ${selectedEvent.foreman}` : ''}`;
+                    const text = `${selectedEvent.title}\n${moment(selectedEvent.start).locale('ru').format('DD.MM.YYYY HH:mm')}\n${selectedEvent.foreman ? `Прораб: ${selectedEvent.foreman}` : ''}`;
                     navigator.clipboard.writeText(text);
                     showNotification('✅ Данные скопированы', 'success');
                   }}
