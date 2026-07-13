@@ -473,19 +473,30 @@ const [tariffStats, setTariffStats] = useState(null);
   
   const mainRef = useRef(null);
   
-  // Get current user's company ID
-  useEffect(() => {
-    const getUserCompany = async () => {
-      if (!currentUser || !supabase) return;
-      const { data } = await supabase
-        .from('company_users')
-        .select('company_id')
-        .eq('user_id', currentUser.id)
-        .maybeSingle();
-      if (data) setUserCompanyId(data.company_id);
-    };
-    getUserCompany();
-  }, [currentUser, supabase]);
+ // В useEffect, где устанавливается userCompanyId (примерно строка 144-153)
+useEffect(() => {
+  const getUserCompany = async () => {
+    if (!currentUser || !supabase) return;
+    const { data } = await supabase
+      .from('company_users')
+      .select('company_id')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    
+    // ✅ ФИКС: Проверяем, что company_id - это строка
+    if (data?.company_id) {
+      const companyId = typeof data.company_id === 'string' 
+        ? data.company_id 
+        : String(data.company_id) || null;
+      setUserCompanyId(companyId);
+      console.log('✅ Company ID установлен:', companyId);
+    } else {
+      console.warn('⚠️ Company ID не найден или некорректен');
+      setUserCompanyId(null);
+    }
+  };
+  getUserCompany();
+}, [currentUser, supabase]);
   
   const { employees, companies, isLoading, loadData } = useSuperAdminData(
     supabase, currentUser, showNotification, t

@@ -1,4 +1,3 @@
-// src/components/GlobalSearch.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, X, Loader2, Users, Building2, FileText, Filter } from 'lucide-react';
 
@@ -41,6 +40,18 @@ const GlobalSearch = ({
       return;
     }
 
+    // ✅ ФИКС: Проверяем, что userCompanyId - это строка
+    const companyId = typeof userCompanyId === 'string' 
+      ? userCompanyId 
+      : userCompanyId?.toString?.() || null;
+    
+    // ✅ Если companyId нет или это не UUID - выходим
+    if (!companyId || companyId === '[object Object]') {
+      console.warn('GlobalSearch: некорректный companyId:', userCompanyId);
+      setResults({ applications: [], users: [], companies: [] });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const searchPattern = `%${debouncedTerm.trim()}%`;
@@ -50,7 +61,7 @@ const GlobalSearch = ({
         supabase
           .from('applications')
           .select('id, object_name, foreman_name, status, created_at, company_id')
-          .eq('company_id', userCompanyId)
+          .eq('company_id', companyId)  // ✅ Теперь точно строка!
           .or(`object_name.ilike.${searchPattern},foreman_name.ilike.${searchPattern}`)
           .limit(5),
         
@@ -58,11 +69,11 @@ const GlobalSearch = ({
         supabase
           .from('company_users')
           .select('id, full_name, email, phone, role, is_active')
-          .eq('company_id', userCompanyId)
+          .eq('company_id', companyId)  // ✅ Теперь точно строка!
           .or(`full_name.ilike.${searchPattern},email.ilike.${searchPattern},phone.ilike.${searchPattern}`)
           .limit(5),
         
-        // Search companies (only for superadmin)
+        // Search companies (only for superadmin) - здесь company_id не нужен
         supabase
           .from('companies')
           .select('id, name, plan_tier, is_blocked')
@@ -131,6 +142,24 @@ const GlobalSearch = ({
     users: selectedCategory === 'all' || selectedCategory === 'users' ? results.users : [],
     companies: selectedCategory === 'all' || selectedCategory === 'companies' ? results.companies : []
   };
+
+  // ✅ Если userCompanyId некорректен - показываем заглушку
+  if (userCompanyId === '[object Object]' || typeof userCompanyId === 'object') {
+    return (
+      <div className={`relative ${className}`}>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t('globalSearchPlaceholder') || "Поиск..."}
+            className="w-full pl-9 pr-10 py-2 text-sm border border-gray-300 dark:border-gray-600 
+                     rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+            disabled
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={searchRef} className={`relative ${className}`}>
