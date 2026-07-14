@@ -118,21 +118,29 @@ export const useChat = ({
   }, [userCompanyId]);
 
   // ===== ЗАГРУЗКА КАНАЛОВ =====
-  const loadCustomChannels = useCallback(async () => {
-    if (!userCompanyId) return;
-    try {
-      const { data, error } = await supabase
-        .from('company_channels')
-        .select('*')
-        .eq('company_id', userCompanyId)
-        .eq('is_archived', false);
-      
-      if (error) throw error;
-      setCustomChannels(data || []);
-    } catch (err) {
-      console.error('Ошибка загрузки каналов:', err);
-    }
-  }, [userCompanyId]);
+const loadCustomChannels = useCallback(async () => {
+  if (!userCompanyId) {
+    console.warn('⚠️ loadCustomChannels: нет userCompanyId');
+    return;
+  }
+  
+  console.log('📂 ЗАГРУЗКА каналов для компании:', userCompanyId);  // ← ДОБАВИТЬ
+  
+  try {
+    const { data, error } = await supabase
+      .from('company_channels')
+      .select('*')
+      .eq('company_id', userCompanyId)
+      .eq('is_archived', false);
+    
+    if (error) throw error;
+    
+    console.log('📂 ЗАГРУЖЕНЫ каналы из БД:', data);  // ← ДОБАВИТЬ
+    setCustomChannels(data || []);
+  } catch (err) {
+    console.error('❌ Ошибка загрузки каналов:', err);
+  }
+}, [userCompanyId]);
 
   // ===== ЗАГРУЗКА СООБЩЕНИЙ =====
   const loadMessages = useCallback(async () => {
