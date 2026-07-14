@@ -303,21 +303,43 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   }, [userCompanyId, showNotification]);
 
   // ===== ВСЕ КАНАЛЫ =====
-  const allChannels = useMemo(() => {
+const allChannels = useMemo(() => {
+  // Каналы из БД (преобразуем в формат интерфейса)
+  const dbChannels = chat.customChannels.map(ch => ({
+    id: ch.id,
+    label: ch.name,
+    name: ch.name,
+    icon: ch.icon || '💬',
+    description: ch.description || '',
+    type: ch.is_system ? 'system' : 'custom',
+    is_private: ch.is_private || false,
+    is_system: ch.is_system || false
+  }));
+  
+  // Фильтруем каналы по правам доступа
+  const filteredDbChannels = dbChannels.filter(ch => {
+    // Если канал системный, проверяем права из SYSTEM_CHANNELS
+    if (ch.is_system) {
+      const sysChannel = SYSTEM_CHANNELS.find(s => s.id === ch.id || s.label === `# ${ch.name}`);
+      if (sysChannel) {
+        return sysChannel.canView?.includes(userRole) || false;
+      }
+    }
+    return true;
+  });
+  
+  // Если каналов из БД нет, используем SYSTEM_CHANNELS как запасной вариант
+  if (filteredDbChannels.length === 0) {
     const system = SYSTEM_CHANNELS.filter(ch => {
       if (!ch.canView) return true;
       return ch.canView.includes(userRole);
     }).map(ch => ({ ...ch, type: 'system' }));
-    
-    const custom = chat.customChannels.filter(ch => {
-      if (ch.type === 'direct') {
-        return ch.participants?.includes(user?.id);
-      }
-      return true;
-    }).map(ch => ({ ...ch, type: ch.type || 'custom' }));
-    
-    return [...system, ...custom];
-  }, [chat.customChannels, userRole, user?.id]);
+    return system;
+  }
+  
+  console.log('📋 Каналы для отображения:', filteredDbChannels);
+  return filteredDbChannels;
+}, [chat.customChannels, userRole]);
 
   // ===== ФИЛЬТРАЦИЯ СООБЩЕНИЙ =====
   const displayedMessages = useMemo(() => {
