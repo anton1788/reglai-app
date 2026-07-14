@@ -302,44 +302,40 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     if (e.target) e.target.value = '';
   }, [userCompanyId, showNotification]);
 
-  // ===== ВСЕ КАНАЛЫ =====
-const allChannels = useMemo(() => {
-  // Каналы из БД (преобразуем в формат интерфейса)
-  const dbChannels = chat.customChannels.map(ch => ({
-    id: ch.id,
-    label: ch.name,
-    name: ch.name,
-    icon: ch.icon || '💬',
-    description: ch.description || '',
-    type: ch.is_system ? 'system' : 'custom',
-    is_private: ch.is_private || false,
-    is_system: ch.is_system || false
-  }));
-  
-  // Фильтруем каналы по правам доступа
-  const filteredDbChannels = dbChannels.filter(ch => {
-    // Если канал системный, проверяем права из SYSTEM_CHANNELS
-    if (ch.is_system) {
-      const sysChannel = SYSTEM_CHANNELS.find(s => s.id === ch.id || s.label === `# ${ch.name}`);
-      if (sysChannel) {
-        return sysChannel.canView?.includes(userRole) || false;
-      }
+  // ============================================================
+  // 🔥 ИСПРАВЛЕННАЯ ФУНКЦИЯ allChannels
+  // ============================================================
+  const allChannels = useMemo(() => {
+    console.log('🔍 allChannels вызван, customChannels:', chat.customChannels);
+    
+    // Если есть каналы из БД — используем их
+    if (chat.customChannels && chat.customChannels.length > 0) {
+      const dbChannels = chat.customChannels.map(ch => ({
+        id: ch.id,
+        label: ch.name,
+        name: ch.name,
+        icon: ch.icon || '💬',
+        description: ch.description || '',
+        type: ch.is_system ? 'system' : 'custom',
+        is_private: ch.is_private || false,
+        is_system: ch.is_system || false,
+        canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
+        canWrite: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client']
+      }));
+      
+      console.log('📋 Каналы из БД:', dbChannels);
+      return dbChannels;
     }
-    return true;
-  });
-  
-  // Если каналов из БД нет, используем SYSTEM_CHANNELS как запасной вариант
-  if (filteredDbChannels.length === 0) {
+    
+    // Если каналов в БД нет — используем SYSTEM_CHANNELS
     const system = SYSTEM_CHANNELS.filter(ch => {
       if (!ch.canView) return true;
       return ch.canView.includes(userRole);
     }).map(ch => ({ ...ch, type: 'system' }));
+    
+    console.log('📋 Системные каналы (запасной вариант):', system);
     return system;
-  }
-  
-  console.log('📋 Каналы для отображения:', filteredDbChannels);
-  return filteredDbChannels;
-}, [chat.customChannels, userRole]);
+  }, [chat.customChannels, userRole]);
 
   // ===== ФИЛЬТРАЦИЯ СООБЩЕНИЙ =====
   const displayedMessages = useMemo(() => {
