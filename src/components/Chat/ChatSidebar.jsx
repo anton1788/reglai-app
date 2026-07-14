@@ -12,9 +12,7 @@ const ChatSidebar = ({
   canCreateChannel,
   onCreateChannel,
   connectionStatus,
-  // isMobile — УДАЛЁН (не используется)
   showSidebar,
-  // onCloseSidebar — УДАЛЁН (не используется)
   onChannelSettings,
   onDeleteChannel,
   currentUserRole,
@@ -22,7 +20,6 @@ const ChatSidebar = ({
   currentUser,
   onStartDirectChat,
   unreadCounts,
-  // lastReadTimes — УДАЛЁН (не используется)
   pinnedChannels = [],
   onTogglePinChannel,
   className = ''
@@ -32,20 +29,25 @@ const ChatSidebar = ({
 
   if (!showSidebar) return null;
 
-  // Фильтрация каналов
+  // Фильтрация каналов по поиску
   const filteredChannels = channels.filter(ch => {
     const label = ch.label || ch.name || '';
     return label.toLowerCase().includes(search.toLowerCase());
   });
 
-  // Разделение на системные и кастомные
-  const systemChannels = filteredChannels.filter(ch => ch.type === 'system');
-  const customChannels = filteredChannels.filter(ch => ch.type !== 'system');
+  // ============================================================
+  // 🔥 ИСПРАВЛЕНО: Все каналы показываем вместе
+  // ============================================================
+  // Просто показываем все каналы в одном списке
+  const allChannels = filteredChannels;
 
   const userInitial = currentUser?.user_metadata?.full_name?.[0]?.toUpperCase() || '?';
   const userName = currentUser?.user_metadata?.full_name || 'Пользователь';
 
   const canManageChannels = currentUserRole === 'manager' || currentUserRole === 'supply_admin';
+
+  // Проверяем, что каналы есть
+  console.log('📋 ChatSidebar: каналов для отображения:', allChannels.length);
 
   return (
     <aside className={`flex flex-col border-r border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30 ${className}`}>
@@ -101,52 +103,16 @@ const ChatSidebar = ({
 
       {/* Список каналов */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {/* Системные каналы */}
-        {systemChannels.length > 0 && (
+        {allChannels.length > 0 ? (
           <>
             <div className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-2 py-1">
               Каналы
             </div>
-            {systemChannels.map(channel => {
+            {allChannels.map(channel => {
               const isActive = activeChannel === channel.id;
               const unread = unreadCounts[channel.id] || 0;
               const isPinned = pinnedChannels.includes(channel.id);
-              
-              return (
-                <button
-                  key={channel.id}
-                  onClick={() => onChannelSelect(channel.id)}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${
-                    isActive 
-                      ? 'bg-[#4A6572] text-white shadow-md' 
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
-                  }`}
-                >
-                  <span className="text-lg flex-shrink-0">{channel.icon}</span>
-                  <span className="truncate flex-1">{channel.label || channel.name}</span>
-                  {isPinned && <Pin className="w-3 h-3 opacity-60 flex-shrink-0" />}
-                  {unread > 0 && (
-                    <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0">
-                      {unread}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </>
-        )}
-
-        {/* Кастомные каналы */}
-        {customChannels.length > 0 && (
-          <>
-            <div className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-2 py-1 mt-2">
-              Чаты
-            </div>
-            {customChannels.map(channel => {
-              const isActive = activeChannel === channel.id;
-              const unread = unreadCounts[channel.id] || 0;
-              const isPinned = pinnedChannels.includes(channel.id);
-              const isDirect = channel.type === 'direct';
+              const isSystem = channel.is_system || channel.type === 'system';
               
               return (
                 <div key={channel.id} className="relative group">
@@ -158,9 +124,7 @@ const ChatSidebar = ({
                         : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
                     }`}
                   >
-                    <span className="text-lg flex-shrink-0">
-                      {isDirect ? '💬' : (channel.icon || '💬')}
-                    </span>
+                    <span className="text-lg flex-shrink-0">{channel.icon || '💬'}</span>
                     <span className="truncate flex-1">{channel.label || channel.name}</span>
                     {isPinned && <Pin className="w-3 h-3 opacity-60 flex-shrink-0" />}
                     {unread > 0 && (
@@ -170,7 +134,7 @@ const ChatSidebar = ({
                     )}
                   </button>
                   
-                  {canManageChannels && channel.type !== 'direct' && (
+                  {canManageChannels && !isSystem && (
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={(e) => {
@@ -207,6 +171,10 @@ const ChatSidebar = ({
               );
             })}
           </>
+        ) : (
+          <div className="text-center py-8 text-gray-400 text-sm">
+            Нет каналов
+          </div>
         )}
       </div>
 
