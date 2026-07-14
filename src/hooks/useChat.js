@@ -19,10 +19,10 @@ export const useChat = ({
   const [editText, setEditText] = useState('');
   const [showReactionsPicker, setShowReactionsPicker] = useState(null);
   const [companyUsers, setCompanyUsers] = useState([]);
-  const [connectionStatus] = useState('connected');  // ← убран setter
+  const [connectionStatus] = useState('connected');
   const [replyTo, setReplyTo] = useState(null);
   const [savedMessages, setSavedMessages] = useState(new Set());
-  const [typingUsers] = useState(new Set());  // ← убран setter
+  const [typingUsers] = useState(new Set());
   const [unreadCounts, setUnreadCounts] = useState({});
   const [lastReadTimes, setLastReadTimes] = useState({});
   const [isMobile, setIsMobile] = useState(false);
@@ -78,6 +78,20 @@ export const useChat = ({
     }
   ], []);
 
+  // ============================================================
+  // 🛠️ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ — ПРИВЕДЕНИЕ companyId К СТРОКЕ
+  // ============================================================
+  const getCompanyId = useCallback(() => {
+    if (!userCompanyId) return null;
+    
+    // Если это объект — извлекаем id или преобразуем в строку
+    if (typeof userCompanyId === 'object') {
+      return userCompanyId?.id || String(userCompanyId);
+    }
+    
+    return userCompanyId;
+  }, [userCompanyId]);
+
   // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
   const getChannelMessages = useCallback((channelId) => {
     return messages.filter(m => {
@@ -100,51 +114,71 @@ export const useChat = ({
     return channel.canWrite?.includes(userRole) || false;
   }, [userRole, SYSTEM_CHANNELS]);
 
-  // ===== ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ =====
+  // ============================================================
+  // 🔥 ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ — ИСПРАВЛЕНА
+  // ============================================================
   const loadUsers = useCallback(async () => {
-    if (!userCompanyId) return;
+    const companyId = getCompanyId();
+    if (!companyId) {
+      console.warn('⚠️ loadUsers: нет companyId');
+      return;
+    }
+    
+    console.log('📂 Загрузка пользователей для компании:', companyId);
+    
     try {
       const { data, error } = await supabase
         .from('company_users')
         .select('user_id, full_name, role, phone')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', companyId)
         .eq('is_active', true);
       
       if (error) throw error;
+      
+      console.log('📂 Загружены пользователи:', data?.length || 0);
       setCompanyUsers(data || []);
     } catch (err) {
       console.error('Ошибка загрузки пользователей:', err);
     }
-  }, [userCompanyId]);
+  }, [getCompanyId]);
 
-  // ===== ЗАГРУЗКА КАНАЛОВ =====
-const loadCustomChannels = useCallback(async () => {
-  if (!userCompanyId) {
-    console.warn('⚠️ loadCustomChannels: нет userCompanyId');
-    return;
-  }
-  
-  console.log('📂 ЗАГРУЗКА каналов для компании:', userCompanyId);  // ← ДОБАВИТЬ
-  
-  try {
-    const { data, error } = await supabase
-      .from('company_channels')
-      .select('*')
-      .eq('company_id', userCompanyId)
-      .eq('is_archived', false);
+  // ============================================================
+  // 🔥 ЗАГРУЗКА КАНАЛОВ — ИСПРАВЛЕНА
+  // ============================================================
+  const loadCustomChannels = useCallback(async () => {
+    const companyId = getCompanyId();
+    if (!companyId) {
+      console.warn('⚠️ loadCustomChannels: нет companyId');
+      return;
+    }
     
-    if (error) throw error;
+    console.log('📂 Загрузка каналов для компании:', companyId);
     
-    console.log('📂 ЗАГРУЖЕНЫ каналы из БД:', data);  // ← ДОБАВИТЬ
-    setCustomChannels(data || []);
-  } catch (err) {
-    console.error('❌ Ошибка загрузки каналов:', err);
-  }
-}, [userCompanyId]);
+    try {
+      const { data, error } = await supabase
+        .from('company_channels')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('is_archived', false);
+      
+      if (error) throw error;
+      
+      console.log('📂 Загружены каналы из БД:', data);
+      setCustomChannels(data || []);
+    } catch (err) {
+      console.error('❌ Ошибка загрузки каналов:', err);
+    }
+  }, [getCompanyId]);
 
-  // ===== ЗАГРУЗКА СООБЩЕНИЙ =====
+  // ============================================================
+  // 🔥 ЗАГРУЗКА СООБЩЕНИЙ — ИСПРАВЛЕНА
+  // ============================================================
   const loadMessages = useCallback(async () => {
-    if (!userCompanyId || !activeChannel) return;
+    const companyId = getCompanyId();
+    if (!companyId || !activeChannel) {
+      console.warn('⚠️ loadMessages: нет companyId или activeChannel');
+      return;
+    }
     
     setLoading(true);
     try {
@@ -154,7 +188,7 @@ const loadCustomChannels = useCallback(async () => {
       let query = supabase
         .from('company_messages')
         .select('*')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', companyId)
         .order('created_at', { ascending: true })
         .limit(100);
       
@@ -240,7 +274,7 @@ const loadCustomChannels = useCallback(async () => {
       const { data: pinnedData } = await supabase
         .from('company_messages')
         .select('id')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', companyId)
         .eq('is_pinned', true);
       
       if (pinnedData) {
@@ -252,7 +286,7 @@ const loadCustomChannels = useCallback(async () => {
         .from('pinned_channels')
         .select('channel_id')
         .eq('user_id', user?.id)
-        .eq('company_id', userCompanyId);
+        .eq('company_id', companyId);
       
       if (pinnedChannelsData) {
         setPinnedChannels(pinnedChannelsData.map(p => p.channel_id));
@@ -274,7 +308,7 @@ const loadCustomChannels = useCallback(async () => {
     } finally {
       setLoading(false);
     }
-  }, [userCompanyId, activeChannel, showNotification, SYSTEM_CHANNELS, user?.id]);
+  }, [getCompanyId, activeChannel, showNotification, SYSTEM_CHANNELS, user?.id]);
 
   // ===== ОТПРАВКА СООБЩЕНИЯ =====
   const sendMessage = useCallback(async (content, replyToMessage = null) => {
@@ -291,7 +325,7 @@ const loadCustomChannels = useCallback(async () => {
       const isDirectChat = activeChannel?.startsWith('dm_');
       
       const messageData = {
-        company_id: userCompanyId,
+        company_id: getCompanyId(),
         user_id: user.id,
         content: content.trim(),
         created_at: new Date().toISOString(),
@@ -328,7 +362,7 @@ const loadCustomChannels = useCallback(async () => {
     } finally {
       setSending(false);
     }
-  }, [user?.id, userCompanyId, activeChannel, canWriteToChannel, sending, showNotification, SYSTEM_CHANNELS]);
+  }, [user?.id, activeChannel, canWriteToChannel, sending, showNotification, SYSTEM_CHANNELS, getCompanyId]);
 
   // ===== РЕДАКТИРОВАНИЕ СООБЩЕНИЯ =====
   const saveEdit = useCallback(async (messageId, content) => {
@@ -507,7 +541,7 @@ const loadCustomChannels = useCallback(async () => {
           .from('pinned_channels')
           .delete()
           .eq('user_id', user.id)
-          .eq('company_id', userCompanyId)
+          .eq('company_id', getCompanyId())
           .eq('channel_id', channelId);
       } else {
         if (pinnedChannels.length >= 5) {
@@ -519,7 +553,7 @@ const loadCustomChannels = useCallback(async () => {
           .from('pinned_channels')
           .insert({
             user_id: user.id,
-            company_id: userCompanyId,
+            company_id: getCompanyId(),
             channel_id: channelId,
             created_at: new Date().toISOString()
           });
@@ -530,11 +564,12 @@ const loadCustomChannels = useCallback(async () => {
       showNotification?.('Не удалось закрепить канал', 'error');
       return { success: false, error: err };
     }
-  }, [user?.id, userCompanyId, pinnedChannels, showNotification]);
+  }, [user?.id, pinnedChannels, showNotification, getCompanyId]);
 
   // ===== НЕПРОЧИТАННЫЕ СООБЩЕНИЯ =====
   const loadUnreadCounts = useCallback(async () => {
-    if (!user?.id || !userCompanyId) return;
+    const companyId = getCompanyId();
+    if (!user?.id || !companyId) return;
     
     try {
       const { data: readData } = await supabase
@@ -548,7 +583,6 @@ const loadCustomChannels = useCallback(async () => {
       });
       setLastReadTimes(readMap);
       
-      // Все каналы
       const allChannels = [
         ...SYSTEM_CHANNELS.map(ch => ch.id),
         ...customChannels.map(ch => ch.id)
@@ -568,14 +602,13 @@ const loadCustomChannels = useCallback(async () => {
       
       setUnreadCounts(counts);
       
-      // Уведомляем родителя
       const totalUnread = Object.values(counts).reduce((sum, count) => sum + count, 0);
       onUnreadCountChange?.(totalUnread);
       
     } catch (err) {
       console.error('Ошибка загрузки непрочитанных:', err);
     }
-  }, [user?.id, userCompanyId, SYSTEM_CHANNELS, customChannels, getChannelMessages, onUnreadCountChange]);
+  }, [user?.id, SYSTEM_CHANNELS, customChannels, getChannelMessages, onUnreadCountChange, getCompanyId]);
 
   // ===== ОТМЕТКА КАНАЛА КАК ПРОЧИТАННОГО =====
   const markChannelAsRead = useCallback(async (channelId) => {
@@ -604,7 +637,8 @@ const loadCustomChannels = useCallback(async () => {
 
   // ===== ПОДПИСКА НА СООБЩЕНИЯ =====
   useEffect(() => {
-    if (!userCompanyId || !activeChannel) return;
+    const companyId = getCompanyId();
+    if (!companyId || !activeChannel) return;
     
     if (subscriptionRef.current) {
       subscriptionRef.current.unsubscribe();
@@ -612,7 +646,7 @@ const loadCustomChannels = useCallback(async () => {
     
     const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
     const filter = isSystemChannel 
-      ? `company_id=eq.${userCompanyId} AND channel=eq.${activeChannel} AND channel_type=eq.system`
+      ? `company_id=eq.${companyId} AND channel=eq.${activeChannel} AND channel_type=eq.system`
       : `channel_id=eq.${activeChannel}`;
     
     subscriptionRef.current = supabase
@@ -626,14 +660,12 @@ const loadCustomChannels = useCallback(async () => {
         const newMsg = payload.new;
         if (newMsg.deleted_at) return;
         
-        // Загружаем данные пользователя
         const { data: userData } = await supabase
           .from('company_users')
           .select('full_name, role')
           .eq('user_id', newMsg.user_id)
           .single();
         
-        // Загружаем реакции
         const { data: reactionsData } = await supabase
           .from('message_reactions')
           .select('emoji, user_id')
@@ -648,7 +680,6 @@ const loadCustomChannels = useCallback(async () => {
         
         setMessages(prev => [...prev, enrichedMessage]);
         
-        // Обновляем счётчик непрочитанных
         if (newMsg.user_id !== user?.id) {
           setUnreadCounts(prev => ({
             ...prev,
@@ -683,7 +714,7 @@ const loadCustomChannels = useCallback(async () => {
         subscriptionRef.current.unsubscribe();
       }
     };
-  }, [userCompanyId, activeChannel, user?.id, SYSTEM_CHANNELS]);
+  }, [getCompanyId, activeChannel, user?.id, SYSTEM_CHANNELS]);
 
   // ===== ИНИЦИАЛИЗАЦИЯ =====
   useEffect(() => {
@@ -699,9 +730,18 @@ const loadCustomChannels = useCallback(async () => {
     loadUnreadCounts();
   }, [loadUnreadCounts]);
 
+  // ============================================================
+  // 🔥 АВТОМАТИЧЕСКИЙ ВЫБОР ПЕРВОГО КАНАЛА
+  // ============================================================
+  useEffect(() => {
+    if (customChannels.length > 0 && activeChannel === 'general') {
+      console.log('🔄 Устанавливаем первый канал как активный:', customChannels[0]);
+      setActiveChannel(customChannels[0].id);
+    }
+  }, [customChannels, activeChannel]);
+
   // ===== ВОЗВРАЩАЕМЫЕ ЗНАЧЕНИЯ =====
   return {
-    // Состояния
     messages,
     activeChannel,
     setActiveChannel,
@@ -731,13 +771,9 @@ const loadCustomChannels = useCallback(async () => {
     setIsUserScrolling,
     pinnedMessages,
     pinnedChannels,
-    
-    // Refs
     messagesContainerRef,
     textareaRef,
     bottomRef,
-    
-    // Функции
     SYSTEM_CHANNELS,
     getChannelMessages,
     canWriteToChannel,
@@ -753,8 +789,6 @@ const loadCustomChannels = useCallback(async () => {
     loadMessages,
     loadUsers,
     loadCustomChannels,
-    
-    // Вспомогательные
     scrollTimeoutRef,
     typingTimeoutRef,
     isUserScrollingRef,
