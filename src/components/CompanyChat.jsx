@@ -1,5 +1,5 @@
 // src/components/CompanyChat.jsx
-import React, { useState, useRef, useCallback, useMemo, memo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
 import { 
   Send, Smile, Paperclip, Edit2, Trash2, X, Check, 
   Loader2, MessageCircle, Plus, Settings, Search, CornerUpLeft, 
@@ -9,7 +9,7 @@ import {
 import { supabase } from '../utils/supabaseClient';
 
 // ============================================================
-// 🔥 НОВЫЕ ИМПОРТЫ
+// 🔥 ИМПОРТЫ КОМПОНЕНТОВ
 // ============================================================
 import ChatEmojiPicker from './Chat/ChatEmojiPicker';
 import VoiceRecorder from './Chat/VoiceRecorder';
@@ -23,7 +23,8 @@ import useChat from '../hooks/useChat';
 const SYSTEM_CHANNELS = [
   { 
     id: 'general', 
-    label: '# Общий', 
+    label: 'Общий', 
+    name: 'Общий',
     icon: '💬', 
     description: 'Общие вопросы компании',
     canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
@@ -31,7 +32,8 @@ const SYSTEM_CHANNELS = [
   },
   { 
     id: 'supply', 
-    label: '📦 Снабжение', 
+    label: 'Снабжение', 
+    name: 'Снабжение',
     icon: '📦', 
     description: 'Закупки, материалы, логистика',
     canView: ['manager', 'supply_admin'],
@@ -39,7 +41,8 @@ const SYSTEM_CHANNELS = [
   },
   { 
     id: 'foremen', 
-    label: '👷 Прорабы', 
+    label: 'Прорабы', 
+    name: 'Прорабы',
     icon: '👷', 
     description: 'Оперативные вопросы на объектах',
     canView: ['manager', 'master', 'foreman'],
@@ -47,13 +50,21 @@ const SYSTEM_CHANNELS = [
   },
   { 
     id: 'announcements', 
-    label: '📢 Объявления', 
+    label: 'Объявления', 
+    name: 'Объявления',
     icon: '📢', 
     description: 'Важные новости и приказы',
     canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
     canWrite: ['manager', 'supply_admin']
   }
 ];
+
+// ========== ВСПОМОГАТЕЛЬНЫЙ КОМПОНЕНТ ==========
+const ArrowDown = ({ className = "w-5 h-5" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+  </svg>
+);
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnreadCountChange }) => {
@@ -68,7 +79,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     onUnreadCountChange
   });
 
-  // ===== ЛОКАЛЬНЫЕ СОСТОЯНИЯ (которые не в хуке) =====
+  // ===== ЛОКАЛЬНЫЕ СОСТОЯНИЯ =====
   const [newMessage, setNewMessage] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,7 +95,64 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   const messagesContainerRef = useRef(null);
   const textareaRef = useRef(null);
 
-  // ===== ОТПРАВКА СООБЩЕНИЯ (обёртка над хуком) =====
+  // ============================================================
+  // 🔥 ВСЕ КАНАЛЫ (ОБЪЕДИНЕННЫЕ)
+  // ============================================================
+  const allChannels = useMemo(() => {
+    // 1️⃣ Системные каналы (фильтруем по роли)
+    const systemChannels = SYSTEM_CHANNELS
+      .filter(ch => ch.canView?.includes(userRole))
+      .map(ch => ({ 
+        ...ch, 
+        id: ch.id,
+        label: ch.label || ch.name,
+        name: ch.name || ch.label,
+        type: 'system',
+        is_system: true,
+        is_private: false,
+        canView: ch.canView || [],
+        canWrite: ch.canWrite || []
+      }));
+    
+    // 2️⃣ Каналы из БД
+    const dbChannels = (chat.customChannels || []).map(ch => ({
+      id: ch.id,
+      label: ch.name || ch.label || 'Без названия',
+      name: ch.name || ch.label || 'Без названия',
+      icon: ch.icon || '💬',
+      description: ch.description || '',
+      type: 'custom',
+      is_private: ch.is_private || false,
+      is_system: false,
+      created_by: ch.created_by,
+      created_at: ch.created_at,
+      canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
+      canWrite: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client']
+    }));
+    
+    // 3️⃣ Объединяем
+    const result = [...systemChannels, ...dbChannels];
+    
+    // 🐛 ОТЛАДКА
+    console.log('📋 [CompanyChat] Все каналы (объединенные):', result);
+    console.log('📊 [CompanyChat] Количество каналов:', result.length);
+    console.log('🔍 [CompanyChat] Системных:', systemChannels.length);
+    console.log('📦 [CompanyChat] Из БД:', dbChannels.length);
+    console.log('👤 [CompanyChat] Роль пользователя:', userRole);
+    
+    return result;
+  }, [chat.customChannels, userRole]);
+
+  // ============================================================
+  // 🔥 ТЕКУЩИЙ КАНАЛ
+  // ============================================================
+  const currentChannel = useMemo(() => {
+    return allChannels.find(c => c.id === chat.activeChannel);
+  }, [allChannels, chat.activeChannel]);
+
+  // ============================================================
+  // 🔥 ОТПРАВКА СООБЩЕНИЯ
+  // ============================================================
   const handleSendMessage = useCallback(async () => {
     if (!newMessage.trim() || chat.sending) return;
     
@@ -95,12 +163,11 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [newMessage, chat]);
 
-  // ===== ОТПРАВКА ГОЛОСОВОГО СООБЩЕНИЯ =====
+  // ===== ОСТАЛЬНЫЕ ОБРАБОТЧИКИ (сокращены для читаемости) =====
   const handleVoiceSend = useCallback(async (audio) => {
     if (!audio || !audio.blob) return;
     
     try {
-      // Загружаем аудио в Storage
       const fileName = `${userCompanyId}/voice_${Date.now()}.webm`;
       const { error: uploadError } = await supabase.storage
         .from('chat-attachments')
@@ -112,10 +179,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         .from('chat-attachments')
         .getPublicUrl(fileName);
       
-      // Отправляем сообщение с ссылкой на аудио
-      const message = `🎙️ Голосовое сообщение: ${publicUrl}`;
-      await chat.sendMessage(message);
-      
+      await chat.sendMessage(`🎙️ Голосовое сообщение: ${publicUrl}`);
       showNotification?.('✅ Голосовое сообщение отправлено', 'success');
     } catch (err) {
       console.error('Ошибка отправки голоса:', err);
@@ -123,7 +187,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [userCompanyId, chat, showNotification]);
 
-  // ===== ЗАГРУЗКА УЧАСТНИКОВ КАНАЛА =====
   const loadChannelMembers = useCallback(async (channelId) => {
     if (!channelId) return;
     setLoadingMembers(true);
@@ -162,7 +225,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [showNotification]);
 
-  // ===== ДОБАВЛЕНИЕ УЧАСТНИКА =====
   const addChannelMember = useCallback(async (channelId, userId) => {
     if (!channelId || !userId) return;
     
@@ -181,7 +243,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [loadChannelMembers, showNotification]);
 
-  // ===== УДАЛЕНИЕ УЧАСТНИКА =====
   const removeChannelMember = useCallback(async (channelId, userId) => {
     if (!channelId || !userId) return;
     
@@ -202,7 +263,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [loadChannelMembers, showNotification]);
 
-  // ===== УДАЛЕНИЕ КАНАЛА =====
   const deleteChannel = useCallback(async (channelId) => {
     if (!channelId) return;
     
@@ -229,7 +289,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [chat, showNotification]);
 
-  // ===== СОЗДАНИЕ КАНАЛА =====
   const handleCreateChannel = useCallback(async (channelData) => {
     if (!userCompanyId || !user?.id) return;
     
@@ -239,7 +298,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         .insert([{
           company_id: userCompanyId,
           name: channelData.name,
-          description: channelData.description,
+          description: channelData.description || '',
           icon: channelData.icon || '💬',
           is_private: channelData.is_private || false,
           created_by: user.id,
@@ -276,7 +335,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [userCompanyId, user?.id, showNotification, chat]);
 
-  // ===== ЗАГРУЗКА ФАЙЛА =====
   const handleFileUpload = useCallback(async (e) => {
     const file = e.target.files?.[0] || e.dataTransfer?.files[0];
     if (!file || !userCompanyId) return;
@@ -302,41 +360,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     if (e.target) e.target.value = '';
   }, [userCompanyId, showNotification]);
 
-  // ============================================================
-  // 🔥 ИСПРАВЛЕННАЯ ФУНКЦИЯ allChannels
-  // ============================================================
-  const allChannels = useMemo(() => {
-    console.log('🔍 allChannels вызван, customChannels:', chat.customChannels);
-    
-    // Если есть каналы из БД — используем их
-    if (chat.customChannels && chat.customChannels.length > 0) {
-      const dbChannels = chat.customChannels.map(ch => ({
-        id: ch.id,
-        label: ch.name,
-        name: ch.name,
-        icon: ch.icon || '💬',
-        description: ch.description || '',
-        type: ch.is_system ? 'system' : 'custom',
-        is_private: ch.is_private || false,
-        is_system: ch.is_system || false,
-        canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
-        canWrite: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client']
-      }));
-      
-      console.log('📋 Каналы из БД:', dbChannels);
-      return dbChannels;
-    }
-    
-    // Если каналов в БД нет — используем SYSTEM_CHANNELS
-    const system = SYSTEM_CHANNELS.filter(ch => {
-      if (!ch.canView) return true;
-      return ch.canView.includes(userRole);
-    }).map(ch => ({ ...ch, type: 'system' }));
-    
-    console.log('📋 Системные каналы (запасной вариант):', system);
-    return system;
-  }, [chat.customChannels, userRole]);
-
   // ===== ФИЛЬТРАЦИЯ СООБЩЕНИЙ =====
   const displayedMessages = useMemo(() => {
     if (!searchQuery) return chat.messages;
@@ -345,8 +368,26 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     );
   }, [chat.messages, searchQuery]);
 
-  // ===== ТЕКУЩИЙ КАНАЛ =====
-  const currentChannel = allChannels.find(c => c.id === chat.activeChannel);
+  // ===== ЭФФЕКТЫ =====
+  useEffect(() => {
+    if (chat.shouldAutoScroll && chat.messages.length > 0) {
+      chat.forceScrollToBottom('smooth');
+    }
+  }, [chat.messages, chat.shouldAutoScroll]);
+
+  useEffect(() => {
+    if (showChannelSettings && selectedChannel?.id) {
+      loadChannelMembers(selectedChannel.id);
+    }
+  }, [showChannelSettings, selectedChannel, loadChannelMembers]);
+
+  // ============================================================
+  // 🔥 ОТЛАДКА - перед рендером ChatSidebar
+  // ============================================================
+  console.log('📦 [CompanyChat] Передаем в ChatSidebar каналы:', allChannels);
+  console.log('📊 [CompanyChat] Количество каналов для ChatSidebar:', allChannels.length);
+  console.log('📋 [CompanyChat] Структура первого канала:', allChannels[0]);
+  console.log('🎯 [CompanyChat] Активный канал:', chat.activeChannel);
 
   // ============================================================
   // 🔥 РЕНДЕР
@@ -359,16 +400,13 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
           channels={allChannels}
           activeChannel={chat.activeChannel}
           onChannelSelect={chat.setActiveChannel}
-          canCreateChannel={userRole === 'manager' || userRole === 'supply_admin'}
+          canCreateChannel={userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director'}
           onCreateChannel={() => setShowCreateModal(true)}
           connectionStatus={chat.connectionStatus}
-          isMobile={chat.isMobile}
           showSidebar={chat.showSidebar}
-          onCloseSidebar={() => chat.setShowSidebar(false)}
           onChannelSettings={(channel) => {
             setSelectedChannel(channel);
             setShowChannelSettings(true);
-            loadChannelMembers(channel.id);
           }}
           onDeleteChannel={deleteChannel}
           currentUserRole={userRole}
@@ -376,12 +414,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
           currentUser={user}
           onStartDirectChat={chat.startDirectChat}
           unreadCounts={chat.unreadCounts}
-          lastReadTimes={chat.lastReadTimes}
           pinnedChannels={chat.pinnedChannels}
           onTogglePinChannel={chat.pinChannel}
+          className={chat.isMobile ? 'absolute inset-0 z-10' : ''}
         />
 
-        {/* Основная область */}
+        {/* Основная область (сокращена для читаемости) */}
         {(!chat.isMobile || !chat.showSidebar) && (
           <div className="flex-1 flex flex-col min-w-0 h-full">
             {/* Хедер */}
@@ -390,7 +428,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
                 {chat.isMobile && !chat.showSidebar && (
                   <button 
                     onClick={() => chat.setShowSidebar(true)}
-                    className="p-2 hover:bg-gray-100 rounded-lg"
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    aria-label="Открыть список каналов"
                   >
                     <Menu className="w-5 h-5" />
                   </button>
@@ -402,34 +441,35 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
                   </span>
                   <div>
                     <h2 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
-                      {currentChannel?.label || currentChannel?.name}
+                      {currentChannel?.label || currentChannel?.name || 'Чат'}
                     </h2>
                     <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-                      {currentChannel?.description}
+                      {currentChannel?.description || ''}
                     </p>
                   </div>
                 </div>
               </div>
               
               <div className="flex items-center gap-2">
-                {/* Кнопка экспорта */}
                 <button 
                   onClick={() => setShowExportModal(true)}
-                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors"
                   title="Экспорт чата"
                 >
                   <Download className="w-5 h-5" />
                 </button>
                 
-                {/* Поиск */}
                 <button 
                   onClick={() => setShowSearch(!showSearch)}
-                  className={`p-2 rounded-lg transition-colors ${showSearch ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-500'}`}
+                  className={`p-2 rounded-lg transition-colors ${
+                    showSearch 
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' 
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500'
+                  }`}
                 >
                   <Search className="w-5 h-5" />
                 </button>
                 
-                {/* Счётчик сообщений */}
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
                   <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   <span>{chat.messages.length}</span>
@@ -439,7 +479,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
 
             {/* Поиск */}
             {showSearch && (
-              <div className="p-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-20 shadow-md">
+              <div className="p-2 bg-white/95 dark:bg-gray-800/95 border-b border-gray-200 dark:border-gray-700 z-20 shadow-md">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
                   <input 
@@ -447,18 +487,21 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
                     placeholder="Поиск по сообщениям..." 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-10 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="w-full pl-10 pr-10 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A6572] text-sm"
                     autoFocus
                   />
                   <button 
-                    onClick={() => {setShowSearch(false); setSearchQuery('')}} 
-                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                    onClick={() => {
+                      setShowSearch(false);
+                      setSearchQuery('');
+                    }} 
+                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                   >
                     <X size={16}/>
                   </button>
                 </div>
                 {searchQuery && (
-                  <div className="text-xs text-gray-500 mt-1 px-2">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 px-2">
                     Найдено сообщений: {displayedMessages.length}
                   </div>
                 )}
@@ -491,10 +534,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
               {chat.loading ? (
                 <div className="flex flex-col items-center justify-center h-40 gap-3">
                   <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
-                  <span className="text-sm text-gray-500">Загрузка...</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Загрузка...</span>
                 </div>
               ) : displayedMessages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                <div className="flex flex-col items-center justify-center h-40 text-gray-400 dark:text-gray-500">
                   <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
                     <MessageCircle className="w-8 h-8 opacity-50" />
                   </div>
@@ -556,6 +599,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
               <button
                 onClick={() => chat.forceScrollToBottom('smooth')}
                 className="absolute bottom-24 right-4 bg-[#4A6572] text-white rounded-full p-2 shadow-lg hover:bg-[#344955] transition-all z-10"
+                aria-label="Прокрутить вниз"
               >
                 <ArrowDown className="w-5 h-5" />
               </button>
@@ -577,60 +621,130 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         )}
       </div>
 
-      {/* Модалка создания канала */}
+      {/* Модальные окна (сокращены для читаемости) */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-bold mb-4">Создать канал</h3>
-            <input type="text" placeholder="Название" className="w-full p-2 border rounded-lg mb-3" id="channelName" />
-            <textarea placeholder="Описание" className="w-full p-2 border rounded-lg mb-3" rows={2} id="channelDesc" />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-gray-600">Отмена</button>
-              <button onClick={() => {
-                const name = document.getElementById('channelName')?.value;
-                const description = document.getElementById('channelDesc')?.value;
-                if (name) {
-                  handleCreateChannel({ name, description, icon: '💬', is_private: false });
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000] fade-enter">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Создать канал</h3>
+              <button 
+                onClick={() => setShowCreateModal(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Название канала *</label>
+                <input 
+                  id="channelName"
+                  type="text" 
+                  placeholder="Например: Обсуждение проекта" 
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572]"
+                  autoFocus
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Описание</label>
+                <textarea 
+                  id="channelDesc"
+                  placeholder="Краткое описание канала..." 
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572]"
+                  rows={2}
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Иконка (эмодзи)</label>
+                <input 
+                  id="channelIcon"
+                  type="text" 
+                  placeholder="💬" 
+                  maxLength={2}
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] text-center text-xl"
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="channelPrivate" className="w-4 h-4 text-[#4A6572] rounded" />
+                <label htmlFor="channelPrivate" className="text-sm text-gray-700 dark:text-gray-300">Приватный канал</label>
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button 
+                onClick={() => setShowCreateModal(false)} 
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+              >
+                Отмена
+              </button>
+              <button 
+                onClick={() => {
+                  const name = document.getElementById('channelName')?.value?.trim();
+                  const description = document.getElementById('channelDesc')?.value?.trim();
+                  const icon = document.getElementById('channelIcon')?.value?.trim() || '💬';
+                  const isPrivate = document.getElementById('channelPrivate')?.checked || false;
+                  
+                  if (!name) {
+                    showNotification?.('Введите название канала', 'error');
+                    return;
+                  }
+                  
+                  handleCreateChannel({ name, description, icon, is_private: isPrivate });
                   setShowCreateModal(false);
-                }
-              }} className="px-4 py-2 bg-[#4A6572] text-white rounded-lg">Создать</button>
+                }} 
+                className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors"
+              >
+                Создать
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Модалка настроек канала */}
       {showChannelSettings && selectedChannel && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000] fade-enter">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Управление каналом: {selectedChannel.name}</h3>
-              <button onClick={() => setShowChannelSettings(false)} className="p-1 hover:bg-gray-100 rounded-lg">
-                <X className="w-5 h-5" />
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                Управление каналом: {selectedChannel.name}
+              </h3>
+              <button 
+                onClick={() => setShowChannelSettings(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
             
             <div className="mb-4">
-              <h4 className="font-medium mb-2">Участники ({channelMembers.length})</h4>
+              <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Участники ({channelMembers.length})</h4>
               {loadingMembers ? (
-                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin" /></div>
+                <div className="flex justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#4A6572]" />
+                </div>
               ) : channelMembers.length === 0 ? (
-                <p className="text-sm text-gray-500">Нет участников</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Нет участников</p>
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {channelMembers.map(member => {
                     const isCreator = selectedChannel.created_by === member.user_id;
-                    const canRemove = !isCreator && (userRole === 'manager' || userRole === 'supply_admin');
+                    const canRemove = !isCreator && (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director');
                     return (
-                      <div key={member.user_id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                      <div key={member.user_id} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                         <div>
-                          <p className="font-medium">{member.user?.full_name || 'Пользователь'}</p>
-                          <p className="text-xs text-gray-500">{member.role}{isCreator && ' (создатель)'}</p>
+                          <p className="font-medium text-gray-900 dark:text-white">{member.user?.full_name || 'Пользователь'}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {member.role}{isCreator && ' (создатель)'}
+                          </p>
                         </div>
                         {canRemove && (
                           <button
                             onClick={() => removeChannelMember(selectedChannel.id, member.user_id)}
-                            className="p-1 text-red-500 hover:bg-red-50 rounded"
+                            className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -643,8 +757,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
             </div>
             
             <div>
-              <h4 className="font-medium mb-2">Добавить участника</h4>
-              <select className="w-full p-2 border rounded-lg mb-3" id="newMemberSelect">
+              <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Добавить участника</h4>
+              <select className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572]" id="newMemberSelect">
                 <option value="">-- Выберите пользователя --</option>
                 {chat.companyUsers
                   .filter(u => !channelMembers.some(m => m.user_id === u.user_id))
@@ -662,13 +776,13 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
                     select.value = '';
                   }
                 }}
-                className="w-full py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955]"
+                className="w-full mt-2 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors"
               >
                 Добавить
               </button>
             </div>
             
-            <div className="mt-6 pt-4 border-t">
+            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => {
                   if (confirm(`Удалить канал "${selectedChannel.name}"?`)) {
@@ -676,7 +790,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
                     setShowChannelSettings(false);
                   }
                 }}
-                className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 Удалить канал
               </button>
@@ -685,9 +799,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         </div>
       )}
 
-      {/* Модалка экспорта */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000] fade-enter">
           <ChatExport
             messages={displayedMessages}
             channelName={currentChannel?.label || currentChannel?.name || 'Чат'}
@@ -699,12 +812,5 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     </div>
   );
 };
-
-// ========== ВСПОМОГАТЕЛЬНЫЙ КОМПОНЕНТ ==========
-const ArrowDown = ({ className = "w-5 h-5" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-  </svg>
-);
 
 export default memo(CompanyChat);

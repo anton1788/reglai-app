@@ -19,7 +19,7 @@ export const useChat = ({
   const [editText, setEditText] = useState('');
   const [showReactionsPicker, setShowReactionsPicker] = useState(null);
   const [companyUsers, setCompanyUsers] = useState([]);
-  const [connectionStatus] = useState('connected');
+  const [connectionStatus, setConnectionStatus] = useState('connected');
   const [replyTo, setReplyTo] = useState(null);
   const [savedMessages, setSavedMessages] = useState(new Set());
   const [typingUsers] = useState(new Set());
@@ -30,6 +30,7 @@ export const useChat = ({
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [pinnedChannels, setPinnedChannels] = useState([]);
+  const [showSidebar, setShowSidebar] = useState(true);
 
   // ===== REFS =====
   const messagesContainerRef = useRef(null);
@@ -84,12 +85,23 @@ export const useChat = ({
   const getCompanyId = useCallback(() => {
     if (!userCompanyId) return null;
     
-    // Если это объект — извлекаем id или преобразуем в строку
     if (typeof userCompanyId === 'object') {
-      return userCompanyId?.id || String(userCompanyId);
+      if (userCompanyId?.id) {
+        return String(userCompanyId.id);
+      }
+      try {
+        const str = String(userCompanyId);
+        if (str !== '[object Object]') {
+          return str;
+        }
+      } catch {
+        // ✅ Исправлено: убрали параметр 'err'
+        console.warn('Не удалось преобразовать companyId в строку');
+      }
+      return null;
     }
     
-    return userCompanyId;
+    return String(userCompanyId);
   }, [userCompanyId]);
 
   // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
@@ -115,7 +127,7 @@ export const useChat = ({
   }, [userRole, SYSTEM_CHANNELS]);
 
   // ============================================================
-  // 🔥 ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ — ИСПРАВЛЕНА
+  // 🔥 ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ
   // ============================================================
   const loadUsers = useCallback(async () => {
     const companyId = getCompanyId();
@@ -137,13 +149,13 @@ export const useChat = ({
       
       console.log('📂 Загружены пользователи:', data?.length || 0);
       setCompanyUsers(data || []);
-    } catch (err) {
-      console.error('Ошибка загрузки пользователей:', err);
+    } catch (error) {
+      console.error('Ошибка загрузки пользователей:', error);
     }
   }, [getCompanyId]);
 
   // ============================================================
-  // 🔥 ЗАГРУЗКА КАНАЛОВ — ИСПРАВЛЕНА
+  // 🔥 ЗАГРУЗКА КАНАЛОВ
   // ============================================================
   const loadCustomChannels = useCallback(async () => {
     const companyId = getCompanyId();
@@ -165,18 +177,20 @@ export const useChat = ({
       
       console.log('📂 Загружены каналы из БД:', data);
       setCustomChannels(data || []);
-    } catch (err) {
-      console.error('❌ Ошибка загрузки каналов:', err);
+    } catch (error) {
+      console.error('❌ Ошибка загрузки каналов:', error);
+      showNotification?.('Ошибка загрузки каналов', 'error');
     }
-  }, [getCompanyId]);
+  }, [getCompanyId, showNotification]);
 
   // ============================================================
-  // 🔥 ЗАГРУЗКА СООБЩЕНИЙ — ИСПРАВЛЕНА
+  // 🔥 ЗАГРУЗКА СООБЩЕНИЙ
   // ============================================================
   const loadMessages = useCallback(async () => {
     const companyId = getCompanyId();
     if (!companyId || !activeChannel) {
       console.warn('⚠️ loadMessages: нет companyId или activeChannel');
+      setLoading(false);
       return;
     }
     
@@ -282,14 +296,16 @@ export const useChat = ({
       }
 
       // Загрузка закреплённых каналов
-      const { data: pinnedChannelsData } = await supabase
-        .from('pinned_channels')
-        .select('channel_id')
-        .eq('user_id', user?.id)
-        .eq('company_id', companyId);
-      
-      if (pinnedChannelsData) {
-        setPinnedChannels(pinnedChannelsData.map(p => p.channel_id));
+      if (user?.id) {
+        const { data: pinnedChannelsData } = await supabase
+          .from('pinned_channels')
+          .select('channel_id')
+          .eq('user_id', user.id)
+          .eq('company_id', companyId);
+        
+        if (pinnedChannelsData) {
+          setPinnedChannels(pinnedChannelsData.map(p => p.channel_id));
+        }
       }
       
       // Формирование сообщений
@@ -302,8 +318,8 @@ export const useChat = ({
       
       setMessages(enrichedMessages);
       
-    } catch (err) {
-      console.error('Ошибка загрузки сообщений:', err);
+    } catch (error) {
+      console.error('Ошибка загрузки сообщений:', error);
       showNotification?.('Ошибка загрузки чата', 'error');
     } finally {
       setLoading(false);
@@ -312,11 +328,19 @@ export const useChat = ({
 
   // ===== ОТПРАВКА СООБЩЕНИЯ =====
   const sendMessage = useCallback(async (content, replyToMessage = null) => {
-    if (!content?.trim() || !user?.id || sending) return;
+    if (!content?.trim() || !user?.id || sending) {
+      return { success: false, error: 'Нет контента или пользователя' };
+    }
     
     if (!canWriteToChannel(activeChannel)) {
       showNotification?.('У вас нет прав на отправку сообщений в этот канал', 'error');
-      return;
+      return { success: false, error: 'Нет прав' };
+    }
+    
+    const companyId = getCompanyId();
+    if (!companyId) {
+      showNotification?.('Ошибка: компания не указана', 'error');
+      return { success: false, error: 'Нет companyId' };
     }
     
     setSending(true);
@@ -325,7 +349,7 @@ export const useChat = ({
       const isDirectChat = activeChannel?.startsWith('dm_');
       
       const messageData = {
-        company_id: getCompanyId(),
+        company_id: companyId,
         user_id: user.id,
         content: content.trim(),
         created_at: new Date().toISOString(),
@@ -355,10 +379,10 @@ export const useChat = ({
       setReplyTo(null);
       return { success: true };
       
-    } catch (err) {
-      console.error('Ошибка отправки:', err);
-      showNotification?.('Не удалось отправить сообщение: ' + (err.message || 'неизвестная ошибка'), 'error');
-      return { success: false, error: err };
+    } catch (error) {
+      console.error('Ошибка отправки:', error);
+      showNotification?.('Не удалось отправить сообщение: ' + (error.message || 'неизвестная ошибка'), 'error');
+      return { success: false, error: error };
     } finally {
       setSending(false);
     }
@@ -366,7 +390,7 @@ export const useChat = ({
 
   // ===== РЕДАКТИРОВАНИЕ СООБЩЕНИЯ =====
   const saveEdit = useCallback(async (messageId, content) => {
-    if (!content?.trim()) return;
+    if (!content?.trim()) return { success: false, error: 'Нет контента' };
     
     try {
       const { error } = await supabase
@@ -385,28 +409,29 @@ export const useChat = ({
       setEditText('');
       showNotification?.('Сообщение обновлено', 'success');
       return { success: true };
-    } catch (err) {
-      console.error('Ошибка редактирования:', err);
+    } catch (error) {
+      console.error('Ошибка редактирования:', error);
       showNotification?.('Не удалось обновить сообщение', 'error');
-      return { success: false, error: err };
+      return { success: false, error: error };
     }
   }, [user?.id, showNotification]);
 
   // ===== УДАЛЕНИЕ СООБЩЕНИЯ =====
   const deleteMessage = useCallback(async (messageId) => {
-    if (!window.confirm('Удалить сообщение?')) return;
+    if (!window.confirm('Удалить сообщение?')) return { success: false, error: 'Отменено' };
     
     try {
       const message = messages.find(m => m.id === messageId);
-      if (!message) return;
+      if (!message) return { success: false, error: 'Сообщение не найдено' };
       
       const canDelete = message.user_id === user?.id || 
                         userRole === 'manager' || 
-                        userRole === 'supply_admin';
+                        userRole === 'supply_admin' ||
+                        userRole === 'director';
       
       if (!canDelete) {
         showNotification?.('У вас нет прав на удаление', 'error');
-        return;
+        return { success: false, error: 'Нет прав' };
       }
       
       const { error } = await supabase
@@ -419,16 +444,16 @@ export const useChat = ({
       setMessages(prev => prev.filter(m => m.id !== messageId));
       showNotification?.('Сообщение удалено', 'success');
       return { success: true };
-    } catch (err) {
-      console.error('Ошибка удаления:', err);
+    } catch (error) {
+      console.error('Ошибка удаления:', error);
       showNotification?.('Не удалось удалить сообщение', 'error');
-      return { success: false, error: err };
+      return { success: false, error: error };
     }
   }, [user?.id, userRole, messages, showNotification]);
 
   // ===== РЕАКЦИИ =====
   const toggleReaction = useCallback(async (messageId, emoji) => {
-    if (!user?.id) return;
+    if (!user?.id) return { success: false, error: 'Нет пользователя' };
     
     const message = messages.find(m => m.id === messageId);
     const hasReacted = message?.reactions?.some(r => r.emoji === emoji && r.user_id === user.id);
@@ -460,15 +485,15 @@ export const useChat = ({
       }
       setShowReactionsPicker(null);
       return { success: true };
-    } catch (err) {
-      console.error('Ошибка реакции:', err);
-      return { success: false, error: err };
+    } catch (error) {
+      console.error('Ошибка реакции:', error);
+      return { success: false, error: error };
     }
   }, [user?.id, messages]);
 
   // ===== СОХРАНЕНИЕ СООБЩЕНИЯ =====
   const toggleSaveMessage = useCallback(async (messageId) => {
-    if (!user?.id) return;
+    if (!user?.id) return { success: false, error: 'Нет пользователя' };
     
     try {
       if (savedMessages.has(messageId)) {
@@ -487,16 +512,16 @@ export const useChat = ({
       } else {
         await supabase
           .from('saved_messages')
-          .insert({ message_id: messageId, user_id: user.id, saved_at: new Date() });
+          .insert({ message_id: messageId, user_id: user.id, saved_at: new Date().toISOString() });
         
         setSavedMessages(prev => new Set([...prev, messageId]));
         showNotification?.('Сообщение сохранено', 'success');
       }
       return { success: true };
-    } catch (err) {
-      console.error('Ошибка сохранения:', err);
+    } catch (error) {
+      console.error('Ошибка сохранения:', error);
       showNotification?.('Не удалось сохранить сообщение', 'error');
-      return { success: false, error: err };
+      return { success: false, error: error };
     }
   }, [user?.id, savedMessages, showNotification]);
 
@@ -513,7 +538,7 @@ export const useChat = ({
       } else {
         if (pinnedMessages.length >= 5) {
           showNotification?.('Нельзя закрепить более 5 сообщений', 'warning');
-          return;
+          return { success: false, error: 'Лимит' };
         }
         setPinnedMessages(prev => [...prev, messageId]);
         await supabase
@@ -523,16 +548,19 @@ export const useChat = ({
         showNotification?.('Сообщение закреплено', 'success');
       }
       return { success: true };
-    } catch (err) {
-      console.error('Ошибка закрепления:', err);
+    } catch (error) {
+      console.error('Ошибка закрепления:', error);
       showNotification?.('Не удалось закрепить сообщение', 'error');
-      return { success: false, error: err };
+      return { success: false, error: error };
     }
   }, [pinnedMessages, showNotification]);
 
   // ===== ЗАКРЕПЛЕНИЕ КАНАЛА =====
   const pinChannel = useCallback(async (channelId) => {
-    if (!user?.id || !userCompanyId) return;
+    const companyId = getCompanyId();
+    if (!user?.id || !companyId) {
+      return { success: false, error: 'Нет данных' };
+    }
     
     try {
       if (pinnedChannels.includes(channelId)) {
@@ -541,28 +569,30 @@ export const useChat = ({
           .from('pinned_channels')
           .delete()
           .eq('user_id', user.id)
-          .eq('company_id', getCompanyId())
+          .eq('company_id', companyId)
           .eq('channel_id', channelId);
+        showNotification?.('Канал откреплён', 'info');
       } else {
         if (pinnedChannels.length >= 5) {
           showNotification?.('Нельзя закрепить более 5 каналов', 'warning');
-          return;
+          return { success: false, error: 'Лимит' };
         }
         setPinnedChannels(prev => [...prev, channelId]);
         await supabase
           .from('pinned_channels')
           .insert({
             user_id: user.id,
-            company_id: getCompanyId(),
+            company_id: companyId,
             channel_id: channelId,
             created_at: new Date().toISOString()
           });
+        showNotification?.('Канал закреплён', 'success');
       }
       return { success: true };
-    } catch (err) {
-      console.error('Ошибка закрепления канала:', err);
+    } catch (error) {
+      console.error('Ошибка закрепления канала:', error);
       showNotification?.('Не удалось закрепить канал', 'error');
-      return { success: false, error: err };
+      return { success: false, error: error };
     }
   }, [user?.id, pinnedChannels, showNotification, getCompanyId]);
 
@@ -589,6 +619,8 @@ export const useChat = ({
       ];
       
       const counts = {};
+      let totalUnread = 0;
+      
       for (const channelId of allChannels) {
         const lastRead = readMap[channelId] || new Date(0);
         const channelMessages = getChannelMessages(channelId);
@@ -598,21 +630,23 @@ export const useChat = ({
         }).length;
         
         counts[channelId] = unread;
+        totalUnread += unread;
       }
       
       setUnreadCounts(counts);
-      
-      const totalUnread = Object.values(counts).reduce((sum, count) => sum + count, 0);
       onUnreadCountChange?.(totalUnread);
       
-    } catch (err) {
-      console.error('Ошибка загрузки непрочитанных:', err);
+    } catch (error) {
+      console.error('Ошибка загрузки непрочитанных:', error);
     }
   }, [user?.id, SYSTEM_CHANNELS, customChannels, getChannelMessages, onUnreadCountChange, getCompanyId]);
 
   // ===== ОТМЕТКА КАНАЛА КАК ПРОЧИТАННОГО =====
   const markChannelAsRead = useCallback(async (channelId) => {
     if (!user?.id || !channelId) return;
+    
+    const companyId = getCompanyId();
+    if (!companyId) return;
     
     try {
       const now = new Date().toISOString();
@@ -630,10 +664,32 @@ export const useChat = ({
         setUnreadCounts(prev => ({ ...prev, [channelId]: 0 }));
         setLastReadTimes(prev => ({ ...prev, [channelId]: new Date(now) }));
       }
-    } catch (err) {
-      console.error('Ошибка отметки прочитанного:', err);
+    } catch (error) {
+      console.error('Ошибка отметки прочитанного:', error);
     }
-  }, [user?.id]);
+  }, [user?.id, getCompanyId]);
+
+  // ===== ПРОКРУТКА =====
+  const forceScrollToBottom = useCallback((behavior = 'smooth') => {
+    if (bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior });
+      setShouldAutoScroll(true);
+      setIsUserScrolling(false);
+    }
+  }, []);
+
+  const handleScroll = useCallback((e) => {
+    const target = e.target;
+    const isAtBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 100;
+    
+    if (!isAtBottom) {
+      setIsUserScrolling(true);
+      setShouldAutoScroll(false);
+    } else {
+      setIsUserScrolling(false);
+      setShouldAutoScroll(true);
+    }
+  }, []);
 
   // ===== ПОДПИСКА НА СООБЩЕНИЯ =====
   useEffect(() => {
@@ -716,31 +772,39 @@ export const useChat = ({
     };
   }, [getCompanyId, activeChannel, user?.id, SYSTEM_CHANNELS]);
 
-  // ===== ИНИЦИАЛИЗАЦИЯ =====
-  useEffect(() => {
-    loadUsers();
-    loadCustomChannels();
-  }, [loadUsers, loadCustomChannels]);
-
-  useEffect(() => {
-    loadMessages();
-  }, [loadMessages]);
-
-  useEffect(() => {
-    loadUnreadCounts();
-  }, [loadUnreadCounts]);
-
   // ============================================================
   // 🔥 АВТОМАТИЧЕСКИЙ ВЫБОР ПЕРВОГО КАНАЛА
   // ============================================================
   useEffect(() => {
     if (customChannels.length > 0 && activeChannel === 'general') {
-      console.log('🔄 Устанавливаем первый канал как активный:', customChannels[0]);
+      console.log('🔄 Устанавливаем первый канал как активный:', customChannels[0].id);
       setActiveChannel(customChannels[0].id);
     }
   }, [customChannels, activeChannel]);
 
-  // ===== ВОЗВРАЩАЕМЫЕ ЗНАЧЕНИЯ =====
+  // ===== ИНИЦИАЛИЗАЦИЯ =====
+  useEffect(() => {
+    if (userCompanyId) {
+      loadUsers();
+      loadCustomChannels();
+    }
+  }, [loadUsers, loadCustomChannels, userCompanyId]);
+
+  useEffect(() => {
+    if (activeChannel && userCompanyId) {
+      loadMessages();
+    }
+  }, [loadMessages, activeChannel, userCompanyId]);
+
+  useEffect(() => {
+    if (userCompanyId && user?.id) {
+      loadUnreadCounts();
+    }
+  }, [loadUnreadCounts, userCompanyId, user?.id]);
+
+  // ============================================================
+  // 🔥 ВОЗВРАЩАЕМЫЕ ЗНАЧЕНИЯ
+  // ============================================================
   return {
     messages,
     activeChannel,
@@ -757,6 +821,7 @@ export const useChat = ({
     setShowReactionsPicker,
     companyUsers,
     connectionStatus,
+    setConnectionStatus,
     replyTo,
     setReplyTo,
     savedMessages,
@@ -771,9 +836,16 @@ export const useChat = ({
     setIsUserScrolling,
     pinnedMessages,
     pinnedChannels,
+    showSidebar,
+    setShowSidebar,
     messagesContainerRef,
     textareaRef,
     bottomRef,
+    scrollTimeoutRef,
+    typingTimeoutRef,
+    isUserScrollingRef,
+    lastScrollTopRef,
+    animationFrameRef,
     SYSTEM_CHANNELS,
     getChannelMessages,
     canWriteToChannel,
@@ -789,11 +861,9 @@ export const useChat = ({
     loadMessages,
     loadUsers,
     loadCustomChannels,
-    scrollTimeoutRef,
-    typingTimeoutRef,
-    isUserScrollingRef,
-    lastScrollTopRef,
-    animationFrameRef
+    forceScrollToBottom,
+    handleScroll,
+    getCompanyId
   };
 };
 

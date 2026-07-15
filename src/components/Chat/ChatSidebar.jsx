@@ -1,5 +1,5 @@
 // src/components/Chat/ChatSidebar.jsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   X, Settings, Trash2, Plus, Search, User, 
   MessageCircle, Lock, Globe, Users, Pin
@@ -24,30 +24,31 @@ const ChatSidebar = ({
   onTogglePinChannel,
   className = ''
 }) => {
+  // ✅ Хуки ВСЕГДА вызываются в одном порядке
   const [search, setSearch] = useState('');
   const [showUserList, setShowUserList] = useState(false);
 
+  // ✅ useMemo ВСЕГДА вызывается, даже если showSidebar = false
+  const filteredChannels = useMemo(() => {
+    console.log('🔍 Фильтрация каналов, channels:', channels?.length || 0);
+    if (!channels) return [];
+    
+    return channels.filter(ch => {
+      const label = ch.label || ch.name || '';
+      return label.toLowerCase().includes(search.toLowerCase());
+    });
+  }, [channels, search]);
+
+  // ✅ Отладочный вывод
+  console.log('📋 ChatSidebar: отфильтровано каналов:', filteredChannels.length);
+
+  // ✅ Теперь можно делать условный возврат ПОСЛЕ всех хуков
   if (!showSidebar) return null;
-
-  // Фильтрация каналов по поиску
-  const filteredChannels = channels.filter(ch => {
-    const label = ch.label || ch.name || '';
-    return label.toLowerCase().includes(search.toLowerCase());
-  });
-
-  // ============================================================
-  // 🔥 ИСПРАВЛЕНО: Все каналы показываем вместе
-  // ============================================================
-  // Просто показываем все каналы в одном списке
-  const allChannels = filteredChannels;
 
   const userInitial = currentUser?.user_metadata?.full_name?.[0]?.toUpperCase() || '?';
   const userName = currentUser?.user_metadata?.full_name || 'Пользователь';
 
   const canManageChannels = currentUserRole === 'manager' || currentUserRole === 'supply_admin';
-
-  // Проверяем, что каналы есть
-  console.log('📋 ChatSidebar: каналов для отображения:', allChannels.length);
 
   return (
     <aside className={`flex flex-col border-r border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/30 ${className}`}>
@@ -103,12 +104,12 @@ const ChatSidebar = ({
 
       {/* Список каналов */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {allChannels.length > 0 ? (
+        {filteredChannels.length > 0 ? (
           <>
             <div className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-2 py-1">
-              Каналы
+              Каналы ({filteredChannels.length})
             </div>
-            {allChannels.map(channel => {
+            {filteredChannels.map(channel => {
               const isActive = activeChannel === channel.id;
               const unread = unreadCounts[channel.id] || 0;
               const isPinned = pinnedChannels.includes(channel.id);
@@ -142,6 +143,7 @@ const ChatSidebar = ({
                           onTogglePinChannel?.(channel.id);
                         }}
                         className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                        aria-label="Закрепить канал"
                       >
                         <Pin className={`w-3 h-3 ${isPinned ? 'text-yellow-500 fill-current' : 'text-gray-400'}`} />
                       </button>
@@ -151,6 +153,7 @@ const ChatSidebar = ({
                           onChannelSettings?.(channel);
                         }}
                         className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                        aria-label="Настройки канала"
                       >
                         <Settings className="w-3 h-3" />
                       </button>
@@ -162,6 +165,7 @@ const ChatSidebar = ({
                           }
                         }}
                         className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500"
+                        aria-label="Удалить канал"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -173,7 +177,7 @@ const ChatSidebar = ({
           </>
         ) : (
           <div className="text-center py-8 text-gray-400 text-sm">
-            Нет каналов
+            {search ? 'Каналы не найдены' : 'Нет доступных каналов'}
           </div>
         )}
       </div>
