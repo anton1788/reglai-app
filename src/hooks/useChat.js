@@ -167,7 +167,7 @@ export const useChat = ({
   }, [getCompanyId]);
 
   // ============================================================
-// 🔥 ЗАГРУЗКА КАНАЛОВ (ИСПРАВЛЕННАЯ)
+// 🔥 ЗАГРУЗКА КАНАЛОВ
 // ============================================================
 const loadCustomChannels = useCallback(async () => {
   const companyId = getCompanyId();
@@ -179,17 +179,25 @@ const loadCustomChannels = useCallback(async () => {
   console.log('📂 Загрузка каналов для компании:', companyId);
   
   try {
-    // ✅ ИСПРАВЛЕНО: используем простой select без параметра columns
+    // ✅ Используем select * или перечисляем все колонки
     const { data, error } = await supabase
       .from('company_channels')
-      .select('*') // ✅ Используем * вместо перечисления колонок
+      .select('*')
       .eq('company_id', companyId)
       .eq('is_archived', false);
     
     if (error) throw error;
     
     console.log('📂 Загружены каналы из БД:', data);
-    setCustomChannels(data || []);
+    console.log('📊 Количество каналов:', data?.length || 0);
+    
+    // Добавляем label для совместимости
+    const channelsWithLabel = (data || []).map(ch => ({
+      ...ch,
+      label: ch.name || ch.label || 'Без названия'
+    }));
+    
+    setCustomChannels(channelsWithLabel);
   } catch (error) {
     console.error('❌ Ошибка загрузки каналов:', error);
     showNotification?.('Ошибка загрузки каналов', 'error');
@@ -705,160 +713,163 @@ const loadCustomChannels = useCallback(async () => {
   }, []);
 
   // ============================================================
-  // 🔥 НАЧАТЬ ЛИЧНЫЙ ЧАТ
-  // ============================================================
-  const startDirectChat = useCallback(async (userData) => {
-    console.log('📞 [startDirectChat] Вызван с:', userData);
+// 🔥 НАЧАТЬ ЛИЧНЫЙ ЧАТ (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+// ============================================================
+const startDirectChat = useCallback(async (userData) => {
+  console.log('📞 [startDirectChat] Вызван с:', userData);
+  
+  if (!user?.id) {
+    console.error('❌ Нет текущего пользователя');
+    showNotification?.('Ошибка: пользователь не авторизован', 'error');
+    return { success: false, error: 'Нет пользователя' };
+  }
+
+  if (!userData?.user_id) {
+    console.error('❌ Нет данных пользователя');
+    showNotification?.('Ошибка: данные пользователя не найдены', 'error');
+    return { success: false, error: 'Нет данных пользователя' };
+  }
+
+  if (userData.user_id === user.id) {
+    console.warn('⚠️ Нельзя начать чат с самим собой');
+    showNotification?.('Нельзя начать чат с самим собой', 'warning');
+    return { success: false, error: 'Сам с собой' };
+  }
+
+  const companyId = getCompanyId();
+  if (!companyId) {
+    console.error('❌ Нет companyId');
+    showNotification?.('Ошибка: компания не указана', 'error');
+    return { success: false, error: 'Нет companyId' };
+  }
+
+  try {
+    const userIds = [user.id, userData.user_id].sort();
+    const channelId = `dm_${userIds[0]}_${userIds[1]}`;
+    const displayName = userData.full_name || userData.name || 'пользователь';
+    const channelName = `Чат с ${displayName}`;
     
-    if (!user?.id) {
-      console.error('❌ Нет текущего пользователя');
-      showNotification?.('Ошибка: пользователь не авторизован', 'error');
-      return { success: false, error: 'Нет пользователя' };
+    console.log('📝 ID канала:', channelId);
+    console.log('👤 Собеседник:', displayName);
+
+    // Проверяем существование в локальном состоянии
+    const existsLocally = customChannels.some(ch => ch.id === channelId);
+    console.log('📂 Существует локально:', existsLocally);
+
+    // ✅ Используем правильный select
+    const { data: existingChannel, error: checkError } = await supabase
+      .from('company_channels')
+      .select('id, name, is_direct')
+      .eq('company_id', companyId)
+      .eq('id', channelId)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('❌ Ошибка проверки чата:', checkError);
+      showNotification?.('Ошибка проверки чата', 'error');
+      return { success: false, error: checkError };
     }
 
-    if (!userData?.user_id) {
-      console.error('❌ Нет данных пользователя');
-      showNotification?.('Ошибка: данные пользователя не найдены', 'error');
-      return { success: false, error: 'Нет данных пользователя' };
-    }
+    console.log('📂 Существует в БД:', existingChannel);
 
-    if (userData.user_id === user.id) {
-      console.warn('⚠️ Нельзя начать чат с самим собой');
-      showNotification?.('Нельзя начать чат с самим собой', 'warning');
-      return { success: false, error: 'Сам с собой' };
-    }
-
-    const companyId = getCompanyId();
-    if (!companyId) {
-      console.error('❌ Нет companyId');
-      showNotification?.('Ошибка: компания не указана', 'error');
-      return { success: false, error: 'Нет companyId' };
-    }
-
-    try {
-      const userIds = [user.id, userData.user_id].sort();
-      const channelId = `dm_${userIds[0]}_${userIds[1]}`;
-      const displayName = userData.full_name || userData.name || 'пользователь';
-      const channelName = `Чат с ${displayName}`;
+    if (!existingChannel) {
+      console.log('🆕 Создаем новый личный чат');
       
-      console.log('📝 ID канала:', channelId);
-      console.log('👤 Собеседник:', displayName);
-
-      // Проверяем существование в локальном состоянии
-      const existsLocally = customChannels.some(ch => ch.id === channelId);
-      console.log('📂 Существует локально:', existsLocally);
-
-      // Проверяем существование в БД
-      const { data: existingChannel, error: checkError } = await supabase
+      // ✅ Правильный INSERT с is_direct = true
+      const { error: createError } = await supabase
         .from('company_channels')
-        .select('id, name, is_direct, created_by')
-        .eq('company_id', companyId)
-        .eq('id', channelId)
-        .maybeSingle();
+        .insert({
+          id: channelId,
+          company_id: companyId,
+          name: channelName,
+          description: `Личный чат с ${displayName}`,
+          icon: '👤',
+          is_private: true,
+          is_direct: true, // ✅ Указываем явно
+          created_by: user.id,
+          created_at: new Date().toISOString()
+        });
 
-      if (checkError) {
-        console.error('❌ Ошибка проверки чата:', checkError);
+      if (createError) {
+        console.error('❌ Ошибка создания чата:', createError);
+        showNotification?.('Не удалось создать чат', 'error');
+        return { success: false, error: createError };
       }
 
-      console.log('📂 Существует в БД:', existingChannel);
+      // Добавляем участников
+      const { error: membersError } = await supabase
+        .from('channel_members')
+        .insert([
+          { channel_id: channelId, user_id: user.id, role: 'member' },
+          { channel_id: channelId, user_id: userData.user_id, role: 'member' }
+        ]);
 
-      if (!existingChannel) {
-        console.log('🆕 Создаем новый личный чат');
-        
-        // Создаем новый канал
-        const { error: createError } = await supabase
-          .from('company_channels')
-          .insert([{
-            id: channelId,
-            company_id: companyId,
-            name: channelName,
-            description: `Личный чат с ${displayName}`,
-            icon: '👤',
-            is_private: true,
-            is_direct: true,
-            created_by: user.id,
-            created_at: new Date().toISOString()
-          }]);
-
-        if (createError) {
-          console.error('❌ Ошибка создания чата:', createError);
-          showNotification?.('Не удалось создать чат', 'error');
-          return { success: false, error: createError };
-        }
-
-        // Добавляем участников
-        const { error: membersError } = await supabase
-          .from('channel_members')
-          .insert([
-            { channel_id: channelId, user_id: user.id, role: 'member' },
-            { channel_id: channelId, user_id: userData.user_id, role: 'member' }
-          ]);
-
-        if (membersError) {
-          console.error('❌ Ошибка добавления участников:', membersError);
-          await supabase.from('company_channels').delete().eq('id', channelId);
-          showNotification?.('Не удалось добавить участников', 'error');
-          return { success: false, error: membersError };
-        }
-
-        showNotification?.(`💬 Чат с ${displayName} создан`, 'success');
-      } else {
-        console.log('✅ Чат уже существует:', existingChannel);
-        showNotification?.(`💬 Чат с ${displayName} открыт`, 'success');
+      if (membersError) {
+        console.error('❌ Ошибка добавления участников:', membersError);
+        // Откатываем создание канала
+        await supabase.from('company_channels').delete().eq('id', channelId);
+        showNotification?.('Не удалось добавить участников', 'error');
+        return { success: false, error: membersError };
       }
 
-      // Добавляем в локальное состояние
-      setCustomChannels(prev => {
-        const exists = prev.some(ch => ch.id === channelId);
-        if (!exists) {
-          console.log('✅ Добавляем канал в список');
-          return [...prev, {
-            id: channelId,
-            name: channelName,
-            label: channelName,
-            description: `Личный чат с ${displayName}`,
-            icon: '👤',
-            is_private: true,
-            is_direct: true,
-            created_by: user.id,
-            created_at: new Date().toISOString(),
-            participant_id: userData.user_id,
-            participant_name: displayName
-          }];
-        }
-        return prev;
-      });
-
-      // Переключаемся на канал
-      console.log('🔄 Переключаемся на канал:', channelId);
-      setActiveChannel(channelId);
-      
-      // Добавляем в закрепленные
-      setPinnedChannels(prev => {
-        if (!prev.includes(channelId)) {
-          return [...prev, channelId];
-        }
-        return prev;
-      });
-
-      // На мобильных устройствах закрываем сайдбар
-      if (isMobile) {
-        setShowSidebar(false);
-      }
-
-      // Принудительно загружаем сообщения
-      setTimeout(() => {
-        loadMessages();
-      }, 100);
-
-      return { success: true, channelId };
-
-    } catch (error) {
-      console.error('❌ Ошибка создания диалога:', error);
-      showNotification?.('Не удалось создать диалог', 'error');
-      return { success: false, error };
+      showNotification?.(`💬 Чат с ${displayName} создан`, 'success');
+    } else {
+      console.log('✅ Чат уже существует:', existingChannel);
+      showNotification?.(`💬 Чат с ${displayName} открыт`, 'success');
     }
-  }, [user, getCompanyId, showNotification, customChannels, setCustomChannels, setActiveChannel, setPinnedChannels, isMobile, setShowSidebar, loadMessages]);
+
+    // Добавляем в локальное состояние
+    setCustomChannels(prev => {
+      const exists = prev.some(ch => ch.id === channelId);
+      if (!exists) {
+        console.log('✅ Добавляем канал в список');
+        return [...prev, {
+          id: channelId,
+          name: channelName,
+          label: channelName,
+          description: `Личный чат с ${displayName}`,
+          icon: '👤',
+          is_private: true,
+          is_direct: true,
+          created_by: user.id,
+          created_at: new Date().toISOString(),
+          participant_id: userData.user_id,
+          participant_name: displayName
+        }];
+      }
+      return prev;
+    });
+
+    // Переключаемся на канал
+    console.log('🔄 Переключаемся на канал:', channelId);
+    setActiveChannel(channelId);
+    
+    // Добавляем в закрепленные
+    setPinnedChannels(prev => {
+      if (!prev.includes(channelId)) {
+        return [...prev, channelId];
+      }
+      return prev;
+    });
+
+    // На мобильных устройствах закрываем сайдбар
+    if (isMobile) {
+      setShowSidebar(false);
+    }
+
+    // Принудительно загружаем сообщения
+    setTimeout(() => {
+      loadMessages();
+    }, 100);
+
+    return { success: true, channelId };
+
+  } catch (error) {
+    console.error('❌ Ошибка создания диалога:', error);
+    showNotification?.('Не удалось создать диалог', 'error');
+    return { success: false, error };
+  }
+}, [user, getCompanyId, showNotification, customChannels, setCustomChannels, setActiveChannel, setPinnedChannels, isMobile, setShowSidebar, loadMessages]);
 
   // ============================================================
   // 🔥 ЭФФЕКТ ДЛЯ ОТСЛЕЖИВАНИЯ РАЗМЕРА ЭКРАНА
