@@ -705,6 +705,100 @@ export const useChat = ({
   }, []);
 
   // ============================================================
+// 🔥 НАЧАТЬ ЛИЧНЫЙ ЧАТ
+// ============================================================
+const startDirectChat = useCallback(async (userData) => {
+  if (!user?.id || !userData?.user_id) {
+    showNotification?.('Не удалось начать чат', 'error');
+    return;
+  }
+
+  // Если это текущий пользователь
+  if (userData.user_id === user.id) {
+    showNotification?.('Нельзя начать чат с самим собой', 'warning');
+    return;
+  }
+
+  const companyId = getCompanyId();
+  if (!companyId) {
+    showNotification?.('Ошибка: компания не указана', 'error');
+    return;
+  }
+
+  try {
+    // Создаем уникальный ID для личного чата
+    const channelId = `dm_${[user.id, userData.user_id].sort().join('_')}`;
+
+    // Проверяем, существует ли уже такой чат
+    const { data: existingChannel } = await supabase
+      .from('company_channels')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('id', channelId)
+      .maybeSingle();
+
+    if (!existingChannel) {
+      // Создаем новый канал для личного чата
+      const { error: createError } = await supabase
+        .from('company_channels')
+        .insert([{
+          id: channelId,
+          company_id: companyId,
+          name: `Чат с ${userData.full_name}`,
+          description: `Личный чат с ${userData.full_name}`,
+          icon: '👤',
+          is_private: true,
+          is_direct: true,
+          created_by: user.id,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (createError) {
+        console.error('Ошибка создания чата:', createError);
+        showNotification?.('Не удалось создать чат', 'error');
+        return;
+      }
+
+      // Добавляем участников
+      await supabase
+        .from('channel_members')
+        .insert([
+          { channel_id: channelId, user_id: user.id, role: 'member' },
+          { channel_id: channelId, user_id: userData.user_id, role: 'member' }
+        ]);
+    }
+
+    // Переключаемся на канал
+    setActiveChannel(channelId);
+    
+    // Добавляем канал в список, если его там нет
+    setCustomChannels(prev => {
+      const exists = prev.some(ch => ch.id === channelId);
+      if (!exists) {
+        return [...prev, {
+          id: channelId,
+          name: `Чат с ${userData.full_name}`,
+          description: `Личный чат с ${userData.full_name}`,
+          icon: '👤',
+          is_private: true,
+          is_direct: true,
+          created_by: user.id
+        }];
+      }
+      return prev;
+    });
+
+    showNotification?.(`Чат с ${userData.full_name} открыт`, 'success');
+    return { success: true, channelId };
+
+  } catch (error) {
+    console.error('Ошибка создания диалога:', error);
+    showNotification?.('Не удалось создать диалог', 'error');
+    return { success: false, error };
+  }
+}, [user, getCompanyId, showNotification, setActiveChannel, setCustomChannels]);
+
+  // ============================================================
   // 🔥 ЭФФЕКТ ДЛЯ ОТСЛЕЖИВАНИЯ РАЗМЕРА ЭКРАНА
   // ============================================================
   useEffect(() => {
@@ -897,6 +991,7 @@ export const useChat = ({
     loadCustomChannels,
     forceScrollToBottom,
     handleScroll,
+    startDirectChat,
     getCompanyId
   };
 };
