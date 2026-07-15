@@ -115,7 +115,10 @@ const ChatSidebar = ({
     return (
       <div key={channel.id} className="relative group">
         <button
-          onClick={() => onChannelSelect(channel.id)}
+          onClick={() => {
+            console.log('🔄 Выбран канал:', channel.id, channel.name || channel.label);
+            onChannelSelect(channel.id);
+          }}
           className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-3 transition-all ${
             isActive 
               ? 'bg-[#4A6572] text-white shadow-md' 
@@ -170,7 +173,7 @@ const ChatSidebar = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (window.confirm(`Удалить канал "${channel.name}"?`)) {
+                if (window.confirm(`Удалить канал "${channel.name || channel.label}"?`)) {
                   onDeleteChannel?.(channel.id);
                 }
               }}

@@ -114,21 +114,29 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         canWrite: ch.canWrite || []
       }));
     
-    // 2️⃣ Каналы из БД
-    const dbChannels = (chat.customChannels || []).map(ch => ({
-      id: ch.id,
-      label: ch.name || ch.label || 'Без названия',
-      name: ch.name || ch.label || 'Без названия',
-      icon: ch.icon || '💬',
-      description: ch.description || '',
-      type: 'custom',
-      is_private: ch.is_private || false,
-      is_system: false,
-      created_by: ch.created_by,
-      created_at: ch.created_at,
-      canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
-      canWrite: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client']
-    }));
+    // 2️⃣ Каналы из БД (включая личные чаты)
+    const dbChannels = (chat.customChannels || []).map(ch => {
+      const isDirect = ch.is_direct || ch.id?.startsWith('dm_');
+      return {
+        id: ch.id,
+        label: isDirect 
+          ? (ch.participant_name || ch.name?.replace('Чат с ', '') || 'Личный чат') 
+          : (ch.name || ch.label || 'Без названия'),
+        name: ch.name || ch.label || 'Без названия',
+        icon: ch.icon || (isDirect ? '👤' : '💬'),
+        description: ch.description || (isDirect ? 'Личный чат' : ''),
+        type: isDirect ? 'direct' : 'custom',
+        is_private: ch.is_private || false,
+        is_system: false,
+        is_direct: isDirect,
+        created_by: ch.created_by,
+        created_at: ch.created_at,
+        participant_id: ch.participant_id,
+        participant_name: ch.participant_name,
+        canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
+        canWrite: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client']
+      };
+    });
     
     // 3️⃣ Объединяем
     const result = [...systemChannels, ...dbChannels];
@@ -138,6 +146,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     console.log('📊 [CompanyChat] Количество каналов:', result.length);
     console.log('🔍 [CompanyChat] Системных:', systemChannels.length);
     console.log('📦 [CompanyChat] Из БД:', dbChannels.length);
+    console.log('👤 [CompanyChat] Личных чатов:', dbChannels.filter(ch => ch.is_direct).length);
     console.log('👤 [CompanyChat] Роль пользователя:', userRole);
     
     return result;
