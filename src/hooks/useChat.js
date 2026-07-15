@@ -167,33 +167,34 @@ export const useChat = ({
   }, [getCompanyId]);
 
   // ============================================================
-  // 🔥 ЗАГРУЗКА КАНАЛОВ
-  // ============================================================
-  const loadCustomChannels = useCallback(async () => {
-    const companyId = getCompanyId();
-    if (!companyId) {
-      console.warn('⚠️ loadCustomChannels: нет companyId');
-      return;
-    }
+// 🔥 ЗАГРУЗКА КАНАЛОВ (ИСПРАВЛЕННАЯ)
+// ============================================================
+const loadCustomChannels = useCallback(async () => {
+  const companyId = getCompanyId();
+  if (!companyId) {
+    console.warn('⚠️ loadCustomChannels: нет companyId');
+    return;
+  }
+  
+  console.log('📂 Загрузка каналов для компании:', companyId);
+  
+  try {
+    // ✅ ИСПРАВЛЕНО: используем простой select без параметра columns
+    const { data, error } = await supabase
+      .from('company_channels')
+      .select('*') // ✅ Используем * вместо перечисления колонок
+      .eq('company_id', companyId)
+      .eq('is_archived', false);
     
-    console.log('📂 Загрузка каналов для компании:', companyId);
+    if (error) throw error;
     
-    try {
-      const { data, error } = await supabase
-        .from('company_channels')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('is_archived', false);
-      
-      if (error) throw error;
-      
-      console.log('📂 Загружены каналы из БД:', data);
-      setCustomChannels(data || []);
-    } catch (error) {
-      console.error('❌ Ошибка загрузки каналов:', error);
-      showNotification?.('Ошибка загрузки каналов', 'error');
-    }
-  }, [getCompanyId, showNotification]);
+    console.log('📂 Загружены каналы из БД:', data);
+    setCustomChannels(data || []);
+  } catch (error) {
+    console.error('❌ Ошибка загрузки каналов:', error);
+    showNotification?.('Ошибка загрузки каналов', 'error');
+  }
+}, [getCompanyId, showNotification]);
 
   // ============================================================
   // 🔥 ЗАГРУЗКА СООБЩЕНИЙ
