@@ -30,7 +30,7 @@ const ChatSidebar = ({
 
   // ✅ useMemo ВСЕГДА вызывается, даже если showSidebar = false
   const filteredChannels = useMemo(() => {
-    console.log('🔍 Фильтрация каналов, channels:', channels?.length || 0);
+    console.log('🔍 [ChatSidebar] Фильтрация каналов, channels:', channels?.length || 0);
     if (!channels) return [];
     
     return channels.filter(ch => {
@@ -40,7 +40,8 @@ const ChatSidebar = ({
   }, [channels, search]);
 
   // ✅ Отладочный вывод
-  console.log('📋 ChatSidebar: отфильтровано каналов:', filteredChannels.length);
+  console.log('📋 [ChatSidebar] Отфильтровано каналов:', filteredChannels.length);
+  console.log('📋 [ChatSidebar] showSidebar:', showSidebar);
 
   // ✅ Теперь можно делать условный возврат ПОСЛЕ всех хуков
   if (!showSidebar) return null;

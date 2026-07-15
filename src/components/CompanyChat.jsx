@@ -163,7 +163,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [newMessage, chat]);
 
-  // ===== ОСТАЛЬНЫЕ ОБРАБОТЧИКИ (сокращены для читаемости) =====
+  // ===== ОСТАЛЬНЫЕ ОБРАБОТЧИКИ =====
   const handleVoiceSend = useCallback(async (audio) => {
     if (!audio || !audio.blob) return;
     
@@ -388,6 +388,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   console.log('📊 [CompanyChat] Количество каналов для ChatSidebar:', allChannels.length);
   console.log('📋 [CompanyChat] Структура первого канала:', allChannels[0]);
   console.log('🎯 [CompanyChat] Активный канал:', chat.activeChannel);
+  console.log('📱 [CompanyChat] showSidebar:', chat.showSidebar);
+  console.log('📱 [CompanyChat] isMobile:', chat.isMobile);
 
   // ============================================================
   // 🔥 РЕНДЕР
@@ -419,7 +421,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
           className={chat.isMobile ? 'absolute inset-0 z-10' : ''}
         />
 
-        {/* Основная область (сокращена для читаемости) */}
+        {/* Основная область */}
         {(!chat.isMobile || !chat.showSidebar) && (
           <div className="flex-1 flex flex-col min-w-0 h-full">
             {/* Хедер */}
@@ -621,7 +623,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         )}
       </div>
 
-      {/* Модальные окна (сокращены для читаемости) */}
+      {/* Модальные окна */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000] fade-enter">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-2xl">

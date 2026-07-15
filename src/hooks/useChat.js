@@ -25,12 +25,26 @@ export const useChat = ({
   const [typingUsers] = useState(new Set());
   const [unreadCounts, setUnreadCounts] = useState({});
   const [lastReadTimes, setLastReadTimes] = useState({});
-  const [isMobile, setIsMobile] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [pinnedChannels, setPinnedChannels] = useState([]);
-  const [showSidebar, setShowSidebar] = useState(true);
+
+  // ✅ ИСПРАВЛЕНО: правильная инициализация isMobile и showSidebar
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  const [showSidebar, setShowSidebar] = useState(() => {
+    if (typeof window !== 'undefined') {
+      // На десктопе (ширина >= 768px) показываем сайдбар
+      return window.innerWidth >= 768;
+    }
+    return true; // SSR fallback
+  });
 
   // ===== REFS =====
   const messagesContainerRef = useRef(null);
@@ -95,7 +109,6 @@ export const useChat = ({
           return str;
         }
       } catch {
-        // ✅ Исправлено: убрали параметр 'err'
         console.warn('Не удалось преобразовать companyId в строку');
       }
       return null;
@@ -689,6 +702,27 @@ export const useChat = ({
       setIsUserScrolling(false);
       setShouldAutoScroll(true);
     }
+  }, []);
+
+  // ============================================================
+  // 🔥 ЭФФЕКТ ДЛЯ ОТСЛЕЖИВАНИЯ РАЗМЕРА ЭКРАНА
+  // ============================================================
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      
+      // На десктопе всегда показываем сайдбар
+      if (!mobile) {
+        setShowSidebar(true);
+      }
+    };
+    
+    // Проверяем при монтировании
+    handleResize();
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // ===== ПОДПИСКА НА СООБЩЕНИЯ =====
