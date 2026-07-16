@@ -172,29 +172,55 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [newMessage, chat]);
 
-  // ===== ОСТАЛЬНЫЕ ОБРАБОТЧИКИ =====
   const handleVoiceSend = useCallback(async (audio) => {
-    if (!audio || !audio.blob) return;
-    
-    try {
-      const fileName = `${userCompanyId}/voice_${Date.now()}.webm`;
-      const { error: uploadError } = await supabase.storage
-        .from('chat-attachments')
-        .upload(fileName, audio.blob);
-      
-      if (uploadError) throw uploadError;
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from('chat-attachments')
-        .getPublicUrl(fileName);
-      
-      await chat.sendMessage(`🎙️ Голосовое сообщение: ${publicUrl}`);
-      showNotification?.('✅ Голосовое сообщение отправлено', 'success');
-    } catch (err) {
-      console.error('Ошибка отправки голоса:', err);
-      showNotification?.('Не удалось отправить голосовое сообщение', 'error');
+  if (!audio || !audio.blob) {
+    console.error('❌ Нет аудио для отправки');
+    showNotification?.('Не удалось отправить голосовое сообщение', 'error');
+    return;
+  }
+  
+  try {
+    const companyId = chat.getCompanyId();
+    if (!companyId) {
+      showNotification?.('Ошибка: компания не указана', 'error');
+      return;
     }
-  }, [userCompanyId, chat, showNotification]);
+    
+    // ✅ Проверяем размер
+    if (audio.blob.size > 10 * 1024 * 1024) {
+      showNotification?.('Файл слишком большой (макс. 10MB)', 'error');
+      return;
+    }
+    
+    const fileName = `${companyId}/voice_${Date.now()}.webm`;
+    console.log('📤 Загрузка голоса:', fileName);
+    
+    // ✅ Добавляем contentType
+    const { error: uploadError } = await supabase.storage
+      .from('chat-attachments')
+      .upload(fileName, audio.blob, {
+        contentType: 'audio/webm',
+        cacheControl: '3600'
+      });
+    
+    if (uploadError) {
+      console.error('❌ Ошибка загрузки:', uploadError);
+      throw uploadError;
+    }
+    
+    const { data: { publicUrl } } = supabase.storage
+      .from('chat-attachments')
+      .getPublicUrl(fileName);
+    
+    console.log('✅ Голос загружен:', publicUrl);
+    
+    await chat.sendMessage(`🎙️ Голосовое сообщение: ${publicUrl}`);
+    showNotification?.('✅ Голосовое сообщение отправлено', 'success');
+  } catch (err) {
+    console.error('❌ Ошибка отправки голоса:', err);
+    showNotification?.('Не удалось отправить голосовое сообщение', 'error');
+  }
+}, [chat, showNotification]);
 
   const loadChannelMembers = useCallback(async (channelId) => {
     if (!channelId) return;
