@@ -486,74 +486,142 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   }, [userCompanyId, showNotification]);
 
   // ============================================================
-  // 🔥 УДАЛЕНИЕ СООБЩЕНИЯ (С УДАЛЕНИЕМ ФАЙЛА ИЗ STORAGE)
-  // ============================================================
-  const deleteMessage = useCallback(async (messageId) => {
-    if (!messageId) return;
+// 🔥 УДАЛЕНИЕ СООБЩЕНИЯ (С УДАЛЕНИЕМ ФАЙЛА ИЗ STORAGE)
+// ============================================================
+const deleteMessage = useCallback(async (messageId) => {
+  if (!messageId) {
+    console.error('❌ Нет ID сообщения');
+    return;
+  }
+  
+  console.log('🗑️ Начинаем удаление сообщения:', messageId);
+  
+  // Находим сообщение
+  const message = chat.messages.find(m => m.id === messageId);
+  if (!message) {
+    console.error('❌ Сообщение не найдено');
+    showNotification?.('Сообщение не найдено', 'error');
+    return;
+  }
+  
+  console.log('📨 Сообщение:', message);
+  console.log('📝 Содержание:', message.content);
+  
+  // ✅ Проверяем, является ли сообщение голосовым
+  const isVoice = message.content?.includes('🎙️ Голосовое сообщение') && 
+                  message.content?.includes('.webm');
+  
+  console.log('🎵 Это голосовое сообщение?', isVoice);
+  
+  // ✅ Если это голосовое сообщение, извлекаем путь к файлу
+  let filePath = null;
+  if (isVoice) {
+    // Ищем URL в сообщении
+    const urlMatch = message.content.match(/https?:\/\/[^\s]+\.webm/);
+    console.log('🔗 Найденный URL:', urlMatch?.[0]);
     
-    // Находим сообщение
-    const message = chat.messages.find(m => m.id === messageId);
-    if (!message) {
-      showNotification?.('Сообщение не найдено', 'error');
-      return;
-    }
-    
-    // ✅ Проверяем, является ли сообщение голосовым
-    const isVoice = message.content?.includes('🎙️ Голосовое сообщение') && 
-                    message.content?.includes('https://') && 
-                    message.content?.includes('.webm');
-    
-    // ✅ Если это голосовое сообщение, извлекаем путь к файлу
-    let filePath = null;
-    if (isVoice) {
-      const urlMatch = message.content.match(/https?:\/\/[^\s]+\.webm/);
-      if (urlMatch) {
-        const url = urlMatch[0];
-        // Извлекаем путь из URL: /storage/v1/object/public/chat-attachments/.../voice_xxx.webm
-        const pathMatch = url.match(/\/object\/public\/chat-attachments\/(.+\.webm)/);
-        if (pathMatch) {
-          filePath = pathMatch[1];
-          console.log('🗑️ Найден файл для удаления:', filePath);
+    if (urlMatch) {
+      const url = urlMatch[0];
+      console.log('🔗 Полный URL:', url);
+      
+      // ✅ ИЗВЛЕКАЕМ ПУТЬ ИЗ URL
+      // Пробуем разные способы
+      
+      // Способ 1: через split
+      const pathParts = url.split('/public/chat-attachments/');
+      if (pathParts.length === 2) {
+        filePath = pathParts[1];
+        console.log('📁 Путь (способ 1):', filePath);
+      }
+      
+      // Способ 2: через регулярное выражение
+      if (!filePath) {
+        const regexMatch = url.match(/\/object\/public\/chat-attachments\/(.+\.webm)/);
+        if (regexMatch) {
+          filePath = regexMatch[1];
+          console.log('📁 Путь (способ 2):', filePath);
         }
       }
-    }
-    
-    // Подтверждение удаления
-    if (!window.confirm('Удалить сообщение?')) return;
-    
-    try {
-      // ✅ Сначала удаляем файл из Storage (если это голосовое сообщение)
+      
+      // Способ 3: через URL объект
+      if (!filePath) {
+        try {
+          const urlObj = new URL(url);
+          const pathname = urlObj.pathname;
+          // /storage/v1/object/public/chat-attachments/folder/file.webm
+          const parts = pathname.split('/public/chat-attachments/');
+          if (parts.length === 2) {
+            filePath = parts[1];
+            console.log('📁 Путь (способ 3):', filePath);
+          }
+        } catch (e) {
+          console.error('❌ Ошибка парсинга URL:', e);
+        }
+      }
+      
+      // Если путь найден, убираем возможные параметры
       if (filePath) {
-        console.log('🗑️ Удаление файла из Storage:', filePath);
-        const { error: storageError } = await supabase.storage
+        filePath = filePath.split('?')[0];
+        console.log('📁 Итоговый путь:', filePath);
+      }
+    }
+  }
+  
+  // Подтверждение удаления
+  if (!window.confirm('Удалить сообщение?')) {
+    console.log('❌ Удаление отменено пользователем');
+    return;
+  }
+  
+  try {
+    // ✅ Сначала удаляем файл из Storage (если это голосовое сообщение)
+    if (filePath) {
+      console.log('🗑️ Удаление файла из Storage:', filePath);
+      
+      try {
+        const { data: removeData, error: storageError } = await supabase.storage
           .from('chat-attachments')
           .remove([filePath]);
         
         if (storageError) {
           console.error('❌ Ошибка удаления файла из Storage:', storageError);
+          console.error('❌ Код ошибки:', storageError.statusCode);
+          console.error('❌ Сообщение:', storageError.message);
           // Продолжаем удаление сообщения даже если файл не удалился
         } else {
-          console.log('✅ Файл удален из Storage');
+          console.log('✅ Файл удален из Storage:', removeData);
         }
+      } catch (storageErr) {
+        console.error('❌ Исключение при удалении файла:', storageErr);
+        // Продолжаем удаление сообщения
       }
-      
-      // ✅ Удаляем сообщение из БД
-      const { error } = await supabase
-        .from('company_messages')
-        .delete()
-        .eq('id', messageId);
-      
-      if (error) throw error;
-      
-      // ✅ Обновляем локальное состояние
-      chat.setMessages(prev => prev.filter(m => m.id !== messageId));
-      showNotification?.('Сообщение удалено', 'success');
-      
-    } catch (error) {
-      console.error('❌ Ошибка удаления:', error);
-      showNotification?.('Не удалось удалить сообщение', 'error');
+    } else {
+      console.log('ℹ️ Это не голосовое сообщение или файл не найден');
     }
-  }, [chat, showNotification]);
+    
+    // ✅ Удаляем сообщение из БД
+    console.log('🗑️ Удаление сообщения из БД...');
+    const { error: deleteError } = await supabase
+      .from('company_messages')
+      .delete()
+      .eq('id', messageId);
+    
+    if (deleteError) {
+      console.error('❌ Ошибка удаления из БД:', deleteError);
+      throw deleteError;
+    }
+    
+    console.log('✅ Сообщение удалено из БД');
+    
+    // ✅ Обновляем локальное состояние
+    chat.setMessages(prev => prev.filter(m => m.id !== messageId));
+    showNotification?.('Сообщение удалено', 'success');
+    
+  } catch (error) {
+    console.error('❌ Ошибка удаления:', error);
+    showNotification?.('Не удалось удалить сообщение', 'error');
+  }
+}, [chat, showNotification]);
 
   // ===== ФИЛЬТРАЦИЯ СООБЩЕНИЙ =====
   const displayedMessages = useMemo(() => {
