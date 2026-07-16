@@ -79,6 +79,15 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     onUnreadCountChange
   });
 
+  // ✅ Добавляем для отладки
+  if (typeof window !== 'undefined') {
+    window.__chat = chat;
+    console.log('🔧 Для отладки используйте window.__chat');
+    console.log('📌 Текущий активный канал:', chat.activeChannel);
+    console.log('📌 Все системные каналы:', chat.SYSTEM_CHANNELS);
+    console.log('📌 Все пользовательские каналы:', chat.customChannels);
+  }
+
   // ===== ЛОКАЛЬНЫЕ СОСТОЯНИЯ =====
   const [newMessage, setNewMessage] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -158,6 +167,22 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   const currentChannel = useMemo(() => {
     return allChannels.find(c => c.id === chat.activeChannel);
   }, [allChannels, chat.activeChannel]);
+
+  // ============================================================
+  // 🔥 ЭФФЕКТ ДЛЯ ПРИНУДИТЕЛЬНОГО ПЕРЕКЛЮЧЕНИЯ НА GENERAL
+  // ============================================================
+  useEffect(() => {
+    // Если активный канал не установлен или равен undefined, устанавливаем 'general'
+    if (!chat.activeChannel) {
+      console.log('🔄 Активный канал не установлен, переключаем на general');
+      chat.setActiveChannel('general');
+    }
+  }, [chat.activeChannel, chat]);
+
+  // Следим за изменениями активного канала
+  useEffect(() => {
+    console.log('🔄 Активный канал изменился на:', chat.activeChannel);
+  }, [chat.activeChannel]);
 
   // ============================================================
   // 🔥 ОТПРАВКА СООБЩЕНИЯ
@@ -665,7 +690,15 @@ const deleteMessage = useCallback(async (messageId) => {
           channels={allChannels}
           activeChannel={chat.activeChannel}
           onChannelSelect={(channelId) => {
+            console.log('🔄 Выбран канал:', channelId);
+            console.log('📌 Текущий активный:', chat.activeChannel);
+            
+            // ✅ Принудительно переключаем
             chat.setActiveChannel(channelId);
+            
+            // ✅ Проверяем, что переключение произошло
+            console.log('📌 Новый активный:', chat.activeChannel);
+            
             if (chat.isMobile) {
               chat.setShowSidebar(false);
             }
@@ -683,6 +716,7 @@ const deleteMessage = useCallback(async (messageId) => {
           companyUsers={chat.companyUsers}
           currentUser={user}
           onStartDirectChat={async (userData) => {
+            console.log('👤 Начинаем личный чат с:', userData);
             await chat.startDirectChat(userData);
             if (chat.isMobile) {
               chat.setShowSidebar(false);
@@ -709,6 +743,25 @@ const deleteMessage = useCallback(async (messageId) => {
                     <Menu className="w-5 h-5" />
                   </button>
                 )}
+                
+                {/* 🐛 Отладочная кнопка */}
+                <button
+                  onClick={() => {
+                    console.log('🔍 ОТЛАДКА КАНАЛОВ:');
+                    console.log('📌 Активный канал:', chat.activeChannel);
+                    console.log('📌 Все каналы:', allChannels);
+                    console.log('📌 Системные каналы:', SYSTEM_CHANNELS);
+                    console.log('📌 Пользовательские каналы:', chat.customChannels);
+                    
+                    // Принудительно переключаем на general
+                    chat.setActiveChannel('general');
+                    console.log('📌 Принудительно переключили на general');
+                  }}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors"
+                  title="Отладка каналов"
+                >
+                  🐛
+                </button>
                 
                 <div className="flex items-center gap-2 sm:gap-3">
                   <span className="text-xl sm:text-2xl bg-gray-100 dark:bg-gray-700 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
