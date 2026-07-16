@@ -271,9 +271,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     console.log('✅ Публичный URL:', publicUrl);
     
     // ✅ Отправляем сообщение с аудио-плеером
-    const result = await chat.sendMessage(
-      `🎙️ Голосовое сообщение:\n<audio controls src="${publicUrl}"></audio>`
-    );
+    const result = await chat.sendMessage(`🎙️ Голосовое сообщение: ${publicUrl}`);
     
     if (result.success) {
       showNotification?.('✅ Голосовое сообщение отправлено', 'success');

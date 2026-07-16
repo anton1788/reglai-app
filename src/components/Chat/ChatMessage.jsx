@@ -26,20 +26,31 @@ const ChatMessage = ({
   isSaved,
   onPinMessage,
   isPinned,
-  // onCopyMessage — УДАЛЁН (не используется)
-  // companyUsers — УДАЛЁН (не используется)
-  // isMobile — УДАЛЁН (не используется)
   showReactionsPicker,
   setShowReactionsPicker,
   textareaRef
 }) => {
   const [copied, setCopied] = useState(false);
 
-  // Форматированное содержимое
-  const formattedContent = useMemo(() => {
-    if (!msg.content) return '';
-    return formatChatMessage(msg.content);
+  // ✅ Проверяем, является ли сообщение голосовым
+  const isVoiceMessage = useMemo(() => {
+    return msg.content?.includes('🎙️ Голосовое сообщение') && 
+           msg.content?.includes('https://') && 
+           msg.content?.includes('.webm');
   }, [msg.content]);
+
+  // ✅ Извлекаем URL из голосового сообщения
+  const voiceAudioUrl = useMemo(() => {
+    if (!isVoiceMessage) return null;
+    const urlMatch = msg.content.match(/https?:\/\/[^\s]+\.webm/);
+    return urlMatch ? urlMatch[0] : null;
+  }, [isVoiceMessage, msg.content]);
+
+  // Форматированное содержимое (только для текстовых сообщений)
+  const formattedContent = useMemo(() => {
+    if (!msg.content || isVoiceMessage) return '';
+    return formatChatMessage(msg.content);
+  }, [msg.content, isVoiceMessage]);
 
   // Упоминания в сообщении
   const mentions = useMemo(() => {
@@ -78,7 +89,6 @@ const ChatMessage = ({
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.warn('Не удалось скопировать:', err);
-      // Fallback
       const textarea = document.createElement('textarea');
       textarea.value = msg.content || '';
       document.body.appendChild(textarea);
@@ -111,6 +121,74 @@ const ChatMessage = ({
     );
   }, [mentions, user]);
 
+  // ============================================================
+  // ✅ Рендер голосового сообщения
+  // ============================================================
+  if (isVoiceMessage && voiceAudioUrl) {
+    return (
+      <article 
+        className={`group flex gap-2 sm:gap-3 ${isOwn ? 'flex-row-reverse' : ''} animate-in fade-in`}
+      >
+        {/* Аватар */}
+        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0 ${isOwn ? 'order-2' : ''}`}>
+          <span className="text-white text-[10px] sm:text-xs font-medium">
+            {senderInitial}
+          </span>
+        </div>
+        
+        <div className={`max-w-[85%] sm:max-w-[75%] ${isOwn ? 'order-1' : ''}`}>
+          {/* Имя отправителя */}
+          {!isOwn && (
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 pl-1 flex-wrap">
+              <span className="text-xs sm:text-sm font-bold text-[#4A6572] dark:text-[#F9AA33]">
+                {senderName}
+              </span>
+              {senderRole && (
+                <span className="text-[9px] sm:text-[10px] text-gray-400 dark:text-gray-500">
+                  · {senderRole}
+                </span>
+              )}
+            </div>
+          )}
+          
+          {/* ✅ Аудио-плеер */}
+          <div 
+            className={`rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-sm ${
+              isOwn 
+                ? 'bg-[#4A6572] text-white rounded-br-md' 
+                : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md border border-gray-100 dark:border-gray-600'
+            }`}
+          >
+            <div className="flex flex-col gap-1">
+              <audio 
+                controls 
+                src={voiceAudioUrl}
+                className="w-full max-w-[280px] h-10 rounded"
+                preload="metadata"
+              >
+                <source src={voiceAudioUrl} type="audio/webm" />
+                <source src={voiceAudioUrl} type="audio/ogg" />
+                <source src={voiceAudioUrl} type="audio/mp4" />
+                Ваш браузер не поддерживает аудио.
+              </audio>
+              <span className="text-[10px] opacity-70">🎙️ Голосовое сообщение</span>
+            </div>
+          </div>
+          
+          {/* Время */}
+          <div className={`flex items-center gap-1 mt-0.5 text-[10px] sm:text-xs ${isOwn ? 'justify-end' : ''}`}>
+            <span className="text-gray-400 dark:text-gray-500">
+              {new Date(msg.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  // ============================================================
+  // ✅ Рендер текстового сообщения
+  // ============================================================
   return (
     <article 
       className={`group flex gap-2 sm:gap-3 ${isOwn ? 'flex-row-reverse' : ''} animate-in fade-in ${
