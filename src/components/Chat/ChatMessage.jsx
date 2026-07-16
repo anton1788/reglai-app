@@ -31,14 +31,14 @@ const ChatMessage = ({
 }) => {
   const [copied, setCopied] = useState(false);
 
-  // ✅ Проверяем, является ли сообщение голосовым
+  // Проверяем, является ли сообщение голосовым
   const isVoiceMessage = useMemo(() => {
     return msg.content?.includes('🎙️ Голосовое сообщение') && 
            msg.content?.includes('https://') && 
            msg.content?.includes('.webm');
   }, [msg.content]);
 
-  // ✅ Извлекаем URL из голосового сообщения
+  // Извлекаем URL из голосового сообщения
   const voiceAudioUrl = useMemo(() => {
     if (!isVoiceMessage) return null;
     const urlMatch = msg.content.match(/https?:\/\/[^\s]+\.webm/);
@@ -70,7 +70,6 @@ const ChatMessage = ({
     return msg.reactions?.some(r => r.emoji === emoji && r.user_id === user?.id);
   }, [msg.reactions, user?.id]);
 
-  // ✅ Права на редактирование и удаление
   const canEdit = msg.user_id === user?.id || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
   const canDelete = msg.user_id === user?.id || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
 
@@ -122,7 +121,7 @@ const ChatMessage = ({
   }, [mentions, user]);
 
   // ============================================================
-  // ✅ Рендер голосового сообщения (С ДОБАВЛЕННЫМИ ДЕЙСТВИЯМИ)
+  // Рендер голосового сообщения (с кнопкой удаления)
   // ============================================================
   if (isVoiceMessage && voiceAudioUrl) {
     return (
@@ -151,77 +150,55 @@ const ChatMessage = ({
             </div>
           )}
           
-          {/* ✅ Аудио-плеер */}
-          <div 
-            className={`rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-sm ${
-              isOwn 
-                ? 'bg-[#4A6572] text-white rounded-br-md' 
-                : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md border border-gray-100 dark:border-gray-600'
-            }`}
-          >
-            <div className="flex flex-col gap-1">
-              <audio 
-                controls 
-                src={voiceAudioUrl}
-                className="w-full max-w-[280px] h-10 rounded"
-                preload="metadata"
-              >
-                <source src={voiceAudioUrl} type="audio/webm" />
-                <source src={voiceAudioUrl} type="audio/ogg" />
-                <source src={voiceAudioUrl} type="audio/mp4" />
-                Ваш браузер не поддерживает аудио.
-              </audio>
-              <span className="text-[10px] opacity-70">🎙️ Голосовое сообщение</span>
+          {/* Аудио-плеер с кнопкой удаления */}
+          <div className="relative">
+            <div 
+              className={`rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-sm ${
+                isOwn 
+                  ? 'bg-[#4A6572] text-white rounded-br-md' 
+                  : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md border border-gray-100 dark:border-gray-600'
+              }`}
+            >
+              <div className="flex flex-col gap-1">
+                <audio 
+                  controls 
+                  src={voiceAudioUrl}
+                  className="w-full max-w-[280px] h-10 rounded"
+                  preload="metadata"
+                >
+                  <source src={voiceAudioUrl} type="audio/webm" />
+                  <source src={voiceAudioUrl} type="audio/ogg" />
+                  <source src={voiceAudioUrl} type="audio/mp4" />
+                  Ваш браузер не поддерживает аудио.
+                </audio>
+                <span className="text-[10px] opacity-70">🎙️ Голосовое сообщение</span>
+              </div>
             </div>
+            
+            {/* ✅ КНОПКА УДАЛЕНИЯ (появляется при наведении) */}
+            {canDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm('Удалить голосовое сообщение?')) {
+                    onDelete?.(msg.id);
+                  }
+                }}
+                className={`absolute -top-2 -right-2 p-1.5 rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600 transition-all opacity-0 group-hover:opacity-100 ${
+                  isOwn ? 'block' : 'block'
+                }`}
+                title="Удалить голосовое сообщение"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
           
-          {/* ✅ Действия под голосовым сообщением (ВКЛЮЧАЯ УДАЛЕНИЕ) */}
+          {/* Время */}
           <div className={`flex items-center gap-1 mt-0.5 text-[10px] sm:text-xs ${isOwn ? 'justify-end' : ''}`}>
             <span className="text-gray-400 dark:text-gray-500">
               {new Date(msg.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
             </span>
-            
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              {/* Ответ */}
-              <button 
-                onClick={() => onReply?.(msg)} 
-                className="p-0.5 sm:p-1 hover:bg-gray-200/50 rounded-full"
-              >
-                <CornerUpLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
-              </button>
-              
-              {/* Копировать */}
-              <button 
-                onClick={handleCopy}
-                className="p-0.5 sm:p-1 hover:bg-gray-200/50 rounded-full"
-              >
-                {copied ? (
-                  <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" />
-                ) : (
-                  <Copy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
-                )}
-              </button>
-              
-              {/* Закрепить */}
-              {onPinMessage && (
-                <button 
-                  onClick={() => onPinMessage?.(msg.id)} 
-                  className="p-0.5 sm:p-1 hover:bg-yellow-100/50 rounded text-yellow-500"
-                >
-                  <Pin className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isPinned ? 'fill-current' : ''}`} />
-                </button>
-              )}
-              
-              {/* ✅ УДАЛИТЬ (добавлено для голосовых сообщений) */}
-              {canDelete && (
-                <button 
-                  onClick={() => onDelete?.(msg.id)} 
-                  className="p-0.5 sm:p-1 hover:bg-red-100/50 rounded text-red-500"
-                >
-                  <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                </button>
-              )}
-            </div>
           </div>
         </div>
       </article>
@@ -229,7 +206,7 @@ const ChatMessage = ({
   }
 
   // ============================================================
-  // ✅ Рендер текстового сообщения
+  // Рендер текстового сообщения
   // ============================================================
   return (
     <article 
