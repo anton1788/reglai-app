@@ -172,7 +172,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [newMessage, chat]);
 
-  const handleVoiceSend = useCallback(async (audio) => {
+ const handleVoiceSend = useCallback(async (audio) => {
   console.log('🔍 [handleVoiceSend] Начало');
   console.log('📊 audio:', audio);
   console.log('📊 audio.blob:', audio?.blob);
@@ -194,64 +194,56 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
       return;
     }
 
-     // ✅ ===== ДОБАВЬТЕ ЭТОТ БЛОК ЗДЕСЬ =====
-    // Проверяем и создаем bucket если нужно
-    const { data: bucketData, error: bucketError } = await supabase
-      .rpc('create_chat_bucket');
-    
-    if (bucketError) {
-      console.error('❌ Ошибка создания bucket:', bucketError);
-      showNotification?.('Ошибка доступа к хранилищу', 'error');
-      return;
-    }
-    console.log('✅ Bucket готов:', bucketData);
-    
     // ✅ Проверяем размер
     if (audio.blob.size > 10 * 1024 * 1024) {
       showNotification?.('Файл слишком большой (макс. 10MB)', 'error');
       return;
     }
 
-    if (audio.blob.size === 0) {
-      showNotification?.('Запись пустая, попробуйте снова', 'error');
+    if (audio.blob.size < 1024) {
+      showNotification?.('Запись слишком короткая', 'error');
       return;
     }
     
-    // ✅ Проверяем Storage перед загрузкой
-    console.log('🔍 Проверка доступа к Storage...');
-    try {
-      const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-      console.log('📦 Все buckets:', buckets);
-      if (bucketsError) {
-        console.error('❌ Ошибка получения buckets:', bucketsError);
+    // ✅ Проверяем bucket
+    const { data: buckets } = await supabase.storage.listBuckets();
+    console.log('📦 Все buckets:', buckets);
+    
+    let bucketExists = buckets?.some(b => b.id === 'chat-attachments');
+    console.log('✅ Bucket chat-attachments существует:', bucketExists);
+    
+    if (!bucketExists) {
+      console.log('🆕 Создаем bucket через RPC...');
+      const { data: bucketData, error: bucketError } = await supabase
+        .rpc('create_chat_bucket');
+      
+      if (bucketError) {
+        console.error('❌ Ошибка создания bucket:', bucketError);
         showNotification?.('Ошибка доступа к хранилищу', 'error');
         return;
       }
+      console.log('✅ Bucket создан:', bucketData);
       
-      const bucketExists = buckets?.some(b => b.id === 'chat-attachments');
-      console.log('✅ Bucket chat-attachments существует:', bucketExists);
-      
-      if (!bucketExists) {
-        showNotification?.('Хранилище не найдено', 'error');
-        return;
-      }
-    } catch (storageErr) {
-      console.error('❌ Ошибка проверки Storage:', storageErr);
-      showNotification?.('Ошибка доступа к хранилищу', 'error');
-      return;
+      // Ждем создания
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-    // ✅ Конвертируем Blob в File
+    // ✅ Определяем расширение файла
+    const mimeType = audio.mimeType || audio.blob.type || 'audio/webm';
+    const extension = mimeType.includes('ogg') ? 'ogg' : 
+                     mimeType.includes('mp4') ? 'mp4' : 'webm';
+    
+    // ✅ Создаем File
     const file = new File(
       [audio.blob], 
-      `voice_${Date.now()}.webm`, 
+      `voice_${Date.now()}.${extension}`, 
       { 
-        type: 'audio/webm',
+        type: mimeType,
         lastModified: Date.now()
       }
     );
     
-    const fileName = `${companyId}/voice_${Date.now()}.webm`;
+    const fileName = `${companyId}/voice_${Date.now()}.${extension}`;
     console.log('📤 Загрузка голоса:', fileName);
     console.log('📊 Размер файла:', file.size, 'байт');
     console.log('📊 Тип файла:', file.type);
@@ -262,15 +254,36 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
       .upload(fileName, file, {
         cacheControl: '3600',
         upsert: false,
-        contentType: 'audio/webm'
+        contentType: mimeType
       });
     
     if (uploadError) {
       console.error('❌ Детали ошибки загрузки:', uploadError);
       console.error('❌ Код ошибки:', uploadError.statusCode);
       console.error('❌ Сообщение:', uploadError.message);
-      showNotification?.(`Не удалось загрузить: ${uploadError.message || 'ошибка'}`, 'error');
-      return;
+      
+      // ✅ Если ошибка 400, пробуем загрузить как ArrayBuffer
+      if (uploadError.statusCode === 400) {
+        console.log('🔄 Пробуем загрузить как ArrayBuffer...');
+        const arrayBuffer = await audio.blob.arrayBuffer();
+        const { data: retryData, error: retryError } = await supabase.storage
+          .from('chat-attachments')
+          .upload(fileName, arrayBuffer, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: mimeType
+          });
+        
+        if (retryError) {
+          console.error('❌ Повторная попытка не удалась:', retryError);
+          showNotification?.('Не удалось загрузить файл', 'error');
+          return;
+        }
+        console.log('✅ Загрузка через ArrayBuffer успешна:', retryData);
+      } else {
+        showNotification?.(`Ошибка загрузки: ${uploadError.message}`, 'error');
+        return;
+      }
     }
     
     console.log('✅ Загрузка успешна:', data);

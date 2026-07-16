@@ -12,7 +12,6 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
 
-  // Проверка поддержки
   useEffect(() => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setIsSupported(false);
@@ -20,7 +19,6 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
     }
   }, []);
 
-  // Очистка при размонтировании
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -30,7 +28,6 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
     };
   }, []);
 
-  // Начать запись
   const startRecording = useCallback(async () => {
     if (!isSupported) {
       setError('Запись голоса не поддерживается');
@@ -40,7 +37,22 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      const mediaRecorder = new MediaRecorder(stream);
+      // ✅ Пробуем разные MIME типы для лучшей поддержки
+      let mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = 'audio/ogg';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else {
+          mimeType = '';
+        }
+      }
+      
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: mimeType || undefined
+      });
+      
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       
@@ -51,31 +63,33 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
       };
       
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        // ✅ Используем тот же тип, что и при записи
+        const audioBlob = new Blob(audioChunksRef.current, { 
+          type: mimeType || 'audio/webm' 
+        });
         const url = URL.createObjectURL(audioBlob);
         setAudioUrl(url);
         
-        // Вызываем callback с аудио
         if (onRecordingComplete) {
+          const extension = mimeType.includes('ogg') ? 'ogg' : 
+                           mimeType.includes('mp4') ? 'mp4' : 'webm';
           onRecordingComplete({
             url,
             blob: audioBlob,
             duration: recordingDuration,
-            name: `голосовое_${Date.now()}.webm`
+            name: `голосовое_${Date.now()}.${extension}`,
+            mimeType: mimeType
           });
         }
         
-        // Останавливаем все треки
         stream.getTracks().forEach(track => track.stop());
       };
       
-      // Запускаем запись
       mediaRecorder.start(1000);
       setIsRecording(true);
       setRecordingDuration(0);
       setError(null);
       
-      // Таймер длительности
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         setRecordingDuration(prev => {
@@ -95,7 +109,6 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
     }
   }, [isSupported, maxDuration, onRecordingComplete]);
 
-  // Остановить запись
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
@@ -108,7 +121,6 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
     }
   }, []);
 
-  // Отменить запись (без отправки)
   const cancelRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
@@ -121,11 +133,13 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
     
     setIsRecording(false);
     setRecordingDuration(0);
-    setAudioUrl(null);
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      setAudioUrl(null);
+    }
     audioChunksRef.current = [];
-  }, []);
+  }, [audioUrl]);
 
-  // Очистить аудио
   const clearAudio = useCallback(() => {
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl);
@@ -133,7 +147,6 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
     }
   }, [audioUrl]);
 
-  // Форматирование времени
   const formatDuration = useCallback((seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
