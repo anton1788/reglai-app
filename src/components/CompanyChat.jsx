@@ -205,12 +205,32 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
       return;
     }
     
-    // ✅ Проверяем bucket
+    // ✅ Определяем расширение файла
+    const mimeType = audio.mimeType || audio.blob.type || 'audio/webm';
+    const extension = mimeType.includes('ogg') ? 'ogg' : 
+                     mimeType.includes('mp4') ? 'mp4' : 'webm';
+    
+    // ✅ Создаем File
+    const file = new File(
+      [audio.blob], 
+      `voice_${Date.now()}.${extension}`, 
+      { 
+        type: mimeType,
+        lastModified: Date.now()
+      }
+    );
+    
+    const fileName = `${companyId}/voice_${Date.now()}.${extension}`;
+    console.log('📤 Загрузка голоса:', fileName);
+    console.log('📊 Размер файла:', file.size, 'байт');
+    console.log('📊 Тип файла:', file.type);
+    
+    // ✅ Проверяем bucket перед загрузкой
     const { data: buckets } = await supabase.storage.listBuckets();
     console.log('📦 Все buckets:', buckets);
     
-    let bucketExists = buckets?.some(b => b.id === 'chat-attachments');
-    console.log('✅ Bucket chat-attachments существует:', bucketExists);
+    const bucketExists = buckets?.some(b => b.id === 'chat-attachments');
+    console.log('✅ chat-attachments существует:', bucketExists);
     
     if (!bucketExists) {
       console.log('🆕 Создаем bucket через RPC...');
@@ -226,27 +246,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-    // ✅ Определяем расширение файла
-    const mimeType = audio.mimeType || audio.blob.type || 'audio/webm';
-    const extension = mimeType.includes('ogg') ? 'ogg' : 
-                     mimeType.includes('mp4') ? 'mp4' : 'webm';
+    // ✅ Загружаем с подробным логированием
+    console.log('📤 Отправка запроса на загрузку...');
+    const startTime = Date.now();
     
-    // ✅ Создаем File из blob
-    const file = new File(
-      [audio.blob], 
-      `voice_${Date.now()}.${extension}`, 
-      { 
-        type: mimeType,
-        lastModified: Date.now()
-      }
-    );
-    
-    const fileName = `${companyId}/voice_${Date.now()}.${extension}`;
-    console.log('📤 Загрузка голоса:', fileName);
-    console.log('📊 Размер файла:', file.size, 'байт');
-    console.log('📊 Тип файла:', file.type);
-    
-    // ✅ Загружаем файл в Storage
     const { data, error: uploadError } = await supabase.storage
       .from('chat-attachments')
       .upload(fileName, file, {
@@ -255,13 +258,33 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         contentType: mimeType
       });
     
+    console.log(`⏱️ Загрузка заняла: ${Date.now() - startTime}мс`);
+    
     if (uploadError) {
       console.error('❌ Ошибка загрузки:', uploadError);
-      showNotification?.(`Ошибка загрузки: ${uploadError.message}`, 'error');
+      console.error('❌ Код ошибки:', uploadError.statusCode);
+      console.error('❌ Сообщение:', uploadError.message);
+      console.error('❌ Детали:', uploadError);
+      
+      showNotification?.(`Ошибка загрузки: ${uploadError.message || 'Неизвестная ошибка'}`, 'error');
       return;
     }
     
     console.log('✅ Загрузка успешна:', data);
+    
+    // ✅ Проверяем, что файл действительно существует
+    console.log('🔍 Проверка существования файла...');
+    const { data: checkData, error: checkError } = await supabase.storage
+      .from('chat-attachments')
+      .download(fileName);
+    
+    if (checkError) {
+      console.error('❌ Файл не найден после загрузки:', checkError);
+      showNotification?.('Файл загружен, но недоступен. Попробуйте снова.', 'error');
+      return;
+    }
+    
+    console.log('✅ Файл подтвержден, размер:', checkData?.size, 'байт');
     
     // ✅ Получаем публичный URL
     const { data: { publicUrl } } = supabase.storage
@@ -270,7 +293,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     
     console.log('✅ Публичный URL:', publicUrl);
     
-    // ✅ Отправляем сообщение с аудио-плеером
+    // ✅ Отправляем ТОЛЬКО ссылку (без HTML)
     const result = await chat.sendMessage(`🎙️ Голосовое сообщение: ${publicUrl}`);
     
     if (result.success) {
@@ -281,6 +304,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     
   } catch (err) {
     console.error('❌ Ошибка отправки голоса:', err);
+    console.error('❌ Стек ошибки:', err.stack);
     showNotification?.('Не удалось отправить голосовое сообщение', 'error');
   }
 }, [chat, showNotification]);
