@@ -193,6 +193,18 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
       showNotification?.('Ошибка: компания не указана', 'error');
       return;
     }
+
+     // ✅ ===== ДОБАВЬТЕ ЭТОТ БЛОК ЗДЕСЬ =====
+    // Проверяем и создаем bucket если нужно
+    const { data: bucketData, error: bucketError } = await supabase
+      .rpc('create_chat_bucket');
+    
+    if (bucketError) {
+      console.error('❌ Ошибка создания bucket:', bucketError);
+      showNotification?.('Ошибка доступа к хранилищу', 'error');
+      return;
+    }
+    console.log('✅ Bucket готов:', bucketData);
     
     // ✅ Проверяем размер
     if (audio.blob.size > 10 * 1024 * 1024) {
