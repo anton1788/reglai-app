@@ -30,7 +30,6 @@ export const useChat = ({
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [pinnedChannels, setPinnedChannels] = useState([]);
 
-  // Инициализация isMobile и showSidebar
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth < 768;
@@ -93,7 +92,7 @@ export const useChat = ({
   ], []);
 
   // ============================================================
-  // 🛠️ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ — ПРИВЕДЕНИЕ companyId К СТРОКЕ
+  // 🛠️ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ
   // ============================================================
   const getCompanyId = useCallback(() => {
     if (!userCompanyId) return null;
@@ -167,42 +166,40 @@ export const useChat = ({
   }, [getCompanyId]);
 
   // ============================================================
-// 🔥 ЗАГРУЗКА КАНАЛОВ
-// ============================================================
-const loadCustomChannels = useCallback(async () => {
-  const companyId = getCompanyId();
-  if (!companyId) {
-    console.warn('⚠️ loadCustomChannels: нет companyId');
-    return;
-  }
-  
-  console.log('📂 Загрузка каналов для компании:', companyId);
-  
-  try {
-    // ✅ Используем select * или перечисляем все колонки
-    const { data, error } = await supabase
-      .from('company_channels')
-      .select('*')
-      .eq('company_id', companyId)
-      .eq('is_archived', false);
+  // 🔥 ЗАГРУЗКА КАНАЛОВ
+  // ============================================================
+  const loadCustomChannels = useCallback(async () => {
+    const companyId = getCompanyId();
+    if (!companyId) {
+      console.warn('⚠️ loadCustomChannels: нет companyId');
+      return;
+    }
     
-    if (error) throw error;
+    console.log('📂 Загрузка каналов для компании:', companyId);
     
-    console.log('📂 Загружены каналы из БД:', data);
-    console.log('📊 Количество каналов:', data?.length || 0);
-    
-    // Добавляем label для совместимости
-    const channelsWithLabel = (data || []).map(ch => ({
-      ...ch,
-      label: ch.name || ch.label || 'Без названия'
-    }));
-    
-    setCustomChannels(channelsWithLabel);
-  } catch (error) {
-    console.error('❌ Ошибка загрузки каналов:', error);
-    showNotification?.('Ошибка загрузки каналов', 'error');
-  }
-}, [getCompanyId, showNotification]);
+    try {
+      const { data, error } = await supabase
+        .from('company_channels')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('is_archived', false);
+      
+      if (error) throw error;
+      
+      console.log('📂 Загружены каналы из БД:', data);
+      console.log('📊 Количество каналов:', data?.length || 0);
+      
+      const channelsWithLabel = (data || []).map(ch => ({
+        ...ch,
+        label: ch.name || ch.label || 'Без названия'
+      }));
+      
+      setCustomChannels(channelsWithLabel);
+    } catch (error) {
+      console.error('❌ Ошибка загрузки каналов:', error);
+      showNotification?.('Ошибка загрузки каналов', 'error');
+    }
+  }, [getCompanyId, showNotification]);
 
   // ============================================================
   // 🔥 ЗАГРУЗКА СООБЩЕНИЙ
@@ -329,7 +326,6 @@ const loadCustomChannels = useCallback(async () => {
         }
       }
       
-      // Формирование сообщений
       const enrichedMessages = (messagesData || []).map(msg => ({
         ...msg,
         user: { user_metadata: usersMap[msg.user_id] || { full_name: 'Пользователь', role: 'user' } },
@@ -677,151 +673,141 @@ const loadCustomChannels = useCallback(async () => {
     }
   }, []);
 
- // ============================================================
-// 🔥 НАЧАТЬ ЛИЧНЫЙ ЧАТ (С ПОДРОБНЫМ ЛОГИРОВАНИЕМ)
-// ============================================================
-const startDirectChat = useCallback(async (userData) => {
-  console.log('📞 [startDirectChat] Начало');
-  console.log('📞 userData:', userData);
-  
-  // --- Проверки ---
-  if (!user?.id) {
-    console.error('❌ Нет текущего пользователя');
-    showNotification?.('Ошибка: пользователь не авторизован', 'error');
-    return { success: false, error: 'Нет пользователя' };
-  }
+  // ============================================================
+  // 🔥 НАЧАТЬ ЛИЧНЫЙ ЧАТ
+  // ============================================================
+  const startDirectChat = useCallback(async (userData) => {
+    console.log('📞 [startDirectChat] Начало');
+    console.log('📞 userData:', userData);
+    
+    if (!user?.id) {
+      console.error('❌ Нет текущего пользователя');
+      showNotification?.('Ошибка: пользователь не авторизован', 'error');
+      return { success: false, error: 'Нет пользователя' };
+    }
 
-  if (!userData?.user_id) {
-    console.error('❌ Нет данных пользователя');
-    showNotification?.('Ошибка: данные пользователя не найдены', 'error');
-    return { success: false, error: 'Нет данных пользователя' };
-  }
+    if (!userData?.user_id) {
+      console.error('❌ Нет данных пользователя');
+      showNotification?.('Ошибка: данные пользователя не найдены', 'error');
+      return { success: false, error: 'Нет данных пользователя' };
+    }
 
-  if (userData.user_id === user.id) {
-    console.warn('⚠️ Нельзя начать чат с самим собой');
-    showNotification?.('Нельзя начать чат с самим собой', 'warning');
-    return { success: false, error: 'Сам с собой' };
-  }
+    if (userData.user_id === user.id) {
+      console.warn('⚠️ Нельзя начать чат с самим собой');
+      showNotification?.('Нельзя начать чат с самим собой', 'warning');
+      return { success: false, error: 'Сам с собой' };
+    }
 
-  const companyId = getCompanyId();
-  if (!companyId) {
-    console.error('❌ Нет companyId');
-    showNotification?.('Ошибка: компания не указана', 'error');
-    return { success: false, error: 'Нет companyId' };
-  }
+    const companyId = getCompanyId();
+    if (!companyId) {
+      console.error('❌ Нет companyId');
+      showNotification?.('Ошибка: компания не указана', 'error');
+      return { success: false, error: 'Нет companyId' };
+    }
 
-  // --- Проверка сессии ---
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError || !session) {
-    console.error('❌ Ошибка сессии:', sessionError);
-    showNotification?.('Ошибка: требуется авторизация', 'error');
-    return { success: false, error: 'No session' };
-  }
-  console.log('✅ Сессия активна, пользователь:', session.user.id);
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      console.error('❌ Ошибка сессии:', sessionError);
+      showNotification?.('Ошибка: требуется авторизация', 'error');
+      return { success: false, error: 'No session' };
+    }
+    console.log('✅ Сессия активна, пользователь:', session.user.id);
 
-  // --- Логируем ID для отладки ---
-  console.log('👤 Текущий пользователь (id):', user.id);
-  console.log('👤 Собеседник (id):', userData.user_id);
-  console.log('🏢 Компания (id):', companyId);
+    console.log('👤 Текущий пользователь (id):', user.id);
+    console.log('👤 Собеседник (id):', userData.user_id);
+    console.log('🏢 Компания (id):', companyId);
 
-  try {
-    // ✅ ВЫЗЫВАЕМ RPC ФУНКЦИЮ
-    console.log('📤 Вызов RPC check_or_create_direct_chat...');
-    const { data, error } = await supabase
-      .rpc('check_or_create_direct_chat', {
-        p_other_user_id: userData.user_id,
-        p_company_id: companyId
+    try {
+      console.log('📤 Вызов RPC check_or_create_direct_chat...');
+      const { data, error } = await supabase
+        .rpc('check_or_create_direct_chat', {
+          p_other_user_id: userData.user_id,
+          p_company_id: companyId
+        });
+
+      console.log('📦 Полный ответ RPC:', { data, error });
+      console.log('📦 data.success:', data?.success);
+      console.log('📦 data.error:', data?.error);
+      console.log('📦 data.channel_id:', data?.channel_id);
+      console.log('📦 data.exists:', data?.exists);
+
+      if (error) {
+        console.error('❌ Ошибка RPC:', error);
+        showNotification?.('Не удалось создать чат', 'error');
+        return { success: false, error };
+      }
+
+      if (!data?.success) {
+        console.error('❌ Ошибка в данных:', data?.error);
+        showNotification?.(`Не удалось создать чат: ${data?.error || 'неизвестная ошибка'}`, 'error');
+        return { success: false, error: data?.error };
+      }
+
+      const channelId = data.channel_id;
+      if (!channelId) {
+        console.error('❌ Нет channel_id в ответе');
+        showNotification?.('Не удалось создать чат: нет ID канала', 'error');
+        return { success: false, error: 'No channel_id' };
+      }
+
+      const displayName = userData.full_name || userData.name || 'пользователь';
+      const channelName = `Чат с ${displayName}`;
+      
+      console.log('✅ Чат найден/создан:', channelId);
+      console.log('📊 Существовал ранее:', data.exists);
+
+      setCustomChannels(prev => {
+        const exists = prev.some(ch => ch.id === channelId);
+        if (!exists) {
+          console.log('✅ Добавляем канал в список');
+          return [...prev, {
+            id: channelId,
+            name: channelName,
+            label: channelName,
+            description: `Личный чат с ${displayName}`,
+            icon: '👤',
+            is_private: true,
+            is_direct: true,
+            created_by: user.id,
+            created_at: new Date().toISOString(),
+            participant_id: userData.user_id,
+            participant_name: displayName
+          }];
+        }
+        return prev;
       });
 
-    // ✅ ПОДРОБНОЕ ЛОГИРОВАНИЕ ОТВЕТА
-    console.log('📦 Полный ответ RPC:', { data, error });
-    console.log('📦 data.success:', data?.success);
-    console.log('📦 data.error:', data?.error);
-    console.log('📦 data.channel_id:', data?.channel_id);
-    console.log('📦 data.exists:', data?.exists);
+      console.log('🔄 Переключаемся на канал:', channelId);
+      setActiveChannel(channelId);
+      
+      setPinnedChannels(prev => {
+        if (!prev.includes(channelId)) {
+          return [...prev, channelId];
+        }
+        return prev;
+      });
 
-    if (error) {
-      console.error('❌ Ошибка RPC:', error);
-      showNotification?.('Не удалось создать чат', 'error');
+      if (isMobile) {
+        setShowSidebar(false);
+      }
+
+      setTimeout(() => {
+        loadMessages();
+      }, 100);
+
+      showNotification?.(`💬 Чат с ${displayName} ${data.exists ? 'открыт' : 'создан'}`, 'success');
+
+      return { success: true, channelId };
+
+    } catch (error) {
+      console.error('❌ Ошибка создания диалога:', error);
+      showNotification?.('Не удалось создать диалог', 'error');
       return { success: false, error };
     }
-
-    if (!data?.success) {
-      console.error('❌ Ошибка в данных:', data?.error);
-      showNotification?.(`Не удалось создать чат: ${data?.error || 'неизвестная ошибка'}`, 'error');
-      return { success: false, error: data?.error };
-    }
-
-    const channelId = data.channel_id;
-    if (!channelId) {
-      console.error('❌ Нет channel_id в ответе');
-      showNotification?.('Не удалось создать чат: нет ID канала', 'error');
-      return { success: false, error: 'No channel_id' };
-    }
-
-    const displayName = userData.full_name || userData.name || 'пользователь';
-    const channelName = `Чат с ${displayName}`;
-    
-    console.log('✅ Чат найден/создан:', channelId);
-    console.log('📊 Существовал ранее:', data.exists);
-
-    // --- Добавляем в локальное состояние ---
-    setCustomChannels(prev => {
-      const exists = prev.some(ch => ch.id === channelId);
-      if (!exists) {
-        console.log('✅ Добавляем канал в список');
-        return [...prev, {
-          id: channelId,
-          name: channelName,
-          label: channelName,
-          description: `Личный чат с ${displayName}`,
-          icon: '👤',
-          is_private: true,
-          is_direct: true,
-          created_by: user.id,
-          created_at: new Date().toISOString(),
-          participant_id: userData.user_id,
-          participant_name: displayName
-        }];
-      }
-      return prev;
-    });
-
-    // --- Переключаемся на канал ---
-    console.log('🔄 Переключаемся на канал:', channelId);
-    setActiveChannel(channelId);
-    
-    // --- Добавляем в закрепленные ---
-    setPinnedChannels(prev => {
-      if (!prev.includes(channelId)) {
-        return [...prev, channelId];
-      }
-      return prev;
-    });
-
-    // --- На мобильных устройствах закрываем сайдбар ---
-    if (isMobile) {
-      setShowSidebar(false);
-    }
-
-    // --- Принудительно загружаем сообщения ---
-    setTimeout(() => {
-      loadMessages();
-    }, 100);
-
-    showNotification?.(`💬 Чат с ${displayName} ${data.exists ? 'открыт' : 'создан'}`, 'success');
-
-    return { success: true, channelId };
-
-  } catch (error) {
-    console.error('❌ Ошибка создания диалога:', error);
-    showNotification?.('Не удалось создать диалог', 'error');
-    return { success: false, error };
-  }
-}, [user, getCompanyId, showNotification, setCustomChannels, setActiveChannel, setPinnedChannels, isMobile, setShowSidebar, loadMessages]);
+  }, [user, getCompanyId, showNotification, setCustomChannels, setActiveChannel, setPinnedChannels, isMobile, setShowSidebar, loadMessages]);
 
   // ============================================================
-  // 🔥 ЭФФЕКТ ДЛЯ ОТСЛЕЖИВАНИЯ РАЗМЕРА ЭКРАНА
+  // 🔥 ЭФФЕКТЫ
   // ============================================================
   useEffect(() => {
     const handleResize = () => {
@@ -921,11 +907,13 @@ const startDirectChat = useCallback(async (userData) => {
   }, [getCompanyId, activeChannel, user?.id, SYSTEM_CHANNELS]);
 
   // ============================================================
-  // 🔥 АВТОМАТИЧЕСКИЙ ВЫБОР ПЕРВОГО КАНАЛА (ТОЛЬКО ЕСЛИ НЕТ АКТИВНОГО)
+  // 🔥 АВТОМАТИЧЕСКИЙ ВЫБОР ПЕРВОГО КАНАЛА — ОТКЛЮЧЕН ДЛЯ 'general'
   // ============================================================
+  // ⚠️ Этот useEffect больше НЕ переключает на первый канал,
+  // чтобы не мешать переключению на 'general'
   useEffect(() => {
-    // ✅ Переключаем на первый канал ТОЛЬКО если activeChannel не установлен
-    if (customChannels.length > 0 && !activeChannel) {
+    // Только если activeChannel === undefined или null
+    if (customChannels.length > 0 && activeChannel === undefined) {
       console.log('🔄 Активный канал не установлен, переключаем на первый:', customChannels[0].id);
       setActiveChannel(customChannels[0].id);
     }
@@ -1000,7 +988,7 @@ const startDirectChat = useCallback(async (userData) => {
     canWriteToChannel,
     sendMessage,
     saveEdit,
-    // deleteMessage, // ✅ УДАЛЕНО — теперь используется из CompanyChat.jsx
+    // deleteMessage, // ✅ УДАЛЕНО
     toggleReaction,
     toggleSaveMessage,
     pinMessage,

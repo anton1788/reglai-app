@@ -696,7 +696,18 @@ const deleteMessage = useCallback(async (messageId) => {
             // ✅ Принудительно переключаем
             chat.setActiveChannel(channelId);
             
-            // ✅ Проверяем, что переключение произошло
+            // ✅ Если это 'general', принудительно обновляем
+            if (channelId === 'general') {
+              console.log('🔄 Принудительное обновление канала general');
+              setTimeout(() => {
+                chat.loadMessages();
+                // Проверяем, что активный канал действительно general
+                if (chat.activeChannel !== 'general') {
+                  chat.setActiveChannel('general');
+                }
+              }, 50);
+            }
+            
             console.log('📌 Новый активный:', chat.activeChannel);
             
             if (chat.isMobile) {
