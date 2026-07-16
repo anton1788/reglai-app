@@ -921,11 +921,12 @@ const startDirectChat = useCallback(async (userData) => {
   }, [getCompanyId, activeChannel, user?.id, SYSTEM_CHANNELS]);
 
   // ============================================================
-  // 🔥 АВТОМАТИЧЕСКИЙ ВЫБОР ПЕРВОГО КАНАЛА
+  // 🔥 АВТОМАТИЧЕСКИЙ ВЫБОР ПЕРВОГО КАНАЛА (ТОЛЬКО ЕСЛИ НЕТ АКТИВНОГО)
   // ============================================================
   useEffect(() => {
-    if (customChannels.length > 0 && activeChannel === 'general') {
-      console.log('🔄 Устанавливаем первый канал как активный:', customChannels[0].id);
+    // ✅ Переключаем на первый канал ТОЛЬКО если activeChannel не установлен
+    if (customChannels.length > 0 && !activeChannel) {
+      console.log('🔄 Активный канал не установлен, переключаем на первый:', customChannels[0].id);
       setActiveChannel(customChannels[0].id);
     }
   }, [customChannels, activeChannel]);
