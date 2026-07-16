@@ -5,7 +5,6 @@ import {
   Pin, FileText, Smile, Copy, Check, X
 } from 'lucide-react';
 import { formatChatMessage, extractMentions } from '../../utils/chatFormatters';
-import ChatEmojiPicker from './ChatEmojiPicker';
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🔥', '👀'];
 
@@ -71,8 +70,9 @@ const ChatMessage = ({
     return msg.reactions?.some(r => r.emoji === emoji && r.user_id === user?.id);
   }, [msg.reactions, user?.id]);
 
-  const canEdit = msg.user_id === user?.id || userRole === 'manager' || userRole === 'supply_admin';
-  const canDelete = msg.user_id === user?.id || userRole === 'manager' || userRole === 'supply_admin';
+  // ✅ Права на редактирование и удаление
+  const canEdit = msg.user_id === user?.id || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
+  const canDelete = msg.user_id === user?.id || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
 
   // Двойной клик для быстрой реакции ❤️
   const handleDoubleClick = useCallback(() => {
@@ -122,7 +122,7 @@ const ChatMessage = ({
   }, [mentions, user]);
 
   // ============================================================
-  // ✅ Рендер голосового сообщения
+  // ✅ Рендер голосового сообщения (С ДОБАВЛЕННЫМИ ДЕЙСТВИЯМИ)
   // ============================================================
   if (isVoiceMessage && voiceAudioUrl) {
     return (
@@ -175,11 +175,53 @@ const ChatMessage = ({
             </div>
           </div>
           
-          {/* Время */}
+          {/* ✅ Действия под голосовым сообщением (ВКЛЮЧАЯ УДАЛЕНИЕ) */}
           <div className={`flex items-center gap-1 mt-0.5 text-[10px] sm:text-xs ${isOwn ? 'justify-end' : ''}`}>
             <span className="text-gray-400 dark:text-gray-500">
               {new Date(msg.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
             </span>
+            
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Ответ */}
+              <button 
+                onClick={() => onReply?.(msg)} 
+                className="p-0.5 sm:p-1 hover:bg-gray-200/50 rounded-full"
+              >
+                <CornerUpLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
+              </button>
+              
+              {/* Копировать */}
+              <button 
+                onClick={handleCopy}
+                className="p-0.5 sm:p-1 hover:bg-gray-200/50 rounded-full"
+              >
+                {copied ? (
+                  <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" />
+                ) : (
+                  <Copy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
+                )}
+              </button>
+              
+              {/* Закрепить */}
+              {onPinMessage && (
+                <button 
+                  onClick={() => onPinMessage?.(msg.id)} 
+                  className="p-0.5 sm:p-1 hover:bg-yellow-100/50 rounded text-yellow-500"
+                >
+                  <Pin className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isPinned ? 'fill-current' : ''}`} />
+                </button>
+              )}
+              
+              {/* ✅ УДАЛИТЬ (добавлено для голосовых сообщений) */}
+              {canDelete && (
+                <button 
+                  onClick={() => onDelete?.(msg.id)} 
+                  className="p-0.5 sm:p-1 hover:bg-red-100/50 rounded text-red-500"
+                >
+                  <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </article>
