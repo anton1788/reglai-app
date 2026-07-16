@@ -712,11 +712,12 @@ const loadCustomChannels = useCallback(async () => {
     }
   }, []);
 
-  // ============================================================
-// 🔥 НАЧАТЬ ЛИЧНЫЙ ЧАТ (ЧЕРЕЗ RPC)
+ // ============================================================
+// 🔥 НАЧАТЬ ЛИЧНЫЙ ЧАТ (С ПОДРОБНЫМ ЛОГИРОВАНИЕМ)
 // ============================================================
 const startDirectChat = useCallback(async (userData) => {
-  console.log('📞 [startDirectChat] Вызван с:', userData);
+  console.log('📞 [startDirectChat] Начало');
+  console.log('📞 userData:', userData);
   
   // --- Проверки ---
   if (!user?.id) {
@@ -744,13 +745,35 @@ const startDirectChat = useCallback(async (userData) => {
     return { success: false, error: 'Нет companyId' };
   }
 
+  // --- Проверка сессии ---
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    console.error('❌ Ошибка сессии:', sessionError);
+    showNotification?.('Ошибка: требуется авторизация', 'error');
+    return { success: false, error: 'No session' };
+  }
+  console.log('✅ Сессия активна, пользователь:', session.user.id);
+
+  // --- Логируем ID для отладки ---
+  console.log('👤 Текущий пользователь (id):', user.id);
+  console.log('👤 Собеседник (id):', userData.user_id);
+  console.log('🏢 Компания (id):', companyId);
+
   try {
-    // ✅ ВЫЗЫВАЕМ RPC ФУНКЦИЮ (вместо прямых запросов)
+    // ✅ ВЫЗЫВАЕМ RPC ФУНКЦИЮ
+    console.log('📤 Вызов RPC check_or_create_direct_chat...');
     const { data, error } = await supabase
       .rpc('check_or_create_direct_chat', {
         p_other_user_id: userData.user_id,
         p_company_id: companyId
       });
+
+    // ✅ ПОДРОБНОЕ ЛОГИРОВАНИЕ ОТВЕТА
+    console.log('📦 Полный ответ RPC:', { data, error });
+    console.log('📦 data.success:', data?.success);
+    console.log('📦 data.error:', data?.error);
+    console.log('📦 data.channel_id:', data?.channel_id);
+    console.log('📦 data.exists:', data?.exists);
 
     if (error) {
       console.error('❌ Ошибка RPC:', error);
@@ -759,12 +782,18 @@ const startDirectChat = useCallback(async (userData) => {
     }
 
     if (!data?.success) {
-      console.error('❌ Ошибка:', data?.error);
-      showNotification?.('Не удалось создать чат', 'error');
+      console.error('❌ Ошибка в данных:', data?.error);
+      showNotification?.(`Не удалось создать чат: ${data?.error || 'неизвестная ошибка'}`, 'error');
       return { success: false, error: data?.error };
     }
 
     const channelId = data.channel_id;
+    if (!channelId) {
+      console.error('❌ Нет channel_id в ответе');
+      showNotification?.('Не удалось создать чат: нет ID канала', 'error');
+      return { success: false, error: 'No channel_id' };
+    }
+
     const displayName = userData.full_name || userData.name || 'пользователь';
     const channelName = `Чат с ${displayName}`;
     
