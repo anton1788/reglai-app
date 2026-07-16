@@ -173,6 +173,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   }, [newMessage, chat]);
 
   const handleVoiceSend = useCallback(async (audio) => {
+  console.log('🔍 [handleVoiceSend] Начало');
+  console.log('📊 audio:', audio);
+  console.log('📊 audio.blob:', audio?.blob);
+  console.log('📊 audio.blob.size:', audio?.blob?.size);
+  console.log('📊 audio.blob.type:', audio?.blob?.type);
+  
   if (!audio || !audio.blob) {
     console.error('❌ Нет аудио для отправки');
     showNotification?.('Не удалось отправить голосовое сообщение', 'error');
@@ -181,6 +187,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   
   try {
     const companyId = chat.getCompanyId();
+    console.log('🏢 companyId:', companyId);
+    
     if (!companyId) {
       showNotification?.('Ошибка: компания не указана', 'error');
       return;
@@ -191,33 +199,89 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
       showNotification?.('Файл слишком большой (макс. 10MB)', 'error');
       return;
     }
+
+    if (audio.blob.size === 0) {
+      showNotification?.('Запись пустая, попробуйте снова', 'error');
+      return;
+    }
+    
+    // ✅ Проверяем Storage перед загрузкой
+    console.log('🔍 Проверка доступа к Storage...');
+    try {
+      const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+      console.log('📦 Все buckets:', buckets);
+      if (bucketsError) {
+        console.error('❌ Ошибка получения buckets:', bucketsError);
+        showNotification?.('Ошибка доступа к хранилищу', 'error');
+        return;
+      }
+      
+      const bucketExists = buckets?.some(b => b.id === 'chat-attachments');
+      console.log('✅ Bucket chat-attachments существует:', bucketExists);
+      
+      if (!bucketExists) {
+        showNotification?.('Хранилище не найдено', 'error');
+        return;
+      }
+    } catch (storageErr) {
+      console.error('❌ Ошибка проверки Storage:', storageErr);
+      showNotification?.('Ошибка доступа к хранилищу', 'error');
+      return;
+    }
+    
+    // ✅ Конвертируем Blob в File
+    const file = new File(
+      [audio.blob], 
+      `voice_${Date.now()}.webm`, 
+      { 
+        type: 'audio/webm',
+        lastModified: Date.now()
+      }
+    );
     
     const fileName = `${companyId}/voice_${Date.now()}.webm`;
     console.log('📤 Загрузка голоса:', fileName);
+    console.log('📊 Размер файла:', file.size, 'байт');
+    console.log('📊 Тип файла:', file.type);
     
-    // ✅ Добавляем contentType
-    const { error: uploadError } = await supabase.storage
+    // ✅ Загружаем
+    const { data, error: uploadError } = await supabase.storage
       .from('chat-attachments')
-      .upload(fileName, audio.blob, {
-        contentType: 'audio/webm',
-        cacheControl: '3600'
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: 'audio/webm'
       });
     
     if (uploadError) {
-      console.error('❌ Ошибка загрузки:', uploadError);
-      throw uploadError;
+      console.error('❌ Детали ошибки загрузки:', uploadError);
+      console.error('❌ Код ошибки:', uploadError.statusCode);
+      console.error('❌ Сообщение:', uploadError.message);
+      showNotification?.(`Не удалось загрузить: ${uploadError.message || 'ошибка'}`, 'error');
+      return;
     }
     
+    console.log('✅ Загрузка успешна:', data);
+    
+    // ✅ Получаем публичный URL
     const { data: { publicUrl } } = supabase.storage
       .from('chat-attachments')
       .getPublicUrl(fileName);
     
-    console.log('✅ Голос загружен:', publicUrl);
+    console.log('✅ Публичный URL:', publicUrl);
     
-    await chat.sendMessage(`🎙️ Голосовое сообщение: ${publicUrl}`);
-    showNotification?.('✅ Голосовое сообщение отправлено', 'success');
+    // ✅ Отправляем сообщение
+    const result = await chat.sendMessage(`🎙️ Голосовое сообщение: ${publicUrl}`);
+    
+    if (result.success) {
+      showNotification?.('✅ Голосовое сообщение отправлено', 'success');
+    } else {
+      throw new Error('Не удалось отправить сообщение');
+    }
+    
   } catch (err) {
     console.error('❌ Ошибка отправки голоса:', err);
+    console.error('❌ Стек ошибки:', err.stack);
     showNotification?.('Не удалось отправить голосовое сообщение', 'error');
   }
 }, [chat, showNotification]);
