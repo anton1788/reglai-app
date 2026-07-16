@@ -231,7 +231,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     const extension = mimeType.includes('ogg') ? 'ogg' : 
                      mimeType.includes('mp4') ? 'mp4' : 'webm';
     
-    // ✅ Создаем File
+    // ✅ Создаем File из blob
     const file = new File(
       [audio.blob], 
       `voice_${Date.now()}.${extension}`, 
@@ -246,7 +246,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     console.log('📊 Размер файла:', file.size, 'байт');
     console.log('📊 Тип файла:', file.type);
     
-    // ✅ Загружаем
+    // ✅ Загружаем файл в Storage
     const { data, error: uploadError } = await supabase.storage
       .from('chat-attachments')
       .upload(fileName, file, {
@@ -256,31 +256,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
       });
     
     if (uploadError) {
-      console.error('❌ Детали ошибки загрузки:', uploadError);
-      console.error('❌ Код ошибки:', uploadError.statusCode);
-      console.error('❌ Сообщение:', uploadError.message);
-      
-      if (uploadError.statusCode === 400) {
-        console.log('🔄 Пробуем загрузить как ArrayBuffer...');
-        const arrayBuffer = await audio.blob.arrayBuffer();
-        const { data: retryData, error: retryError } = await supabase.storage
-          .from('chat-attachments')
-          .upload(fileName, arrayBuffer, {
-            cacheControl: '3600',
-            upsert: false,
-            contentType: mimeType
-          });
-        
-        if (retryError) {
-          console.error('❌ Повторная попытка не удалась:', retryError);
-          showNotification?.('Не удалось загрузить файл', 'error');
-          return;
-        }
-        console.log('✅ Загрузка через ArrayBuffer успешна:', retryData);
-      } else {
-        showNotification?.(`Ошибка загрузки: ${uploadError.message}`, 'error');
-        return;
-      }
+      console.error('❌ Ошибка загрузки:', uploadError);
+      showNotification?.(`Ошибка загрузки: ${uploadError.message}`, 'error');
+      return;
     }
     
     console.log('✅ Загрузка успешна:', data);
@@ -292,9 +270,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     
     console.log('✅ Публичный URL:', publicUrl);
     
-    // ============================================================
-    // ✅ ИЗМЕНЕНИЕ: Отправляем сообщение с аудио-плеером
-    // ============================================================
+    // ✅ Отправляем сообщение с аудио-плеером
     const result = await chat.sendMessage(
       `🎙️ Голосовое сообщение:\n<audio controls src="${publicUrl}"></audio>`
     );
@@ -304,11 +280,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     } else {
       throw new Error('Не удалось отправить сообщение');
     }
-    // ============================================================
     
   } catch (err) {
     console.error('❌ Ошибка отправки голоса:', err);
-    console.error('❌ Стек ошибки:', err.stack);
     showNotification?.('Не удалось отправить голосовое сообщение', 'error');
   }
 }, [chat, showNotification]);

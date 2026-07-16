@@ -11,6 +11,7 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
+  const streamRef = useRef(null);
 
   useEffect(() => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -19,14 +20,32 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
     }
   }, []);
 
+  // ✅ Улучшенная очистка
   useEffect(() => {
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {
+          // Игнорируем ошибки при остановке
+        }
+      }
+      
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
       }
     };
-  }, []);
+  }, [audioUrl]);
 
   const startRecording = useCallback(async () => {
     if (!isSupported) {
@@ -34,20 +53,39 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
       return;
     }
 
+    if (isRecording) {
+      console.warn('⚠️ Запись уже идет');
+      return;
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        }
+      });
       
-      // ✅ Пробуем разные MIME типы для лучшей поддержки
-      let mimeType = 'audio/webm';
-      if (!MediaRecorder.isTypeSupported('audio/webm')) {
-        if (MediaRecorder.isTypeSupported('audio/ogg')) {
-          mimeType = 'audio/ogg';
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4';
-        } else {
-          mimeType = '';
+      streamRef.current = stream;
+      
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+            mimeType = 'audio/ogg;codecs=opus';
+          } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+            mimeType = 'audio/ogg';
+          } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            mimeType = 'audio/mp4';
+          } else {
+            mimeType = '';
+          }
         }
       }
+      
+      console.log('🎵 Используемый MIME тип:', mimeType || 'default');
       
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: mimeType || undefined
@@ -63,26 +101,43 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
       };
       
       mediaRecorder.onstop = () => {
-        // ✅ Используем тот же тип, что и при записи
+        if (audioChunksRef.current.length === 0) {
+          console.warn('⚠️ Нет данных для записи');
+          setError('Запись не удалась, попробуйте снова');
+          return;
+        }
+        
+        const finalMimeType = mimeType || 'audio/webm';
         const audioBlob = new Blob(audioChunksRef.current, { 
-          type: mimeType || 'audio/webm' 
+          type: finalMimeType
         });
+        
+        if (audioBlob.size === 0) {
+          console.warn('⚠️ Пустая запись');
+          setError('Запись пустая, попробуйте снова');
+          return;
+        }
+        
         const url = URL.createObjectURL(audioBlob);
         setAudioUrl(url);
         
+        const extension = finalMimeType.includes('ogg') ? 'ogg' : 
+                         finalMimeType.includes('mp4') ? 'mp4' : 'webm';
+        
         if (onRecordingComplete) {
-          const extension = mimeType.includes('ogg') ? 'ogg' : 
-                           mimeType.includes('mp4') ? 'mp4' : 'webm';
           onRecordingComplete({
             url,
             blob: audioBlob,
             duration: recordingDuration,
             name: `голосовое_${Date.now()}.${extension}`,
-            mimeType: mimeType
+            mimeType: finalMimeType
           });
         }
         
-        stream.getTracks().forEach(track => track.stop());
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
       };
       
       mediaRecorder.start(1000);
@@ -90,7 +145,11 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
       setRecordingDuration(0);
       setError(null);
       
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      
       timerRef.current = setInterval(() => {
         setRecordingDuration(prev => {
           const newDuration = prev + 1;
@@ -103,16 +162,30 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
       }, 1000);
       
     } catch (err) {
-      console.error('Ошибка доступа к микрофону:', err);
-      setError('Не удалось получить доступ к микрофону');
+      console.error('❌ Ошибка доступа к микрофону:', err);
+      
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError('Доступ к микрофону запрещен. Разрешите доступ в настройках браузера');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setError('Микрофон не найден. Подключите микрофон и попробуйте снова');
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        setError('Микрофон занят другим приложением. Закройте другие программы и попробуйте снова');
+      } else {
+        setError('Не удалось получить доступ к микрофону');
+      }
+      
       setIsRecording(false);
     }
-  }, [isSupported, maxDuration, onRecordingComplete]);
+  }, [isSupported, maxDuration, onRecordingComplete, isRecording]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
+      try {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+      } catch (err) {
+        console.error('❌ Ошибка остановки записи:', err);
+      }
     }
     
     if (timerRef.current) {
@@ -123,7 +196,11 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
 
   const cancelRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (err) {
+        console.error('❌ Ошибка отмены записи:', err);
+      }
     }
     
     if (timerRef.current) {
@@ -131,13 +208,21 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
       timerRef.current = null;
     }
     
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    
     setIsRecording(false);
     setRecordingDuration(0);
+    
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl);
       setAudioUrl(null);
     }
+    
     audioChunksRef.current = [];
+    setError(null);
   }, [audioUrl]);
 
   const clearAudio = useCallback(() => {
@@ -145,11 +230,13 @@ export const useVoiceRecorder = ({ onRecordingComplete, maxDuration = 60 }) => {
       URL.revokeObjectURL(audioUrl);
       setAudioUrl(null);
     }
+    setError(null);
   }, [audioUrl]);
 
   const formatDuration = useCallback((seconds) => {
+    if (!seconds || seconds < 0) return '0:00';
     const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }, []);
 

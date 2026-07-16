@@ -1,5 +1,5 @@
 // src/components/Chat/VoiceRecorder.jsx
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Mic, Square, X, Play, Trash2, Loader2 } from 'lucide-react';
 import useVoiceRecorder from '../../hooks/useVoiceRecorder';
 
@@ -30,6 +30,10 @@ const VoiceRecorder = ({
 
   const audioRef = useRef(null);
   const waveformRef = useRef(null);
+  
+  // ✅ Добавляем состояние для прогресса
+  const [progress, setProgress] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   // Визуализация звука (простая)
   useEffect(() => {
@@ -45,10 +49,65 @@ const VoiceRecorder = ({
     }
   }, [isRecording]);
 
+  // ✅ Обработка воспроизведения
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => {
+      if (audio.duration) {
+        setProgress((audio.currentTime / audio.duration) * 100);
+      }
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setProgress(0);
+    };
+
+    const handleError = (e) => {
+      console.error('❌ Ошибка воспроизведения:', e);
+      setIsPlaying(false);
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
+
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
+    };
+  }, [audioUrl]);
+
   // Очистка аудио при размонтировании
   useEffect(() => {
-    return () => clearAudio();
+    return () => {
+      clearAudio();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+    };
   }, [clearAudio]);
+
+  // ✅ Функция для переключения воспроизведения
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch((err) => {
+          console.error('❌ Не удалось воспроизвести:', err);
+          setIsPlaying(false);
+        });
+    }
+  };
 
   if (!isSupported) {
     return (
@@ -63,38 +122,46 @@ const VoiceRecorder = ({
     return (
       <div className={`flex items-center gap-3 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg ${className}`}>
         <button
-          onClick={() => {
-            if (audioRef.current) {
-              if (audioRef.current.paused) {
-                audioRef.current.play();
-              } else {
-                audioRef.current.pause();
-              }
-            }
-          }}
-          className="p-2 bg-[#4A6572] text-white rounded-full hover:bg-[#344955] transition-colors"
+          onClick={togglePlay}
+          className="p-2 bg-[#4A6572] text-white rounded-full hover:bg-[#344955] transition-colors flex-shrink-0"
         >
-          <Play className="w-4 h-4" />
+          {isPlaying ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
         </button>
         
-        <audio ref={audioRef} src={audioUrl} className="hidden" />
+        {/* ✅ Аудио элемент с явным указанием источника */}
+        <audio 
+          ref={audioRef} 
+          className="hidden"
+          preload="metadata"
+        >
+          <source src={audioUrl} type="audio/webm" />
+          <source src={audioUrl} type="audio/ogg" />
+          <source src={audioUrl} type="audio/mp4" />
+          Ваш браузер не поддерживает аудио.
+        </audio>
         
+        {/* ✅ Прогресс-бар */}
         <div className="flex-1">
-          <div className="h-1 bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden">
-            <div className="h-full bg-[#4A6572] rounded-full" style={{ width: '0%' }} />
+          <div className="h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden cursor-pointer">
+            <div 
+              className="h-full bg-[#4A6572] rounded-full transition-all duration-100"
+              style={{ width: `${progress}%` }}
+            />
           </div>
         </div>
         
-        <span className="text-xs text-gray-500 dark:text-gray-400">
+        <span className="text-xs text-gray-500 dark:text-gray-400 font-mono flex-shrink-0">
           {formatDuration(recordingDuration)}
         </span>
         
         <button
           onClick={() => {
             clearAudio();
+            setProgress(0);
+            setIsPlaying(false);
             onCancel?.();
           }}
-          className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg text-red-500"
+          className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg text-red-500 flex-shrink-0"
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -108,7 +175,7 @@ const VoiceRecorder = ({
       <div className={`flex items-center gap-3 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg ${className}`}>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-          <span className="text-sm font-medium text-red-600 dark:text-red-400">
+          <span className="text-sm font-medium text-red-600 dark:text-red-400 font-mono">
             {formatDuration(recordingDuration)}
           </span>
         </div>
@@ -126,14 +193,14 @@ const VoiceRecorder = ({
         
         <button
           onClick={stopRecording}
-          className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+          className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors flex-shrink-0"
         >
           <Square className="w-4 h-4" />
         </button>
         
         <button
           onClick={cancelRecording}
-          className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg"
+          className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg flex-shrink-0"
         >
           <X className="w-4 h-4 text-gray-500" />
         </button>
