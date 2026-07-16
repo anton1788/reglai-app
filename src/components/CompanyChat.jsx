@@ -407,28 +407,41 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* Сайдбар */}
-        <ChatSidebar
-          channels={allChannels}
-          activeChannel={chat.activeChannel}
-          onChannelSelect={chat.setActiveChannel}
-          canCreateChannel={userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director'}
-          onCreateChannel={() => setShowCreateModal(true)}
-          connectionStatus={chat.connectionStatus}
-          showSidebar={chat.showSidebar}
-          onChannelSettings={(channel) => {
-            setSelectedChannel(channel);
-            setShowChannelSettings(true);
-          }}
-          onDeleteChannel={deleteChannel}
-          currentUserRole={userRole}
-          companyUsers={chat.companyUsers}
-          currentUser={user}
-          onStartDirectChat={chat.startDirectChat}
-          unreadCounts={chat.unreadCounts}
-          pinnedChannels={chat.pinnedChannels}
-          onTogglePinChannel={chat.pinChannel}
-          className={chat.isMobile ? 'absolute inset-0 z-10' : ''}
-        />
+        {/* Сайдбар */}
+<ChatSidebar
+  channels={allChannels}
+  activeChannel={chat.activeChannel}
+  onChannelSelect={(channelId) => {
+    // ✅ Закрываем сайдбар на мобильных при выборе канала
+    chat.setActiveChannel(channelId);
+    if (chat.isMobile) {
+      chat.setShowSidebar(false);
+    }
+  }}
+  canCreateChannel={userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director'}
+  onCreateChannel={() => setShowCreateModal(true)}
+  connectionStatus={chat.connectionStatus}
+  showSidebar={chat.showSidebar}
+  onChannelSettings={(channel) => {
+    setSelectedChannel(channel);
+    setShowChannelSettings(true);
+  }}
+  onDeleteChannel={deleteChannel}
+  currentUserRole={userRole}
+  companyUsers={chat.companyUsers}
+  currentUser={user}
+  onStartDirectChat={async (userData) => {
+    // ✅ Закрываем сайдбар на мобильных после создания чата
+    await chat.startDirectChat(userData);
+    if (chat.isMobile) {
+      chat.setShowSidebar(false);
+    }
+  }}
+  unreadCounts={chat.unreadCounts}
+  pinnedChannels={chat.pinnedChannels}
+  onTogglePinChannel={chat.pinChannel}
+  className={chat.isMobile ? 'absolute inset-0 z-50 shadow-2xl' : ''}
+/>
 
         {/* Основная область */}
         {(!chat.isMobile || !chat.showSidebar) && (
