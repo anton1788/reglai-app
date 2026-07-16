@@ -172,7 +172,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [newMessage, chat]);
 
- const handleVoiceSend = useCallback(async (audio) => {
+  const handleVoiceSend = useCallback(async (audio) => {
   console.log('🔍 [handleVoiceSend] Начало');
   console.log('📊 audio:', audio);
   console.log('📊 audio.blob:', audio?.blob);
@@ -385,6 +385,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [loadChannelMembers, showNotification]);
 
+  // ============================================================
+  // 🔥 УДАЛЕНИЕ КАНАЛА
+  // ============================================================
   const deleteChannel = useCallback(async (channelId) => {
     if (!channelId) return;
     
@@ -482,6 +485,76 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     if (e.target) e.target.value = '';
   }, [userCompanyId, showNotification]);
 
+  // ============================================================
+  // 🔥 УДАЛЕНИЕ СООБЩЕНИЯ (С УДАЛЕНИЕМ ФАЙЛА ИЗ STORAGE)
+  // ============================================================
+  const deleteMessage = useCallback(async (messageId) => {
+    if (!messageId) return;
+    
+    // Находим сообщение
+    const message = chat.messages.find(m => m.id === messageId);
+    if (!message) {
+      showNotification?.('Сообщение не найдено', 'error');
+      return;
+    }
+    
+    // ✅ Проверяем, является ли сообщение голосовым
+    const isVoice = message.content?.includes('🎙️ Голосовое сообщение') && 
+                    message.content?.includes('https://') && 
+                    message.content?.includes('.webm');
+    
+    // ✅ Если это голосовое сообщение, извлекаем путь к файлу
+    let filePath = null;
+    if (isVoice) {
+      const urlMatch = message.content.match(/https?:\/\/[^\s]+\.webm/);
+      if (urlMatch) {
+        const url = urlMatch[0];
+        // Извлекаем путь из URL: /storage/v1/object/public/chat-attachments/.../voice_xxx.webm
+        const pathMatch = url.match(/\/object\/public\/chat-attachments\/(.+\.webm)/);
+        if (pathMatch) {
+          filePath = pathMatch[1];
+          console.log('🗑️ Найден файл для удаления:', filePath);
+        }
+      }
+    }
+    
+    // Подтверждение удаления
+    if (!window.confirm('Удалить сообщение?')) return;
+    
+    try {
+      // ✅ Сначала удаляем файл из Storage (если это голосовое сообщение)
+      if (filePath) {
+        console.log('🗑️ Удаление файла из Storage:', filePath);
+        const { error: storageError } = await supabase.storage
+          .from('chat-attachments')
+          .remove([filePath]);
+        
+        if (storageError) {
+          console.error('❌ Ошибка удаления файла из Storage:', storageError);
+          // Продолжаем удаление сообщения даже если файл не удалился
+        } else {
+          console.log('✅ Файл удален из Storage');
+        }
+      }
+      
+      // ✅ Удаляем сообщение из БД
+      const { error } = await supabase
+        .from('company_messages')
+        .delete()
+        .eq('id', messageId);
+      
+      if (error) throw error;
+      
+      // ✅ Обновляем локальное состояние
+      chat.setMessages(prev => prev.filter(m => m.id !== messageId));
+      showNotification?.('Сообщение удалено', 'success');
+      
+    } catch (error) {
+      console.error('❌ Ошибка удаления:', error);
+      showNotification?.('Не удалось удалить сообщение', 'error');
+    }
+  }, [chat, showNotification]);
+
   // ===== ФИЛЬТРАЦИЯ СООБЩЕНИЙ =====
   const displayedMessages = useMemo(() => {
     if (!searchQuery) return chat.messages;
@@ -520,41 +593,38 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* Сайдбар */}
-        {/* Сайдбар */}
-<ChatSidebar
-  channels={allChannels}
-  activeChannel={chat.activeChannel}
-  onChannelSelect={(channelId) => {
-    // ✅ Закрываем сайдбар на мобильных при выборе канала
-    chat.setActiveChannel(channelId);
-    if (chat.isMobile) {
-      chat.setShowSidebar(false);
-    }
-  }}
-  canCreateChannel={userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director'}
-  onCreateChannel={() => setShowCreateModal(true)}
-  connectionStatus={chat.connectionStatus}
-  showSidebar={chat.showSidebar}
-  onChannelSettings={(channel) => {
-    setSelectedChannel(channel);
-    setShowChannelSettings(true);
-  }}
-  onDeleteChannel={deleteChannel}
-  currentUserRole={userRole}
-  companyUsers={chat.companyUsers}
-  currentUser={user}
-  onStartDirectChat={async (userData) => {
-    // ✅ Закрываем сайдбар на мобильных после создания чата
-    await chat.startDirectChat(userData);
-    if (chat.isMobile) {
-      chat.setShowSidebar(false);
-    }
-  }}
-  unreadCounts={chat.unreadCounts}
-  pinnedChannels={chat.pinnedChannels}
-  onTogglePinChannel={chat.pinChannel}
-  className={chat.isMobile ? 'absolute inset-0 z-50 shadow-2xl' : ''}
-/>
+        <ChatSidebar
+          channels={allChannels}
+          activeChannel={chat.activeChannel}
+          onChannelSelect={(channelId) => {
+            chat.setActiveChannel(channelId);
+            if (chat.isMobile) {
+              chat.setShowSidebar(false);
+            }
+          }}
+          canCreateChannel={userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director'}
+          onCreateChannel={() => setShowCreateModal(true)}
+          connectionStatus={chat.connectionStatus}
+          showSidebar={chat.showSidebar}
+          onChannelSettings={(channel) => {
+            setSelectedChannel(channel);
+            setShowChannelSettings(true);
+          }}
+          onDeleteChannel={deleteChannel}
+          currentUserRole={userRole}
+          companyUsers={chat.companyUsers}
+          currentUser={user}
+          onStartDirectChat={async (userData) => {
+            await chat.startDirectChat(userData);
+            if (chat.isMobile) {
+              chat.setShowSidebar(false);
+            }
+          }}
+          unreadCounts={chat.unreadCounts}
+          pinnedChannels={chat.pinnedChannels}
+          onTogglePinChannel={chat.pinChannel}
+          className={chat.isMobile ? 'absolute inset-0 z-50 shadow-2xl' : ''}
+        />
 
         {/* Основная область */}
         {(!chat.isMobile || !chat.showSidebar) && (
@@ -705,7 +775,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
                         chat.setEditingMessageId(null);
                         chat.setEditText('');
                       }}
-                      onDelete={chat.deleteMessage}
+                      onDelete={deleteMessage}
                       onToggleReaction={chat.toggleReaction}
                       onReply={chat.setReplyTo}
                       onToggleSave={chat.toggleSaveMessage}
