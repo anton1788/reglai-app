@@ -437,41 +437,6 @@ const loadCustomChannels = useCallback(async () => {
     }
   }, [user?.id, showNotification]);
 
-  // ===== УДАЛЕНИЕ СООБЩЕНИЯ =====
-  const deleteMessage = useCallback(async (messageId) => {
-    if (!window.confirm('Удалить сообщение?')) return { success: false, error: 'Отменено' };
-    
-    try {
-      const message = messages.find(m => m.id === messageId);
-      if (!message) return { success: false, error: 'Сообщение не найдено' };
-      
-      const canDelete = message.user_id === user?.id || 
-                        userRole === 'manager' || 
-                        userRole === 'supply_admin' ||
-                        userRole === 'director';
-      
-      if (!canDelete) {
-        showNotification?.('У вас нет прав на удаление', 'error');
-        return { success: false, error: 'Нет прав' };
-      }
-      
-      const { error } = await supabase
-        .from('company_messages')
-        .delete()
-        .eq('id', messageId);
-      
-      if (error) throw error;
-      
-      setMessages(prev => prev.filter(m => m.id !== messageId));
-      showNotification?.('Сообщение удалено', 'success');
-      return { success: true };
-    } catch (error) {
-      console.error('Ошибка удаления:', error);
-      showNotification?.('Не удалось удалить сообщение', 'error');
-      return { success: false, error: error };
-    }
-  }, [user?.id, userRole, messages, showNotification]);
-
   // ===== РЕАКЦИИ =====
   const toggleReaction = useCallback(async (messageId, emoji) => {
     if (!user?.id) return { success: false, error: 'Нет пользователя' };
@@ -1034,7 +999,7 @@ const startDirectChat = useCallback(async (userData) => {
     canWriteToChannel,
     sendMessage,
     saveEdit,
-    deleteMessage,
+    // deleteMessage, // ✅ УДАЛЕНО — теперь используется из CompanyChat.jsx
     toggleReaction,
     toggleSaveMessage,
     pinMessage,
