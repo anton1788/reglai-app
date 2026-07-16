@@ -713,12 +713,12 @@ const loadCustomChannels = useCallback(async () => {
   }, []);
 
   // ============================================================
-// 🔥 НАЧАТЬ ЛИЧНЫЙ ЧАТ (С RPC)
+// 🔥 НАЧАТЬ ЛИЧНЫЙ ЧАТ (ЧЕРЕЗ RPC)
 // ============================================================
 const startDirectChat = useCallback(async (userData) => {
   console.log('📞 [startDirectChat] Вызван с:', userData);
   
-  // 1. Проверка пользователя
+  // --- Проверки ---
   if (!user?.id) {
     console.error('❌ Нет текущего пользователя');
     showNotification?.('Ошибка: пользователь не авторизован', 'error');
@@ -771,7 +771,7 @@ const startDirectChat = useCallback(async (userData) => {
     console.log('✅ Чат найден/создан:', channelId);
     console.log('📊 Существовал ранее:', data.exists);
 
-    // ✅ Добавляем в локальное состояние (если ещё нет)
+    // --- Добавляем в локальное состояние ---
     setCustomChannels(prev => {
       const exists = prev.some(ch => ch.id === channelId);
       if (!exists) {
@@ -793,11 +793,11 @@ const startDirectChat = useCallback(async (userData) => {
       return prev;
     });
 
-    // ✅ Переключаемся на канал
+    // --- Переключаемся на канал ---
     console.log('🔄 Переключаемся на канал:', channelId);
     setActiveChannel(channelId);
     
-    // ✅ Добавляем в закрепленные
+    // --- Добавляем в закрепленные ---
     setPinnedChannels(prev => {
       if (!prev.includes(channelId)) {
         return [...prev, channelId];
@@ -805,12 +805,12 @@ const startDirectChat = useCallback(async (userData) => {
       return prev;
     });
 
-    // ✅ На мобильных устройствах закрываем сайдбар
+    // --- На мобильных устройствах закрываем сайдбар ---
     if (isMobile) {
       setShowSidebar(false);
     }
 
-    // ✅ Принудительно загружаем сообщения
+    // --- Принудительно загружаем сообщения ---
     setTimeout(() => {
       loadMessages();
     }, 100);
