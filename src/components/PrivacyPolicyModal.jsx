@@ -1,6 +1,3 @@
-// src/components/PrivacyPolicyModal.jsx
-// Добавлены пункты 8 и 9 о 152-ФЗ и согласии на обработку данных
-
 import React from 'react';
 import { X, Shield, Download, Printer } from 'lucide-react';
 
@@ -306,94 +303,10 @@ const PrivacyPolicyModal = ({ isOpen, onClose }) => {
             </div>
           </div>
 
-          {/* 8. Соответствие 152-ФЗ «О персональных данных» */}
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <span className="w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center text-xs font-bold">8</span>
-               Соответствие 152-ФЗ «О персональных данных»
-            </h3>
-            
-            <div className="space-y-3">
-              <p className="text-sm">
-                <span className="font-semibold">8.1.</span> Настоящая Политика разработана в соответствии с Федеральным законом 
-                от 27.07.2006 № 152-ФЗ «О персональных данных» и определяет порядок обработки 
-                персональных данных пользователей Сервиса.
-              </p>
-              
-              <p className="text-sm">
-                <span className="font-semibold">8.2.</span> Оператор обеспечивает защиту персональных данных от несанкционированного 
-                доступа, изменения, блокирования, копирования, предоставления, распространения, 
-                а также от иных неправомерных действий в соответствии с требованиями 152-ФЗ.
-              </p>
-              
-              <p className="text-sm">
-                <span className="font-semibold">8.3.</span> Все персональные данные хранятся на серверах, расположенных на территории 
-                Российской Федерации, что соответствует требованиям законодательства РФ о локализации 
-                персональных данных граждан РФ.
-              </p>
-              
-              <p className="text-sm">
-                <span className="font-semibold">8.4.</span> Обработка персональных данных осуществляется с использованием средств 
-                криптографической защиты информации, сертифицированных в установленном порядке.
-              </p>
-              
-              <p className="text-sm">
-                <span className="font-semibold">8.5.</span> В случае выявления фактов неправомерной обработки персональных данных 
-                Оператор обязан принять меры по устранению нарушений в течение 3 рабочих дней.
-              </p>
-            </div>
-          </div>
-
-          {/* 9. Согласие на обработку персональных данных */}
-          <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <span className="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-xs font-bold">9</span>
-               Согласие на обработку персональных данных
-            </h3>
-            
-            <div className="space-y-3">
-              <p className="text-sm">
-                <span className="font-semibold">9.1.</span> Пользователь дает свое согласие на обработку своих персональных данных 
-                путем проставления отметки в соответствующем поле при регистрации в Сервисе.
-              </p>
-              
-              <p className="text-sm">
-                <span className="font-semibold">9.2.</span> Согласие дается на обработку следующих персональных данных: 
-                фамилия, имя, отчество, контактный телефон, адрес электронной почты, 
-                данные о компании, должность, а также иные данные, указанные в пункте 2 настоящей Политики.
-              </p>
-              
-              <p className="text-sm">
-                <span className="font-semibold">9.3.</span> Согласие на обработку персональных данных может быть отозвано 
-                в любое время путем направления письменного уведомления на адрес электронной почты: 
-                <a href="mailto:legal@reglay.pro" className="text-[#4A6572] hover:underline ml-1">legal@reglay.pro</a>
-              </p>
-              
-              <p className="text-sm">
-                <span className="font-semibold">9.4.</span> В случае отзыва согласия Оператор обязан прекратить обработку 
-                персональных данных и уничтожить их в срок, не превышающий 30 дней с даты получения 
-                соответствующего уведомления.
-              </p>
-              
-              <p className="text-sm">
-                <span className="font-semibold">9.5.</span> Согласие на обработку персональных данных действует в течение всего 
-                срока использования Сервиса и в течение 3 лет после прекращения использования.
-              </p>
-              
-              <div className="bg-white/50 dark:bg-gray-800/50 rounded-lg p-3 mt-2 border border-purple-200 dark:border-purple-800">
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  📌 Для пользователей из Европейского Союза дополнительно применяются требования 
-                  GDPR (Regulation (EU) 2016/679). В случае противоречий между 152-ФЗ и GDPR, 
-                  применяются положения, предоставляющие пользователю более высокий уровень защиты.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* 10. Cookies и аналитика */}
+          {/* 8. Cookies и аналитика */}
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <span className="w-6 h-6 bg-[#4A6572] text-white rounded-full flex items-center justify-center text-xs font-bold">10</span>
+              <span className="w-6 h-6 bg-[#4A6572] text-white rounded-full flex items-center justify-center text-xs font-bold">8</span>
                Cookies и аналитика
             </h3>
             <ul className="list-disc pl-6 space-y-2">
@@ -405,10 +318,10 @@ const PrivacyPolicyModal = ({ isOpen, onClose }) => {
             </ul>
           </div>
 
-          {/* 11. Контакты */}
+          {/* 9. Контакты */}
           <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <span className="w-6 h-6 bg-[#4A6572] text-white rounded-full flex items-center justify-center text-xs font-bold">11</span>
+              <span className="w-6 h-6 bg-[#4A6572] text-white rounded-full flex items-center justify-center text-xs font-bold">9</span>
                Контакты для вопросов о данных
             </h3>
             <p className="mb-2">По всем вопросам обработки персональных данных вы можете обратиться:</p>
@@ -423,10 +336,10 @@ const PrivacyPolicyModal = ({ isOpen, onClose }) => {
             </p>
           </div>
 
-          {/* 12. Изменение политики */}
+          {/* 10. Изменение политики */}
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <span className="w-6 h-6 bg-[#4A6572] text-white rounded-full flex items-center justify-center text-xs font-bold">12</span>
+              <span className="w-6 h-6 bg-[#4A6572] text-white rounded-full flex items-center justify-center text-xs font-bold">10</span>
                Изменение политики
             </h3>
             <p className="mb-2">

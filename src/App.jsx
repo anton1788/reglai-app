@@ -3,9 +3,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import ChatNavItem from './components/ChatNavItem';
 import TesterFeedbackForm from './components/Feedback/TesterFeedbackForm';
-import OfferModal from './components/OfferModal';
-import LegalEntityOffer from './components/LegalEntityOffer';
-import LeadForm from './components/Landing/LeadForm';
 // После других импортов
 import FeedbackButton from './components/Feedback/FeedbackButton';
 // === ТАРИФЫ И КВОТЫ ===
@@ -1219,9 +1216,6 @@ const [waitingWorker, setWaitingWorker] = useState(null);
 const [showSettings, setShowSettings] = useState(false);
 // В App.jsx, в секции useState
 const [showFeedbackForm, setShowFeedbackForm] = useState(false);
-const [showOfferModal, setShowOfferModal] = useState(false);
-const [showLegalOffer, setShowLegalOffer] = useState(false);
-const [showLeadForm, setShowLeadForm] = useState(false);
 
   // ─────────────────────────────────────────────────────────
   // 🎯 FOCUS MANAGEMENT (Pattern #3)
@@ -6246,36 +6240,18 @@ const renderAnalyticsDashboard = () => {
                 />
                 <label htmlFor="signup-consent" className="text-xs text-gray-700 dark:text-gray-300 leading-tight">
                   Я принимаю условия{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPrivacyPolicyModal(true);
+                    }}
+                    className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium inline-flex items-center gap-0.5"
+                  >
+                    Политики конфиденциальности
+                  </button>
                   {' '}и даю согласие на обработку персональных данных
                 </label>
               </div>
-
-              {/* Кнопки документов - ПОСЛЕ блока согласия */}
-<div className="mt-4 flex flex-wrap gap-2">
-  <button
-    type="button"
-    onClick={() => setShowPrivacyPolicyModal(true)}
-    className="text-xs text-[#4A6572] hover:underline dark:text-[#F9AA33]"
-  >
-    Политика конфиденциальности
-  </button>
-  <span className="text-xs text-gray-400">|</span>
-  <button
-    type="button"
-    onClick={() => setShowOfferModal(true)}
-    className="text-xs text-[#4A6572] hover:underline dark:text-[#F9AA33]"
-  >
-    Публичная оферта
-  </button>
-  <span className="text-xs text-gray-400">|</span>
-  <button
-    type="button"
-    onClick={() => setShowLegalOffer(true)}
-    className="text-xs text-[#4A6572] hover:underline dark:text-[#F9AA33]"
-  >
-    Договор для юрлиц
-  </button>
-</div>
               
               <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 leading-tight">
                 📄 Нажимая «Зарегистрироваться», вы подтверждаете, что ознакомились с полным текстом 
@@ -7890,53 +7866,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   isOpen={showPrivacyPolicyModal}
   onClose={() => setShowPrivacyPolicyModal(false)}
 />
-{/* Модалки юридических документов */}
-<OfferModal 
-  isOpen={showOfferModal} 
-  onClose={() => setShowOfferModal(false)} 
-/>
-
-{showLegalOffer && (
-  <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[10000] fade-enter">
-    <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-          📄 Договор-оферта для юридических лиц
-        </h2>
-        <button
-          onClick={() => setShowLegalOffer(false)}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <X className="w-6 h-6" />
-        </button>
-      </div>
-      <LegalEntityOffer />
-    </div>
-  </div>
-)}
-
-{/* Форма сбора клиентов */}
-{showLeadForm && (
-  <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[10000] fade-enter">
-    <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-          🎁 Получить бесплатный доступ
-        </h2>
-        <button
-          onClick={() => setShowLeadForm(false)}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <X className="w-6 h-6" />
-        </button>
-      </div>
-      <LeadForm onSuccess={() => {
-        setShowLeadForm(false);
-        // Показать уведомление об успехе
-      }} />
-    </div>
-  </div>
-)}
 
 {/* 🆕 Кнопка отзыва для всех пользователей */}
     {user && !isSuperAdmin(userRole, user?.user_metadata) && (
