@@ -80,13 +80,15 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   });
 
   // ✅ Добавляем для отладки
-  if (typeof window !== 'undefined') {
-    window.__chat = chat;
-    console.log('🔧 Для отладки используйте window.__chat');
-    console.log('📌 Текущий активный канал:', chat.activeChannel);
-    console.log('📌 Все системные каналы:', chat.SYSTEM_CHANNELS);
-    console.log('📌 Все пользовательские каналы:', chat.customChannels);
-  }
+  // ✅ Добавляем для отладки
+if (typeof window !== 'undefined') {
+  window.__chat = chat;
+  window.__supabase = supabase; // ✅ Добавляем это
+  console.log('🔧 Для отладки используйте window.__chat и window.__supabase');
+  console.log('📌 Текущий активный канал:', chat.activeChannel);
+  console.log('📌 Все системные каналы:', chat.SYSTEM_CHANNELS);
+  console.log('📌 Все пользовательские каналы:', chat.customChannels);
+}
 
   // ===== ЛОКАЛЬНЫЕ СОСТОЯНИЯ =====
   const [newMessage, setNewMessage] = useState('');
