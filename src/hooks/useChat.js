@@ -825,86 +825,147 @@ export const useChat = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // ===== ПОДПИСКА НА СООБЩЕНИЯ =====
-  useEffect(() => {
-    const companyId = getCompanyId();
-    if (!companyId || !activeChannel) return;
-    
-    if (subscriptionRef.current) {
-      subscriptionRef.current.unsubscribe();
-    }
-    
-    const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
-    const filter = isSystemChannel 
-      ? `company_id=eq.${companyId} AND channel=eq.${activeChannel} AND channel_type=eq.system`
-      : `channel_id=eq.${activeChannel}`;
-    
-    subscriptionRef.current = supabase
-      .channel(`messages:${activeChannel}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'company_messages',
-        filter: filter
-      }, async (payload) => {
-        const newMsg = payload.new;
-        if (newMsg.deleted_at) return;
-        
-        const { data: userData } = await supabase
-          .from('company_users')
-          .select('full_name, role')
-          .eq('user_id', newMsg.user_id)
-          .single();
-        
-        const { data: reactionsData } = await supabase
-          .from('message_reactions')
-          .select('emoji, user_id')
-          .eq('message_id', newMsg.id);
+  // ===== ПОДПИСКА НА СООБЩЕНИЯ (ИСПРАВЛЕННАЯ) =====
+useEffect(() => {
+  const companyId = getCompanyId();
+  if (!companyId || !activeChannel) {
+    console.log('⚠️ Нет companyId или activeChannel для подписки');
+    return;
+  }
+  
+  // Отписываемся от старого канала
+  if (subscriptionRef.current) {
+    console.log('🔌 Отключаемся от старого канала:', activeChannel);
+    subscriptionRef.current.unsubscribe();
+    subscriptionRef.current = null;
+  }
+  
+  console.log('📡 Создаем подписку для канала:', activeChannel);
+  console.log('📡 companyId:', companyId);
+  
+  // ✅ СОЗДАЕМ КАНАЛ БЕЗ ФИЛЬТРА (для надежности)
+  const channelName = `messages:${activeChannel}`;
+  subscriptionRef.current = supabase
+    .channel(channelName)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'company_messages',
+      // ✅ УБИРАЕМ filter, чтобы получать все сообщения в канале
+    }, async (payload) => {
+      console.log('📩 Новое сообщение через Realtime:', payload);
+      
+      const newMsg = payload.new;
+      if (newMsg.deleted_at) return;
+      
+      // Проверяем, что сообщение относится к текущему каналу
+      const isSystemChannel = SYSTEM_CHANNELS.some(ch => ch.id === activeChannel);
+      let isForCurrentChannel = false;
+      
+      if (isSystemChannel) {
+        isForCurrentChannel = newMsg.channel === activeChannel && newMsg.channel_type === 'system';
+      } else if (activeChannel?.startsWith('dm_')) {
+        isForCurrentChannel = newMsg.channel_id === activeChannel && newMsg.channel_type === 'direct';
+      } else {
+        isForCurrentChannel = newMsg.channel_id === activeChannel && newMsg.channel_type === 'custom';
+      }
+      
+      if (!isForCurrentChannel) {
+        console.log('⏭️ Сообщение не для этого канала, пропускаем');
+        return;
+      }
+      
+      // Проверяем, не добавлено ли уже это сообщение
+      setMessages(prev => {
+        const exists = prev.some(m => m.id === newMsg.id);
+        if (exists) return prev;
         
         const enrichedMessage = {
           ...newMsg,
-          user: { user_metadata: userData || { full_name: 'Пользователь', role: 'user' } },
-          reactions: reactionsData || [],
+          user: { 
+            user_metadata: { 
+              full_name: 'Пользователь', 
+              role: 'user' 
+            } 
+          },
+          reactions: [],
           replied_message: null
         };
         
-        setMessages(prev => [...prev, enrichedMessage]);
+        // Пытаемся получить данные пользователя
+        supabase
+          .from('company_users')
+          .select('full_name, role')
+          .eq('user_id', newMsg.user_id)
+          .single()
+          .then(({ data: userData }) => {
+            if (userData) {
+              setMessages(prevMessages => 
+                prevMessages.map(m => 
+                  m.id === newMsg.id 
+                    ? { ...m, user: { user_metadata: userData } }
+                    : m
+                )
+              );
+            }
+          })
+          .catch(() => {});
         
-        if (newMsg.user_id !== user?.id) {
-          setUnreadCounts(prev => ({
-            ...prev,
-            [activeChannel]: (prev[activeChannel] || 0) + 1
-          }));
-        }
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'company_messages',
-        filter: filter
-      }, (payload) => {
-        const updatedMsg = payload.new;
-        setMessages(prev => prev.map(m => 
-          m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m
-        ));
-      })
-      .on('postgres_changes', {
-        event: 'DELETE',
-        schema: 'public',
-        table: 'company_messages',
-        filter: filter
-      }, (payload) => {
-        const deletedMsg = payload.old;
-        setMessages(prev => prev.filter(m => m.id !== deletedMsg.id));
-      })
-      .subscribe();
-    
-    return () => {
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
+        return [...prev, enrichedMessage];
+      });
+      
+      if (newMsg.user_id !== user?.id) {
+        setUnreadCounts(prev => ({
+          ...prev,
+          [activeChannel]: (prev[activeChannel] || 0) + 1
+        }));
       }
-    };
-  }, [getCompanyId, activeChannel, user?.id, SYSTEM_CHANNELS]);
+    })
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'company_messages',
+    }, (payload) => {
+      const updatedMsg = payload.new;
+      setMessages(prev => prev.map(m => 
+        m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m
+      ));
+    })
+    .on('postgres_changes', {
+      event: 'DELETE',
+      schema: 'public',
+      table: 'company_messages',
+    }, (payload) => {
+      const deletedMsg = payload.old;
+      setMessages(prev => prev.filter(m => m.id !== deletedMsg.id));
+    })
+    .subscribe((status, err) => {
+      console.log('📡 Статус подписки:', status);
+      if (status === 'SUBSCRIBED') {
+        console.log('✅ Подключено к Realtime для канала:', activeChannel);
+        setConnectionStatus('connected');
+      }
+      if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+        console.error('❌ Ошибка Realtime:', err);
+        setConnectionStatus('error');
+        // ✅ Автоматическая переподписка через 5 секунд
+        setTimeout(() => {
+          console.log('🔄 Переподключение к Realtime...');
+          if (subscriptionRef.current) {
+            subscriptionRef.current.subscribe();
+          }
+        }, 5000);
+      }
+    });
+  
+  return () => {
+    if (subscriptionRef.current) {
+      console.log('🔌 Отключаемся от канала:', activeChannel);
+      subscriptionRef.current.unsubscribe();
+      subscriptionRef.current = null;
+    }
+  };
+}, [getCompanyId, activeChannel, user?.id, SYSTEM_CHANNELS]);
 
   // ============================================================
   // 🔥 АВТОМАТИЧЕСКИЙ ВЫБОР ПЕРВОГО КАНАЛА — ОТКЛЮЧЕН ДЛЯ 'general'
