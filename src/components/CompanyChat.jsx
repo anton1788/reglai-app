@@ -7,6 +7,7 @@ import {
   Mic, Square, Play, Copy
 } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
+import toast from 'react-hot-toast';
 
 // ============================================================
 // 🔥 ИМПОРТЫ КОМПОНЕНТОВ
@@ -80,15 +81,74 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   });
 
   // ✅ Добавляем для отладки
-  // ✅ Добавляем для отладки
-if (typeof window !== 'undefined') {
-  window.__chat = chat;
-  window.__supabase = supabase; // ✅ Добавляем это
-  console.log('🔧 Для отладки используйте window.__chat и window.__supabase');
-  console.log('📌 Текущий активный канал:', chat.activeChannel);
-  console.log('📌 Все системные каналы:', chat.SYSTEM_CHANNELS);
-  console.log('📌 Все пользовательские каналы:', chat.customChannels);
-}
+  if (typeof window !== 'undefined') {
+    window.__chat = chat;
+    window.__supabase = supabase;
+    console.log('🔧 Для отладки используйте window.__chat и window.__supabase');
+    console.log('📌 Текущий активный канал:', chat.activeChannel);
+    console.log('📌 Все системные каналы:', chat.SYSTEM_CHANNELS);
+    console.log('📌 Все пользовательские каналы:', chat.customChannels);
+  }
+
+  // ✅ Звук уведомления
+  const playNotificationSound = useCallback(() => {
+    try {
+      const audio = new Audio('/notification.mp3');
+      audio.play().catch(() => {
+        // Игнорируем ошибки воспроизведения звука
+      });
+    } catch {
+      // Игнорируем ошибки
+    }
+  }, []);
+
+  // ✅ Toast уведомления о новых сообщениях
+  useEffect(() => {
+    const handleNewMessage = async (payload) => {
+      const newMsg = payload.new;
+      
+      // Пропускаем свои сообщения
+      if (newMsg.user_id === user?.id) return;
+      
+      // Проверяем, что сообщение для текущего канала
+      const isForCurrentChannel = newMsg.channel_id === chat.activeChannel || 
+                                 newMsg.channel === chat.activeChannel;
+      if (!isForCurrentChannel) return;
+      
+      // Получаем имя отправителя
+      const { data: userData } = await supabase
+        .from('company_users')
+        .select('full_name')
+        .eq('user_id', newMsg.user_id)
+        .single();
+      
+      const senderName = userData?.full_name || 'Пользователь';
+      
+      // Toast уведомление
+      toast.success(`💬 ${senderName}: ${newMsg.content?.substring(0, 50)}${newMsg.content?.length > 50 ? '...' : ''}`, {
+        duration: 5000,
+        position: 'top-right',
+        className: 'dark:bg-gray-800 dark:text-white',
+      });
+      
+      // Звук
+      playNotificationSound();
+    };
+    
+    // Подписка на новые сообщения
+    const subscription = supabase
+      .channel('new_messages_notifications')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'company_messages',
+      }, handleNewMessage)
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [chat.activeChannel, user?.id, playNotificationSound]);
 
   // ===== ЛОКАЛЬНЫЕ СОСТОЯНИЯ =====
   const [newMessage, setNewMessage] = useState('');
@@ -581,8 +641,8 @@ const deleteMessage = useCallback(async (messageId) => {
             filePath = parts[1];
             console.log('📁 Путь (способ 3):', filePath);
           }
-        } catch (e) {
-          console.error('❌ Ошибка парсинга URL:', e);
+        } catch {
+          console.error('❌ Ошибка парсинга URL');
         }
       }
       
@@ -618,8 +678,8 @@ const deleteMessage = useCallback(async (messageId) => {
         } else {
           console.log('✅ Файл удален из Storage:', removeData);
         }
-      } catch (storageErr) {
-        console.error('❌ Исключение при удалении файла:', storageErr);
+      } catch {
+        console.error('❌ Исключение при удалении файла');
         // Продолжаем удаление сообщения
       }
     } else {
@@ -663,7 +723,7 @@ const deleteMessage = useCallback(async (messageId) => {
     if (chat.shouldAutoScroll && chat.messages.length > 0) {
       chat.forceScrollToBottom('smooth');
     }
-  }, [chat.messages, chat.shouldAutoScroll]);
+  }, [chat.messages, chat.shouldAutoScroll, chat]);
 
   useEffect(() => {
     if (showChannelSettings && selectedChannel?.id) {
@@ -811,9 +871,15 @@ const deleteMessage = useCallback(async (messageId) => {
                   <Search className="w-5 h-5" />
                 </button>
                 
-                <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">
+                {/* ✅ СЧЕТЧИК НЕПРОЧИТАННЫХ В ХЕДЕРЕ */}
+                <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full relative">
                   <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   <span>{chat.messages.length}</span>
+                  {chat.totalUnread > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center">
+                      {chat.totalUnread > 9 ? '9+' : chat.totalUnread}
+                    </span>
+                  )}
                 </div>
               </div>
             </header>

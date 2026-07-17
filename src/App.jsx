@@ -7314,16 +7314,14 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         )}
         
         {currentView === 'chat' && (
-          <CompanyChat
-            user={user}
-            userCompanyId={userCompanyId}
-            userRole={userRole}
-            t={t}
-            language={language}
-            showNotification={showNotification}
-            onUnreadCountChange={setChatUnreadCount}
-          />
-        )}
+  <CompanyChat
+    user={user}
+    userCompanyId={userCompanyId}
+    userRole={userRole}
+    showNotification={showNotification}
+    onUnreadCountChange={setChatUnreadCount}
+  />
+)}
         
         {currentView === 'approvals' && renderApprovalsQueue()}
         

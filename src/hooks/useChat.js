@@ -29,6 +29,9 @@ export const useChat = ({
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [pinnedChannels, setPinnedChannels] = useState([]);
+  
+  // ✅ НОВОЕ: общее количество непрочитанных
+  const [totalUnread, setTotalUnread] = useState(0);
 
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -616,6 +619,8 @@ export const useChat = ({
       }
       
       setUnreadCounts(counts);
+      // ✅ Обновляем общее количество непрочитанных
+      setTotalUnread(totalUnread);
       onUnreadCountChange?.(totalUnread);
       
     } catch (error) {
@@ -919,6 +924,8 @@ useEffect(() => {
           ...prev,
           [activeChannel]: (prev[activeChannel] || 0) + 1
         }));
+        // ✅ Обновляем общее количество непрочитанных
+        setTotalUnread(prev => prev + 1);
       }
     })
     .on('postgres_changes', {
@@ -968,12 +975,9 @@ useEffect(() => {
 }, [getCompanyId, activeChannel, user?.id, SYSTEM_CHANNELS]);
 
   // ============================================================
-  // 🔥 АВТОМАТИЧЕСКИЙ ВЫБОР ПЕРВОГО КАНАЛА — ОТКЛЮЧЕН ДЛЯ 'general'
+  // 🔥 АВТОМАТИЧЕСКИЙ ВЫБОР ПЕРВОГО КАНАЛА
   // ============================================================
-  // ⚠️ Этот useEffect больше НЕ переключает на первый канал,
-  // чтобы не мешать переключению на 'general'
   useEffect(() => {
-    // Только если activeChannel === undefined или null
     if (customChannels.length > 0 && activeChannel === undefined) {
       console.log('🔄 Активный канал не установлен, переключаем на первый:', customChannels[0].id);
       setActiveChannel(customChannels[0].id);
@@ -1026,6 +1030,7 @@ useEffect(() => {
     typingUsers,
     unreadCounts,
     lastReadTimes,
+    totalUnread, // ✅ ДОБАВЛЕНО
     isMobile,
     setIsMobile,
     shouldAutoScroll,
