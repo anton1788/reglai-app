@@ -293,6 +293,9 @@ back: 'Назад',
 'legalOffer.executor': 'Исполнитель',
 'legalOffer.client': 'Заказчик',
 'legalOffer.fillDetails': 'Заполнить реквизиты',
+'legalOffer.loaded': 'Загружено',
+'legalOffer.notLoaded': 'Не загружено',
+'legalOffer.updateDetails': 'Обновить реквизиты',
     
     // Согласие на обработку данных
     'consent.title': 'Согласие на обработку данных',
@@ -1288,6 +1291,9 @@ showErrorDetails: 'Show details',
 'legalOffer.executor': 'Executor',
 'legalOffer.client': 'Client',
 'legalOffer.fillDetails': 'Fill in details',
+'legalOffer.loaded': 'Loaded',
+'legalOffer.notLoaded': 'Not loaded',
+'legalOffer.updateDetails': 'Update details',
     
     // Consent
     'consent.title': 'Consent to Data Processing',

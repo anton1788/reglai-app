@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, FileCheck, Building, Mail, Calendar, Shield, Clock, Users, CreditCard, Phone } from 'lucide-react';
 
 const LegalOfferModal = ({ 
@@ -7,8 +7,40 @@ const LegalOfferModal = ({
   t, 
   language, 
   companyName, 
-  userRole 
+  userRole,
+  supabase,
+  userCompanyId,
+  onNavigate
 }) => {
+  const [companyDetails, setCompanyDetails] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Загружаем реквизиты компании при открытии модалки
+  useEffect(() => {
+    if (isOpen && supabase && userCompanyId) {
+      loadCompanyDetails();
+    }
+  }, [isOpen, supabase, userCompanyId]);
+
+  const loadCompanyDetails = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('inn, kpp, ogrn, legal_address, director_name, account_number, bank_name, bik, corr_account')
+        .eq('id', userCompanyId)
+        .single();
+
+      if (error) throw error;
+      setCompanyDetails(data);
+    } catch (err) {
+      console.error('Ошибка загрузки реквизитов компании:', err);
+      setCompanyDetails(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   // Используем t() для получения переводов
@@ -19,6 +51,111 @@ const LegalOfferModal = ({
     } catch {
       return defaultValue;
     }
+  };
+
+  // Формируем строку с реквизитами Заказчика для печати
+  const getClientDetailsForPrint = () => {
+    if (!companyDetails) {
+      return `
+        ${companyName || '[Название компании]'}
+        Юридический адрес: ____________________
+        ИНН: ____________________
+        КПП: ____________________
+        ОГРН: ____________________
+        Расчётный счёт: ____________________
+        Банк: ____________________
+        БИК: ____________________
+        Кор. счёт: ____________________
+      `;
+    }
+
+    return `
+      ${companyName || '[Название компании]'}
+      Юридический адрес: ${companyDetails.legal_address || '____________________'}
+      ИНН: ${companyDetails.inn || '____________________'}
+      КПП: ${companyDetails.kpp || '____________________'}
+      ОГРН: ${companyDetails.ogrn || '____________________'}
+      Расчётный счёт: ${companyDetails.account_number || '____________________'}
+      Банк: ${companyDetails.bank_name || '____________________'}
+      БИК: ${companyDetails.bik || '____________________'}
+      Кор. счёт: ${companyDetails.corr_account || '____________________'}
+    `;
+  };
+
+  // Формируем JSX с реквизитами Заказчика
+  const renderClientDetails = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="w-4 h-4 border-2 border-gray-300 border-t-[#4A6572] rounded-full animate-spin" />
+          {getText('loading', 'Загрузка...')}
+        </div>
+      );
+    }
+
+    if (!companyDetails) {
+      return (
+        <>
+          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+            {companyName || '[Название компании]'}<br/>
+            Юридический адрес: ____________________<br/>
+            ИНН: ____________________<br/>
+            КПП: ____________________<br/>
+            ОГРН: ____________________<br/>
+            Расчётный счёт: ____________________<br/>
+            Банк: ____________________<br/>
+            БИК: ____________________<br/>
+            Кор. счёт: ____________________
+          </p>
+          <button
+            onClick={() => {
+              onClose();
+              if (onNavigate) {
+                onNavigate('companyProfile');
+              }
+            }}
+            className="mt-2 text-xs text-[#4A6572] hover:underline dark:text-[#F9AA33] flex items-center gap-1"
+          >
+            <CreditCard className="w-3 h-3" />
+            {getText('legalOffer.fillDetails', 'Заполнить реквизиты')}
+          </button>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+          {companyName || '[Название компании]'}<br/>
+          Юридический адрес: {companyDetails.legal_address || '____________________'}<br/>
+          ИНН: {companyDetails.inn || '____________________'}<br/>
+          КПП: {companyDetails.kpp || '____________________'}<br/>
+          ОГРН: {companyDetails.ogrn || '____________________'}<br/>
+          Расчётный счёт: {companyDetails.account_number || '____________________'}<br/>
+          Банк: {companyDetails.bank_name || '____________________'}<br/>
+          БИК: {companyDetails.bik || '____________________'}<br/>
+          Кор. счёт: {companyDetails.corr_account || '____________________'}
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-xs text-green-600 flex items-center gap-1">
+            <Shield className="w-3 h-3" />
+            {getText('legalOffer.loaded', 'Реквизиты загружены')}
+          </span>
+          <button
+            onClick={() => {
+              onClose();
+              if (onNavigate) {
+                onNavigate('companyProfile');
+              }
+            }}
+            className="text-xs text-[#4A6572] hover:underline dark:text-[#F9AA33] flex items-center gap-1"
+          >
+            <CreditCard className="w-3 h-3" />
+            {getText('legalOffer.updateDetails', 'Обновить')}
+          </button>
+        </div>
+      </>
+    );
   };
 
   const handlePrint = () => {
@@ -136,7 +273,7 @@ const LegalOfferModal = ({
         <h3 style="color:#1f2937;font-size:16px;">${getText('legalOffer.section11.title', '11. Реквизиты сторон')}</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:10px;">
           <div style="background:#f9fafb;padding:15px;border-radius:8px;">
-            <p style="font-weight:bold;margin:0 0 5px 0;">Исполнитель</p>
+            <p style="font-weight:bold;margin:0 0 5px 0;">${getText('legalOffer.executor', 'Исполнитель')}</p>
             <p style="font-size:13px;line-height:1.6;color:#374151;margin:0;">
               ООО «Реглай»<br/>
               Юридический адрес: г. Москва, ул. Примерная, д. 1, офис 100<br/>
@@ -149,17 +286,9 @@ const LegalOfferModal = ({
             </p>
           </div>
           <div style="background:#f9fafb;padding:15px;border-radius:8px;">
-            <p style="font-weight:bold;margin:0 0 5px 0;">Заказчик</p>
-            <p style="font-size:13px;line-height:1.6;color:#374151;margin:0;">
-              ${companyName || '[Название компании]'}<br/>
-              Юридический адрес: ____________________<br/>
-              ИНН: ____________________<br/>
-              КПП: ____________________<br/>
-              ОГРН: ____________________<br/>
-              Расчётный счёт: ____________________<br/>
-              Банк: ____________________<br/>
-              БИК: ____________________<br/>
-              Кор. счёт: ____________________
+            <p style="font-weight:bold;margin:0 0 5px 0;">${getText('legalOffer.client', 'Заказчик')}</p>
+            <p style="font-size:13px;line-height:1.6;color:#374151;margin:0;white-space:pre-wrap;">
+              ${getClientDetailsForPrint()}
             </p>
           </div>
         </div>
@@ -267,6 +396,12 @@ const LegalOfferModal = ({
               <Users className="w-4 h-4" />
               {getText('legalOffer.parties', 'Стороны: 2')}
             </span>
+            {companyDetails && (
+              <span className="flex items-center gap-1 text-green-700 dark:text-green-300 ml-auto">
+                <Shield className="w-3 h-3" />
+                {getText('legalOffer.loaded', 'Реквизиты загружены')}
+              </span>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -429,55 +564,54 @@ const LegalOfferModal = ({
             <hr className="border-gray-200 dark:border-gray-700" />
           </div>
 
-          {/* Раздел 11: Реквизиты сторон */}
+          {/* Раздел 11: Реквизиты сторон (с динамической загрузкой) */}
           <div className="space-y-2">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               {getText('legalOffer.section11.title', '11. Реквизиты сторон')}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Исполнитель (фиксированные реквизиты) */}
               <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
                 <p className="font-medium text-gray-900 dark:text-white mb-2 flex items-center gap-2">
                   <Building className="w-4 h-4 text-[#4A6572]" />
                   {getText('legalOffer.executor', 'Исполнитель')}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                  ООО «Реглай»<br/>
-                  Юридический адрес: г. Москва, ул. Примерная, д. 1, офис 100<br/>
-                  ИНН: 1234567890 | КПП: 123456789<br/>
-                  ОГРН: 1234567890123<br/>
-                  Расчётный счёт: 40702810123456789012<br/>
-                  Банк: АО «Тинькофф Банк»<br/>
-                  БИК: 044525974<br/>
+                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap">
+                  ООО «Реглай»
+                  Юридический адрес: г. Москва, ул. Примерная, д. 1, офис 100
+                  ИНН: 1234567890 | КПП: 123456789
+                  ОГРН: 1234567890123
+                  Расчётный счёт: 40702810123456789012
+                  Банк: АО «Тинькофф Банк»
+                  БИК: 044525974
                   Кор. счёт: 30101810100000000974
                 </p>
               </div>
+
+              {/* Заказчик (динамические реквизиты из БД) */}
               <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg">
-                <p className="font-medium text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                  <Users className="w-4 h-4 text-[#4A6572]" />
-                  {getText('legalOffer.client', 'Заказчик')}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                  {companyName || '[Название компании]'}<br/>
-                  Юридический адрес: ____________________<br/>
-                  ИНН: ____________________<br/>
-                  КПП: ____________________<br/>
-                  ОГРН: ____________________<br/>
-                  Расчётный счёт: ____________________<br/>
-                  Банк: ____________________<br/>
-                  БИК: ____________________<br/>
-                  Кор. счёт: ____________________
-                </p>
-                <button
-                  onClick={() => {
-                    // Переход в профиль компании
-                    onClose();
-                    // setCurrentView('companyProfile');
-                  }}
-                  className="mt-2 text-xs text-[#4A6572] hover:underline dark:text-[#F9AA33] flex items-center gap-1"
-                >
-                  <CreditCard className="w-3 h-3" />
-                  {getText('legalOffer.fillDetails', 'Заполнить реквизиты')}
-                </button>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                    <Users className="w-4 h-4 text-[#4A6572]" />
+                    {getText('legalOffer.client', 'Заказчик')}
+                  </p>
+                  {isLoading ? (
+                    <div className="w-4 h-4 border-2 border-gray-300 border-t-[#4A6572] rounded-full animate-spin" />
+                  ) : companyDetails ? (
+                    <span className="text-xs text-green-600 flex items-center gap-1">
+                      <Shield className="w-3 h-3" />
+                      {getText('legalOffer.loaded', 'Загружено')}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-amber-600 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {getText('legalOffer.notLoaded', 'Не загружено')}
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap">
+                  {renderClientDetails()}
+                </div>
               </div>
             </div>
           </div>

@@ -1189,24 +1189,27 @@ const Navbar = ({
       />
 
       {/* 🆕 Модальные окна для юридических документов с переданными пропсами */}
-      <PublicOfferModal
-        isOpen={showPublicOffer}
-        onClose={() => setShowPublicOffer(false)}
-        t={t}
-        language={language}
-      />
-      <LegalOfferModal
-        isOpen={showLegalOffer}
-        onClose={() => setShowLegalOffer(false)}
-        t={t}
-        language={language}
-        companyName={companyName}
-        userRole={userRole}
-      />
-      <PrivacyPolicyModal
-        isOpen={showPrivacyPolicyModal}
-        onClose={() => setShowPrivacyPolicyModal(false)}
-      />
+<PublicOfferModal
+  isOpen={showPublicOffer}
+  onClose={() => setShowPublicOffer(false)}
+  t={t}
+  language={language}
+/>
+<LegalOfferModal
+  isOpen={showLegalOffer}
+  onClose={() => setShowLegalOffer(false)}
+  t={t}
+  language={language}
+  companyName={companyName}
+  userRole={userRole}
+  supabase={supabase}
+  userCompanyId={companyId}
+  onNavigate={onNavigate}  // ← ИСПРАВЛЕНО: используем onNavigate вместо setCurrentView
+/>
+<PrivacyPolicyModal
+  isOpen={showPrivacyPolicyModal}
+  onClose={() => setShowPrivacyPolicyModal(false)}
+/>
 
       {/* Модальное окно просмотра уведомления */}
       {showNotificationModal && selectedNotification && (
