@@ -14,10 +14,16 @@ import {
   FileText,
   Settings,
   FolderOpen,
-  Star
+  Star,
+  FileCheck, // Добавляем иконку для документов
+  Scale // Добавляем иконку для юридических документов
 } from 'lucide-react';
 import { getCompanyPlan } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
+// Импортируем модальные окна для документов
+import PublicOfferModal from './PublicOfferModal';
+import LegalOfferModal from './LegalOfferModal';
+import PrivacyPolicyModal from './PrivacyPolicyModal';
 
 const Navbar = ({ 
   user, 
@@ -65,6 +71,11 @@ const Navbar = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   
+  // Состояния для модальных окон юридических документов
+  const [showPublicOffer, setShowPublicOffer] = useState(false);
+  const [showLegalOffer, setShowLegalOffer] = useState(false);
+  const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
+  
   const profileRef = useRef(null);
   const notificationsRef = useRef(null);
   const searchRef = useRef(null);
@@ -83,7 +94,6 @@ const Navbar = ({
       setCurrentPlan(planData);
     } catch (error) {
       console.error('Failed to load company plan:', error);
-      // Не сбрасываем план при ошибке
     } finally {
       setPlanLoading(false);
     }
@@ -255,14 +265,14 @@ const Navbar = ({
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
 
-     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'master' || userRole === 'foreman') {
-    items.push({ 
-      id: 'projects', 
-      label: 'Проекты', 
-      icon: FolderOpen, 
-      path: '/projects' 
-    });
-  }
+    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'master' || userRole === 'foreman') {
+      items.push({ 
+        id: 'projects', 
+        label: 'Проекты', 
+        icon: FolderOpen, 
+        path: '/projects' 
+      });
+    }
 
     // CRM Sales - Лиды (для manager и supply_admin)
     if (userRole === 'manager' || userRole === 'supply_admin') {
@@ -651,19 +661,19 @@ const Navbar = ({
                         </button>
                       )}
                     </div>
-                    {/* ← ДОБАВИТЬ ЗДЕСЬ КНОПКУ ДЛЯ СУПЕР-АДМИНА */}
-{newFeedbackCount > 0 && userRole === 'super_admin' && (
-  <button
-    onClick={() => { onNavigate?.('/superAdmin'); }}
-    className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-    aria-label="Новые отзывы"
-  >
-    <Star className="w-5 h-5 text-yellow-500" />
-    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
-      {newFeedbackCount > 99 ? '99+' : newFeedbackCount}
-    </span>
-  </button>
-)}
+                    {/* Кнопка для супер-админа */}
+                    {newFeedbackCount > 0 && userRole === 'super_admin' && (
+                      <button
+                        onClick={() => { onNavigate?.('/superAdmin'); setIsMobileMenuOpen(false); }}
+                        className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        aria-label="Новые отзывы"
+                      >
+                        <Star className="w-5 h-5 text-yellow-500" />
+                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                          {newFeedbackCount > 99 ? '99+' : newFeedbackCount}
+                        </span>
+                      </button>
+                    )}
                     <div className="max-h-96 overflow-y-auto">
                       {notifications.length === 0 ? (
                         <div className="p-6 text-center text-gray-500 dark:text-gray-400">
@@ -673,17 +683,16 @@ const Navbar = ({
                       ) : (
                         notifications.map(notif => (
                           <div 
-  key={notif.id} 
-  className={`p-3 ... cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${!notif.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-  onClick={() => {
-    // Если есть функция открытия модалки, вызываем её
-    if (onNotificationClick) {
-      onNotificationClick(notif);
-    } else {
-      onMarkNotificationRead?.(notif.id);
-    }
-  }}
->
+                            key={notif.id} 
+                            className={`p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${!notif.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                            onClick={() => {
+                              if (onNotificationClick) {
+                                onNotificationClick(notif);
+                              } else {
+                                onMarkNotificationRead?.(notif.id);
+                              }
+                            }}
+                          >
                             <p className="text-sm font-medium text-gray-900 dark:text-white">{notif.title}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{notif.message}</p>
                             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{notif.time}</p>
@@ -853,11 +862,11 @@ const Navbar = ({
                         {mergeableCount}
                       </span>
                     )}
-                    {item.id === 'chat' && chatUnreadCount > 0 && (  // ← ДОБАВИТЬ ЭТОТ БЛОК
-  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center animate-pulse">
-    {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-  </span>
-)}
+                    {item.id === 'chat' && chatUnreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center animate-pulse">
+                        {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -943,11 +952,11 @@ const Navbar = ({
                           {mergeableCount}
                         </span>
                       )}
-                      {item.id === 'chat' && chatUnreadCount > 0 && (  // ← ДОБАВИТЬ ЭТОТ БЛОК
-  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
-    {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-  </span>
-)}
+                      {item.id === 'chat' && chatUnreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                          {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -1107,11 +1116,11 @@ const Navbar = ({
                         {mergeableCount}
                       </span>
                     )}
-                    {item.id === 'chat' && chatUnreadCount > 0 && (  // ← ДОБАВИТЬ ЭТОТ БЛОК
-  <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0 animate-pulse">
-    {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-  </span>
-)}
+                    {item.id === 'chat' && chatUnreadCount > 0 && (
+                      <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0 animate-pulse">
+                        {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -1132,6 +1141,33 @@ const Navbar = ({
                 <Building className="w-5 h-5" />
                 Реквизиты
               </button>
+
+              {/* 🆕 Юридические документы в мобильном меню */}
+              <div className="mt-2 px-2 space-y-1">
+                <p className="text-xs text-gray-400 dark:text-gray-500 px-2 py-1">Юридическая информация</p>
+                <button
+                  onClick={() => { setShowPublicOffer(true); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <Scale className="w-4 h-4 text-[#4A6572]" />
+                  Публичная оферта
+                </button>
+                <button
+                  onClick={() => { setShowLegalOffer(true); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <FileCheck className="w-4 h-4 text-[#4A6572]" />
+                  Договор для юрлиц
+                </button>
+                <button
+                  onClick={() => { setShowPrivacyPolicyModal(true); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <Shield className="w-4 h-4 text-[#4A6572]" />
+                  Политика конфиденциальности
+                </button>
+              </div>
+
               <hr className="my-3 border-gray-100 dark:border-gray-800" />
               <button
                 onClick={onLogout}
@@ -1145,6 +1181,38 @@ const Navbar = ({
         )}
       </nav>
 
+      {/* 🆕 Футер с юридическими документами - добавляем внизу страницы */}
+      <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-4 px-4">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            © {new Date().getFullYear()} Реглай. Все права защищены.
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+            <button 
+              onClick={() => setShowPublicOffer(true)} 
+              className="hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors flex items-center gap-1.5"
+            >
+              <Scale className="w-4 h-4" />
+              Публичная оферта
+            </button>
+            <button 
+              onClick={() => setShowLegalOffer(true)} 
+              className="hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors flex items-center gap-1.5"
+            >
+              <FileCheck className="w-4 h-4" />
+              Договор для юрлиц
+            </button>
+            <button 
+              onClick={() => setShowPrivacyPolicyModal(true)} 
+              className="hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors flex items-center gap-1.5"
+            >
+              <Shield className="w-4 h-4" />
+              Политика конфиденциальности
+            </button>
+          </div>
+        </div>
+      </footer>
+
       {/* Модальное окно поддержки */}
       <SupportModal
         isOpen={showSupportModal}
@@ -1153,7 +1221,22 @@ const Navbar = ({
         userCompany={companyName}
         userRole={userRole}
       />
-            {/* 🆕 Модальное окно просмотра уведомления */}
+
+      {/* 🆕 Модальные окна для юридических документов */}
+      <PublicOfferModal
+        isOpen={showPublicOffer}
+        onClose={() => setShowPublicOffer(false)}
+      />
+      <LegalOfferModal
+        isOpen={showLegalOffer}
+        onClose={() => setShowLegalOffer(false)}
+      />
+      <PrivacyPolicyModal
+        isOpen={showPrivacyPolicyModal}
+        onClose={() => setShowPrivacyPolicyModal(false)}
+      />
+
+      {/* Модальное окно просмотра уведомления */}
       {showNotificationModal && selectedNotification && (
         <div 
           className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] fade-enter"
@@ -1189,7 +1272,6 @@ const Navbar = ({
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => {
-                  // Помечаем прочитанным при закрытии
                   onMarkNotificationRead?.(selectedNotification.id);
                   onCloseNotificationModal?.();
                 }}

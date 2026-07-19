@@ -190,6 +190,9 @@ import EstimateCalculator from './components/EstimateCalculator';
 import ReportBuilder from './components/ReportBuilder';
 import OneCIntegration from './components/OneCIntegration';
 import SettingsPage from './components/SettingsPage';
+import PublicOfferModal from './components/PublicOfferModal';
+import LegalOfferModal from './components/LegalOfferModal';
+import ConsentModal from './components/ConsentModal';
 
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
@@ -1216,6 +1219,10 @@ const [waitingWorker, setWaitingWorker] = useState(null);
 const [showSettings, setShowSettings] = useState(false);
 // В App.jsx, в секции useState
 const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+// Состояния для юридических документов
+const [showPublicOffer, setShowPublicOffer] = useState(false);
+const [showLegalOffer, setShowLegalOffer] = useState(false);
+const [showConsentUpdate, setShowConsentUpdate] = useState(false);
 
   // ─────────────────────────────────────────────────────────
   // 🎯 FOCUS MANAGEMENT (Pattern #3)
@@ -7890,6 +7897,39 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       t={t}
     />
   </div>
+)}
+// Модальные окна юридических документов
+{showPublicOffer && (
+  <PublicOfferModal
+    isOpen={showPublicOffer}
+    onClose={() => setShowPublicOffer(false)}
+    t={t}
+    language={language}
+  />
+)}
+
+{showLegalOffer && (
+  <LegalOfferModal
+    isOpen={showLegalOffer}
+    onClose={() => setShowLegalOffer(false)}
+    t={t}
+    language={language}
+    companyName={userCompany}
+    userRole={userRole}
+  />
+)}
+
+{showConsentUpdate && (
+  <ConsentModal
+    isOpen={showConsentUpdate}
+    onClose={() => setShowConsentUpdate(false)}
+    onAccept={() => {
+      // Сохранить согласие в БД
+      setShowConsentUpdate(false);
+      showNotification('Согласие подтверждено', 'success');
+    }}
+    t={t}
+  />
 )}
   </ErrorBoundary>
 );
