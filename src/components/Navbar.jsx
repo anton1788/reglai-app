@@ -1,4 +1,3 @@
-// src/components/Navbar.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Menu, X, Search, User, LogOut, HelpCircle, 
@@ -15,12 +14,11 @@ import {
   Settings,
   FolderOpen,
   Star,
-  FileCheck, // Добавляем иконку для документов
-  Scale // Добавляем иконку для юридических документов
+  FileCheck,
+  Scale
 } from 'lucide-react';
 import { getCompanyPlan } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
-// Импортируем модальные окна для документов
 import PublicOfferModal from './PublicOfferModal';
 import LegalOfferModal from './LegalOfferModal';
 import PrivacyPolicyModal from './PrivacyPolicyModal';
@@ -57,7 +55,10 @@ const Navbar = ({
   onNotificationClick,
   selectedNotification,
   showNotificationModal,
-  onCloseNotificationModal
+  onCloseNotificationModal,
+  // 🔥 ДОБАВЛЯЕМ НЕДОСТАЮЩИЕ ПРОПСЫ
+  t,
+  language
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -71,7 +72,6 @@ const Navbar = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   
-  // Состояния для модальных окон юридических документов
   const [showPublicOffer, setShowPublicOffer] = useState(false);
   const [showLegalOffer, setShowLegalOffer] = useState(false);
   const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
@@ -261,7 +261,6 @@ const Navbar = ({
   const getNavItems = () => {
     const items = [];
 
-    // Базовые пункты для всех
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
 
@@ -274,12 +273,10 @@ const Navbar = ({
       });
     }
 
-    // CRM Sales - Лиды (для manager и supply_admin)
     if (userRole === 'manager' || userRole === 'supply_admin') {
       items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
     }
 
-    // Объединение заявок — для manager, supply_admin, director, владельца
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
       items.push({ 
         id: 'merge', 
@@ -289,57 +286,46 @@ const Navbar = ({
       });
     }
 
-    // Для мастера и прораба - только заявки (свои), история
     if (userRole === 'master' || userRole === 'foreman') {
       items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
       items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
     }
 
-    // Склад (для manager, supply_admin, foreman, accountant)
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || userRole === 'accountant') {
       items.push({ id: 'warehouse', label: 'Склад', icon: Package, path: '/warehouse' });
     }
 
-    // Клиенты (для manager и client_manager)
     if (userRole === 'manager' || userRole === 'client_manager') {
       items.push({ id: 'clients', label: 'Клиенты', icon: Users, path: '/clients' });
     }
 
-    // Аналитика - для manager, supply_admin, director, accountant, владельца компании
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
       items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
     }
 
-    // API - для бухгалтера, руководителя, администратора снабжения
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
     }
 
-    // Сметы - для бухгалтера, руководителя, администратора снабжения
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'estimates', label: 'Сметы', icon: Calculator, path: '/estimates' });
     }
 
-    // Отчёты - для бухгалтера, руководителя, администратора снабжения
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'reports', label: 'Отчёты', icon: FileText, path: '/reports' });
     }
 
-    // Интеграция - для руководителя и администратора снабжения
     if (userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'integration', label: 'Интеграция', icon: Settings, path: '/integration' });
     }
 
-    // Документы - для всех, кроме client
     if (userRole !== 'client') {
       items.push({ id: 'documents', label: 'Документы', icon: FileText, path: '/documents' });
     }
 
-    // Чат - для всех
     items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
     items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
 
-    // Согласование (только для manager и director)
     if (userRole === 'manager' || userRole === 'director') {
       items.push({ 
         id: 'approvals', 
@@ -349,27 +335,22 @@ const Navbar = ({
       });
     }
 
-    // Сотрудники (только для manager)
     if (userRole === 'manager') {
       items.push({ id: 'employees', label: 'Сотрудники', icon: Users, path: '/employees' });
     }
 
-    // Корзина
     if (cartItemsCount > 0) {
       items.push({ id: 'cart', label: `Корзина (${cartItemsCount})`, icon: ShoppingCart, path: '/cart' });
     }
 
-    // Аудит - для manager, director, accountant, владельца
     if (userRole === 'manager' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
       items.push({ id: 'audit', label: 'Аудит', icon: Eye, path: '/audit' });
     }
 
-    // Задачи
     if (userRole !== 'client') {
       items.push({ id: 'tasks', label: 'Задачи', icon: Target, path: '/tasks' });
     }
 
-    // Для заказчика - отдельные пункты
     if (userRole === 'client') {
       items.push({ id: 'clientDashboard', label: 'Мой объект', icon: Home, path: '/client' });
       items.push({ id: 'clientDocuments', label: 'Мои документы', icon: FileText, path: '/client/documents' });
@@ -407,7 +388,6 @@ const Navbar = ({
     return () => document.head.removeChild(style);
   }, []);
 
-  // Безопасный рендеринг индикатора тарифа
   const renderTariffIndicator = () => {
     if (planLoading) {
       return (
@@ -486,7 +466,7 @@ const Navbar = ({
               </button>
             </div>
 
-            {/* Поиск - центрированный */}
+            {/* Поиск */}
             <div className="hidden md:flex items-center flex-1 max-w-md mx-4">
               <form onSubmit={handleSearch} className="w-full">
                 <div className="relative">
@@ -508,12 +488,10 @@ const Navbar = ({
 
             {/* Правая часть */}
             <div className="flex items-center gap-1 flex-shrink-0">
-              {/* Индикатор тарифа с состоянием загрузки */}
               <div className="hidden lg:flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg min-w-[60px]">
                 {renderTariffIndicator()}
               </div>
 
-              {/* Индикатор офлайн режима с синхронизацией */}
               {!isOnline && offlineDraftsCount > 0 && (
                 <div className="hidden sm:flex items-center gap-2 px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
                   <div className="relative">
@@ -661,7 +639,6 @@ const Navbar = ({
                         </button>
                       )}
                     </div>
-                    {/* Кнопка для супер-админа */}
                     {newFeedbackCount > 0 && userRole === 'super_admin' && (
                       <button
                         onClick={() => { onNavigate?.('/superAdmin'); setIsMobileMenuOpen(false); }}
@@ -820,10 +797,9 @@ const Navbar = ({
           </div>
         </div>
 
-        {/* Планшетная навигация - иконки с подписями и прокруткой */}
+        {/* Планшетная навигация */}
         {navItems.length > 0 && (
           <div className="hidden sm:flex lg:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 relative">
-            {/* Левая градиентная маска */}
             <div className="absolute left-0 top-0 bottom-0 w-8 z-5 bg-gradient-to-r from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
             
             <div 
@@ -872,21 +848,18 @@ const Navbar = ({
               })}
             </div>
             
-            {/* Правая градиентная маска */}
             <div className="absolute right-0 top-0 bottom-0 w-8 z-5 bg-gradient-to-l from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
           </div>
         )}
 
-        {/* Десктопная навигация - горизонтальное меню с прокруткой */}
+        {/* Десктопная навигация */}
         {navItems.length > 0 && (
           <div className="hidden lg:block border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
             <div className="w-full px-4 relative">
-              {/* Левая градиентная маска */}
               {showLeftScroll && (
                 <div className="absolute left-0 top-0 bottom-0 w-12 z-5 bg-gradient-to-r from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
               )}
               
-              {/* Кнопка прокрутки влево */}
               {showLeftScroll && (
                 <button
                   onClick={() => scrollNav('left')}
@@ -904,7 +877,6 @@ const Navbar = ({
                 </button>
               )}
               
-              {/* Прокручиваемое меню */}
               <div 
                 ref={navScrollRef}
                 className="flex overflow-x-auto no-scrollbar gap-1 py-2 scroll-smooth px-8"
@@ -962,7 +934,6 @@ const Navbar = ({
                 })}
               </div>
               
-              {/* Кнопка прокрутки вправо */}
               {showRightScroll && (
                 <button
                   onClick={() => scrollNav('right')}
@@ -980,7 +951,6 @@ const Navbar = ({
                 </button>
               )}
               
-              {/* Правая градиентная маска */}
               {showRightScroll && (
                 <div className="absolute right-0 top-0 bottom-0 w-12 z-5 bg-gradient-to-l from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
               )}
@@ -988,7 +958,7 @@ const Navbar = ({
           </div>
         )}
 
-        {/* Мобильное меню (бургер) с поиском и группировкой */}
+        {/* Мобильное меню */}
         {isMobileMenuOpen && (
           <div className="lg:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 fade-enter max-h-[calc(100vh-56px)] overflow-y-auto">
             <form onSubmit={handleSearch} className="p-4 border-b border-gray-100 dark:border-gray-800">
@@ -1005,7 +975,6 @@ const Navbar = ({
             </form>
             
             <div className="p-2">
-              {/* Информация о тарифе в мобильном меню */}
               {currentPlan && (
                 <div className="mx-3 mb-2 p-2 bg-gradient-to-r from-[#F9AA33]/10 to-[#F57C00]/10 rounded-lg border border-[#F9AA33]/20">
                   <div className="flex items-center justify-between">
@@ -1026,7 +995,6 @@ const Navbar = ({
                 </div>
               )}
 
-              {/* Поиск по меню */}
               <div className="relative px-3 mb-2">
                 <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
@@ -1038,7 +1006,6 @@ const Navbar = ({
                 />
               </div>
 
-              {/* Быстрые действия в мобильном меню */}
               <div className="mx-3 mb-2 p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                 <p className="text-xs text-gray-500 dark:text-gray-400 px-1 py-1">Быстрые действия</p>
                 <div className="flex flex-wrap gap-1 mt-1">
@@ -1142,7 +1109,6 @@ const Navbar = ({
                 Реквизиты
               </button>
 
-              {/* 🆕 Юридические документы в мобильном меню */}
               <div className="mt-2 px-2 space-y-1">
                 <p className="text-xs text-gray-400 dark:text-gray-500 px-2 py-1">Юридическая информация</p>
                 <button
@@ -1181,7 +1147,7 @@ const Navbar = ({
         )}
       </nav>
 
-      {/* 🆕 Футер с юридическими документами - добавляем внизу страницы */}
+      {/* Футер */}
       <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-4 px-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -1222,14 +1188,20 @@ const Navbar = ({
         userRole={userRole}
       />
 
-      {/* 🆕 Модальные окна для юридических документов */}
+      {/* 🆕 Модальные окна для юридических документов с переданными пропсами */}
       <PublicOfferModal
         isOpen={showPublicOffer}
         onClose={() => setShowPublicOffer(false)}
+        t={t}
+        language={language}
       />
       <LegalOfferModal
         isOpen={showLegalOffer}
         onClose={() => setShowLegalOffer(false)}
+        t={t}
+        language={language}
+        companyName={companyName}
+        userRole={userRole}
       />
       <PrivacyPolicyModal
         isOpen={showPrivacyPolicyModal}
