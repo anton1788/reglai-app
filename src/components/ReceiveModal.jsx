@@ -4,7 +4,7 @@ import {
   X, CheckCircle, XCircle, Package, Warehouse, Send, AlertCircle,
   Loader2, Info, ChevronDown, ChevronUp, Undo2, ShoppingCart,
   ArrowRight, FileText, Download, Mail, CheckCircle2, AlertTriangle,
-  Camera, QrCode,Shield 
+  Camera, QrCode, Shield
 } from 'lucide-react';
 import {
   APPLICATION_STATUS,
@@ -18,6 +18,8 @@ import {
 // Импорты компонентов
 import QRScanner from './Mobile/QRScanner';
 import PhotoCapture from './Mobile/PhotoCapture';
+import { usePriceVisibility } from '../hooks/usePriceVisibility';
+import { sanitizeMaterialForMaster } from '../utils/materialSanitizer';
 
 // ─────────────────────────────────────────────────────────────
 // 🎨 СТИЛИ И АНИМАЦИИ
@@ -153,6 +155,7 @@ const AdminReceiveRow = memo(function({
   onUpdate,
   onPhotoClick,
   t,
+  hidePrices = false,
 }) {
   const requestedQty = Number(material.quantity) || 0;
   const onWarehouse = Number(material.supplier_received_quantity) || 0;
@@ -196,11 +199,28 @@ const AdminReceiveRow = memo(function({
               <Camera className="w-4 h-4" />
             </button>
           </div>
+          
           <MaterialProgress
             requested={requestedQty}
             onWarehouse={onWarehouse}
             confirmed={Number(material.received) || 0}
           />
+          
+          {/* ✅ ЦЕНА - ТОЛЬКО ЕСЛИ НЕ СКРЫТА */}
+          {!hidePrices && (
+            <div className="mt-3 flex items-center gap-3 text-sm border-t border-gray-200 dark:border-gray-700 pt-2">
+              {material.supplier_price !== undefined && material.supplier_price !== null && (
+                <span className="text-gray-700 dark:text-gray-300">
+                  💰 {formatNumber(material.supplier_price)} ₽
+                </span>
+              )}
+              {material.supplier_name && (
+                <span className="text-gray-500 dark:text-gray-400 text-xs">
+                  {material.supplier_name}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         
         <div className="flex items-center gap-3">
@@ -406,7 +426,7 @@ const ReceiveModal = memo(function({
   saveReceiveStatus,
   language,
   escapeHtml,
-  onTakeToWork,        // ← ДОБАВИТЬ
+  onTakeToWork,
   onSendForApproval,
   t,
   modalMode = 'admin_receive',
@@ -419,6 +439,8 @@ const ReceiveModal = memo(function({
   // eslint-disable-next-line no-unused-vars
   onQRClick,
 }) {
+  const { shouldHidePrices, isMaster } = usePriceVisibility(userRole);
+  
   // ─────────────────────────────────────────────────────────
   // 📊 STATE
   // ─────────────────────────────────────────────────────────
@@ -521,10 +543,10 @@ const ReceiveModal = memo(function({
         result = await onAdminReceive(localMaterials, selectedApplication);
       }
       else if (modalMode === 'admin_send_to_master' && typeof onSendToMaster === 'function') {
-  const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
-  console.log('🔔 Вызов onSendToMaster с items:', items);
-  result = await onSendToMaster(items, selectedApplication);
-}
+        const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
+        console.log('🔔 Вызов onSendToMaster с items:', items);
+        result = await onSendToMaster(items, selectedApplication);
+      }
       else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
         const confirmationsToSend = localMaterials.map(function(m, idx) {
           const conf = confirmations.find(function(c) { return c.materialIndex === idx; });
@@ -855,14 +877,20 @@ const ReceiveModal = memo(function({
               
               <div className="space-y-3">
                 {localMaterials.map(function(material, index) {
+                  // ✅ Санитайз для мастера
+                  const displayMaterial = isMaster 
+                    ? sanitizeMaterialForMaster(material)
+                    : material;
+                  
                   return (
                     <AdminReceiveRow
                       key={index}
-                      material={material}
+                      material={displayMaterial}
                       index={index}
                       onUpdate={handleMaterialUpdate}
                       onPhotoClick={handleOpenPhotoForMaterial}
                       t={t}
+                      hidePrices={shouldHidePrices}
                     />
                   );
                 })}
@@ -880,36 +908,37 @@ const ReceiveModal = memo(function({
               )}
             </>
           )}
+          
           {/* 🔹 ПАНЕЛЬ РЕШЕНИЙ ДЛЯ СНАБЖЕНЦА */}
-{modalMode === 'admin_receive' && userRole === 'supply_admin' && (
-  <div className="mt-4 p-4 bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
-    <h4 className="font-semibold text-gray-900 dark:text-white mb-3 text-sm">
-      {t('supplyDecision') || 'Как обработать заявку?'}
-    </h4>
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {/* 🔹 В работу */}
-      <button
-        onClick={() => onTakeToWork?.(selectedApplication)}
-        className="px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/25"
-      >
-        <Package className="w-4 h-4" />
-        {t('takeToWork') || '📦 Взять в работу'}
-      </button>
-      
-      {/* 🔹 На согласование */}
-      <button
-        onClick={() => onSendForApproval?.(selectedApplication)}
-        className="px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-orange-500/25"
-      >
-        <Shield className="w-4 h-4" />
-        {t('sendForApproval') || '📋 На согласование'}
-      </button>
-    </div>
-    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-      💡 "В работу" — начать поиск поставщика. "На согласование" — отправить руководителю после получения счета/суммы.
-    </p>
-  </div>
-)}
+          {modalMode === 'admin_receive' && userRole === 'supply_admin' && (
+            <div className="mt-4 p-4 bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-3 text-sm">
+                {t('supplyDecision') || 'Как обработать заявку?'}
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 🔹 В работу */}
+                <button
+                  onClick={() => onTakeToWork?.(selectedApplication)}
+                  className="px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/25"
+                >
+                  <Package className="w-4 h-4" />
+                  {t('takeToWork') || '📦 Взять в работу'}
+                </button>
+                
+                {/* 🔹 На согласование */}
+                <button
+                  onClick={() => onSendForApproval?.(selectedApplication)}
+                  className="px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-orange-500/25"
+                >
+                  <Shield className="w-4 h-4" />
+                  {t('sendForApproval') || '📋 На согласование'}
+                </button>
+              </div>
+              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                💡 "В работу" — начать поиск поставщика. "На согласование" — отправить руководителю после получения счета/суммы.
+              </p>
+            </div>
+          )}
           
           {/* 🔹 АДМИН: Отправка мастеру */}
           {modalMode === 'admin_send_to_master' && (
@@ -1153,15 +1182,15 @@ const ReceiveModal = memo(function({
           )}
         </div>
 
-        {/* 🔽 ВСТАВИТЬ ПОДСКАЗКУ ЗДЕСЬ — ПЕРЕД FOOTER */}
-{selectedApplication?.status === 'pending_approval' && (
-  <div className="px-4 sm:px-6 pb-2">
-    <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5 bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-lg border border-orange-200 dark:border-orange-800">
-      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
-      <span>{t('applicationPendingApproval') || 'Заявка ожидает одобрения руководителя'}</span>
-    </p>
-  </div>
-)}
+        {/* Подсказка перед Footer */}
+        {selectedApplication?.status === 'pending_approval' && (
+          <div className="px-4 sm:px-6 pb-2">
+            <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5 bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded-lg border border-orange-200 dark:border-orange-800">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+              <span>{t('applicationPendingApproval') || 'Заявка ожидает одобрения руководителя'}</span>
+            </p>
+          </div>
+        )}
         
         {/* Footer */}
         <div className="p-4 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-3xl flex justify-between items-center gap-3">
@@ -1179,30 +1208,30 @@ const ReceiveModal = memo(function({
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть</span>
             </div>
             
-          {/* Кнопка сохранения - видна для всех, кто может изменять */}
-{modalMode === 'admin_receive' && (
-  <button
-    onClick={handleSave}
-    disabled={!hasChanges || isSaving}
-    className={`px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg ${
-      hasChanges && !isSaving
-        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
-        : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
-    }`}
-  >
-    {isSaving ? (
-      <>
-        <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-        <span>{t('saving') || 'Сохранение...'}</span>
-      </>
-    ) : (
-      <>
-        <CheckCircle className="w-4 h-4" aria-hidden="true" />
-        <span>{t('save') || 'Сохранить'}</span>
-      </>
-    )}
-  </button>
-)}
+            {/* Кнопка сохранения */}
+            {modalMode === 'admin_receive' && (
+              <button
+                onClick={handleSave}
+                disabled={!hasChanges || isSaving}
+                className={`px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg ${
+                  hasChanges && !isSaving
+                    ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
+                }`}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    <span>{t('saving') || 'Сохранение...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" aria-hidden="true" />
+                    <span>{t('save') || 'Сохранить'}</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>

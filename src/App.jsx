@@ -193,6 +193,10 @@ import SettingsPage from './components/SettingsPage';
 import PublicOfferModal from './components/PublicOfferModal';
 import LegalOfferModal from './components/LegalOfferModal';
 import ConsentModal from './components/ConsentModal';
+// В импорты добавить
+import PriceEditor from './components/PriceEditor/PriceEditor';
+import { sanitizeApplicationsForMaster } from './utils/materialSanitizer';
+import { canViewPrices, canEditPrices } from './utils/priceManager';
 
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
@@ -1223,6 +1227,9 @@ const [showFeedbackForm, setShowFeedbackForm] = useState(false);
 const [showPublicOffer, setShowPublicOffer] = useState(false);
 const [showLegalOffer, setShowLegalOffer] = useState(false);
 const [showConsentUpdate, setShowConsentUpdate] = useState(false);
+// В состояния добавить
+const [showPriceEditor, setShowPriceEditor] = useState(false);
+const [selectedForPriceEdit, setSelectedForPriceEdit] = useState(null);
 
   // ─────────────────────────────────────────────────────────
   // 🎯 FOCUS MANAGEMENT (Pattern #3)
@@ -3791,20 +3798,21 @@ useEffect(() => {
                 unit: material.unit,
                 company_id: userCompanyId
               });
-              const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
-                p_company_id: userCompanyId,
-                p_item_name: (material.description || '').trim(),
-                p_quantity: qtyReceived,
-                p_transaction_type: 'income',
-                p_user_id: user?.id || null,
-                p_user_email: user?.email || null,
-                p_comment: `Приёмка: ${selectedApplication?.object_name}`,
-                p_application_id: selectedApplication?.id || null,
-                p_unit: material.unit || 'шт',
-                p_target_object_name: selectedApplication?.object_name || null,
-                p_recipient_name: selectedApplication?.foreman_name || null,
-                p_recipient_phone: selectedApplication?.foreman_phone || null
-              });
+              // ✅ ПРАВИЛЬНО:
+const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
+  p_company_id: userCompanyId,
+  p_item_name: (material.description || '').trim(),
+  p_quantity: qtyReceived,
+  p_transaction_type: 'income',
+  p_user_id: user?.id || null,
+  p_user_email: user?.email || null,
+  p_comment: `Приёмка: ${selectedApplication?.object_name}`,
+  p_application_id: selectedApplication?.id || null,
+  p_unit: material.unit || 'шт',
+  p_target_object_name: selectedApplication?.object_name || null,
+  p_recipient_name: selectedApplication?.foreman_name || null,
+  p_recipient_phone: selectedApplication?.foreman_phone || null
+});
               if (rpcError) {
                 console.error('❌ [WAREHOUSE] RPC ошибка:', rpcError);
                 showNotification(`⚠️ Ошибка склада: ${rpcError.message}`, 'warning');
@@ -4142,19 +4150,19 @@ const handleNpsSubmit = async ({ score, comment }) => {
         const qtyToSend = Number(item.quantityToSend) || 0;
         if (qtyToSend > 0) {
           await supabase.rpc('update_warehouse_balance', {
-            p_company_id: userCompanyId,
-            p_item_name: item.description.trim(),
-            p_quantity: qtyToSend,
-            p_transaction_type: 'expense',
-            p_user_id: user?.id,
-            p_user_email: user?.email,
-            p_comment: `Отправка мастеру: ${application.object_name}`,
-            p_application_id: application.id,
-            p_unit: item.unit || 'шт',
-            p_target_object_name: application.object_name,
-            p_recipient_name: application.foreman_name,
-            p_recipient_phone: application.foreman_phone
-          });
+  p_company_id: userCompanyId,
+  p_item_name: item.description.trim(),
+  p_quantity: qtyToSend,
+  p_transaction_type: 'expense',
+  p_user_id: user?.id,
+  p_user_email: user?.email,
+  p_comment: `Отправка мастеру: ${application.object_name}`,
+  p_application_id: application.id,
+  p_unit: item.unit || 'шт',
+  p_target_object_name: application.object_name,
+  p_recipient_name: application.foreman_name,
+  p_recipient_phone: application.foreman_phone
+});
         }
       }
     }
@@ -4225,19 +4233,19 @@ const handleNpsSubmit = async ({ score, comment }) => {
     const qty = Number(mat.received) || 0;
     if (qty > 0) {
       const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
-        p_company_id: userCompanyId,
-        p_item_name: (mat.description || '').trim(),
-        p_quantity: qty,
-        p_transaction_type: 'expense',
-        p_user_id: user?.id,
-        p_user_email: user?.email,
-        p_comment: `Выдача мастеру: ${application.object_name}`,
-        p_application_id: application.id,
-        p_unit: mat.unit || 'шт',
-        p_target_object_name: application.object_name,     // ← ДОБАВИТЬ
-        p_recipient_name: application.foreman_name,        // ← ДОБАВИТЬ
-        p_recipient_phone: application.foreman_phone       // ← ДОБАВИТЬ
-      });
+  p_company_id: userCompanyId,
+  p_item_name: (mat.description || '').trim(),
+  p_quantity: qty,
+  p_transaction_type: 'expense',
+  p_user_id: user?.id,
+  p_user_email: user?.email,
+  p_comment: `Выдача мастеру: ${application.object_name}`,
+  p_application_id: application.id,
+  p_unit: mat.unit || 'шт',
+  p_target_object_name: application.object_name,
+  p_recipient_name: application.foreman_name,
+  p_recipient_phone: application.foreman_phone
+});
       
       if (rpcError) {
         console.error('❌ RPC ошибка выдачи:', rpcError);
@@ -4556,6 +4564,12 @@ useEffect(() => {
         .limit(500);
       setAllApplications(allApps || []);
     }
+
+    const processedApps = (userRole === 'master' || userRole === 'foreman')
+    ? sanitizeApplicationsForMaster(userApps)
+    : userApps;
+  
+  setApplications(processedApps);
     
     // Сохраняем в кэш
     cacheManager.set('applications', cacheKey, {
@@ -6515,6 +6529,35 @@ const renderApprovalsQueue = () => (
             </div>
           </div>
         ))}
+
+        {/* История согласований */}
+{approvalHistory.length > 0 && (
+  <div className="mt-8">
+    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+      История согласований
+    </h3>
+    <div className="space-y-2">
+      {approvalHistory.slice(0, 5).map((history) => (
+        <div key={history.id} className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg text-sm">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="font-medium">
+                {history.applications?.object_name || history.object_name}
+              </p>
+              <p className="text-xs text-gray-500">
+                {history.status === 'approved' ? '✅ Одобрено' : 
+                 history.status === 'rejected' ? '❌ Отклонено' : '⏳ На согласовании'}
+              </p>
+            </div>
+            <p className="text-xs text-gray-400">
+              {new Date(history.created_at).toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
         {/* 🔴 ========== ВСТАВИТЬ ИСТОРИЮ СОГЛАСОВАНИЙ СЮДА ========== */}
         {/* История согласований */}
         {approvalHistory.length > 0 && (
@@ -6794,6 +6837,8 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           setShowNotificationModal(false);
           setSelectedNotification(null);
         }}
+        t={t}
+        language={language}
       >
 {user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (
   <div className="max-w-7xl mx-auto px-4 pt-2">
@@ -7602,6 +7647,28 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         retentionMetrics={retentionMetrics}
         engagementMetrics={engagementMetrics}
       />
+
+      {showPriceEditor && selectedForPriceEdit && (
+  <PriceEditor
+    application={selectedForPriceEdit}
+    onSave={(updatedMaterials) => {
+      setApplications(prev => prev.map(app =>
+        app.id === selectedForPriceEdit.id
+          ? { ...app, materials: updatedMaterials }
+          : app
+      ));
+      showNotification('✅ Цены обновлены', 'success');
+    }}
+    onClose={() => {
+      setShowPriceEditor(false);
+      setSelectedForPriceEdit(null);
+    }}
+    showNotification={showNotification}
+    supabase={supabase}
+    user={user}
+    userRole={userRole}
+  />
+)}
       
       {privacyPolicyOpen && <PrivacyPolicyModal />}
       {renderSignupModal()}
@@ -7898,7 +7965,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     />
   </div>
 )}
-// Модальные окна юридических документов
+
 {showPublicOffer && (
   <PublicOfferModal
     isOpen={showPublicOffer}

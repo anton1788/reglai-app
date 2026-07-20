@@ -25,6 +25,7 @@ import {
   isApplicationActive,
   requiresMasterConfirmation
 } from '../utils/applicationStatuses';
+import { canEditPrices } from '../utils/priceManager';
 
 // ─────────────────────────────────────────────────────────────
 // 📦 КОНФИГУРАЦИЯ СТАТУСОВ
@@ -254,7 +255,8 @@ const MobileApplicationCard = memo(({
   commentDrafts,
   handleCommentChange,
   clearCommentDraftHandler,
-  loadCommentDraft
+  loadCommentDraft,
+  onOpenPriceEditor,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(false);
@@ -407,6 +409,16 @@ const MobileApplicationCard = memo(({
               )}
             </div>
           )}
+
+          {/* В action-grid, после других кнопок и перед комментариями */}
+{canEditPrices(userRole) && (
+  <button
+    onClick={() => onOpenPriceEditor?.(application)}
+    className="touch-target px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+  >
+    💰 {t('prices') || 'Цены'}
+  </button>
+)}
           
           <div className="action-grid mt-3">
             {canShowReceiveButton(application, userRole) && (
@@ -524,7 +536,8 @@ const DesktopApplicationRow = memo(({
   commentDrafts,
   handleCommentChange,
   clearCommentDraftHandler,
-  loadCommentDraft
+  loadCommentDraft,
+  onOpenPriceEditor
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
@@ -657,6 +670,17 @@ const DesktopApplicationRow = memo(({
               {t('send') || 'Отправить'}
             </button>
           )}
+
+          {/* В блоке действий, после кнопки "Отправить" и перед комментариями */}
+{canEditPrices(userRole) && (
+  <button
+    onClick={() => onOpenPriceEditor?.(application)}
+    className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
+    title={t('editPrices') || 'Редактировать цены'}
+  >
+    💰 {t('prices') || 'Цены'}
+  </button>
+)}
           
           {userRole === 'foreman' && 
            requiresMasterConfirmation(application.status) && 
@@ -921,6 +945,7 @@ const ApplicationList = memo(({
   onDateFilterChange,
   onViewedFilterChange,
   onClearFilters,
+  onOpenPriceEditor,
   comments = {},
   showComments = {},
   isLoading = false,
@@ -1166,6 +1191,7 @@ const ApplicationList = memo(({
                 handleCommentChange={handleCommentChange}
                 clearCommentDraftHandler={clearCommentDraftHandler}
                 loadCommentDraft={loadCommentDraft}
+                onOpenPriceEditor={onOpenPriceEditor}
               />
             ))}
           </div>
@@ -1384,6 +1410,7 @@ const ApplicationList = memo(({
                   handleCommentChange={handleCommentChange}
                   clearCommentDraftHandler={clearCommentDraftHandler}
                   loadCommentDraft={loadCommentDraft}
+                  onOpenPriceEditor={onOpenPriceEditor} 
                 />
               ))}
             </div>

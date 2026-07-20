@@ -22,6 +22,7 @@ import SupportModal from './SupportModal';
 import PublicOfferModal from './PublicOfferModal';
 import LegalOfferModal from './LegalOfferModal';
 import PrivacyPolicyModal from './PrivacyPolicyModal';
+import { usePriceVisibility } from '../hooks/usePriceVisibility';
 
 const Navbar = ({ 
   user, 
@@ -75,6 +76,7 @@ const Navbar = ({
   const [showPublicOffer, setShowPublicOffer] = useState(false);
   const [showLegalOffer, setShowLegalOffer] = useState(false);
   const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
+  const { isMaster } = usePriceVisibility(userRole);
   
   const profileRef = useRef(null);
   const notificationsRef = useRef(null);
@@ -260,6 +262,16 @@ const Navbar = ({
   // Все пункты навигации в зависимости от роли и тарифа
   const getNavItems = () => {
     const items = [];
+    // ✅ ЕСЛИ МАСТЕР - ПОКАЗЫВАЕМ ТОЛЬКО БАЗОВЫЕ ПУНКТЫ
+  if (isMaster) {
+    items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
+    items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
+    items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
+    items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
+    items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
+    items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
+    return items;
+  }
 
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
@@ -532,7 +544,7 @@ const Navbar = ({
               )}
 
               {/* Быстрые действия */}
-              {(userRole === 'accountant' || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'master' || userRole === 'foreman' || isCompanyOwner) && (
+              {(userRole === 'accountant' || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'client_manager' || isCompanyOwner) && (
                 <div className="relative group">
                   <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                     <Plus className="w-5 h-5 text-gray-600 dark:text-gray-400" />

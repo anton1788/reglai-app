@@ -1,115 +1,256 @@
-// src/utils/kpiConfig.js
+// src/components/KPIDashboard.jsx
+import React, { useState, useEffect, useCallback } from 'react';
+import { Target, TrendingUp, TrendingDown, Activity, RefreshCw, AlertCircle, Eye, EyeOff, Users, Clock, CheckCircle, DollarSign, Shield } from 'lucide-react';
+import { KPI_TARGETS, calculateKPIs, getMetricStatus, getMetricColor } from '../utils/kpiConfig';
+import LoadingOverlay from './LoadingOverlay';
+import { usePriceVisibility } from '../hooks/usePriceVisibility';
 
-// KPI конфигурация для отслеживания метрик бизнеса
+// Метрики, которые НЕ должны видеть мастер и прораб (финансовые)
+const FINANCIAL_METRICS = ['trial_conversion', 'churn_rate', 'ltv', 'cac', 'payback_period'];
 
-export const KPI_TARGETS = {
-  trial_conversion: { min: 15, target: 25, unit: '%', label: 'Конверсия из триала', priority: 'high' },
-  churn_rate: { min: 0, target: 5, unit: '%', label: 'Отток клиентов', priority: 'high', inverse: true },
-  ltv: { min: 25000, target: 50000, unit: '₽', label: 'LTV (жизненная ценность)', priority: 'high' },
-  cac: { min: 5000, target: 10000, unit: '₽', label: 'CAC (стоимость привлечения)', priority: 'high', inverse: true },
-  payback_period: { min: 3, target: 6, unit: 'мес', label: 'Окупаемость', priority: 'medium', inverse: true },
-  active_users: { min: 10, target: 50, unit: '', label: 'Активные пользователи', priority: 'medium' },
-  avg_response_time: { min: 24, target: 6, unit: 'ч', label: 'Среднее время ответа', priority: 'medium', inverse: true }
-};
+// Базовые метрики, видимые всем
+const BASIC_METRICS = ['active_users', 'avg_response_time'];
 
-// Расчет метрик
-export const calculateKPIs = (data) => {
-  const {
-    companies = [],
-    applications = [],
-    payments = [],
-    comments = []  // ← добавили comments в деструктуризацию
-  } = data;
+const KPIDashboard = ({ 
+  supabase, 
+  companyId, 
+  onRefresh, 
+  refreshInterval = 300000,
+  userRole = 'master',
+  isMasterMode = false
+}) => {
+  const [kpis, setKpis] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  
+  // ✅ ИСПРАВЛЕНО: убрали неиспользуемый shouldHidePrices
+  const { isMaster } = usePriceVisibility(userRole);
+  
+  const hideFinancialMetrics = isMaster || isMasterMode;
 
-  // 1. Trial conversion (конверсия из триала в платных пользователей)
-  const trialUsers = companies.filter(c => c.plan_tier === 'trial' && !c.is_blocked).length;
-  const payingUsers = companies.filter(c => c.plan_tier !== 'trial' && c.plan_tier !== 'basic' && !c.is_blocked).length;
-  const trial_conversion = trialUsers ? Math.round((payingUsers / trialUsers) * 100) : 0;
-
-  // 2. Churn rate (отток клиентов за месяц)
-  const now = new Date();
-  const monthAgo = new Date(now.setMonth(now.getMonth() - 1));
-  const usersStartMonth = companies.filter(c => new Date(c.created_at) < monthAgo).length;
-  const usersEndMonth = companies.filter(c => !c.is_blocked && new Date(c.created_at) < monthAgo).length;
-  const lostUsers = usersStartMonth - usersEndMonth;
-  const churn_rate = usersStartMonth ? Math.round((lostUsers / usersStartMonth) * 100) : 0;
-
-  // 3. LTV (Lifetime Value)
-  const avgMonthlyPayment = payments.length ? payments.reduce((sum, p) => sum + p.amount, 0) / payments.length / 12 : 10000;
-  const avgCustomerLifetime = 6; // среднее время жизни клиента в месяцах
-  const ltv = Math.round(avgMonthlyPayment * avgCustomerLifetime);
-
-  // 4. CAC (Customer Acquisition Cost)
-  const totalMarketingCosts = 50000; // TODO: брать из реальных данных
-  const newCustomersLastMonth = companies.filter(c => {
-    const createdAt = new Date(c.created_at);
-    const monthAgoCAC = new Date();
-    monthAgoCAC.setMonth(monthAgoCAC.getMonth() - 1);
-    return createdAt > monthAgoCAC;
-  }).length;
-  const cac = newCustomersLastMonth ? Math.round(totalMarketingCosts / newCustomersLastMonth) : KPI_TARGETS.cac.target;
-
-  // 5. Payback period
-  const payback_period = Number((cac / (avgMonthlyPayment || 10000)).toFixed(1));
-
-  // 6. Active users (пользователи, создавшие заявку за последние 7 дней)
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const activeUserIds = new Set(applications.filter(a => new Date(a.created_at) > weekAgo).map(a => a.user_id));
-  const active_users = activeUserIds.size;
-
-  // 7. Avg response time (среднее время от заявки до первого комментария)
-  let totalResponseTime = 0;
-  let responseCount = 0;
-  applications.forEach(app => {
-    const appComments = comments.filter(c => c.application_id === app.id) || [];
-    if (appComments.length > 0 && appComments[0].created_at) {
-      const responseTime = (new Date(appComments[0].created_at) - new Date(app.created_at)) / (1000 * 60 * 60);
-      if (responseTime > 0 && responseTime < 168) { // меньше недели
-        totalResponseTime += responseTime;
-        responseCount++;
-      }
+  const loadKPIs = useCallback(async () => {
+    if (!supabase || !companyId) {
+      setLoading(false);
+      return;
     }
-  });
-  const avg_response_time = responseCount ? Number((totalResponseTime / responseCount).toFixed(1)) : 24;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const [companiesRes, appsRes, usersRes, paymentsRes, commentsRes] = await Promise.all([
+        supabase.from('companies').select('id, created_at, plan_tier, is_blocked'),
+        supabase.from('applications').select('id, created_at, user_id, company_id, status'),
+        supabase.from('users').select('id, created_at, email, last_active_at'),
+        supabase.from('payments').select('id, amount, created_at'),
+        supabase.from('comments').select('id, application_id, created_at')
+      ]);
+      
+      const data = {
+        companies: companiesRes.data || [],
+        applications: appsRes.data || [],
+        users: usersRes.data || [],
+        payments: paymentsRes.data || [],
+        comments: commentsRes.data || []
+      };
+      
+      const calculatedKPIs = calculateKPIs(data);
+      setKpis(calculatedKPIs);
+      setLastUpdate(new Date());
+      
+      // Сохраняем в localStorage для истории
+      try {
+        const history = JSON.parse(localStorage.getItem('kpi_history') || '[]');
+        history.push({ ...calculatedKPIs, timestamp: new Date().toISOString() });
+        if (history.length > 30) history.shift();
+        localStorage.setItem('kpi_history', JSON.stringify(history));
+      } catch {
+        // Игнорируем ошибки localStorage
+      }
+      
+    } catch (err) {
+      console.error('Error loading KPIs:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase, companyId]);
 
-  return {
-    trial_conversion,
-    churn_rate,
-    ltv,
-    cac,
-    payback_period,
-    active_users,
-    avg_response_time,
-    timestamp: new Date().toISOString()
+  useEffect(() => {
+    loadKPIs();
+    
+    const interval = setInterval(loadKPIs, refreshInterval);
+    return () => clearInterval(interval);
+  }, [loadKPIs, refreshInterval]);
+
+  const handleRefresh = () => {
+    loadKPIs();
+    onRefresh?.();
   };
+
+  const getVisibleMetrics = () => {
+    if (!kpis) return [];
+    
+    const allMetricKeys = Object.keys(KPI_TARGETS);
+    
+    if (hideFinancialMetrics) {
+      return allMetricKeys.filter(key => BASIC_METRICS.includes(key));
+    }
+    
+    return allMetricKeys;
+  };
+
+  const isFinancialMetric = (key) => FINANCIAL_METRICS.includes(key);
+
+  if (loading && !kpis) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 relative min-h-[300px]">
+        <LoadingOverlay isLoading={true} message="Загрузка KPI..." />
+      </div>
+    );
+  }
+
+  const visibleMetrics = getVisibleMetrics();
+  const hasFinancialData = kpis && Object.keys(kpis).some(key => FINANCIAL_METRICS.includes(key) && kpis[key] !== undefined);
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+      {/* Заголовок */}
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Target className="w-5 h-5 text-[#4A6572]" />
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+            {hideFinancialMetrics ? '📊 Мои показатели' : '📈 KPI Дашборд'}
+          </h3>
+          {lastUpdate && (
+            <span className="text-xs text-gray-400 ml-2 hidden sm:inline">
+              обновлено: {lastUpdate.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {hideFinancialMetrics && (
+            <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full flex items-center gap-1">
+              <EyeOff className="w-3 h-3" />
+              Без финансов
+            </span>
+          )}
+          
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            title="Обновить"
+          >
+            <RefreshCw className={`w-4 h-4 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Ошибка */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-500" />
+          <span className="text-sm text-red-600 dark:text-red-400">Ошибка загрузки: {error}</span>
+        </div>
+      )}
+
+      {/* Карточки KPI */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {visibleMetrics.map((key) => {
+          const value = kpis?.[key];
+          if (value === undefined || value === null) return null;
+          
+          const config = KPI_TARGETS[key];
+          if (!config) return null;
+          
+          const status = getMetricStatus(key, value);
+          const colorClass = getMetricColor(key, value);
+          const isFinancial = isFinancialMetric(key);
+          
+          let IconComponent;
+          if (isFinancial) {
+            IconComponent = DollarSign;
+          } else if (key === 'active_users') {
+            IconComponent = Users;
+          } else if (key === 'avg_response_time') {
+            IconComponent = Clock;
+          } else {
+            IconComponent = status === 'excellent' ? TrendingUp : 
+                          status === 'bad' ? TrendingDown : Activity;
+          }
+          
+          return (
+            <div 
+              key={key} 
+              className={`rounded-lg p-4 transition-all hover:shadow-md ${colorClass} ${isFinancial && hideFinancialMetrics ? 'opacity-50' : ''}`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium truncate" title={config.label}>
+                  {config.label}
+                </span>
+                <IconComponent className="w-5 h-5 flex-shrink-0" />
+              </div>
+              
+              <div className="text-2xl font-bold">
+                {value}
+                <span className="text-sm font-normal ml-1">{config.unit}</span>
+              </div>
+              
+              <div className="mt-2 text-xs opacity-75">
+                {status === 'excellent' && '✅ Отлично'}
+                {status === 'good' && '📊 Норма'}
+                {status === 'bad' && '⚠️ Требует внимания'}
+                {` • Цель: ${config.target}${config.unit}`}
+              </div>
+              
+              <div className="mt-2 h-1.5 bg-white/30 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-current transition-all duration-500"
+                  style={{ 
+                    width: `${Math.min(100, Math.max(0, (value / config.target) * 100))}%` 
+                  }}
+                />
+              </div>
+              
+              {isFinancial && hideFinancialMetrics && (
+                <div className="mt-1 text-[10px] opacity-60 flex items-center gap-1">
+                  <Shield className="w-3 h-3" />
+                  Только для руководителей
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {hideFinancialMetrics && (
+        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
+            <EyeOff className="w-4 h-4" />
+            💡 Финансовые показатели скрыты. Для информации по ценам и финансовым метрикам обратитесь к снабженцу или руководителю.
+          </p>
+        </div>
+      )}
+
+      {kpis && (
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500">
+          <div className="flex flex-wrap justify-between gap-2">
+            <span>👥 Активных пользователей: {kpis.active_users || 0}</span>
+            <span>⏱️ Среднее время ответа: {kpis.avg_response_time || 0} ч</span>
+            {!hideFinancialMetrics && hasFinancialData && (
+              <>
+                <span>💰 LTV: {kpis.ltv?.toLocaleString() || 0} ₽</span>
+                <span>📊 Конверсия: {kpis.trial_conversion || 0}%</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
-// Получение статуса метрики (отлично/норма/плохо)
-export const getMetricStatus = (metricName, value) => {
-  const config = KPI_TARGETS[metricName];
-  if (!config) return 'unknown';
-  
-  const { min, target, inverse } = config;
-  
-  if (inverse) {
-    if (value <= target) return 'excellent';
-    if (value <= min) return 'good';
-    return 'bad';
-  } else {
-    if (value >= target) return 'excellent';
-    if (value >= min) return 'good';
-    return 'bad';
-  }
-};
-
-// Получение цвета для метрики
-export const getMetricColor = (metricName, value) => {
-  const status = getMetricStatus(metricName, value);
-  switch (status) {
-    case 'excellent': return 'text-green-600 bg-green-100 dark:bg-green-900/30';
-    case 'good': return 'text-yellow-600 bg-yellow-100 dark:bg-yellow-900/30';
-    case 'bad': return 'text-red-600 bg-red-100 dark:bg-red-900/30';
-    default: return 'text-gray-600 bg-gray-100 dark:bg-gray-700';
-  }
-};
+export default KPIDashboard;
