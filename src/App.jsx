@@ -194,7 +194,9 @@ import PublicOfferModal from './components/PublicOfferModal';
 import LegalOfferModal from './components/LegalOfferModal';
 import ConsentModal from './components/ConsentModal';
 // В импорты добавить
-import PriceEditor from './components/PriceEditor/PriceEditor';
+import PriceEditor from './components/MaterialPriceView/PriceEditor';
+// Должно быть правильно:
+import MaterialPriceView from './components/MaterialPriceView/MaterialPriceView';
 import { sanitizeApplicationsForMaster } from './utils/materialSanitizer';
 import { canViewPrices, canEditPrices } from './utils/priceManager';
 
@@ -7664,7 +7666,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       setSelectedForPriceEdit(null);
     }}
     showNotification={showNotification}
-    supabase={supabase}
     user={user}
     userRole={userRole}
   />
