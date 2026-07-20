@@ -1,6 +1,7 @@
 // src/hooks/usePriceVisibility.js
 import { useMemo } from 'react';
-import { isMasterRole, canEditPrices } from '../utils/materialSanitizer';
+import { isMasterRole } from '../utils/materialSanitizer';
+import { canEditPrices } from '../utils/priceManager';
 import { canViewPrices as canViewPricesUtil } from '../utils/priceManager';
 
 export const usePriceVisibility = (userRole) => {
