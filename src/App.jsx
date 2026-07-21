@@ -4093,99 +4093,6 @@ const handleNpsSubmit = async ({ score, comment }) => {
   }
 };
 
-  const handleSendToMaster = useCallback(async (itemsToSend, application) => {
-  try {
-    console.log('📦 Отправка мастеру, items:', itemsToSend);
-    
-    // 1. Обновляем материалы
-    const updatedMaterials = application.materials.map((originalMaterial) => {
-      const itemToSend = itemsToSend.find(i => i.description === originalMaterial.description);
-      
-      if (itemToSend && (Number(itemToSend.quantityToSend) || 0) > 0) {
-        const qtyToSend = Number(itemToSend.quantityToSend);
-        return {
-          ...originalMaterial,
-          sent_to_master_quantity: (Number(originalMaterial.sent_to_master_quantity) || 0) + qtyToSend,
-          status: ITEM_STATUS.SENT_TO_MASTER,
-          sent_to_master_at: new Date().toISOString(),
-          sent_to_master_by: user?.id
-        };
-      }
-      return originalMaterial;
-    });
-    
-    // 2. Проверяем, все ли материалы отправлены мастеру
-    const allSent = updatedMaterials.every(m => 
-      (Number(m.sent_to_master_quantity) || 0) >= (Number(m.supplier_received_quantity) || 0)
-    );
-    
-    // 3. Новый статус заявки
-    const newStatus = allSent 
-      ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION 
-      : APPLICATION_STATUS.PARTIAL_RECEIVED;
-    
-    // 4. Обновляем заявку
-    const { error: updateError } = await supabase
-      .from('applications')
-      .update({
-        status: newStatus,
-        materials: updatedMaterials,
-        updated_at: new Date().toISOString(),
-        status_history: [
-          ...(application.status_history || []),
-          {
-            action: 'sent_to_master',
-            user_id: user?.id,
-            user_email: user?.email,
-            timestamp: new Date().toISOString(),
-            details: `Отправлено мастеру: ${itemsToSend.length} позиций`
-          }
-        ]
-      })
-      .eq('id', application.id);
-    
-    if (updateError) throw updateError;
-    
-    // 5. Списание со склада
-    if (WAREHOUSE_ENABLED) {
-      for (const item of itemsToSend) {
-        const qtyToSend = Number(item.quantityToSend) || 0;
-        if (qtyToSend > 0) {
-          await supabase.rpc('update_warehouse_balance', {
-  p_company_id: userCompanyId,
-  p_item_name: item.description.trim(),
-  p_quantity: qtyToSend,
-  p_transaction_type: 'expense',
-  p_user_id: user?.id,
-  p_user_email: user?.email,
-  p_comment: `Отправка мастеру: ${application.object_name}`,
-  p_application_id: application.id,
-  p_unit: item.unit || 'шт',
-  p_target_object_name: application.object_name,
-  p_recipient_name: application.foreman_name,
-  p_recipient_phone: application.foreman_phone
-});
-        }
-      }
-    }
-    
-    // 6. Обновляем UI
-    setApplications(prev => prev.map(app =>
-      app.id === application.id
-        ? { ...app, status: newStatus, materials: updatedMaterials }
-        : app
-    ));
-    
-    showNotification(`✅ Отправлено мастеру ${itemsToSend.length} позиций`, 'success');
-    return { success: true };
-    
-  } catch (err) {
-    console.error('Ошибка:', err);
-    showNotification('Ошибка отправки: ' + err.message, 'error');
-    return { success: false, error: err };
-  }
-}, [user, userCompanyId, WAREHOUSE_ENABLED, showNotification, setApplications]);
-
   const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
     try {
       const updatedMaterials = materialsFromModal.map((m, index) => {
@@ -7302,8 +7209,13 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
                 setShowReceiveModal(true);
               }
             }}
-          />
-        )}
+          onApplicationUpdate={async (applicationId) => {
+      // Перезагружаем заявки после обновления из склада
+      await loadApplications(page);
+      showNotification('📦 Заявка обновлена после отправки материалов', 'info');
+    }}
+  />
+)}
         
         {currentView === 'documents' && (
           <DocumentGenerator
@@ -7591,7 +7503,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         onClose={() => setShowReceiveModal(false)}
         selectedApplication={selectedApplication}
         onAdminReceive={handleAdminReceive} 
-        onSendToMaster={handleSendToMaster}
         onMasterConfirm={handleMasterConfirm}
         language={language}
         escapeHtml={escapeHtml}

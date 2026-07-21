@@ -13,6 +13,7 @@ import {
   getUserContext,
   shouldLogFeature
 } from '../utils/auditLogger'; 
+import { APPLICATION_STATUS, ITEM_STATUS } from '../utils/applicationStatuses';
 
 // === Константы ===
 const LOW_STOCK_THRESHOLD = 10;
@@ -705,7 +706,8 @@ const WarehouseView = ({
   showNotification,
   applications = [],
   autoReorderEnabled = true,
-  onToggleAutoReorder
+  onToggleAutoReorder,
+  onApplicationUpdate // 🔥 НОВЫЙ ПРОП ДЛЯ ОБНОВЛЕНИЯ ЗАЯВКИ В РОДИТЕЛЕ
 }) => {
 const [warehouseItems, setWarehouseItems] = useState([]);
 const [transactions, setTransactions] = useState([]);
@@ -853,7 +855,7 @@ const loadWarehouseData = useCallback(async () => {
   } finally {
     setIsLoading(false);
   }
-}, [userRole, supabase, t, showNotification]); // 🔥 УДАЛИЛ userCompanyId из зависимостей
+}, [userRole, supabase, t, showNotification]);
 
 useEffect(() => {
   if (userCompanyId && user?.id) {
@@ -1054,6 +1056,9 @@ const addNewItem = useCallback(async () => {
   }
 }, [supabase, userCompanyId, newItemForm, t, showNotification, loadWarehouseData]);
 
+// ============================================================
+// 🔥 ОСНОВНОЕ ИЗМЕНЕНИЕ: createTransfer с обновлением заявки
+// ============================================================
 const createTransfer = useCallback(async (item, recipientId, objectName, quantity, comment) => {
   setActionLoading(prev => ({ ...prev, transfer: item.id }));
   try {
@@ -1065,6 +1070,7 @@ const createTransfer = useCallback(async (item, recipientId, objectName, quantit
       throw new Error('Недостаточно материала');
     }
     
+    // 1. СПИСЫВАЕМ СО СКЛАДА
     const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
       p_company_id: userCompanyId,
       p_item_name: item.name,
@@ -1081,6 +1087,7 @@ const createTransfer = useCallback(async (item, recipientId, objectName, quantit
     
     if (rpcError) throw rpcError;
     
+    // 2. ЗАПИСЫВАЕМ ВЫДАЧУ В material_issues
     await supabase
       .from('material_issues')
       .insert([{
@@ -1096,9 +1103,117 @@ const createTransfer = useCallback(async (item, recipientId, objectName, quantit
         issued_at: new Date().toISOString()
       }]);
     
-    showNotification(t('transferred') || `✅ Выдано ${quantity} ${item.unit} сотруднику ${recipient.full_name}`, 'success');
+    // ============================================================
+    // 🔥 3. ОБНОВЛЯЕМ ЗАЯВКУ - отмечаем, что материалы отправлены мастеру
+    // ============================================================
+    try {
+      // Находим заявку по объекту и статусу
+      const { data: applicationsData, error: findError } = await supabase
+        .from('applications')
+        .select('id, materials, object_name, foreman_name')
+        .eq('company_id', userCompanyId)
+        .eq('object_name', objectName)
+        .eq('foreman_name', recipient.full_name)
+        .in('status', [
+          APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+          APPLICATION_STATUS.PARTIAL_RECEIVED,
+          APPLICATION_STATUS.ADMIN_PROCESSING
+        ])
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (findError) {
+        console.warn('⚠️ Не удалось найти заявку для обновления:', findError);
+      } else if (applicationsData && applicationsData.length > 0) {
+        const app = applicationsData[0];
+        
+        // Обновляем материалы в заявке
+        const updatedMaterials = app.materials.map(m => {
+          if (m.description === item.name) {
+            const currentSent = Number(m.sent_to_master_quantity) || 0;
+            const newSent = currentSent + Number(quantity);
+            const requested = Number(m.quantity) || 0;
+            
+            return {
+              ...m,
+              sent_to_master_quantity: newSent,
+              sent_to_master_at: new Date().toISOString(),
+              sent_to_master_by: user?.id,
+              status: newSent >= requested 
+                ? ITEM_STATUS.SENT_TO_MASTER 
+                : (newSent > 0 ? ITEM_STATUS.PARTIAL_SENT : ITEM_STATUS.PENDING)
+            };
+          }
+          return m;
+        });
+        
+        // Проверяем, все ли материалы отправлены
+        const allSent = updatedMaterials.every(m => 
+          (Number(m.sent_to_master_quantity) || 0) >= (Number(m.quantity) || 0)
+        );
+        
+        const newStatus = allSent 
+          ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION 
+          : APPLICATION_STATUS.PARTIAL_RECEIVED;
+        
+        // Обновляем заявку в БД
+        const { error: updateError } = await supabase
+          .from('applications')
+          .update({
+            materials: updatedMaterials,
+            status: newStatus,
+            updated_at: new Date().toISOString(),
+            status_history: [
+              ...(app.status_history || []),
+              {
+                action: 'sent_to_master',
+                user_id: user?.id,
+                user_email: user?.email,
+                timestamp: new Date().toISOString(),
+                details: `Отправлено мастеру: ${item.name} - ${quantity} ${item.unit}`
+              }
+            ]
+          })
+          .eq('id', app.id);
+        
+        if (updateError) {
+          console.warn('⚠️ Ошибка обновления заявки:', updateError);
+        } else {
+          console.log(`✅ Заявка ${app.id} обновлена, статус: ${newStatus}`);
+          
+          // 🔥 Уведомляем родительский компонент об обновлении
+          if (typeof onApplicationUpdate === 'function') {
+            onApplicationUpdate(app.id);
+          }
+          
+          // Отправляем уведомление мастеру
+          await supabase
+            .from('notifications')
+            .insert([{
+              user_id: recipientId,
+              title: '📦 Материалы отправлены',
+              message: `Снабженец отправил вам "${item.name}" (${quantity} ${item.unit}) по заявке "${objectName}"`,
+              type: 'shipment',
+              link: `/applications/${app.id}`,
+              company_id: userCompanyId
+            }]);
+        }
+      }
+    } catch (appUpdateError) {
+      console.warn('⚠️ Ошибка при обновлении заявки:', appUpdateError);
+      // Не прерываем выполнение, т.к. склад уже обновлён
+    }
+    
+    // 4. Показываем уведомление
+    showNotification(
+      t('transferred') || `✅ Выдано ${quantity} ${item.unit} сотруднику ${recipient.full_name}`,
+      'success'
+    );
+    
+    // 5. Перезагружаем данные
     await loadWarehouseData();
     setTransferModal({ isOpen: false, item: null });
+    
   } catch (err) {
     console.error('Transfer error:', err);
     showNotification(err.message || t('transferError'), 'error');
@@ -1106,7 +1221,17 @@ const createTransfer = useCallback(async (item, recipientId, objectName, quantit
   } finally {
     setActionLoading(prev => ({ ...prev, transfer: null }));
   }
-}, [userCompanyId, user, profileData, supabase, t, showNotification, loadWarehouseData, employees]);
+}, [
+  userCompanyId, 
+  user, 
+  profileData, 
+  supabase, 
+  t, 
+  showNotification, 
+  loadWarehouseData, 
+  employees,
+  onApplicationUpdate // 🔥 Добавляем в зависимости
+]);
 
 const loadItemHistory = useCallback(async (item) => {
 setActionLoading(prev => ({ ...prev, details: item.id }));
