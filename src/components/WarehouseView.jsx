@@ -256,50 +256,42 @@ isFromApplications
 </td>
 <td className="text-right">
 <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
-{!isFromApplications && onAdjust && (
-<button
-onClick={() => onAdjust(item)}
-disabled={itemLoading}
-className="table-action-btn text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
-title={t('adjustBalance')}
->
-<Edit2 className="w-3.5 h-3.5" />
-{t('adjust') || 'Корр.'}
-</button>
-)}
-{balance > 0 && canEdit && !isFromApplications && onTransfer && (
-<button
-onClick={() => onTransfer(item)}
-disabled={itemLoading}
-className="table-action-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-title={t('transfer')}
->
-<Truck className="w-3.5 h-3.5" />
-{t('transfer') || 'Выдать'}
-</button>
-)}
-{canEdit && !isFromApplications && onDelete && (
-<button
-onClick={() => onDelete(item)}
-disabled={itemLoading}
-className="table-action-btn text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
-title={t('delete') || 'Удалить'}
->
-<Trash2 className="w-3.5 h-3.5" />
-{t('delete') || 'Удалить'}
-</button>
-)}
-{!isFromApplications && onViewHistory && (
-<button
-onClick={() => onViewHistory(item)}
-disabled={itemLoading}
-className="table-action-btn text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-title={t('history')}
->
-<History className="w-3.5 h-3.5" />
-</button>
-)}
-</div>
+ {/* 🔹 Корректировка - только для склада */}
+    {!isFromApplications && onAdjust && (
+      <button onClick={() => onAdjust(item)} disabled={itemLoading} className="table-action-btn text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title={t('adjustBalance')}>
+        <Edit2 className="w-3.5 h-3.5" />
+        {t('adjust') || 'Корр.'}
+      </button>
+    )}
+    
+    {/* 🔹 ВЫДАТЬ - теперь и для "Из заявок"! */}
+    {balance > 0 && canEdit && onTransfer && (
+      <button
+        onClick={() => onTransfer(item)}
+        disabled={itemLoading}
+        className="table-action-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+        title={t('transfer')}
+      >
+        <Truck className="w-3.5 h-3.5" />
+        {t('transfer') || 'Выдать'}
+      </button>
+    )}
+    
+    {/* 🔹 Удалить - только для склада */}
+    {canEdit && !isFromApplications && onDelete && (
+      <button onClick={() => onDelete(item)} disabled={itemLoading} className="table-action-btn text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20" title={t('delete') || 'Удалить'}>
+        <Trash2 className="w-3.5 h-3.5" />
+        {t('delete') || 'Удалить'}
+      </button>
+    )}
+    
+    {/* 🔹 История - только для склада */}
+    {!isFromApplications && onViewHistory && (
+      <button onClick={() => onViewHistory(item)} disabled={itemLoading} className="table-action-btn text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" title={t('history')}>
+        <History className="w-3.5 h-3.5" />
+      </button>
+    )}
+  </div>
 </td>
 </tr>
 );
