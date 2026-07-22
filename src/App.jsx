@@ -1258,6 +1258,20 @@ const {
   requiresApproval
 } = useApproval(userCompanyId, user?.id, userRole);
 
+// ============================================================
+// 🔧 ВСТАВЬТЕ СЮДА ФИКС (после всех useState, ПЕРЕД useEffect)
+// ============================================================
+useEffect(() => {
+  // Фикс для userCompanyId - нормализуем, если это объект
+  if (userCompanyId && typeof userCompanyId === 'object') {
+    console.warn('⚠️ Исправляем userCompanyId из объекта:', userCompanyId);
+    const fixedId = userCompanyId.id || userCompanyId.company_id || null;
+    if (fixedId) {
+      setUserCompanyId(fixedId);
+    }
+  }
+}, [userCompanyId]);
+
   // ─────────────────────────────────────────────────────────
   // 🎨 INJECT GLOBAL STYLES (Pattern #1)
   // ─────────────────────────────────────────────────────────
