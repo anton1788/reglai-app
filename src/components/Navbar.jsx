@@ -299,9 +299,15 @@ const Navbar = ({
     }
 
     if (userRole === 'master' || userRole === 'foreman') {
-      items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
-      items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
-    }
+  items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
+  items.push({ 
+    id: 'confirmation', 
+    label: 'Подтверждение', 
+    icon: CheckCircle, 
+    path: '/confirmation' 
+  });
+  items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
+}
 
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || userRole === 'accountant') {
       items.push({ id: 'warehouse', label: 'Склад', icon: Package, path: '/warehouse' });

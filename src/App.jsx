@@ -7019,10 +7019,16 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 )}
         
         {currentView === 'inwork' && (
-          <ApplicationList
-            applications={filteredApplications.filter(app => {
-              return isApplicationActive(app.status) &&
-                (userRole !== 'master' || app.user_id === user?.id);
+  <ApplicationList
+    applications={filteredApplications.filter(app => {
+      // Для мастера показываем активные заявки + заявки на подтверждение
+      if (userRole === 'master' || userRole === 'foreman') {
+        return app.user_id === user?.id && (
+          isApplicationActive(app.status) ||
+          app.status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION
+        );
+      }
+      return isApplicationActive(app.status);
             })}
             title={language === 'ru' ? 'В работе' : 'In Work'}
             emptyMessage={language === 'ru' ? 'Нет заявок в работе' : 'No applications in work'}
@@ -7068,56 +7074,58 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             isExportingXLSX={isExportingXLSX}
           />
         )}
-        
-        {currentView === 'confirmation' && (
-          <ApplicationList
-            applications={filteredApplications.filter(app =>
-              requiresMasterConfirmation(app.status) && app.user_id === user?.id
-            )}
-            title={language === 'ru' ? 'Заявки на подтверждение' : 'Applications for Confirmation'}
-            emptyMessage={language === 'ru' ? 'Нет заявок, требующих подтверждения' : 'No applications requiring confirmation'}
-            isMobile={isMobile}
-            user={user}
-            userRole={userRole}
-            isAdminMode={isAdminMode}
-            permissions={currentUserPermissions}
-            t={t}
-            language={language}
-            uniqueDates={uniqueDates}
-            page={page}
-            totalPages={totalPages}
-            onAdminLogout={handleAdminLogout}
-            onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
-            onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
-            onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
-            onOpenReceiveModal={openReceiveModal}
-            onCancelApplication={cancelApplication}
-            onAddComment={addComment}
-            onToggleComments={(appId) => setShowComments(prev => ({
-              ...prev,
-              [appId]: !(prev[appId] || false)
-            }))}
-            onPageChange={setPage}
-            searchTerm={searchTerm}
-            statusFilter={statusFilter}
-            dateFilter={dateFilter}
-            viewedFilter={viewedFilter}
-            onSearchChange={setSearchTerm}
-            onStatusFilterChange={setStatusFilter}
-            onDateFilterChange={setDateFilter}
-            onViewedFilterChange={setViewedFilter}
-            onClearFilters={clearFilters}
-            expandedMaterials={expandedMaterials}
-            onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
-              ...prev,
-              [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
-            }))}
-            comments={comments}
-            showComments={showComments}
-            isExportingPDF={isExportingPDF}
-            isExportingXLSX={isExportingXLSX}
-          />
-        )}
+
+        {/* ✅ ДОБАВИТЬ НОВЫЙ БЛОК ДЛЯ ПОДТВЕРЖДЕНИЯ - ВСТАВИТЬ СЮДА! */}
+{currentView === 'confirmation' && (
+  <ApplicationList
+    applications={filteredApplications.filter(app =>
+      app.status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION &&
+      app.user_id === user?.id
+    )}
+    title={language === 'ru' ? 'Подтверждение получения' : 'Confirmation'}
+    emptyMessage={language === 'ru' ? 'Нет заявок для подтверждения' : 'No applications to confirm'}
+    isMobile={isMobile}
+    user={user}
+    userRole={userRole}
+    isAdminMode={isAdminMode}
+    permissions={currentUserPermissions}
+    t={t}
+    language={language}
+    uniqueDates={uniqueDates}
+    page={page}
+    totalPages={totalPages}
+    onAdminLogout={handleAdminLogout}
+    onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
+    onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
+    onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
+    onOpenReceiveModal={openReceiveModal}
+    onCancelApplication={cancelApplication}
+    onAddComment={addComment}
+    onToggleComments={(appId) => setShowComments(prev => ({
+      ...prev,
+      [appId]: !(prev[appId] || false)
+    }))}
+    onPageChange={setPage}
+    searchTerm={searchTerm}
+    statusFilter={statusFilter}
+    dateFilter={dateFilter}
+    viewedFilter={viewedFilter}
+    onSearchChange={setSearchTerm}
+    onStatusFilterChange={setStatusFilter}
+    onDateFilterChange={setDateFilter}
+    onViewedFilterChange={setViewedFilter}
+    onClearFilters={clearFilters}
+    expandedMaterials={expandedMaterials}
+    onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
+      ...prev,
+      [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
+    }))}
+    comments={comments}
+    showComments={showComments}
+    isExportingPDF={isExportingPDF}
+    isExportingXLSX={isExportingXLSX}
+  />
+)}
         
         {currentView === 'history' && (
           <ApplicationList
