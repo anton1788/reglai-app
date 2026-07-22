@@ -4502,10 +4502,10 @@ useEffect(() => {
     
     try {
       const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+  .from('user_notifications')  // ← ИЗМЕНЕНО
+  .select('*')
+  .eq('user_id', user.id)
+  .order('created_at', { ascending: false });
 
       if (error) throw error;
       
@@ -4539,16 +4539,16 @@ useEffect(() => {
   useEffect(() => {
     if (!user?.id) return;
 
-    const channel = supabase
-      .channel('notifications_channel')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        },
+      const channel = supabase
+  .channel('notifications_channel')
+  .on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'user_notifications',  // ← ИСПРАВЛЕНО
+      filter: `user_id=eq.${user.id}`
+    },
         (payload) => {
           const newNotif = {
             ...payload.new,

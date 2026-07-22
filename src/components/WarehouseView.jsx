@@ -1180,15 +1180,23 @@ const createTransfer = useCallback(async (item, recipientId, objectName, quantit
           
           // Отправляем уведомление мастеру
           await supabase
-            .from('notifications')
-            .insert([{
-              user_id: recipientId,
-              title: '📦 Материалы отправлены',
-              message: `Снабженец отправил вам "${item.name}" (${quantity} ${item.unit}) по заявке "${objectName}"`,
-              type: 'shipment',
-              link: `/applications/${app.id}`,
-              company_id: userCompanyId
-            }]);
+  .from('user_notifications')  // ← ИЗМЕНЕНО!
+  .insert([{
+    user_id: recipientId,
+    company_id: userCompanyId,
+    title: '📦 Материалы отправлены',
+    message: `Снабженец отправил вам "${item.name}" (${quantity} ${item.unit}) по заявке "${objectName}"`,
+    type: 'shipment',
+    link: `/applications/${app.id}`,
+    related_data: {  // ← related_data вместо link
+      application_id: app.id,
+      object_name: objectName,
+      material_name: item.name,
+      quantity: quantity
+    },
+    is_read: false,
+    created_at: new Date().toISOString()
+  }]);
         }
       }
     } catch (appUpdateError) {
