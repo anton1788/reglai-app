@@ -1183,9 +1183,7 @@ useEffect(() => {
   const loadClientId = async () => {
     if (user && userCompanyId && userRole === 'client') {
       // Нормализуем перед передачей
-      const safeCompanyId = typeof userCompanyId === 'object' 
-        ? userCompanyId?.id || userCompanyId?.company_id || null 
-        : userCompanyId;
+      const safeCompanyId = userCompanyId?.id || userCompanyId?.company_id || userCompanyId;
       const id = await getClientId(user.id, safeCompanyId);
       setClientId(id);
     }
@@ -1261,9 +1259,7 @@ const [selectedForPriceEdit, setSelectedForPriceEdit] = useState(null);
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK
 // ─────────────────────────────────────────────────────────
-const safeCompanyId = typeof userCompanyId === 'object' 
-  ? userCompanyId?.id || userCompanyId?.company_id || null 
-  : userCompanyId;
+const safeCompanyId = userCompanyId?.id || userCompanyId?.company_id || userCompanyId;
 const {
   pendingApprovals,
   approvalHistory,
@@ -4416,9 +4412,7 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
   // ✅ ЖЕСТКАЯ НОРМАЛИЗАЦИЯ ПРЯМО ЗДЕСЬ
-  const safeCompanyId = typeof userCompanyId === 'object' 
-    ? userCompanyId?.id || userCompanyId?.company_id || null 
-    : userCompanyId;
+  const safeCompanyId = userCompanyId?.id || userCompanyId?.company_id || userCompanyId;
   
   if (!user || !safeCompanyId) {
     console.warn('⚠️ loadApplications: нет user или companyId');
