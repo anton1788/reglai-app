@@ -1143,7 +1143,7 @@ const handleChurnSubmit = async ({ reason, severity, comment }) => {
     const { data } = await supabase
       .from('churn_reasons')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', safeCompanyId)
       .order('created_at', { ascending: false });
     if (data) setChurnReasons(data);
   } catch (err) {
@@ -1161,7 +1161,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('audit_logs')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', safeCompanyId)
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
     if (data) setAuditLogs(data);
   };
@@ -1187,7 +1187,7 @@ useEffect(() => {
     const { data: allResponses } = await supabase
       .from('nps_responses')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', safeCompanyId)
       .order('created_at', { ascending: false });
     
     if (allResponses) {
@@ -1209,7 +1209,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('churn_reasons')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', safeCompanyId)
       .order('created_at', { ascending: false });
     if (data) setChurnReasons(data);
   };
@@ -1247,6 +1247,9 @@ const [selectedForPriceEdit, setSelectedForPriceEdit] = useState(null);
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK
 // ─────────────────────────────────────────────────────────
+const safeCompanyId = typeof userCompanyId === 'object' 
+  ? userCompanyId?.id || userCompanyId?.company_id || null 
+  : userCompanyId;
 const {
   pendingApprovals,
   approvalHistory,
@@ -1256,7 +1259,7 @@ const {
   escalateApplication,
   // eslint-disable-next-line no-unused-vars
   requiresApproval
-} = useApproval(userCompanyId, user?.id, userRole);
+} = useApproval(safeCompanyId, user?.id, userRole);
 
 // ============================================================
 // 🔧 ВСТАВЬТЕ СЮДА ФИКС (после всех useState, ПЕРЕД useEffect)
@@ -1538,8 +1541,8 @@ return () => {
     const checkSecurityStatus = async () => {
       try {
         const [companyRes, userRes] = await Promise.all([
-          supabase.from('companies').select('is_blocked').eq('id', userCompanyId).single(),
-          supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', userCompanyId).maybeSingle()
+          supabase.from('companies').select('is_blocked').eq('id', safeCompanyId).single(),
+          supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', safeCompanyId).maybeSingle()
         ]);
         const isCompanyBlocked = companyRes.data?.is_blocked;
         const isUserInactive = userRes.data?.is_active === false;
@@ -1898,7 +1901,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
             .from('company_users')
             .select('id')
             .eq('user_id', data[0].user_id)
-            .eq('company_id', userCompanyId)
+            .eq('company_id', safeCompanyId)
             .maybeSingle();
           if (!checkErr && !existingUser) {
             const { error: insertErr } = await supabase
@@ -1951,11 +1954,12 @@ const checkInvitation = useCallback(async (email) => {
 
   try {
     const { data, error } = await supabase
-      .from('invitations')
-      .select('company_id, companies(name)')
-      .eq('email', email.toLowerCase().trim())
-      .eq('accepted', false)
-      .maybeSingle();
+  .from('invitations')
+  .select('company_id, companies(name)')
+  .eq('email', email.toLowerCase().trim())
+  .eq('accepted', false)
+  .eq('company_id', safeCompanyId)  // ← ДОБАВИТЬ
+  .maybeSingle();
 
     if (error) {
       console.error('Ошибка проверки приглашения:', error);
@@ -2394,11 +2398,12 @@ const checkForUpdates = useCallback(async () => {
 
     try {
       const { data: invitation, error: inviteError } = await supabase
-        .from('invitations')
-        .select('role, id, company_id')
-        .eq('email', signupEmail.trim().toLowerCase())
-        .eq('accepted', false)
-        .maybeSingle();
+  .from('invitations')
+  .select('role, id, company_id')
+  .eq('email', signupEmail.trim().toLowerCase())
+  .eq('accepted', false)
+  .eq('company_id', safeCompanyId)  // ← ДОБАВИТЬ
+  .maybeSingle();
 
       if (invitation && !inviteError) {
         targetCompanyId = invitation.company_id;
@@ -2613,7 +2618,7 @@ const handleInviteUser = async () => {
       const { count: currentUsers, error: countError } = await supabase
         .from('company_users')
         .select('*', { count: 'exact', head: true })
-        .eq('company_id', userCompanyId)
+        .eq('company_id', safeCompanyId)
         .eq('is_active', true);
       
       if (countError) throw countError;
@@ -2687,7 +2692,7 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
     const { error: companyError } = await supabase
       .from('companies')
       .update({ is_company_owner: newOwnerId })
-      .eq('id', userCompanyId);
+      .eq('id', safeCompanyId)
     
     if (companyError) throw companyError;
     
@@ -2696,7 +2701,7 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
       .from('company_users')
       .update({ role: 'manager' })
       .eq('user_id', newOwnerId)
-      .eq('company_id', userCompanyId);
+      .eq('company_id', safeCompanyId)
     
     // 3. Старый владелец → supply_admin
     if (companyOwnerId) {
@@ -2704,7 +2709,7 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
         .from('company_users')
         .update({ role: 'supply_admin' })
         .eq('user_id', companyOwnerId)
-        .eq('company_id', userCompanyId);
+        .eq('company_id', safeCompanyId)
     }
     
     showNotification(`✅ Руководителем назначен ${newOwnerName}\n📦 Вы стали администратором снабжения`, 'success');
@@ -2915,7 +2920,11 @@ const handleSubmit = async (e) => {
   }
   
   const sessionUser = session.user;
-  const safeCompanyId = sessionUser.user_metadata?.company_id || userCompanyId;
+  let safeCompanyId = sessionUser.user_metadata?.company_id || userCompanyId;
+// Нормализуем
+if (safeCompanyId && typeof safeCompanyId === 'object') {
+  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+}
   const safeCompany = sessionUser.user_metadata?.company_name?.trim() || userCompany;
   
   if (!safeCompanyId) {
@@ -3193,7 +3202,7 @@ const handleSubmit = async (e) => {
         .from('applications')
         .select('*')
         .eq('user_id', user?.id)
-        .eq('company_id', userCompanyId)
+        .eq('company_id', safeCompanyId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -4095,7 +4104,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
     const { data: updated } = await supabase
       .from('nps_responses')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', safeCompanyId)
       .order('created_at', { ascending: false });
     
     if (updated) setNpsResponses(updated);
@@ -4295,7 +4304,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: currentEmployees, error: loadError } = await supabase
         .from('company_users')
         .select('*')
-        .eq('company_id', userCompanyId);
+        .eq('company_id', safeCompanyId)
       if (!loadError && currentEmployees && currentEmployees.length > 0) {
         setEmployees(currentEmployees);
         return;
@@ -4303,7 +4312,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: apps, error: appsError } = await supabase
         .from('applications')
         .select('user_id, foreman_name, foreman_phone')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', safeCompanyId)
         .not('user_id', 'eq', user?.id);
       if (appsError) {
         console.error('Ошибка загрузки заявок для миграции:', appsError);
@@ -4335,7 +4344,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: updatedEmployees } = await supabase
         .from('company_users')
         .select('*')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', safeCompanyId)
         .neq('user_id', user?.id);
       setEmployees(updatedEmployees || []);
     } catch (err) {
@@ -4359,7 +4368,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('companies')
       .select('is_company_owner')
-      .eq('id', userCompanyId)
+      .eq('id', safeCompanyId)
       .single();
     if (data) setCompanyOwnerId(data.is_company_owner);
   };
@@ -4392,13 +4401,18 @@ useEffect(() => {
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
-  if (!user || !userCompanyId) {
+  // ✅ ЖЕСТКАЯ НОРМАЛИЗАЦИЯ ПРЯМО ЗДЕСЬ
+  const safeCompanyId = typeof userCompanyId === 'object' 
+    ? userCompanyId?.id || userCompanyId?.company_id || null 
+    : userCompanyId;
+  
+  if (!user || !safeCompanyId) {
     console.warn('⚠️ loadApplications: нет user или companyId');
     return;
   }
   
-  // Проверка кэша
-  const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
+  // Проверка кэша (используем safeCompanyId)
+  const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}`;
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
     setApplications(cached.userApps);
@@ -4411,11 +4425,11 @@ useEffect(() => {
   
   setIsLoading(true);
   try {
-    // ✅ 1. Сначала получаем ТОЛЬКО количество
+    // ✅ ВСЕ ЗАПРОСЫ используют safeCompanyId
     const { count, error: countError } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
-      .eq('company_id', userCompanyId);
+      .eq('company_id', safeCompanyId);
     
     if (countError) throw countError;
     
@@ -4436,11 +4450,11 @@ useEffect(() => {
     
     // ✅ 5. Запрос с правильным range
     let query = supabase
-      .from('applications')
-      .select('*')
-      .eq('company_id', userCompanyId)
-      .order('created_at', { ascending: false })
-      .range(from, to > 0 ? to : 0);
+  .from('applications')
+  .select('*')
+  .eq('company_id', safeCompanyId)  // ← ИСПРАВЛЕНО
+  .order('created_at', { ascending: false })
+  .range(from, to > 0 ? to : 0);
     
     if (userRole === 'master') query = query.eq('user_id', user?.id);
     if (userRole === 'accountant') query = query.eq('status', 'received');
@@ -4452,9 +4466,9 @@ useEffect(() => {
     
     // Загрузка пользователей
     const { data: usersData } = await supabase
-      .from('company_users')
-      .select('user_id, created_at, full_name, role')
-      .eq('company_id', userCompanyId);
+  .from('company_users')
+  .select('user_id, created_at, full_name, role')
+  .eq('company_id', safeCompanyId);
     
     let commentsMap = {};
     if (usersData) setCompanyUsers(usersData);
@@ -4480,11 +4494,11 @@ useEffect(() => {
     
     if (isAdminMode) {
       const { data: allApps = [] } = await supabase
-        .from('applications')
-        .select('id, status, created_at, object_name, materials')
-        .eq('company_id', userCompanyId)
-        .order('created_at', { ascending: false })
-        .limit(500);
+  .from('applications')
+  .select('id, status, created_at, object_name, materials')
+  .eq('company_id', safeCompanyId)  // ← ИСПРАВЛЕНО
+  .order('created_at', { ascending: false })
+  .limit(500);
       setAllApplications(allApps || []);
     }
 
@@ -4602,7 +4616,7 @@ useEffect(() => {
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .select('plan_tier, plan_activated_at, plan_expires_at, trial_started_at, trial_ended_at, promo_code_used, promo_applied_at, promo_discount_percent')
-        .eq('id', userCompanyId)
+        .eq('id', safeCompanyId)
         .single();
       
       if (companyError) throw companyError;
@@ -4759,7 +4773,7 @@ useEffect(() => {
           plan_expires_at: null,
           updated_at: now.toISOString()
         })
-        .eq('id', userCompanyId);
+        .eq('id', safeCompanyId)
       
       setCurrentPlan(TARIFF_PLANS.basic);
       setCurrentPlanDetails(prev => ({
@@ -4818,7 +4832,7 @@ useEffect(() => {
             plan_expires_at: null,
             updated_at: now.toISOString()
           })
-          .eq('id', userCompanyId);
+          .eq('id', safeCompanyId)
         
         setCurrentPlan(TARIFF_PLANS.basic);
         setCurrentPlanDetails(null);
@@ -4882,7 +4896,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('audit_logs')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', safeCompanyId)
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString())
       .order('created_at', { ascending: false });
     if (data) setAuditLogs(data);
@@ -5073,7 +5087,7 @@ useEffect(() => {
         const { count, error } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('company_id', userCompanyId);
+          .eq('company_id', safeCompanyId)
         if (!error && count === 0 && applications.length > 0) {
           console.log('🔄 База пуста, обновляем состояние...');
           setApplications([]);
@@ -5346,7 +5360,7 @@ const handleSelectPlan = async (planId) => {
     const { error } = await supabase
       .from('companies')
       .update(updateData)
-      .eq('id', userCompanyId);
+      .eq('id', safeCompanyId)
 
     if (error) throw error;
 
@@ -5506,7 +5520,7 @@ useEffect(() => {
       const { data } = await supabase
         .from('companies')
         .select('inn, logo_url, company_profile_completed')
-        .eq('id', userCompanyId)
+        .eq('id', safeCompanyId)
         .single();
       
       // Если ИНН не заполнен и нет флага заполнения
