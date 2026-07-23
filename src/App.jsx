@@ -439,11 +439,21 @@ const getDaysSince = (dateString) => {
 };
 
 const getClientId = async (userId, companyId) => {
+    // ✅ ФИКС
+  const safeCompanyId = typeof companyId === 'object' 
+    ? companyId?.id || companyId?.company_id || null 
+    : companyId;
+  
+  if (!safeCompanyId) {
+    console.warn('⚠️ getClientId: invalid companyId', companyId);
+    return null;
+  }
+  
   const { data } = await supabase
     .from('company_users')
     .select('id')
     .eq('user_id', userId)
-    .eq('company_id', companyId)
+    .eq('company_id', safeCompanyId)
     .eq('role', 'client')
     .single();
   return data?.id || null;
@@ -1172,7 +1182,11 @@ useEffect(() => {
 useEffect(() => {
   const loadClientId = async () => {
     if (user && userCompanyId && userRole === 'client') {
-      const id = await getClientId(user.id, userCompanyId);
+      // Нормализуем перед передачей
+      const safeCompanyId = typeof userCompanyId === 'object' 
+        ? userCompanyId?.id || userCompanyId?.company_id || null 
+        : userCompanyId;
+      const id = await getClientId(user.id, safeCompanyId);
       setClientId(id);
     }
   };
