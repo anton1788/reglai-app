@@ -421,6 +421,7 @@ const ReceiveModal = memo(function({
   onClose,
   selectedApplication,
   onAdminReceive,
+  onSendToMaster,
   onMasterConfirm,
   saveReceiveStatus,
   language,
@@ -445,6 +446,8 @@ const ReceiveModal = memo(function({
   // ─────────────────────────────────────────────────────────
   const [localMaterials, setLocalMaterials] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [transferComment, setTransferComment] = useState('');
+  const [itemsToSend, setItemsToSend] = useState([]);
   const [confirmations, setConfirmations] = useState([]);
   const modalContentRef = useRef(null);
   
@@ -496,6 +499,25 @@ const ReceiveModal = memo(function({
       
       setLocalMaterials(validMaterials);
       
+      if (modalMode === 'admin_send_to_master') {
+        setItemsToSend(selectedApplication.materials
+          .filter(function(m) {
+            const onWarehouseQty = Number(m.supplier_received_quantity) || 0;
+            const alreadySent = Number(m.sent_to_master_quantity) || 0;
+            const isAlreadySent = m.status === ITEM_STATUS.SENT_TO_MASTER || 
+                                 m.status === ITEM_STATUS.CONFIRMED;
+            return onWarehouseQty > 0 && !isAlreadySent && alreadySent < onWarehouseQty;
+          })
+          .map(function(m) {
+            return {
+              ...m,
+              quantityToSend: Number(m.supplier_received_quantity) || 0,
+              unit: m.unit || 'шт'
+            };
+          })
+        );
+      }
+      
       if (modalMode === 'master_confirm') {
         setConfirmations(selectedApplication.materials.map(function(m, idx) {
           return {
@@ -519,6 +541,11 @@ const ReceiveModal = memo(function({
       
       if (modalMode === 'admin_receive' && typeof onAdminReceive === 'function') {
         result = await onAdminReceive(localMaterials, selectedApplication);
+      }
+      else if (modalMode === 'admin_send_to_master' && typeof onSendToMaster === 'function') {
+        const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
+        console.log('🔔 Вызов onSendToMaster с items:', items);
+        result = await onSendToMaster(items, selectedApplication);
       }
       else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
         const confirmationsToSend = localMaterials.map(function(m, idx) {
@@ -555,7 +582,7 @@ const ReceiveModal = memo(function({
     } finally {
       setIsSaving(false);
     }
-  }, [modalMode, onAdminReceive, onMasterConfirm, saveReceiveStatus, localMaterials, confirmations, selectedApplication, onClose, t, showNotification]);
+  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, saveReceiveStatus, localMaterials, itemsToSend, confirmations, selectedApplication, onClose, t, showNotification]);
   
   useEffect(function() {
     const handleKeyDown = function(e) {
@@ -579,6 +606,14 @@ const ReceiveModal = memo(function({
     setLocalMaterials(function(prev) {
       return prev.map(function(m, idx) {
         return idx === index ? { ...m, [field]: value } : m;
+      });
+    });
+  }, []);
+  
+  const handleItemToSendUpdate = useCallback(function(index, quantity) {
+    setItemsToSend(function(prev) {
+      return prev.map(function(item, idx) {
+        return idx === index ? { ...item, quantityToSend: clamp(quantity, 0, item.supplier_received_quantity) } : item;
       });
     });
   }, []);
@@ -662,18 +697,28 @@ const ReceiveModal = memo(function({
       });
     }
     
+    if (modalMode === 'admin_send_to_master') {
+      return itemsToSend.some(function(i) { return i.quantityToSend > 0; });
+    }
+    
     if (modalMode === 'master_confirm') {
       return confirmations.some(function(c) { return c.quantity > 0 || c.action === 'reject'; });
     }
     
     return false;
-  }, [modalMode, localMaterials, confirmations, selectedApplication]);
+  }, [modalMode, localMaterials, itemsToSend, confirmations, selectedApplication]);
   
   const totalToAccept = useMemo(function() {
     return localMaterials.reduce(function(sum, m) {
       return sum + (Number(m.supplier_received_quantity) || 0);
     }, 0);
   }, [localMaterials]);
+  
+  const totalToSend = useMemo(function() {
+    return itemsToSend.reduce(function(sum, i) {
+      return sum + (Number(i.quantityToSend) || 0);
+    }, 0);
+  }, [itemsToSend]);
   
   const totalToConfirm = useMemo(function() {
     return confirmations.filter(function(c) { return c.action === 'confirm'; }).reduce(function(sum, c) {
@@ -694,11 +739,13 @@ const ReceiveModal = memo(function({
   
   const modalTitles = {
     admin_receive: t('acceptToWarehouse') || 'Приёмка на склад',
+    admin_send_to_master: t('sendToMaster') || 'Отправка мастеру',
     master_confirm: t('confirmReceipt') || 'Подтверждение получения'
   };
   
   const modalIcons = {
     admin_receive: Warehouse,
+    admin_send_to_master: Send,
     master_confirm: CheckCircle2
   };
   
@@ -891,6 +938,92 @@ const ReceiveModal = memo(function({
                 💡 "В работу" — начать поиск поставщика. "На согласование" — отправить руководителю после получения счета/суммы.
               </p>
             </div>
+          )}
+          
+          {/* 🔹 АДМИН: Отправка мастеру */}
+          {modalMode === 'admin_send_to_master' && (
+            <>
+              <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
+                <Mail className="w-4 h-4" aria-hidden="true" />
+                {t('sendToMasterHint') || 'Выберите материалы и количество для отправки мастеру'}
+              </div>
+              
+              <div className="space-y-3">
+                {itemsToSend.map(function(item, index) {
+                  return (
+                    <article key={index} className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
+                      <div className="flex flex-col lg:flex-row gap-4">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                            {item.description || '—'}
+                          </h4>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                            {t('onWarehouse')}: {formatNumber(item.supplier_received_quantity)} {item.unit}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="quantity-stepper flex items-center gap-1.5 bg-purple-50 dark:bg-purple-900/20 rounded-xl p-1">
+                            <button
+                              type="button"
+                              onClick={function() { handleItemToSendUpdate(index, item.quantityToSend - 1); }}
+                              disabled={item.quantityToSend <= 0}
+                              className="w-9 h-9 flex items-center justify-center rounded-lg text-purple-600 dark:text-purple-400 hover:bg-white dark:hover:bg-purple-900/30 disabled:opacity-40 transition-colors"
+                            >
+                              <ChevronDown className="w-4 h-4" />
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              max={item.supplier_received_quantity}
+                              value={item.quantityToSend}
+                              onChange={function(e) { handleItemToSendUpdate(index, e.target.value); }}
+                              className="w-16 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium"
+                            />
+                            <button
+                              type="button"
+                              onClick={function() { handleItemToSendUpdate(index, item.quantityToSend + 1); }}
+                              disabled={item.quantityToSend >= item.supplier_received_quantity}
+                              className="w-9 h-9 flex items-center justify-center rounded-lg text-purple-600 dark:text-purple-400 hover:bg-white dark:hover:bg-purple-900/30 disabled:opacity-40 transition-colors"
+                            >
+                              <ChevronUp className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-gray-500 dark:text-gray-400">{t('unit')}</div>
+                            <div className="font-medium text-gray-900 dark:text-white">{item.unit || 'шт'}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+              
+              <div>
+                <label htmlFor="transfer-comment" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t('transferComment')}
+                </label>
+                <textarea
+                  id="transfer-comment"
+                  value={transferComment}
+                  onChange={function(e) { setTransferComment(e.target.value); }}
+                  placeholder={t('transferCommentPlaceholder') || 'Комментарий к передаче...'}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 resize-none"
+                  rows="3"
+                />
+              </div>
+              
+              {totalToSend > 0 && (
+                <div className="flex items-center justify-between p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
+                  <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                    <Send className="w-5 h-5" aria-hidden="true" />
+                    <span className="font-medium">
+                      {t('totalToSend') || 'Всего к отправке'}: {formatNumber(totalToSend)} {t('units')}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </>
           )}
           
           {/* 🔹 МАСТЕР: Подтверждение получения */}

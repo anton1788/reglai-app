@@ -13,7 +13,6 @@ import {
   getUserContext,
   shouldLogFeature
 } from '../utils/auditLogger'; 
-import { APPLICATION_STATUS, ITEM_STATUS } from '../utils/applicationStatuses';
 
 // === Константы ===
 const LOW_STOCK_THRESHOLD = 10;
@@ -256,42 +255,50 @@ isFromApplications
 </td>
 <td className="text-right">
 <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
- {/* 🔹 Корректировка - только для склада */}
-    {!isFromApplications && onAdjust && (
-      <button onClick={() => onAdjust(item)} disabled={itemLoading} className="table-action-btn text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title={t('adjustBalance')}>
-        <Edit2 className="w-3.5 h-3.5" />
-        {t('adjust') || 'Корр.'}
-      </button>
-    )}
-    
-    {/* 🔹 ВЫДАТЬ - теперь и для "Из заявок"! */}
-    {balance > 0 && canEdit && onTransfer && (
-      <button
-        onClick={() => onTransfer(item)}
-        disabled={itemLoading}
-        className="table-action-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-        title={t('transfer')}
-      >
-        <Truck className="w-3.5 h-3.5" />
-        {t('transfer') || 'Выдать'}
-      </button>
-    )}
-    
-    {/* 🔹 Удалить - только для склада */}
-    {canEdit && !isFromApplications && onDelete && (
-      <button onClick={() => onDelete(item)} disabled={itemLoading} className="table-action-btn text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20" title={t('delete') || 'Удалить'}>
-        <Trash2 className="w-3.5 h-3.5" />
-        {t('delete') || 'Удалить'}
-      </button>
-    )}
-    
-    {/* 🔹 История - только для склада */}
-    {!isFromApplications && onViewHistory && (
-      <button onClick={() => onViewHistory(item)} disabled={itemLoading} className="table-action-btn text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" title={t('history')}>
-        <History className="w-3.5 h-3.5" />
-      </button>
-    )}
-  </div>
+{!isFromApplications && onAdjust && (
+<button
+onClick={() => onAdjust(item)}
+disabled={itemLoading}
+className="table-action-btn text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+title={t('adjustBalance')}
+>
+<Edit2 className="w-3.5 h-3.5" />
+{t('adjust') || 'Корр.'}
+</button>
+)}
+{balance > 0 && canEdit && !isFromApplications && onTransfer && (
+<button
+onClick={() => onTransfer(item)}
+disabled={itemLoading}
+className="table-action-btn text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+title={t('transfer')}
+>
+<Truck className="w-3.5 h-3.5" />
+{t('transfer') || 'Выдать'}
+</button>
+)}
+{canEdit && !isFromApplications && onDelete && (
+<button
+onClick={() => onDelete(item)}
+disabled={itemLoading}
+className="table-action-btn text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
+title={t('delete') || 'Удалить'}
+>
+<Trash2 className="w-3.5 h-3.5" />
+{t('delete') || 'Удалить'}
+</button>
+)}
+{!isFromApplications && onViewHistory && (
+<button
+onClick={() => onViewHistory(item)}
+disabled={itemLoading}
+className="table-action-btn text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+title={t('history')}
+>
+<History className="w-3.5 h-3.5" />
+</button>
+)}
+</div>
 </td>
 </tr>
 );
@@ -698,8 +705,7 @@ const WarehouseView = ({
   showNotification,
   applications = [],
   autoReorderEnabled = true,
-  onToggleAutoReorder,
-  onApplicationUpdate // 🔥 НОВЫЙ ПРОП ДЛЯ ОБНОВЛЕНИЯ ЗАЯВКИ В РОДИТЕЛЕ
+  onToggleAutoReorder
 }) => {
 const [warehouseItems, setWarehouseItems] = useState([]);
 const [transactions, setTransactions] = useState([]);
@@ -847,7 +853,7 @@ const loadWarehouseData = useCallback(async () => {
   } finally {
     setIsLoading(false);
   }
-}, [userRole, supabase, t, showNotification]);
+}, [userRole, supabase, t, showNotification]); // 🔥 УДАЛИЛ userCompanyId из зависимостей
 
 useEffect(() => {
   if (userCompanyId && user?.id) {
@@ -1048,9 +1054,6 @@ const addNewItem = useCallback(async () => {
   }
 }, [supabase, userCompanyId, newItemForm, t, showNotification, loadWarehouseData]);
 
-// ============================================================
-// 🔥 ОСНОВНОЕ ИЗМЕНЕНИЕ: createTransfer с обновлением заявки
-// ============================================================
 const createTransfer = useCallback(async (item, recipientId, objectName, quantity, comment) => {
   setActionLoading(prev => ({ ...prev, transfer: item.id }));
   try {
@@ -1062,7 +1065,6 @@ const createTransfer = useCallback(async (item, recipientId, objectName, quantit
       throw new Error('Недостаточно материала');
     }
     
-    // 1. СПИСЫВАЕМ СО СКЛАДА
     const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
       p_company_id: userCompanyId,
       p_item_name: item.name,
@@ -1079,7 +1081,6 @@ const createTransfer = useCallback(async (item, recipientId, objectName, quantit
     
     if (rpcError) throw rpcError;
     
-    // 2. ЗАПИСЫВАЕМ ВЫДАЧУ В material_issues
     await supabase
       .from('material_issues')
       .insert([{
@@ -1095,125 +1096,9 @@ const createTransfer = useCallback(async (item, recipientId, objectName, quantit
         issued_at: new Date().toISOString()
       }]);
     
-    // ============================================================
-    // 🔥 3. ОБНОВЛЯЕМ ЗАЯВКУ - отмечаем, что материалы отправлены мастеру
-    // ============================================================
-    try {
-      // Находим заявку по объекту и статусу
-      const { data: applicationsData, error: findError } = await supabase
-        .from('applications')
-        .select('id, materials, object_name, foreman_name')
-        .eq('company_id', userCompanyId)
-        .eq('object_name', objectName)
-        .eq('foreman_name', recipient.full_name)
-        .in('status', [
-          APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
-          APPLICATION_STATUS.PARTIAL_RECEIVED,
-          APPLICATION_STATUS.ADMIN_PROCESSING
-        ])
-        .order('created_at', { ascending: false })
-        .limit(1);
-      
-      if (findError) {
-        console.warn('⚠️ Не удалось найти заявку для обновления:', findError);
-      } else if (applicationsData && applicationsData.length > 0) {
-        const app = applicationsData[0];
-        
-        // Обновляем материалы в заявке
-        const updatedMaterials = app.materials.map(m => {
-          if (m.description === item.name) {
-            const currentSent = Number(m.sent_to_master_quantity) || 0;
-            const newSent = currentSent + Number(quantity);
-            const requested = Number(m.quantity) || 0;
-            
-            return {
-              ...m,
-              sent_to_master_quantity: newSent,
-              sent_to_master_at: new Date().toISOString(),
-              sent_to_master_by: user?.id,
-              status: newSent >= requested 
-                ? ITEM_STATUS.SENT_TO_MASTER 
-                : (newSent > 0 ? ITEM_STATUS.PARTIAL_SENT : ITEM_STATUS.PENDING)
-            };
-          }
-          return m;
-        });
-        
-        // Проверяем, все ли материалы отправлены
-        const allSent = updatedMaterials.every(m => 
-          (Number(m.sent_to_master_quantity) || 0) >= (Number(m.quantity) || 0)
-        );
-        
-        const newStatus = allSent 
-          ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION 
-          : APPLICATION_STATUS.PARTIAL_RECEIVED;
-        
-        // Обновляем заявку в БД
-        const { error: updateError } = await supabase
-          .from('applications')
-          .update({
-            materials: updatedMaterials,
-            status: newStatus,
-            updated_at: new Date().toISOString(),
-            status_history: [
-              ...(app.status_history || []),
-              {
-                action: 'sent_to_master',
-                user_id: user?.id,
-                user_email: user?.email,
-                timestamp: new Date().toISOString(),
-                details: `Отправлено мастеру: ${item.name} - ${quantity} ${item.unit}`
-              }
-            ]
-          })
-          .eq('id', app.id);
-        
-        if (updateError) {
-          console.warn('⚠️ Ошибка обновления заявки:', updateError);
-        } else {
-          console.log(`✅ Заявка ${app.id} обновлена, статус: ${newStatus}`);
-          
-          // 🔥 Уведомляем родительский компонент об обновлении
-          if (typeof onApplicationUpdate === 'function') {
-            onApplicationUpdate(app.id);
-          }
-          
-          // Отправляем уведомление мастеру
-          await supabase
-  .from('user_notifications')  // ← ИЗМЕНЕНО!
-  .insert([{
-    user_id: recipientId,
-    company_id: userCompanyId,
-    title: '📦 Материалы отправлены',
-    message: `Снабженец отправил вам "${item.name}" (${quantity} ${item.unit}) по заявке "${objectName}"`,
-    type: 'shipment',
-    link: `/applications/${app.id}`,
-    related_data: {  // ← related_data вместо link
-      application_id: app.id,
-      object_name: objectName,
-      material_name: item.name,
-      quantity: quantity
-    },
-    is_read: false,
-    created_at: new Date().toISOString()
-  }]);
-        }
-      }
-    } catch (appUpdateError) {
-      console.warn('⚠️ Ошибка при обновлении заявки:', appUpdateError);
-      // Не прерываем выполнение, т.к. склад уже обновлён
-    }
-    
-    // 4. Показываем уведомление
-    showNotification(
-      t('transferred') || `✅ Выдано ${quantity} ${item.unit} сотруднику ${recipient.full_name}`,
-      'success'
-    );
-    
-    // 5. Перезагружаем данные
+    showNotification(t('transferred') || `✅ Выдано ${quantity} ${item.unit} сотруднику ${recipient.full_name}`, 'success');
     await loadWarehouseData();
     setTransferModal({ isOpen: false, item: null });
-    
   } catch (err) {
     console.error('Transfer error:', err);
     showNotification(err.message || t('transferError'), 'error');
@@ -1221,17 +1106,7 @@ const createTransfer = useCallback(async (item, recipientId, objectName, quantit
   } finally {
     setActionLoading(prev => ({ ...prev, transfer: null }));
   }
-}, [
-  userCompanyId, 
-  user, 
-  profileData, 
-  supabase, 
-  t, 
-  showNotification, 
-  loadWarehouseData, 
-  employees,
-  onApplicationUpdate // 🔥 Добавляем в зависимости
-]);
+}, [userCompanyId, user, profileData, supabase, t, showNotification, loadWarehouseData, employees]);
 
 const loadItemHistory = useCallback(async (item) => {
 setActionLoading(prev => ({ ...prev, details: item.id }));

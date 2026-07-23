@@ -439,21 +439,11 @@ const getDaysSince = (dateString) => {
 };
 
 const getClientId = async (userId, companyId) => {
-    // ✅ ФИКС
-  const safeCompanyId = typeof companyId === 'object' 
-    ? companyId?.id || companyId?.company_id || null 
-    : companyId;
-  
-  if (!safeCompanyId) {
-    console.warn('⚠️ getClientId: invalid companyId', companyId);
-    return null;
-  }
-  
   const { data } = await supabase
     .from('company_users')
     .select('id')
     .eq('user_id', userId)
-    .eq('company_id', safeCompanyId)
+    .eq('company_id', companyId)
     .eq('role', 'client')
     .single();
   return data?.id || null;
@@ -1153,7 +1143,7 @@ const handleChurnSubmit = async ({ reason, severity, comment }) => {
     const { data } = await supabase
       .from('churn_reasons')
       .select('*')
-      .eq('company_id', safeCompanyId)
+      .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false });
     if (data) setChurnReasons(data);
   } catch (err) {
@@ -1171,7 +1161,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('audit_logs')
       .select('*')
-      .eq('company_id', safeCompanyId)
+      .eq('company_id', userCompanyId)
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
     if (data) setAuditLogs(data);
   };
@@ -1182,9 +1172,7 @@ useEffect(() => {
 useEffect(() => {
   const loadClientId = async () => {
     if (user && userCompanyId && userRole === 'client') {
-      // Нормализуем перед передачей
-      const safeCompanyId = userCompanyId?.id || userCompanyId?.company_id || userCompanyId;
-      const id = await getClientId(user.id, safeCompanyId);
+      const id = await getClientId(user.id, userCompanyId);
       setClientId(id);
     }
   };
@@ -1199,7 +1187,7 @@ useEffect(() => {
     const { data: allResponses } = await supabase
       .from('nps_responses')
       .select('*')
-      .eq('company_id', safeCompanyId)
+      .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false });
     
     if (allResponses) {
@@ -1221,7 +1209,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('churn_reasons')
       .select('*')
-      .eq('company_id', safeCompanyId)
+      .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false });
     if (data) setChurnReasons(data);
   };
@@ -1259,7 +1247,6 @@ const [selectedForPriceEdit, setSelectedForPriceEdit] = useState(null);
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK
 // ─────────────────────────────────────────────────────────
-const safeCompanyId = userCompanyId?.id || userCompanyId?.company_id || userCompanyId;
 const {
   pendingApprovals,
   approvalHistory,
@@ -1269,21 +1256,7 @@ const {
   escalateApplication,
   // eslint-disable-next-line no-unused-vars
   requiresApproval
-} = useApproval(safeCompanyId, user?.id, userRole);
-
-// ============================================================
-// 🔧 ВСТАВЬТЕ СЮДА ФИКС (после всех useState, ПЕРЕД useEffect)
-// ============================================================
-useEffect(() => {
-  // Фикс для userCompanyId - нормализуем, если это объект
-  if (userCompanyId && typeof userCompanyId === 'object') {
-    console.warn('⚠️ Исправляем userCompanyId из объекта:', userCompanyId);
-    const fixedId = userCompanyId.id || userCompanyId.company_id || null;
-    if (fixedId) {
-      setUserCompanyId(fixedId);
-    }
-  }
-}, [userCompanyId]);
+} = useApproval(userCompanyId, user?.id, userRole);
 
   // ─────────────────────────────────────────────────────────
   // 🎨 INJECT GLOBAL STYLES (Pattern #1)
@@ -1551,8 +1524,8 @@ return () => {
     const checkSecurityStatus = async () => {
       try {
         const [companyRes, userRes] = await Promise.all([
-          supabase.from('companies').select('is_blocked').eq('id', safeCompanyId).single(),
-          supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', safeCompanyId).maybeSingle()
+          supabase.from('companies').select('is_blocked').eq('id', userCompanyId).single(),
+          supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', userCompanyId).maybeSingle()
         ]);
         const isCompanyBlocked = companyRes.data?.is_blocked;
         const isUserInactive = userRes.data?.is_active === false;
@@ -1911,7 +1884,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
             .from('company_users')
             .select('id')
             .eq('user_id', data[0].user_id)
-            .eq('company_id', safeCompanyId)
+            .eq('company_id', userCompanyId)
             .maybeSingle();
           if (!checkErr && !existingUser) {
             const { error: insertErr } = await supabase
@@ -1964,12 +1937,11 @@ const checkInvitation = useCallback(async (email) => {
 
   try {
     const { data, error } = await supabase
-  .from('invitations')
-  .select('company_id, companies(name)')
-  .eq('email', email.toLowerCase().trim())
-  .eq('accepted', false)
-  .eq('company_id', safeCompanyId)  // ← ДОБАВИТЬ
-  .maybeSingle();
+      .from('invitations')
+      .select('company_id, companies(name)')
+      .eq('email', email.toLowerCase().trim())
+      .eq('accepted', false)
+      .maybeSingle();
 
     if (error) {
       console.error('Ошибка проверки приглашения:', error);
@@ -2408,12 +2380,11 @@ const checkForUpdates = useCallback(async () => {
 
     try {
       const { data: invitation, error: inviteError } = await supabase
-  .from('invitations')
-  .select('role, id, company_id')
-  .eq('email', signupEmail.trim().toLowerCase())
-  .eq('accepted', false)
-  .eq('company_id', safeCompanyId)  // ← ДОБАВИТЬ
-  .maybeSingle();
+        .from('invitations')
+        .select('role, id, company_id')
+        .eq('email', signupEmail.trim().toLowerCase())
+        .eq('accepted', false)
+        .maybeSingle();
 
       if (invitation && !inviteError) {
         targetCompanyId = invitation.company_id;
@@ -2628,7 +2599,7 @@ const handleInviteUser = async () => {
       const { count: currentUsers, error: countError } = await supabase
         .from('company_users')
         .select('*', { count: 'exact', head: true })
-        .eq('company_id', safeCompanyId)
+        .eq('company_id', userCompanyId)
         .eq('is_active', true);
       
       if (countError) throw countError;
@@ -2702,7 +2673,7 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
     const { error: companyError } = await supabase
       .from('companies')
       .update({ is_company_owner: newOwnerId })
-      .eq('id', safeCompanyId)
+      .eq('id', userCompanyId);
     
     if (companyError) throw companyError;
     
@@ -2711,7 +2682,7 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
       .from('company_users')
       .update({ role: 'manager' })
       .eq('user_id', newOwnerId)
-      .eq('company_id', safeCompanyId)
+      .eq('company_id', userCompanyId);
     
     // 3. Старый владелец → supply_admin
     if (companyOwnerId) {
@@ -2719,7 +2690,7 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
         .from('company_users')
         .update({ role: 'supply_admin' })
         .eq('user_id', companyOwnerId)
-        .eq('company_id', safeCompanyId)
+        .eq('company_id', userCompanyId);
     }
     
     showNotification(`✅ Руководителем назначен ${newOwnerName}\n📦 Вы стали администратором снабжения`, 'success');
@@ -2930,11 +2901,7 @@ const handleSubmit = async (e) => {
   }
   
   const sessionUser = session.user;
-  let safeCompanyId = sessionUser.user_metadata?.company_id || userCompanyId;
-// Нормализуем
-if (safeCompanyId && typeof safeCompanyId === 'object') {
-  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-}
+  const safeCompanyId = sessionUser.user_metadata?.company_id || userCompanyId;
   const safeCompany = sessionUser.user_metadata?.company_name?.trim() || userCompany;
   
   if (!safeCompanyId) {
@@ -3212,7 +3179,7 @@ if (safeCompanyId && typeof safeCompanyId === 'object') {
         .from('applications')
         .select('*')
         .eq('user_id', user?.id)
-        .eq('company_id', safeCompanyId)
+        .eq('company_id', userCompanyId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -4114,7 +4081,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
     const { data: updated } = await supabase
       .from('nps_responses')
       .select('*')
-      .eq('company_id', safeCompanyId)
+      .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false });
     
     if (updated) setNpsResponses(updated);
@@ -4125,6 +4092,99 @@ const handleNpsSubmit = async ({ score, comment }) => {
     setNpsSubmitting(false);
   }
 };
+
+  const handleSendToMaster = useCallback(async (itemsToSend, application) => {
+  try {
+    console.log('📦 Отправка мастеру, items:', itemsToSend);
+    
+    // 1. Обновляем материалы
+    const updatedMaterials = application.materials.map((originalMaterial) => {
+      const itemToSend = itemsToSend.find(i => i.description === originalMaterial.description);
+      
+      if (itemToSend && (Number(itemToSend.quantityToSend) || 0) > 0) {
+        const qtyToSend = Number(itemToSend.quantityToSend);
+        return {
+          ...originalMaterial,
+          sent_to_master_quantity: (Number(originalMaterial.sent_to_master_quantity) || 0) + qtyToSend,
+          status: ITEM_STATUS.SENT_TO_MASTER,
+          sent_to_master_at: new Date().toISOString(),
+          sent_to_master_by: user?.id
+        };
+      }
+      return originalMaterial;
+    });
+    
+    // 2. Проверяем, все ли материалы отправлены мастеру
+    const allSent = updatedMaterials.every(m => 
+      (Number(m.sent_to_master_quantity) || 0) >= (Number(m.supplier_received_quantity) || 0)
+    );
+    
+    // 3. Новый статус заявки
+    const newStatus = allSent 
+      ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION 
+      : APPLICATION_STATUS.PARTIAL_RECEIVED;
+    
+    // 4. Обновляем заявку
+    const { error: updateError } = await supabase
+      .from('applications')
+      .update({
+        status: newStatus,
+        materials: updatedMaterials,
+        updated_at: new Date().toISOString(),
+        status_history: [
+          ...(application.status_history || []),
+          {
+            action: 'sent_to_master',
+            user_id: user?.id,
+            user_email: user?.email,
+            timestamp: new Date().toISOString(),
+            details: `Отправлено мастеру: ${itemsToSend.length} позиций`
+          }
+        ]
+      })
+      .eq('id', application.id);
+    
+    if (updateError) throw updateError;
+    
+    // 5. Списание со склада
+    if (WAREHOUSE_ENABLED) {
+      for (const item of itemsToSend) {
+        const qtyToSend = Number(item.quantityToSend) || 0;
+        if (qtyToSend > 0) {
+          await supabase.rpc('update_warehouse_balance', {
+  p_company_id: userCompanyId,
+  p_item_name: item.description.trim(),
+  p_quantity: qtyToSend,
+  p_transaction_type: 'expense',
+  p_user_id: user?.id,
+  p_user_email: user?.email,
+  p_comment: `Отправка мастеру: ${application.object_name}`,
+  p_application_id: application.id,
+  p_unit: item.unit || 'шт',
+  p_target_object_name: application.object_name,
+  p_recipient_name: application.foreman_name,
+  p_recipient_phone: application.foreman_phone
+});
+        }
+      }
+    }
+    
+    // 6. Обновляем UI
+    setApplications(prev => prev.map(app =>
+      app.id === application.id
+        ? { ...app, status: newStatus, materials: updatedMaterials }
+        : app
+    ));
+    
+    showNotification(`✅ Отправлено мастеру ${itemsToSend.length} позиций`, 'success');
+    return { success: true };
+    
+  } catch (err) {
+    console.error('Ошибка:', err);
+    showNotification('Ошибка отправки: ' + err.message, 'error');
+    return { success: false, error: err };
+  }
+}, [user, userCompanyId, WAREHOUSE_ENABLED, showNotification, setApplications]);
 
   const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
     try {
@@ -4314,7 +4374,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: currentEmployees, error: loadError } = await supabase
         .from('company_users')
         .select('*')
-        .eq('company_id', safeCompanyId)
+        .eq('company_id', userCompanyId);
       if (!loadError && currentEmployees && currentEmployees.length > 0) {
         setEmployees(currentEmployees);
         return;
@@ -4322,7 +4382,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: apps, error: appsError } = await supabase
         .from('applications')
         .select('user_id, foreman_name, foreman_phone')
-        .eq('company_id', safeCompanyId)
+        .eq('company_id', userCompanyId)
         .not('user_id', 'eq', user?.id);
       if (appsError) {
         console.error('Ошибка загрузки заявок для миграции:', appsError);
@@ -4354,7 +4414,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: updatedEmployees } = await supabase
         .from('company_users')
         .select('*')
-        .eq('company_id', safeCompanyId)
+        .eq('company_id', userCompanyId)
         .neq('user_id', user?.id);
       setEmployees(updatedEmployees || []);
     } catch (err) {
@@ -4378,7 +4438,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('companies')
       .select('is_company_owner')
-      .eq('id', safeCompanyId)
+      .eq('id', userCompanyId)
       .single();
     if (data) setCompanyOwnerId(data.is_company_owner);
   };
@@ -4411,16 +4471,13 @@ useEffect(() => {
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
-  // ✅ ЖЕСТКАЯ НОРМАЛИЗАЦИЯ ПРЯМО ЗДЕСЬ
-  const safeCompanyId = userCompanyId?.id || userCompanyId?.company_id || userCompanyId;
-  
-  if (!user || !safeCompanyId) {
+  if (!user || !userCompanyId) {
     console.warn('⚠️ loadApplications: нет user или companyId');
     return;
   }
   
-  // Проверка кэша (используем safeCompanyId)
-  const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}`;
+  // Проверка кэша
+  const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
     setApplications(cached.userApps);
@@ -4433,11 +4490,11 @@ useEffect(() => {
   
   setIsLoading(true);
   try {
-    // ✅ ВСЕ ЗАПРОСЫ используют safeCompanyId
+    // ✅ 1. Сначала получаем ТОЛЬКО количество
     const { count, error: countError } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
-      .eq('company_id', safeCompanyId);
+      .eq('company_id', userCompanyId);
     
     if (countError) throw countError;
     
@@ -4458,11 +4515,11 @@ useEffect(() => {
     
     // ✅ 5. Запрос с правильным range
     let query = supabase
-  .from('applications')
-  .select('*')
-  .eq('company_id', safeCompanyId)  // ← ИСПРАВЛЕНО
-  .order('created_at', { ascending: false })
-  .range(from, to > 0 ? to : 0);
+      .from('applications')
+      .select('*')
+      .eq('company_id', userCompanyId)
+      .order('created_at', { ascending: false })
+      .range(from, to > 0 ? to : 0);
     
     if (userRole === 'master') query = query.eq('user_id', user?.id);
     if (userRole === 'accountant') query = query.eq('status', 'received');
@@ -4474,9 +4531,9 @@ useEffect(() => {
     
     // Загрузка пользователей
     const { data: usersData } = await supabase
-  .from('company_users')
-  .select('user_id, created_at, full_name, role')
-  .eq('company_id', safeCompanyId);
+      .from('company_users')
+      .select('user_id, created_at, full_name, role')
+      .eq('company_id', userCompanyId);
     
     let commentsMap = {};
     if (usersData) setCompanyUsers(usersData);
@@ -4502,11 +4559,11 @@ useEffect(() => {
     
     if (isAdminMode) {
       const { data: allApps = [] } = await supabase
-  .from('applications')
-  .select('id, status, created_at, object_name, materials')
-  .eq('company_id', safeCompanyId)  // ← ИСПРАВЛЕНО
-  .order('created_at', { ascending: false })
-  .limit(500);
+        .from('applications')
+        .select('id, status, created_at, object_name, materials')
+        .eq('company_id', userCompanyId)
+        .order('created_at', { ascending: false })
+        .limit(500);
       setAllApplications(allApps || []);
     }
 
@@ -4538,10 +4595,10 @@ useEffect(() => {
     
     try {
       const { data, error } = await supabase
-  .from('user_notifications')  // ← ИЗМЕНЕНО
-  .select('*')
-  .eq('user_id', user.id)
-  .order('created_at', { ascending: false });
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       
@@ -4575,16 +4632,16 @@ useEffect(() => {
   useEffect(() => {
     if (!user?.id) return;
 
-      const channel = supabase
-  .channel('notifications_channel')
-  .on(
-    'postgres_changes',
-    {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'user_notifications',  // ← ИСПРАВЛЕНО
-      filter: `user_id=eq.${user.id}`
-    },
+    const channel = supabase
+      .channel('notifications_channel')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        },
         (payload) => {
           const newNotif = {
             ...payload.new,
@@ -4624,7 +4681,7 @@ useEffect(() => {
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .select('plan_tier, plan_activated_at, plan_expires_at, trial_started_at, trial_ended_at, promo_code_used, promo_applied_at, promo_discount_percent')
-        .eq('id', safeCompanyId)
+        .eq('id', userCompanyId)
         .single();
       
       if (companyError) throw companyError;
@@ -4781,7 +4838,7 @@ useEffect(() => {
           plan_expires_at: null,
           updated_at: now.toISOString()
         })
-        .eq('id', safeCompanyId)
+        .eq('id', userCompanyId);
       
       setCurrentPlan(TARIFF_PLANS.basic);
       setCurrentPlanDetails(prev => ({
@@ -4840,7 +4897,7 @@ useEffect(() => {
             plan_expires_at: null,
             updated_at: now.toISOString()
           })
-          .eq('id', safeCompanyId)
+          .eq('id', userCompanyId);
         
         setCurrentPlan(TARIFF_PLANS.basic);
         setCurrentPlanDetails(null);
@@ -4904,7 +4961,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('audit_logs')
       .select('*')
-      .eq('company_id', safeCompanyId)
+      .eq('company_id', userCompanyId)
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString())
       .order('created_at', { ascending: false });
     if (data) setAuditLogs(data);
@@ -5095,7 +5152,7 @@ useEffect(() => {
         const { count, error } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('company_id', safeCompanyId)
+          .eq('company_id', userCompanyId);
         if (!error && count === 0 && applications.length > 0) {
           console.log('🔄 База пуста, обновляем состояние...');
           setApplications([]);
@@ -5368,7 +5425,7 @@ const handleSelectPlan = async (planId) => {
     const { error } = await supabase
       .from('companies')
       .update(updateData)
-      .eq('id', safeCompanyId)
+      .eq('id', userCompanyId);
 
     if (error) throw error;
 
@@ -5528,7 +5585,7 @@ useEffect(() => {
       const { data } = await supabase
         .from('companies')
         .select('inn, logo_url, company_profile_completed')
-        .eq('id', safeCompanyId)
+        .eq('id', userCompanyId)
         .single();
       
       // Если ИНН не заполнен и нет флага заполнения
@@ -7055,16 +7112,10 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 )}
         
         {currentView === 'inwork' && (
-  <ApplicationList
-    applications={filteredApplications.filter(app => {
-      // Для мастера показываем активные заявки + заявки на подтверждение
-      if (userRole === 'master' || userRole === 'foreman') {
-        return app.user_id === user?.id && (
-          isApplicationActive(app.status) ||
-          app.status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION
-        );
-      }
-      return isApplicationActive(app.status);
+          <ApplicationList
+            applications={filteredApplications.filter(app => {
+              return isApplicationActive(app.status) &&
+                (userRole !== 'master' || app.user_id === user?.id);
             })}
             title={language === 'ru' ? 'В работе' : 'In Work'}
             emptyMessage={language === 'ru' ? 'Нет заявок в работе' : 'No applications in work'}
@@ -7110,58 +7161,56 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             isExportingXLSX={isExportingXLSX}
           />
         )}
-
-        {/* ✅ ДОБАВИТЬ НОВЫЙ БЛОК ДЛЯ ПОДТВЕРЖДЕНИЯ - ВСТАВИТЬ СЮДА! */}
-{currentView === 'confirmation' && (
-  <ApplicationList
-    applications={filteredApplications.filter(app =>
-      app.status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION &&
-      app.user_id === user?.id
-    )}
-    title={language === 'ru' ? 'Подтверждение получения' : 'Confirmation'}
-    emptyMessage={language === 'ru' ? 'Нет заявок для подтверждения' : 'No applications to confirm'}
-    isMobile={isMobile}
-    user={user}
-    userRole={userRole}
-    isAdminMode={isAdminMode}
-    permissions={currentUserPermissions}
-    t={t}
-    language={language}
-    uniqueDates={uniqueDates}
-    page={page}
-    totalPages={totalPages}
-    onAdminLogout={handleAdminLogout}
-    onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
-    onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
-    onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
-    onOpenReceiveModal={openReceiveModal}
-    onCancelApplication={cancelApplication}
-    onAddComment={addComment}
-    onToggleComments={(appId) => setShowComments(prev => ({
-      ...prev,
-      [appId]: !(prev[appId] || false)
-    }))}
-    onPageChange={setPage}
-    searchTerm={searchTerm}
-    statusFilter={statusFilter}
-    dateFilter={dateFilter}
-    viewedFilter={viewedFilter}
-    onSearchChange={setSearchTerm}
-    onStatusFilterChange={setStatusFilter}
-    onDateFilterChange={setDateFilter}
-    onViewedFilterChange={setViewedFilter}
-    onClearFilters={clearFilters}
-    expandedMaterials={expandedMaterials}
-    onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
-      ...prev,
-      [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
-    }))}
-    comments={comments}
-    showComments={showComments}
-    isExportingPDF={isExportingPDF}
-    isExportingXLSX={isExportingXLSX}
-  />
-)}
+        
+        {currentView === 'confirmation' && (
+          <ApplicationList
+            applications={filteredApplications.filter(app =>
+              requiresMasterConfirmation(app.status) && app.user_id === user?.id
+            )}
+            title={language === 'ru' ? 'Заявки на подтверждение' : 'Applications for Confirmation'}
+            emptyMessage={language === 'ru' ? 'Нет заявок, требующих подтверждения' : 'No applications requiring confirmation'}
+            isMobile={isMobile}
+            user={user}
+            userRole={userRole}
+            isAdminMode={isAdminMode}
+            permissions={currentUserPermissions}
+            t={t}
+            language={language}
+            uniqueDates={uniqueDates}
+            page={page}
+            totalPages={totalPages}
+            onAdminLogout={handleAdminLogout}
+            onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
+            onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
+            onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
+            onOpenReceiveModal={openReceiveModal}
+            onCancelApplication={cancelApplication}
+            onAddComment={addComment}
+            onToggleComments={(appId) => setShowComments(prev => ({
+              ...prev,
+              [appId]: !(prev[appId] || false)
+            }))}
+            onPageChange={setPage}
+            searchTerm={searchTerm}
+            statusFilter={statusFilter}
+            dateFilter={dateFilter}
+            viewedFilter={viewedFilter}
+            onSearchChange={setSearchTerm}
+            onStatusFilterChange={setStatusFilter}
+            onDateFilterChange={setDateFilter}
+            onViewedFilterChange={setViewedFilter}
+            onClearFilters={clearFilters}
+            expandedMaterials={expandedMaterials}
+            onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
+              ...prev,
+              [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
+            }))}
+            comments={comments}
+            showComments={showComments}
+            isExportingPDF={isExportingPDF}
+            isExportingXLSX={isExportingXLSX}
+          />
+        )}
         
         {currentView === 'history' && (
           <ApplicationList
@@ -7253,13 +7302,8 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
                 setShowReceiveModal(true);
               }
             }}
-          onApplicationUpdate={async (applicationId) => {
-      // Перезагружаем заявки после обновления из склада
-      await loadApplications(page);
-      showNotification('📦 Заявка обновлена после отправки материалов', 'info');
-    }}
-  />
-)}
+          />
+        )}
         
         {currentView === 'documents' && (
           <DocumentGenerator
@@ -7547,6 +7591,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         onClose={() => setShowReceiveModal(false)}
         selectedApplication={selectedApplication}
         onAdminReceive={handleAdminReceive} 
+        onSendToMaster={handleSendToMaster}
         onMasterConfirm={handleMasterConfirm}
         language={language}
         escapeHtml={escapeHtml}
