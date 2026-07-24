@@ -1855,16 +1855,21 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   // 📤 SEND OFFLINE DRAFTS
   // ─────────────────────────────────────────────────────────
   const sendWithRetry = useCallback(async (draft, maxRetries = 5) => {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const application = {
+  // ✅ ФИКС
+  const companyId = typeof userCompanyId === 'string' 
+    ? userCompanyId 
+    : userCompanyId?.id || null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const application = {
           object_name: draft.objectName,
           foreman_name: draft.foremanName,
           foreman_phone: draft.foremanPhone,
           materials: draft.materials.map(m => ({ ...m, received: 0, status: 'pending' })),
           status: 'pending',
           user_id: user?.id,
-          company_id: userCompanyId,
+          company_id: companyId || userCompanyId,
           created_at: draft.timestamp || new Date().toISOString(),
           status_history: [{
             user_id: user?.id,
@@ -2556,8 +2561,13 @@ if (authData?.user) {
 
   // 👥 INVITE USER - с учётом прав supply_admin
 const handleInviteUser = async () => {
-  if (!inviteEmail || !inviteRole) {
-    showNotification(t('enterValidEmail'), 'error');
+  // ✅ ФИКС
+  const companyId = typeof userCompanyId === 'string' 
+    ? userCompanyId 
+    : userCompanyId?.id || null;
+  
+  if (!companyId) {
+    showNotification('Ошибка: компания не указана', 'error');
     return;
   }
 
@@ -4472,13 +4482,18 @@ useEffect(() => {
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
-  if (!user || !userCompanyId) {
-    console.warn('⚠️ loadApplications: нет user или companyId');
+  // ✅ ФИКС: безопасное получение companyId
+  const companyId = typeof userCompanyId === 'string' 
+    ? userCompanyId 
+    : userCompanyId?.id || null;
+  
+  if (!user || !companyId) {
+    console.warn('⚠️ loadApplications: нет user или companyId', { user, companyId });
     return;
   }
   
-  // Проверка кэша
-  const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
+  // ✅ ИСПРАВЛЕНО: используем companyId
+  const cacheKey = `applications_${companyId}_page_${pageNumber}`;  // ← companyId!
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
     setApplications(cached.userApps);
@@ -4491,34 +4506,29 @@ useEffect(() => {
   
   setIsLoading(true);
   try {
-    // ✅ 1. Сначала получаем ТОЛЬКО количество
     const { count, error: countError } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
-      .eq('company_id', userCompanyId);
+      .eq('company_id', companyId);  // ← companyId!
     
     if (countError) throw countError;
     
-    // ✅ 2. Вычисляем totalPages
     const calculatedTotalPages = Math.max(1, Math.ceil(count / ITEMS_PER_PAGE));
     setTotalPages(calculatedTotalPages);
     
-    // ✅ 3. Корректируем pageNumber если нужно
     let safePage = pageNumber;
     if (safePage > calculatedTotalPages) {
       safePage = 1;
       setPage(1);
     }
     
-    // ✅ 4. Вычисляем правильный range
     const from = (safePage - 1) * ITEMS_PER_PAGE;
     const to = Math.min(safePage * ITEMS_PER_PAGE - 1, count - 1);
     
-    // ✅ 5. Запрос с правильным range
     let query = supabase
       .from('applications')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', companyId)  // ← companyId!
       .order('created_at', { ascending: false })
       .range(from, to > 0 ? to : 0);
     
@@ -4530,11 +4540,10 @@ useEffect(() => {
     
     setApplications(userApps);
     
-    // Загрузка пользователей
     const { data: usersData } = await supabase
       .from('company_users')
       .select('user_id, created_at, full_name, role')
-      .eq('company_id', userCompanyId);
+      .eq('company_id', companyId);  // ← companyId!
     
     let commentsMap = {};
     if (usersData) setCompanyUsers(usersData);
@@ -4562,19 +4571,18 @@ useEffect(() => {
       const { data: allApps = [] } = await supabase
         .from('applications')
         .select('id, status, created_at, object_name, materials')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', companyId)  // ← companyId!
         .order('created_at', { ascending: false })
         .limit(500);
       setAllApplications(allApps || []);
     }
 
     const processedApps = (userRole === 'master' || userRole === 'foreman')
-    ? sanitizeApplicationsForMaster(userApps)
-    : userApps;
-  
-  setApplications(processedApps);
+      ? sanitizeApplicationsForMaster(userApps)
+      : userApps;
     
-    // Сохраняем в кэш
+    setApplications(processedApps);
+    
     cacheManager.set('applications', cacheKey, {
       userApps,
       totalPages: calculatedTotalPages,
@@ -4588,7 +4596,7 @@ useEffect(() => {
   } finally {
     setIsLoading(false);
   }
-}, [user, userCompanyId, userRole, isAdminMode, showNotification]);
+}, [user, userCompanyId, userRole, isAdminMode, showNotification]);  // ← Здесь оставляем userCompanyId!
 
   // 📩 ЗАГРУЗКА УВЕДОМЛЕНИЙ (ВСТАВИТЬ ПОСЛЕ loadApplications)
   const loadNotifications = useCallback(async () => {
@@ -4663,14 +4671,17 @@ useEffect(() => {
 // 💰 Load company plan & quota (ОБНОВЛЁННАЯ ВЕРСИЯ)
 useEffect(() => {
   const loadPlan = async () => {
-    // 🔒 Супер-админ: не загружаем тариф компании
     if (isSuperAdmin(userRole, user?.user_metadata)) {
       setCurrentPlan(null);
       setPlanLoading(false);
       return;
     }
     
-    if (!userCompanyId || !supabase) {
+    const companyId = typeof userCompanyId === 'string' 
+      ? userCompanyId 
+      : userCompanyId?.id || null;
+    
+    if (!companyId || !supabase) {
       setPlanLoading(false);
       return;
     }
@@ -4678,11 +4689,10 @@ useEffect(() => {
     try {
       setPlanLoading(true);
       
-      // Загружаем данные компании
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .select('plan_tier, plan_activated_at, plan_expires_at, trial_started_at, trial_ended_at, promo_code_used, promo_applied_at, promo_discount_percent')
-        .eq('id', userCompanyId)
+        .eq('id', companyId)  // ← companyId!
         .single();
       
       if (companyError) throw companyError;
