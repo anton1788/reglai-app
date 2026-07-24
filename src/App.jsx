@@ -1854,6 +1854,10 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   // 📤 SEND OFFLINE DRAFTS
   // ─────────────────────────────────────────────────────────
   const sendWithRetry = useCallback(async (draft, maxRetries = 5) => {
+     // ✅ ДОБАВЬТЕ ЭТИ СТРОКИ
+  const companyId = typeof userCompanyId === 'string' 
+    ? userCompanyId 
+    : userCompanyId?.id || null;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const application = {
@@ -2840,6 +2844,10 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
  // 📤 SUBMIT APPLICATION — С ЖЕСТКОЙ БЛОКИРОВКОЙ
 const handleSubmit = async (e) => {
   e.preventDefault();
+  // ✅ ДОБАВЬТЕ В САМОМ НАЧАЛЕ
+  const companyId = typeof userCompanyId === 'string' 
+    ? userCompanyId 
+    : userCompanyId?.id || null;
 
   // ✅ ЗАЩИТА ОТ ДВОЙНОГО НАЖАТИЯ
   if (isSubmitting) {
@@ -2865,7 +2873,7 @@ const handleSubmit = async (e) => {
         m.description?.trim() && m.quantity && m.quantity > 0 && !isNaN(m.quantity)
       );
       
-      const materialCheck = await checkMaterialsLimit(supabase, userCompanyId, validMaterials.length);
+      const materialCheck = await checkMaterialsLimit(supabase, companyId, validMaterials.length);
       if (!materialCheck.allowed) {
         showNotification(
           `⚠️ В бесплатном тарифе максимум ${materialCheck.limit} материалов в заявке.`,
@@ -4821,15 +4829,18 @@ useEffect(() => {
 // Добавьте этот useEffect в App.jsx после loadPlan
 useEffect(() => {
   const checkTrialExpired = async () => {
-    if (!userCompanyId || !supabase) return;
+    // ✅ ФИКС
+    const companyId = typeof userCompanyId === 'string' 
+      ? userCompanyId 
+      : userCompanyId?.id || null;
+    
+    if (!companyId || !supabase) return;
     if (!currentPlanDetails?.is_trial) return;
     
     const trialEnd = new Date(currentPlanDetails.trial_ended_at);
     const now = new Date();
     
     if (trialEnd < now && currentPlan?.id !== 'basic') {
-      console.log('⏰ Пробный период истёк, переходим на Базовый');
-      
       await supabase
         .from('companies')
         .update({
@@ -4838,7 +4849,7 @@ useEffect(() => {
           plan_expires_at: null,
           updated_at: now.toISOString()
         })
-        .eq('id', userCompanyId);
+        .eq('id', companyId);  // ← ✅ companyId
       
       setCurrentPlan(TARIFF_PLANS.basic);
       setCurrentPlanDetails(prev => ({
@@ -4918,17 +4929,20 @@ useEffect(() => {
 // ============================================================
 useEffect(() => {
   const resetDailyLimits = async () => {
-    if (!userCompanyId) return;
+    // ✅ ФИКС
+    const companyId = typeof userCompanyId === 'string' 
+      ? userCompanyId 
+      : userCompanyId?.id || null;
+    
+    if (!companyId) return;
     
     try {
-      // Проверяем, нужно ли сбрасывать
-      const lastReset = localStorage.getItem(`quota_reset_${userCompanyId}`);
+      const lastReset = localStorage.getItem(`quota_reset_${companyId}`);
       const today = new Date().toDateString();
       
       if (lastReset !== today) {
-        // Вызываем RPC функцию для сброса
         const { error } = await supabase.rpc('reset_company_limits', {
-          p_company_id: userCompanyId
+          p_company_id: companyId  // ← ✅ companyId
         });
         
         if (error) {
@@ -5620,16 +5634,17 @@ useEffect(() => {
 useEffect(() => {
   const checkQuotaOnView = async () => {
     if (currentView === 'create' && (currentPlan?.id === 'basic' || !currentPlan)) {
-      if (!userCompanyId) return;
+      // ✅ ФИКС: безопасное получение companyId
+      const companyId = typeof userCompanyId === 'string' 
+        ? userCompanyId 
+        : userCompanyId?.id || null;
+      
+      if (!companyId) return;
       
       try {
-        const quota = await checkQuota(supabase, userCompanyId);
+        const quota = await checkQuota(supabase, companyId);  // ← ✅ companyId
         setQuotaStatus(quota);
-        
-        // ✅ Если лимит исчерпан - показываем предупреждение
-        if (!quota.allowed) {
-          showNotification('⚠️ Лимит заявок исчерпан. Перейдите в раздел "Тарифы" для обновления.', 'warning');
-        }
+        // ...
       } catch (err) {
         console.debug('Quota check on view error:', err);
       }
