@@ -200,6 +200,16 @@ import MaterialPriceView from './components/MaterialPriceView/MaterialPriceView'
 import { sanitizeApplicationsForMaster } from './utils/materialSanitizer';
 import { canViewPrices, canEditPrices } from './utils/priceManager';
 
+// ✅ ХЕЛПЕР ДЛЯ БЕЗОПАСНОГО ПОЛУЧЕНИЯ ID
+const getCompanyId = (id) => {
+  if (!id) return null;
+  if (typeof id === 'string') return id;
+  if (typeof id === 'object' && id !== null) {
+    return id.id || id.toString() || null;
+  }
+  return String(id) || null;
+};
+
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
 const NOTIFICATIONS_ENABLED = false;
@@ -1143,7 +1153,7 @@ const handleChurnSubmit = async ({ reason, severity, comment }) => {
     const { data } = await supabase
       .from('churn_reasons')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
       .order('created_at', { ascending: false });
     if (data) setChurnReasons(data);
   } catch (err) {
@@ -1161,7 +1171,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('audit_logs')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
     if (data) setAuditLogs(data);
   };
@@ -1187,7 +1197,7 @@ useEffect(() => {
     const { data: allResponses } = await supabase
       .from('nps_responses')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
       .order('created_at', { ascending: false });
     
     if (allResponses) {
@@ -1209,7 +1219,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('churn_reasons')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
       .order('created_at', { ascending: false });
     if (data) setChurnReasons(data);
   };
@@ -1525,7 +1535,7 @@ return () => {
       try {
         const [companyRes, userRes] = await Promise.all([
           supabase.from('companies').select('is_blocked').eq('id', userCompanyId).single(),
-          supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', userCompanyId).maybeSingle()
+          supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', getCompanyId(userCompanyId) || userCompanyId).maybeSingle()
         ]);
         const isCompanyBlocked = companyRes.data?.is_blocked;
         const isUserInactive = userRes.data?.is_active === false;
@@ -1888,7 +1898,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
             .from('company_users')
             .select('id')
             .eq('user_id', data[0].user_id)
-            .eq('company_id', userCompanyId)
+            .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
             .maybeSingle();
           if (!checkErr && !existingUser) {
             const { error: insertErr } = await supabase
@@ -2603,7 +2613,7 @@ const handleInviteUser = async () => {
       const { count: currentUsers, error: countError } = await supabase
         .from('company_users')
         .select('*', { count: 'exact', head: true })
-        .eq('company_id', userCompanyId)
+        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
         .eq('is_active', true);
       
       if (countError) throw countError;
@@ -2686,7 +2696,7 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
       .from('company_users')
       .update({ role: 'manager' })
       .eq('user_id', newOwnerId)
-      .eq('company_id', userCompanyId);
+      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId);
     
     // 3. Старый владелец → supply_admin
     if (companyOwnerId) {
@@ -2694,7 +2704,7 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
         .from('company_users')
         .update({ role: 'supply_admin' })
         .eq('user_id', companyOwnerId)
-        .eq('company_id', userCompanyId);
+        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId);
     }
     
     showNotification(`✅ Руководителем назначен ${newOwnerName}\n📦 Вы стали администратором снабжения`, 'success');
@@ -3187,7 +3197,7 @@ const handleSubmit = async (e) => {
         .from('applications')
         .select('*')
         .eq('user_id', user?.id)
-        .eq('company_id', userCompanyId)
+        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -4089,7 +4099,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
     const { data: updated } = await supabase
       .from('nps_responses')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
       .order('created_at', { ascending: false });
     
     if (updated) setNpsResponses(updated);
@@ -4382,7 +4392,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: currentEmployees, error: loadError } = await supabase
         .from('company_users')
         .select('*')
-        .eq('company_id', userCompanyId);
+        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId);
       if (!loadError && currentEmployees && currentEmployees.length > 0) {
         setEmployees(currentEmployees);
         return;
@@ -4390,7 +4400,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: apps, error: appsError } = await supabase
         .from('applications')
         .select('user_id, foreman_name, foreman_phone')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
         .not('user_id', 'eq', user?.id);
       if (appsError) {
         console.error('Ошибка загрузки заявок для миграции:', appsError);
@@ -4422,7 +4432,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: updatedEmployees } = await supabase
         .from('company_users')
         .select('*')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
         .neq('user_id', user?.id);
       setEmployees(updatedEmployees || []);
     } catch (err) {
@@ -4975,7 +4985,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('audit_logs')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString())
       .order('created_at', { ascending: false });
     if (data) setAuditLogs(data);
@@ -5166,7 +5176,7 @@ useEffect(() => {
         const { count, error } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('company_id', userCompanyId);
+          .eq('company_id', getCompanyId(userCompanyId) || userCompanyId);
         if (!error && count === 0 && applications.length > 0) {
           console.log('🔄 База пуста, обновляем состояние...');
           setApplications([]);
