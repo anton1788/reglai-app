@@ -446,7 +446,8 @@ const getClientId = async (userId, companyId) => {
     .eq('company_id', companyId)
     .eq('role', 'client')
     .single();
-  return data?.id || null;
+  // ✅ ЯВНОЕ ПРИВЕДЕНИЕ К СТРОКЕ
+  return data?.id ? String(data.id) : null;
 };
 
 const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num || 0);

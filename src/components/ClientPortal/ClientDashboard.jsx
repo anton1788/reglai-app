@@ -15,16 +15,25 @@ const ClientDashboard = ({ clientId, t }) => {
   const [selectedApplication, setSelectedApplication] = useState(null);
 
   const loadData = useCallback(async () => {
-    if (!clientId) return;
-    
-    setLoading(true);
-    try {
-      // Загружаем заявки заказчика
-      const { data: apps, error } = await supabase
-        .from('applications')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false });
+  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
+  const safeClientId = clientId && typeof clientId === 'object' 
+    ? clientId.id || null 
+    : clientId;
+  
+  // ✅ Если нет ID - выходим
+  if (!safeClientId) {
+    console.warn('⚠️ ClientDashboard: нет clientId', { clientId });
+    setLoading(false);
+    return;
+  }
+  
+  setLoading(true);
+  try {
+    const { data: apps, error } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('client_id', safeClientId)  // ← используем safeClientId
+      .order('created_at', { ascending: false });
       
       if (error) throw error;
       setApplications(apps || []);
