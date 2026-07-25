@@ -193,22 +193,6 @@ import SettingsPage from './components/SettingsPage';
 import PublicOfferModal from './components/PublicOfferModal';
 import LegalOfferModal from './components/LegalOfferModal';
 import ConsentModal from './components/ConsentModal';
-// В импорты добавить
-import PriceEditor from './components/MaterialPriceView/PriceEditor';
-// Должно быть правильно:
-import MaterialPriceView from './components/MaterialPriceView/MaterialPriceView';
-import { sanitizeApplicationsForMaster } from './utils/materialSanitizer';
-import { canViewPrices, canEditPrices } from './utils/priceManager';
-
-// ✅ ХЕЛПЕР ДЛЯ БЕЗОПАСНОГО ПОЛУЧЕНИЯ ID
-const getCompanyId = (id) => {
-  if (!id) return null;
-  if (typeof id === 'string') return id;
-  if (typeof id === 'object' && id !== null) {
-    return id.id || id.toString() || null;
-  }
-  return String(id) || null;
-};
 
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
@@ -1153,7 +1137,7 @@ const handleChurnSubmit = async ({ reason, severity, comment }) => {
     const { data } = await supabase
       .from('churn_reasons')
       .select('*')
-      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
+      .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false });
     if (data) setChurnReasons(data);
   } catch (err) {
@@ -1171,7 +1155,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('audit_logs')
       .select('*')
-      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
+      .eq('company_id', userCompanyId)
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
     if (data) setAuditLogs(data);
   };
@@ -1197,7 +1181,7 @@ useEffect(() => {
     const { data: allResponses } = await supabase
       .from('nps_responses')
       .select('*')
-      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
+      .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false });
     
     if (allResponses) {
@@ -1219,7 +1203,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('churn_reasons')
       .select('*')
-      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
+      .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false });
     if (data) setChurnReasons(data);
   };
@@ -1239,9 +1223,6 @@ const [showFeedbackForm, setShowFeedbackForm] = useState(false);
 const [showPublicOffer, setShowPublicOffer] = useState(false);
 const [showLegalOffer, setShowLegalOffer] = useState(false);
 const [showConsentUpdate, setShowConsentUpdate] = useState(false);
-// В состояния добавить
-const [showPriceEditor, setShowPriceEditor] = useState(false);
-const [selectedForPriceEdit, setSelectedForPriceEdit] = useState(null);
 
   // ─────────────────────────────────────────────────────────
   // 🎯 FOCUS MANAGEMENT (Pattern #3)
@@ -1535,7 +1516,7 @@ return () => {
       try {
         const [companyRes, userRes] = await Promise.all([
           supabase.from('companies').select('is_blocked').eq('id', userCompanyId).single(),
-          supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', getCompanyId(userCompanyId) || userCompanyId).maybeSingle()
+          supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', userCompanyId).maybeSingle()
         ]);
         const isCompanyBlocked = companyRes.data?.is_blocked;
         const isUserInactive = userRes.data?.is_active === false;
@@ -1864,10 +1845,6 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   // 📤 SEND OFFLINE DRAFTS
   // ─────────────────────────────────────────────────────────
   const sendWithRetry = useCallback(async (draft, maxRetries = 5) => {
-     // ✅ ДОБАВЬТЕ ЭТИ СТРОКИ
-  const companyId = typeof userCompanyId === 'string' 
-    ? userCompanyId 
-    : userCompanyId?.id || null;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const application = {
@@ -1898,7 +1875,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
             .from('company_users')
             .select('id')
             .eq('user_id', data[0].user_id)
-            .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
+            .eq('company_id', userCompanyId)
             .maybeSingle();
           if (!checkErr && !existingUser) {
             const { error: insertErr } = await supabase
@@ -2613,7 +2590,7 @@ const handleInviteUser = async () => {
       const { count: currentUsers, error: countError } = await supabase
         .from('company_users')
         .select('*', { count: 'exact', head: true })
-        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
+        .eq('company_id', userCompanyId)
         .eq('is_active', true);
       
       if (countError) throw countError;
@@ -2696,7 +2673,7 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
       .from('company_users')
       .update({ role: 'manager' })
       .eq('user_id', newOwnerId)
-      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId);
+      .eq('company_id', userCompanyId);
     
     // 3. Старый владелец → supply_admin
     if (companyOwnerId) {
@@ -2704,7 +2681,7 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
         .from('company_users')
         .update({ role: 'supply_admin' })
         .eq('user_id', companyOwnerId)
-        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId);
+        .eq('company_id', userCompanyId);
     }
     
     showNotification(`✅ Руководителем назначен ${newOwnerName}\n📦 Вы стали администратором снабжения`, 'success');
@@ -2854,10 +2831,6 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
  // 📤 SUBMIT APPLICATION — С ЖЕСТКОЙ БЛОКИРОВКОЙ
 const handleSubmit = async (e) => {
   e.preventDefault();
-  // ✅ ДОБАВЬТЕ В САМОМ НАЧАЛЕ
-  const companyId = typeof userCompanyId === 'string' 
-    ? userCompanyId 
-    : userCompanyId?.id || null;
 
   // ✅ ЗАЩИТА ОТ ДВОЙНОГО НАЖАТИЯ
   if (isSubmitting) {
@@ -2883,7 +2856,7 @@ const handleSubmit = async (e) => {
         m.description?.trim() && m.quantity && m.quantity > 0 && !isNaN(m.quantity)
       );
       
-      const materialCheck = await checkMaterialsLimit(supabase, companyId, validMaterials.length);
+      const materialCheck = await checkMaterialsLimit(supabase, userCompanyId, validMaterials.length);
       if (!materialCheck.allowed) {
         showNotification(
           `⚠️ В бесплатном тарифе максимум ${materialCheck.limit} материалов в заявке.`,
@@ -3197,7 +3170,7 @@ const handleSubmit = async (e) => {
         .from('applications')
         .select('*')
         .eq('user_id', user?.id)
-        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
+        .eq('company_id', userCompanyId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -3818,21 +3791,20 @@ useEffect(() => {
                 unit: material.unit,
                 company_id: userCompanyId
               });
-              // ✅ ПРАВИЛЬНО:
-const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
-  p_company_id: userCompanyId,
-  p_item_name: (material.description || '').trim(),
-  p_quantity: qtyReceived,
-  p_transaction_type: 'income',
-  p_user_id: user?.id || null,
-  p_user_email: user?.email || null,
-  p_comment: `Приёмка: ${selectedApplication?.object_name}`,
-  p_application_id: selectedApplication?.id || null,
-  p_unit: material.unit || 'шт',
-  p_target_object_name: selectedApplication?.object_name || null,
-  p_recipient_name: selectedApplication?.foreman_name || null,
-  p_recipient_phone: selectedApplication?.foreman_phone || null
-});
+              const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
+                p_company_id: userCompanyId,
+                p_item_name: (material.description || '').trim(),
+                p_quantity: qtyReceived,
+                p_transaction_type: 'income',
+                p_user_id: user?.id || null,
+                p_user_email: user?.email || null,
+                p_comment: `Приёмка: ${selectedApplication?.object_name}`,
+                p_application_id: selectedApplication?.id || null,
+                p_unit: material.unit || 'шт',
+                p_target_object_name: selectedApplication?.object_name || null,
+                p_recipient_name: selectedApplication?.foreman_name || null,
+                p_recipient_phone: selectedApplication?.foreman_phone || null
+              });
               if (rpcError) {
                 console.error('❌ [WAREHOUSE] RPC ошибка:', rpcError);
                 showNotification(`⚠️ Ошибка склада: ${rpcError.message}`, 'warning');
@@ -4099,7 +4071,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
     const { data: updated } = await supabase
       .from('nps_responses')
       .select('*')
-      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
+      .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false });
     
     if (updated) setNpsResponses(updated);
@@ -4170,19 +4142,19 @@ const handleNpsSubmit = async ({ score, comment }) => {
         const qtyToSend = Number(item.quantityToSend) || 0;
         if (qtyToSend > 0) {
           await supabase.rpc('update_warehouse_balance', {
-  p_company_id: userCompanyId,
-  p_item_name: item.description.trim(),
-  p_quantity: qtyToSend,
-  p_transaction_type: 'expense',
-  p_user_id: user?.id,
-  p_user_email: user?.email,
-  p_comment: `Отправка мастеру: ${application.object_name}`,
-  p_application_id: application.id,
-  p_unit: item.unit || 'шт',
-  p_target_object_name: application.object_name,
-  p_recipient_name: application.foreman_name,
-  p_recipient_phone: application.foreman_phone
-});
+            p_company_id: userCompanyId,
+            p_item_name: item.description.trim(),
+            p_quantity: qtyToSend,
+            p_transaction_type: 'expense',
+            p_user_id: user?.id,
+            p_user_email: user?.email,
+            p_comment: `Отправка мастеру: ${application.object_name}`,
+            p_application_id: application.id,
+            p_unit: item.unit || 'шт',
+            p_target_object_name: application.object_name,
+            p_recipient_name: application.foreman_name,
+            p_recipient_phone: application.foreman_phone
+          });
         }
       }
     }
@@ -4253,19 +4225,19 @@ const handleNpsSubmit = async ({ score, comment }) => {
     const qty = Number(mat.received) || 0;
     if (qty > 0) {
       const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
-  p_company_id: userCompanyId,
-  p_item_name: (mat.description || '').trim(),
-  p_quantity: qty,
-  p_transaction_type: 'expense',
-  p_user_id: user?.id,
-  p_user_email: user?.email,
-  p_comment: `Выдача мастеру: ${application.object_name}`,
-  p_application_id: application.id,
-  p_unit: mat.unit || 'шт',
-  p_target_object_name: application.object_name,
-  p_recipient_name: application.foreman_name,
-  p_recipient_phone: application.foreman_phone
-});
+        p_company_id: userCompanyId,
+        p_item_name: (mat.description || '').trim(),
+        p_quantity: qty,
+        p_transaction_type: 'expense',
+        p_user_id: user?.id,
+        p_user_email: user?.email,
+        p_comment: `Выдача мастеру: ${application.object_name}`,
+        p_application_id: application.id,
+        p_unit: mat.unit || 'шт',
+        p_target_object_name: application.object_name,     // ← ДОБАВИТЬ
+        p_recipient_name: application.foreman_name,        // ← ДОБАВИТЬ
+        p_recipient_phone: application.foreman_phone       // ← ДОБАВИТЬ
+      });
       
       if (rpcError) {
         console.error('❌ RPC ошибка выдачи:', rpcError);
@@ -4392,7 +4364,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: currentEmployees, error: loadError } = await supabase
         .from('company_users')
         .select('*')
-        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId);
+        .eq('company_id', userCompanyId);
       if (!loadError && currentEmployees && currentEmployees.length > 0) {
         setEmployees(currentEmployees);
         return;
@@ -4400,7 +4372,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: apps, error: appsError } = await supabase
         .from('applications')
         .select('user_id, foreman_name, foreman_phone')
-        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
+        .eq('company_id', userCompanyId)
         .not('user_id', 'eq', user?.id);
       if (appsError) {
         console.error('Ошибка загрузки заявок для миграции:', appsError);
@@ -4432,7 +4404,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       const { data: updatedEmployees } = await supabase
         .from('company_users')
         .select('*')
-        .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
+        .eq('company_id', userCompanyId)
         .neq('user_id', user?.id);
       setEmployees(updatedEmployees || []);
     } catch (err) {
@@ -4489,19 +4461,13 @@ useEffect(() => {
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
-  // ✅ ДОБАВЛЯЕМ ЭТУ СТРОКУ
-  const companyId = typeof userCompanyId === 'string' 
-    ? userCompanyId 
-    : userCompanyId?.id || null;
-  
-  // ✅ МЕНЯЕМ userCompanyId → companyId
-  if (!user || !companyId) {
-    console.warn('⚠️ loadApplications: нет user или companyId', { user, companyId });
+  if (!user || !userCompanyId) {
+    console.warn('⚠️ loadApplications: нет user или companyId');
     return;
   }
   
-  // ✅ МЕНЯЕМ userCompanyId → companyId
-  const cacheKey = `applications_${companyId}_page_${pageNumber}`;
+  // Проверка кэша
+  const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
     setApplications(cached.userApps);
@@ -4514,29 +4480,34 @@ useEffect(() => {
   
   setIsLoading(true);
   try {
+    // ✅ 1. Сначала получаем ТОЛЬКО количество
     const { count, error: countError } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
-      .eq('company_id', companyId);  // ← ✅ companyId
+      .eq('company_id', userCompanyId);
     
     if (countError) throw countError;
     
+    // ✅ 2. Вычисляем totalPages
     const calculatedTotalPages = Math.max(1, Math.ceil(count / ITEMS_PER_PAGE));
     setTotalPages(calculatedTotalPages);
     
+    // ✅ 3. Корректируем pageNumber если нужно
     let safePage = pageNumber;
     if (safePage > calculatedTotalPages) {
       safePage = 1;
       setPage(1);
     }
     
+    // ✅ 4. Вычисляем правильный range
     const from = (safePage - 1) * ITEMS_PER_PAGE;
     const to = Math.min(safePage * ITEMS_PER_PAGE - 1, count - 1);
     
+    // ✅ 5. Запрос с правильным range
     let query = supabase
       .from('applications')
       .select('*')
-      .eq('company_id', companyId)  // ← ✅ companyId
+      .eq('company_id', userCompanyId)
       .order('created_at', { ascending: false })
       .range(from, to > 0 ? to : 0);
     
@@ -4548,10 +4519,11 @@ useEffect(() => {
     
     setApplications(userApps);
     
+    // Загрузка пользователей
     const { data: usersData } = await supabase
       .from('company_users')
       .select('user_id, created_at, full_name, role')
-      .eq('company_id', companyId);  // ← ✅ companyId
+      .eq('company_id', userCompanyId);
     
     let commentsMap = {};
     if (usersData) setCompanyUsers(usersData);
@@ -4579,18 +4551,13 @@ useEffect(() => {
       const { data: allApps = [] } = await supabase
         .from('applications')
         .select('id, status, created_at, object_name, materials')
-        .eq('company_id', companyId)  // ← ✅ companyId
+        .eq('company_id', userCompanyId)
         .order('created_at', { ascending: false })
         .limit(500);
       setAllApplications(allApps || []);
     }
-
-    const processedApps = (userRole === 'master' || userRole === 'foreman')
-      ? sanitizeApplicationsForMaster(userApps)
-      : userApps;
     
-    setApplications(processedApps);
-    
+    // Сохраняем в кэш
     cacheManager.set('applications', cacheKey, {
       userApps,
       totalPages: calculatedTotalPages,
@@ -4604,7 +4571,6 @@ useEffect(() => {
   } finally {
     setIsLoading(false);
   }
-  // ✅ ОСТАВЛЯЕМ userCompanyId в зависимостях
 }, [user, userCompanyId, userRole, isAdminMode, showNotification]);
 
   // 📩 ЗАГРУЗКА УВЕДОМЛЕНИЙ (ВСТАВИТЬ ПОСЛЕ loadApplications)
@@ -4839,18 +4805,15 @@ useEffect(() => {
 // Добавьте этот useEffect в App.jsx после loadPlan
 useEffect(() => {
   const checkTrialExpired = async () => {
-    // ✅ ФИКС
-    const companyId = typeof userCompanyId === 'string' 
-      ? userCompanyId 
-      : userCompanyId?.id || null;
-    
-    if (!companyId || !supabase) return;
+    if (!userCompanyId || !supabase) return;
     if (!currentPlanDetails?.is_trial) return;
     
     const trialEnd = new Date(currentPlanDetails.trial_ended_at);
     const now = new Date();
     
     if (trialEnd < now && currentPlan?.id !== 'basic') {
+      console.log('⏰ Пробный период истёк, переходим на Базовый');
+      
       await supabase
         .from('companies')
         .update({
@@ -4859,7 +4822,7 @@ useEffect(() => {
           plan_expires_at: null,
           updated_at: now.toISOString()
         })
-        .eq('id', companyId);  // ← ✅ companyId
+        .eq('id', userCompanyId);
       
       setCurrentPlan(TARIFF_PLANS.basic);
       setCurrentPlanDetails(prev => ({
@@ -4939,20 +4902,17 @@ useEffect(() => {
 // ============================================================
 useEffect(() => {
   const resetDailyLimits = async () => {
-    // ✅ ФИКС
-    const companyId = typeof userCompanyId === 'string' 
-      ? userCompanyId 
-      : userCompanyId?.id || null;
-    
-    if (!companyId) return;
+    if (!userCompanyId) return;
     
     try {
-      const lastReset = localStorage.getItem(`quota_reset_${companyId}`);
+      // Проверяем, нужно ли сбрасывать
+      const lastReset = localStorage.getItem(`quota_reset_${userCompanyId}`);
       const today = new Date().toDateString();
       
       if (lastReset !== today) {
+        // Вызываем RPC функцию для сброса
         const { error } = await supabase.rpc('reset_company_limits', {
-          p_company_id: companyId  // ← ✅ companyId
+          p_company_id: userCompanyId
         });
         
         if (error) {
@@ -4985,7 +4945,7 @@ useEffect(() => {
     const { data } = await supabase
       .from('audit_logs')
       .select('*')
-      .eq('company_id', getCompanyId(userCompanyId) || userCompanyId)
+      .eq('company_id', userCompanyId)
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString())
       .order('created_at', { ascending: false });
     if (data) setAuditLogs(data);
@@ -5176,7 +5136,7 @@ useEffect(() => {
         const { count, error } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('company_id', getCompanyId(userCompanyId) || userCompanyId);
+          .eq('company_id', userCompanyId);
         if (!error && count === 0 && applications.length > 0) {
           console.log('🔄 База пуста, обновляем состояние...');
           setApplications([]);
@@ -5644,17 +5604,16 @@ useEffect(() => {
 useEffect(() => {
   const checkQuotaOnView = async () => {
     if (currentView === 'create' && (currentPlan?.id === 'basic' || !currentPlan)) {
-      // ✅ ФИКС: безопасное получение companyId
-      const companyId = typeof userCompanyId === 'string' 
-        ? userCompanyId 
-        : userCompanyId?.id || null;
-      
-      if (!companyId) return;
+      if (!userCompanyId) return;
       
       try {
-        const quota = await checkQuota(supabase, companyId);  // ← ✅ companyId
+        const quota = await checkQuota(supabase, userCompanyId);
         setQuotaStatus(quota);
-        // ...
+        
+        // ✅ Если лимит исчерпан - показываем предупреждение
+        if (!quota.allowed) {
+          showNotification('⚠️ Лимит заявок исчерпан. Перейдите в раздел "Тарифы" для обновления.', 'warning');
+        }
       } catch (err) {
         console.debug('Quota check on view error:', err);
       }
@@ -6556,35 +6515,6 @@ const renderApprovalsQueue = () => (
             </div>
           </div>
         ))}
-
-        {/* История согласований */}
-{approvalHistory.length > 0 && (
-  <div className="mt-8">
-    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-      История согласований
-    </h3>
-    <div className="space-y-2">
-      {approvalHistory.slice(0, 5).map((history) => (
-        <div key={history.id} className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg text-sm">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="font-medium">
-                {history.applications?.object_name || history.object_name}
-              </p>
-              <p className="text-xs text-gray-500">
-                {history.status === 'approved' ? '✅ Одобрено' : 
-                 history.status === 'rejected' ? '❌ Отклонено' : '⏳ На согласовании'}
-              </p>
-            </div>
-            <p className="text-xs text-gray-400">
-              {new Date(history.created_at).toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
         {/* 🔴 ========== ВСТАВИТЬ ИСТОРИЮ СОГЛАСОВАНИЙ СЮДА ========== */}
         {/* История согласований */}
         {approvalHistory.length > 0 && (
@@ -6864,8 +6794,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           setShowNotificationModal(false);
           setSelectedNotification(null);
         }}
-        t={t}
-        language={language}
       >
 {user && !isSuperAdmin(userRole, user?.user_metadata) && !onboardingTasksComplete && (
   <div className="max-w-7xl mx-auto px-4 pt-2">
@@ -7674,27 +7602,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         retentionMetrics={retentionMetrics}
         engagementMetrics={engagementMetrics}
       />
-
-      {showPriceEditor && selectedForPriceEdit && (
-  <PriceEditor
-    application={selectedForPriceEdit}
-    onSave={(updatedMaterials) => {
-      setApplications(prev => prev.map(app =>
-        app.id === selectedForPriceEdit.id
-          ? { ...app, materials: updatedMaterials }
-          : app
-      ));
-      showNotification('✅ Цены обновлены', 'success');
-    }}
-    onClose={() => {
-      setShowPriceEditor(false);
-      setSelectedForPriceEdit(null);
-    }}
-    showNotification={showNotification}
-    user={user}
-    userRole={userRole}
-  />
-)}
       
       {privacyPolicyOpen && <PrivacyPolicyModal />}
       {renderSignupModal()}
@@ -7991,7 +7898,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     />
   </div>
 )}
-
+// Модальные окна юридических документов
 {showPublicOffer && (
   <PublicOfferModal
     isOpen={showPublicOffer}
