@@ -1671,7 +1671,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
               setUser(newSession.user);
               setUserRole(role);
               setUserCompany(company_name);
-              setUserCompanyId(company_id);
+              safeSetUserCompanyId(company_id);
               if (company_id && newSession?.user?.id) {
                 const { data: companyData, error: ownerError } = await supabase
                   .from('companies')
