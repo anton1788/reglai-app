@@ -994,6 +994,27 @@ const App = () => {
   const [userRole, setUserRole] = useState('master');
   const [userCompany, setUserCompany] = useState(null);
   const [userCompanyId, setUserCompanyId] = useState(null);
+  // ✅ ДОБАВИТЬ ЭТОТ БЛОК
+const safeSetUserCompanyId = useCallback((value) => {
+  if (!value) {
+    setUserCompanyId(null);
+    return;
+  }
+  if (typeof value === 'string') {
+    setUserCompanyId(value);
+    return;
+  }
+  if (typeof value === 'object') {
+    const id = value.id || value.company_id || value._id || null;
+    if (id) {
+      setUserCompanyId(String(id));
+      return;
+    }
+    setUserCompanyId(String(value));
+    return;
+  }
+  setUserCompanyId(String(value));
+}, []);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [showSignupModal, setShowSignupModal] = useState(false);
@@ -1602,7 +1623,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
         setUser(session.user);
         setUserRole(role);
         setUserCompany(company_name);
-        setUserCompanyId(company_id);
+        safeSetUserCompanyId(company_id);
         if (company_id && session?.user?.id) {
           const { data: companyData, error: ownerError } = await supabase
             .from('companies')
@@ -1707,7 +1728,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
         setUser(session.user);
         setUserRole(role);
         setUserCompany(company_name);
-        setUserCompanyId(company_id);
+        safeSetUserCompanyId(company_id);
         setProfileDataForHeader({
           fullName: metadata.full_name || '',
           phone: metadata.phone || ''
@@ -2323,7 +2344,7 @@ const checkForUpdates = useCallback(async () => {
   setUser(null);
   setUserRole('foreman');
   setUserCompany(null);
-  setUserCompanyId(null);
+  safeSetUserCompanyId(null);
   setIsAdminMode(false);
   setCurrentView('create');
 };
