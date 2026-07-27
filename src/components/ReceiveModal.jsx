@@ -508,19 +508,19 @@ const ReceiveModal = memo(function({
   // 🔁 INIT LOCAL MATERIALS
   // ─────────────────────────────────────────────────────────
   useEffect(function() {
-    if (selectedApplication && selectedApplication.materials) {
-      const validMaterials = selectedApplication.materials
-        .filter(function(m) { return m.description && m.description.trim(); })
-        .map(function(m, idx) {
-          return {
-            ...m,
-            _index: m._index || idx,
-            unit: m.unit || 'шт',
-            received: Number(m.received) || 0,
-            supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
-            sent_to_master_quantity: Number(m.sent_to_master_quantity) || 0
-          };
-        });
+  if (selectedApplication && selectedApplication.materials) {
+    const validMaterials = selectedApplication.materials
+      .filter(function(m) { return m.description && m.description.trim(); })
+      .map(function(m, idx) {
+        return {
+          ...m,
+          _index: m._index || idx,
+          unit: m.unit || 'шт',
+          received: Number(m.received) || 0,
+          supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
+          sent_to_master_quantity: Number(m.sent_to_master_quantity) || 0,  // ← ДОБАВИТЬ
+        };
+      });
       
       setLocalMaterials(validMaterials);
       

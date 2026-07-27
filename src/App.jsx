@@ -3030,7 +3030,8 @@ const handleSubmit = async (e) => {
     ...m,
     received: 0,
     supplier_received_quantity: 0,
-    status: ITEM_STATUS.PENDING
+    status: ITEM_STATUS.PENDING,
+    sent_to_master_quantity: 0
   }));
   
   let initialStatus = APPLICATION_STATUS.PENDING;
@@ -4527,6 +4528,47 @@ useEffect(() => {
   const loadApplications = useCallback(async (pageNumber = 1) => {
   // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
   let safeCompanyId = userCompanyId;
+
+  // Если это объект - извлекаем id
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+  }
+
+  // Если всё ещё объект - пробуем JSON
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    try {
+      const str = JSON.stringify(safeCompanyId);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(str)) {
+        safeCompanyId = str;
+      } else {
+        safeCompanyId = null;
+      }
+    } catch {
+      safeCompanyId = null;
+    }
+  }
+
+  // Приводим к строке
+  if (safeCompanyId && typeof safeCompanyId !== 'string') {
+    safeCompanyId = String(safeCompanyId);
+  }
+
+  // Проверяем валидность
+  if (!safeCompanyId || safeCompanyId === '[object Object]') {
+    console.warn('⚠️ loadApplications: неверный companyId', userCompanyId);
+    // Пытаемся восстановить из метаданных
+    const metaId = user?.user_metadata?.company_id;
+    if (metaId) {
+      safeCompanyId = String(metaId);
+      safeSetUserCompanyId(metaId);
+    } else {
+      setIsLoading(false);
+      return;
+    }
+  }
+
+  console.log('📊 loadApplications с companyId:', safeCompanyId);
 
 // Если это объект - извлекаем id
 if (safeCompanyId && typeof safeCompanyId === 'object') {
