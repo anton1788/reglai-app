@@ -517,7 +517,8 @@ const ReceiveModal = memo(function({
             _index: m._index || idx,
             unit: m.unit || 'шт',
             received: Number(m.received) || 0,
-            supplier_received_quantity: Number(m.supplier_received_quantity) || 0
+            supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
+            sent_to_master_quantity: Number(m.sent_to_master_quantity) || 0
           };
         });
       
@@ -536,6 +537,27 @@ const ReceiveModal = memo(function({
             return {
               ...m,
               quantityToSend: Number(m.supplier_received_quantity) || 0,
+              unit: m.unit || 'шт'
+            };
+          })
+        );
+      }
+      
+      // ✅ НОВЫЙ РЕЖИМ: Готовы к выдаче
+      if (modalMode === 'admin_ready_to_issue') {
+        setItemsToSend(selectedApplication.materials
+          .filter(function(m) {
+            const onWarehouseQty = Number(m.supplier_received_quantity) || 0;
+            const alreadySent = Number(m.sent_to_master_quantity) || 0;
+            return onWarehouseQty > 0 && alreadySent < onWarehouseQty;
+          })
+          .map(function(m) {
+            return {
+              ...m,
+              quantityToSend: Math.min(
+                Number(m.supplier_received_quantity) || 0,
+                (Number(m.supplier_received_quantity) || 0) - (Number(m.sent_to_master_quantity) || 0)
+              ),
               unit: m.unit || 'шт'
             };
           })
@@ -566,7 +588,7 @@ const ReceiveModal = memo(function({
       if (modalMode === 'admin_receive' && typeof onAdminReceive === 'function') {
         result = await onAdminReceive(localMaterials, selectedApplication);
       }
-      else if (modalMode === 'admin_send_to_master' && typeof onSendToMaster === 'function') {
+      else if ((modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && typeof onSendToMaster === 'function') {
         const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
         console.log('🔔 Вызов onSendToMaster с items:', items);
         result = await onSendToMaster(items, selectedApplication);
@@ -732,6 +754,11 @@ const ReceiveModal = memo(function({
       return itemsToSend.some(function(i) { return i.quantityToSend > 0; });
     }
     
+    // ✅ НОВЫЙ РЕЖИМ: Готовы к выдаче
+    if (modalMode === 'admin_ready_to_issue') {
+      return itemsToSend.some(function(i) { return i.quantityToSend > 0; });
+    }
+    
     if (modalMode === 'master_confirm') {
       return confirmations.some(function(c) { return c.quantity > 0 || c.action === 'reject'; });
     }
@@ -762,6 +789,87 @@ const ReceiveModal = memo(function({
       return sum + c.quantity;
     }, 0);
   }, [confirmations]);
+
+  // ============================================================
+  // 🔹 РЕЖИМ: ГОТОВЫ К ВЫДАЧЕ (для снабженца)
+  // ============================================================
+  const renderReadyToIssue = function() {
+    // Показываем материалы, которые на складе и ещё не отправлены мастеру
+    const availableMaterials = localMaterials.filter(function(m) {
+      return (Number(m.supplier_received_quantity) || 0) > 0 &&
+        (Number(m.sent_to_master_quantity) || 0) < (Number(m.supplier_received_quantity) || 0);
+    });
+
+    if (availableMaterials.length === 0) {
+      return (
+        <div className="text-center py-8 text-gray-500">
+          <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+          <p>Все материалы уже отправлены мастеру</p>
+          <p className="text-sm">Нет материалов для выдачи</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600">
+          Выберите материалы для выдачи мастеру <strong>{selectedApplication?.foreman_name}</strong>
+        </p>
+
+        <div className="space-y-3 max-h-60 overflow-y-auto">
+          {availableMaterials.map(function(m, index) {
+            const available = (Number(m.supplier_received_quantity) || 0) - (Number(m.sent_to_master_quantity) || 0);
+            return (
+              <div key={index} className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">{m.description || m.item_name}</p>
+                    <p className="text-xs text-gray-500">
+                      На складе: {available} {m.unit || 'шт'} | 
+                      Запрошено: {m.quantity} {m.unit || 'шт'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">Выдать:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={available}
+                      value={m.quantityToSend || 0}
+                      onChange={function(e) {
+                        const val = Math.min(Number(e.target.value) || 0, available);
+                        handleItemToSendUpdate(index, val);
+                      }}
+                      className="w-20 px-2 py-1 border rounded text-sm"
+                    />
+                    <span className="text-sm text-gray-500">{m.unit || 'шт'}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex justify-end gap-3 pt-4 border-t">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            disabled={isSaving}
+          >
+            Отмена
+          </button>
+          <button
+            onClick={function() { handleSave(); }}
+            disabled={isSaving || itemsToSend.every(function(i) { return (i.quantityToSend || 0) === 0; })}
+            className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            Выдать мастеру
+          </button>
+        </div>
+      </div>
+    );
+  };
   
   // ─────────────────────────────────────────────────────────
   // 📋 RENDERING
@@ -771,13 +879,15 @@ const ReceiveModal = memo(function({
   const modalTitles = {
     admin_receive: t('acceptToWarehouse') || 'Приёмка на склад',
     admin_send_to_master: t('sendToMaster') || 'Отправка мастеру',
-    master_confirm: t('confirmReceipt') || 'Подтверждение получения'
+    master_confirm: t('confirmReceipt') || 'Подтверждение получения',
+    admin_ready_to_issue: t('readyToIssue') || 'Готовы к выдаче'
   };
-  
+
   const modalIcons = {
     admin_receive: Warehouse,
     admin_send_to_master: Send,
-    master_confirm: CheckCircle2
+    master_confirm: CheckCircle2,
+    admin_ready_to_issue: Package
   };
   
   const ModalIcon = modalIcons[modalMode] || Warehouse;
@@ -949,7 +1059,7 @@ const ReceiveModal = memo(function({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* 🔹 В работу */}
                 <button
-                  onClick={() => onTakeToWork?.(selectedApplication)}
+                  onClick={function() { if (onTakeToWork) onTakeToWork(selectedApplication); }}
                   className="px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/25"
                 >
                   <Package className="w-4 h-4" />
@@ -958,7 +1068,7 @@ const ReceiveModal = memo(function({
                 
                 {/* 🔹 На согласование */}
                 <button
-                  onClick={() => onSendForApproval?.(selectedApplication)}
+                  onClick={function() { if (onSendForApproval) onSendForApproval(selectedApplication); }}
                   className="px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-orange-500/25"
                 >
                   <Shield className="w-4 h-4" />
@@ -1056,6 +1166,9 @@ const ReceiveModal = memo(function({
               )}
             </>
           )}
+          
+          {/* 🔹 АДМИН: Готовы к выдаче */}
+          {modalMode === 'admin_ready_to_issue' && renderReadyToIssue()}
           
           {/* 🔹 МАСТЕР: Подтверждение получения */}
           {modalMode === 'master_confirm' && (
@@ -1240,7 +1353,7 @@ const ReceiveModal = memo(function({
             </div>
             
             {/* Кнопка сохранения */}
-            {modalMode === 'admin_receive' && (
+            {(modalMode === 'admin_receive' || modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && (
               <button
                 onClick={handleSave}
                 disabled={!hasChanges || isSaving}

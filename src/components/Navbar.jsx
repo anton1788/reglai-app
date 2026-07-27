@@ -259,20 +259,30 @@ const Navbar = ({
 
   // Все пункты навигации в зависимости от роли и тарифа
   const getNavItems = () => {
-    const items = [];
+  const items = [];
 
-    // Базовые пункты для всех
-    items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
-    items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
+  // Базовые пункты для всех
+  items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
+  items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
 
-    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'master' || userRole === 'foreman') {
-      items.push({ 
-        id: 'projects', 
-        label: 'Проекты', 
-        icon: FolderOpen, 
-        path: '/projects' 
-      });
-    }
+  // 🔹 ГОТОВЫ К ВЫДАЧЕ - для снабженца и руководителя
+  if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+    items.push({ 
+      id: 'readyToIssue', 
+      label: 'Готовы к выдаче', 
+      icon: Package, 
+      path: '/ready-to-issue' 
+    });
+  }
+
+  if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'master' || userRole === 'foreman') {
+    items.push({ 
+      id: 'projects', 
+      label: 'Проекты', 
+      icon: FolderOpen, 
+      path: '/projects' 
+    });
+  }
 
     // CRM Sales - Лиды (для manager и supply_admin)
     if (userRole === 'manager' || userRole === 'supply_admin') {

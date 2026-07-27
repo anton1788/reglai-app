@@ -133,6 +133,7 @@ onTransfer,
 onDelete,
 onViewHistory,
 onEditUnit,
+onIssueToApplication,  // ← ДОБАВИТЬ
 isLoading,
 userRole,
 t,
@@ -275,6 +276,18 @@ title={t('transfer')}
 >
 <Truck className="w-3.5 h-3.5" />
 {t('transfer') || 'Выдать'}
+</button>
+)}
+{/* 🔹 КНОПКА "ВЫДАТЬ ПО ЗАЯВКЕ" */}
+{onIssueToApplication && balance > 0 && !isFromApplications && (
+<button
+onClick={() => onIssueToApplication(item)}
+disabled={itemLoading}
+className="table-action-btn text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/20"
+title={t('issueToApplication') || 'Выдать по заявке'}
+>
+<FileText className="w-3.5 h-3.5" />
+{t('issueToApplication') || 'По заявке'}
 </button>
 )}
 {canEdit && !isFromApplications && onDelete && (
@@ -705,7 +718,8 @@ const WarehouseView = ({
   showNotification,
   applications = [],
   autoReorderEnabled = true,
-  onToggleAutoReorder
+  onToggleAutoReorder,
+  onIssueToApplication,
 }) => {
 const [warehouseItems, setWarehouseItems] = useState([]);
 const [transactions, setTransactions] = useState([]);
@@ -853,7 +867,7 @@ const loadWarehouseData = useCallback(async () => {
   } finally {
     setIsLoading(false);
   }
-}, [userRole, supabase, t, showNotification]); // 🔥 УДАЛИЛ userCompanyId из зависимостей
+}, [userRole, supabase, t, showNotification, userCompanyId]);
 
 useEffect(() => {
   if (userCompanyId && user?.id) {
@@ -963,7 +977,8 @@ showNotification(t('error'), 'error');
 } finally {
 setActionLoading(prev => ({ ...prev, adjust: null }));
 }
-}, [userCompanyId, user, supabase, t, showNotification, loadWarehouseData]);
+}, [user, supabase, t, showNotification, loadWarehouseData]);
+// userCompanyId не нужен, т.к. используется внутри
 
 const deleteItem = useCallback(async (item) => {
   if (!window.confirm(`Вы уверены, что хотите удалить товар "${item.name}" со склада?`)) {
@@ -1302,6 +1317,7 @@ onTransfer={(item) => setTransferModal({ isOpen: true, item })}
 onDelete={viewMode === 'warehouse' ? deleteItem : undefined}
 onViewHistory={viewMode === 'warehouse' ? loadItemHistory : undefined}
 onEditUnit={viewMode === 'warehouse' ? editUnit : undefined}
+onIssueToApplication={onIssueToApplication}
 isLoading={actionLoading}
 userRole={userRole}
 t={t}

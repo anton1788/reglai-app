@@ -3905,120 +3905,76 @@ const handleClearFilters = useCallback(() => {
   setPage(1); // ← УЖЕ ДОБАВЛЕНО
 }, []);
 
-  const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
-  // 🔍 ДОБАВЛЕНО: Логирование начала работы
+  // ============================================================
+// 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (ОБНОВЛЁННАЯ)
+// ============================================================
+const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
   console.log('🔍 [DEBUG] handleAdminReceive started', {
-    applicationId: application.id,
-    materialsCount: materialsFromModal.length,
+    applicationId: application?.id,
+    materialsCount: materialsFromModal?.length || 0,
     userCompanyId
   });
   
-  // 🔧 ИСПРАВЛЕНО: Явное сохранение supplier_received_quantity и received
-  const updatedMaterials = materialsFromModal.map(m => {
-    const supplierReceived = Number(m.supplier_received_quantity) || 0;
-    const requested = Number(m.quantity) || 0;
-    
-    let itemStatus = ITEM_STATUS.PENDING;
-    if (supplierReceived >= requested && requested > 0) {
-      itemStatus = ITEM_STATUS.ON_WAREHOUSE;
-    } else if (supplierReceived > 0) {
-      itemStatus = ITEM_STATUS.ON_WAREHOUSE;
-    }
-    
-    return {
-      ...m,
-      supplier_received_quantity: supplierReceived,
-      received: Number(m.received) || 0,
-      status: itemStatus,
-      supplier_received_at: supplierReceived > 0 ? new Date().toISOString() : m.supplier_received_at
-    };
-  });
-  
-   const allReceived = updatedMaterials.every(m =>
-    (m.supplier_received_quantity || 0) >= (m.quantity || 0)
-  );
-  const anyReceived = updatedMaterials.some(m =>
-    (m.supplier_received_quantity || 0) > 0
-  );
-  
-  // 🔧 ИСПРАВЛЕНО: Если есть материалы, требующие отправки мастеру
-  const hasMaterialsToSend = updatedMaterials.some(m =>
-    (m.supplier_received_quantity || 0) > 0 && 
-    ((m.sent_to_master_quantity || 0) < (m.supplier_received_quantity || 0))
-  );
-  
-  const newAppStatus = allReceived && !hasMaterialsToSend
-    ? APPLICATION_STATUS.RECEIVED           // ✅ Если всё принято И отправлено
-    : anyReceived
-      ? APPLICATION_STATUS.PARTIAL_RECEIVED // ✅ Частично принято
-      : APPLICATION_STATUS.ADMIN_PROCESSING;
-  
-  const newHistoryEntry = {
-    user_id: user?.id,
-    user_email: user?.email,
-    old_status: application.status,
-    new_status: newAppStatus,
-    action: 'supplier_received',
-    timestamp: new Date().toISOString(),
-    details: `Принято позиций: ${updatedMaterials.filter(m => m.supplier_received_quantity > 0).length}`
-  };
-  
-  const { error } = await supabase
-    .from('applications')
-    .update({
-      status: newAppStatus,
-      materials: updatedMaterials,
-      status_history: [...(application.status_history || []), newHistoryEntry],
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', application.id)
-    .select()
-    .single();
-  
-  if (error) {
-    console.error('❌ Ошибка обновления заявки:', error);
-    showNotification('Ошибка сохранения', 'error');
-    return { success: false, error };
+  if (!application?.id) {
+    showNotification('Ошибка: заявка не найдена', 'error');
+    return { success: false };
   }
   
-  // 🏚️ ОБНОВЛЕНИЕ СКЛАДА С ЛОГАМИ
-  if (WAREHOUSE_ENABLED) {
-  for (const mat of updatedMaterials) {
-    const qty = Number(mat.supplier_received_quantity) || 0;
-    if (qty > 0) {
-      const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
-        p_company_id: userCompanyId,
-        p_item_name: (mat.description || '').trim(),
-        p_quantity: qty,
-        p_transaction_type: 'income',
-        p_user_id: user?.id,
-        p_user_email: user?.email,
-        p_comment: `Приёмка: ${application.object_name}`,
-        p_application_id: application.id,
-        p_unit: mat.unit || 'шт',
-        p_target_object_name: application.object_name,     // ← ДОБАВИТЬ
-        p_recipient_name: application.foreman_name,        // ← ДОБАВИТЬ
-        p_recipient_phone: application.foreman_phone       // ← ДОБАВИТЬ
-      });
+  try {
+    // 1. Формируем данные для RPC
+    const receiveItems = materialsFromModal.map(m => ({
+      item_name: m.description || m.item_name || '',
+      quantity: Number(m.supplier_received_quantity) || Number(m.quantityToReceive) || Number(m.quantity) || 0,
+      unit: m.unit || 'шт',
+      invoice_url: m.invoice_url || null
+    })).filter(m => m.quantity > 0 && m.item_name);
+    
+    if (receiveItems.length === 0) {
+      showNotification('Нет материалов для приёмки', 'warning');
+      return { success: false };
+    }
+    
+    // 2. Вызываем RPC функцию receive_materials
+    const { data, error } = await supabase.rpc('receive_materials', {
+      p_application_id: application.id,
+      p_company_id: userCompanyId,
+      p_user_id: user?.id,
+      p_user_email: user?.email,
+      p_materials: receiveItems,
+      p_invoice_url: materialsFromModal[0]?.invoice_url || null
+    });
+    
+    if (error) throw error;
+    
+    if (data?.success) {
+      // 3. Обновляем локальное состояние
+      setApplications(prev => prev.map(app =>
+        app.id === application.id
+          ? { ...app, status: data.new_status, materials: data.materials }
+          : app
+      ));
       
-      if (rpcError) {
-        console.error('❌ RPC ошибка:', rpcError);
-        showNotification(`⚠️ Ошибка склада: ${rpcError.message}`, 'warning');
+      showNotification(`✅ Принято ${receiveItems.length} позиций на склад`, 'success');
+      setShowReceiveModal(false);
+      
+      // 4. Если все принято - предлагаем отправить мастеру
+      if (data.new_status === APPLICATION_STATUS.READY_FOR_ISSUE) {
+        setTimeout(() => {
+          showNotification('📤 Все материалы на складе. Перейдите в "Готовы к выдаче"', 'info');
+        }, 1000);
       }
+      
+      return { success: true, data };
+    } else {
+      showNotification('Ошибка: ' + (data?.error || 'Неизвестная ошибка'), 'error');
+      return { success: false };
     }
+  } catch (err) {
+    console.error('❌ Ошибка приёмки:', err);
+    showNotification('Ошибка приёмки: ' + err.message, 'error');
+    return { success: false };
   }
-}
-  
-  // Обновляем состояние в UI
-  setApplications(prev => prev.map(app =>
-    app.id === application.id
-      ? { ...app, status: newAppStatus, materials: updatedMaterials, status_history: [...(app.status_history || []), newHistoryEntry] }
-      : app
-  ));
-  
-  showNotification(`✅ Приёмка завершена. Статус: ${newAppStatus}`, 'success');
-  return { success: true, newAppStatus, updatedMaterials };
-}, [user, userCompanyId, WAREHOUSE_ENABLED, showNotification, setApplications]);
+}, [user, userCompanyId, supabase, showNotification, setApplications]);
 
   // 🔹 Снабженец берет заявку в работу (поиск поставщика, запрос счета)
 const handleTakeToWork = useCallback(async (application) => {
@@ -4124,25 +4080,35 @@ const handleNpsSubmit = async ({ score, comment }) => {
   }
 };
 
-  const handleSendToMaster = useCallback(async (itemsToSend, application) => {
+  // ============================================================
+// 🔹 ОТПРАВКА МАСТЕРУ (ОБНОВЛЁННАЯ)
+// ============================================================
+const handleSendToMaster = useCallback(async (itemsToSend, application) => {
+  console.log('📦 Отправка мастеру, items:', itemsToSend);
+  
+  if (!application?.id || !itemsToSend?.length) {
+    showNotification('Нет материалов для отправки', 'warning');
+    return { success: false };
+  }
+  
   try {
-    console.log('📦 Отправка мастеру, items:', itemsToSend);
-    
-    // 1. Обновляем материалы
-    const updatedMaterials = application.materials.map((originalMaterial) => {
-      const itemToSend = itemsToSend.find(i => i.description === originalMaterial.description);
+    // 1. Обновляем материалы в заявке
+    const updatedMaterials = application.materials.map(original => {
+      const itemToSend = itemsToSend.find(i => 
+        (i.description || i.item_name) === (original.description || original.item_name)
+      );
       
       if (itemToSend && (Number(itemToSend.quantityToSend) || 0) > 0) {
         const qtyToSend = Number(itemToSend.quantityToSend);
         return {
-          ...originalMaterial,
-          sent_to_master_quantity: (Number(originalMaterial.sent_to_master_quantity) || 0) + qtyToSend,
+          ...original,
+          sent_to_master_quantity: (Number(original.sent_to_master_quantity) || 0) + qtyToSend,
           status: ITEM_STATUS.SENT_TO_MASTER,
           sent_to_master_at: new Date().toISOString(),
           sent_to_master_by: user?.id
         };
       }
-      return originalMaterial;
+      return original;
     });
     
     // 2. Проверяем, все ли материалы отправлены мастеру
@@ -4155,7 +4121,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
       ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION 
       : APPLICATION_STATUS.PARTIAL_RECEIVED;
     
-    // 4. Обновляем заявку
+    // 4. Обновляем заявку в БД
     const { error: updateError } = await supabase
       .from('applications')
       .update({
@@ -4169,7 +4135,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
             user_id: user?.id,
             user_email: user?.email,
             timestamp: new Date().toISOString(),
-            details: `Отправлено мастеру: ${itemsToSend.length} позиций`
+            details: `Отправлено мастеру: ${itemsToSend.filter(i => i.quantityToSend > 0).length} позиций`
           }
         ]
       })
@@ -4177,14 +4143,14 @@ const handleNpsSubmit = async ({ score, comment }) => {
     
     if (updateError) throw updateError;
     
-    // 5. Списание со склада
+    // 5. Списание со склада (через RPC)
     if (WAREHOUSE_ENABLED) {
       for (const item of itemsToSend) {
         const qtyToSend = Number(item.quantityToSend) || 0;
         if (qtyToSend > 0) {
           await supabase.rpc('update_warehouse_balance', {
             p_company_id: userCompanyId,
-            p_item_name: item.description.trim(),
+            p_item_name: (item.description || item.item_name || '').trim(),
             p_quantity: qtyToSend,
             p_transaction_type: 'expense',
             p_user_id: user?.id,
@@ -4207,99 +4173,99 @@ const handleNpsSubmit = async ({ score, comment }) => {
         : app
     ));
     
-    showNotification(`✅ Отправлено мастеру ${itemsToSend.length} позиций`, 'success');
+    showNotification(`✅ Отправлено мастеру ${itemsToSend.filter(i => i.quantityToSend > 0).length} позиций`, 'success');
+    setShowReceiveModal(false);
+    
     return { success: true };
     
   } catch (err) {
-    console.error('Ошибка:', err);
+    console.error('❌ Ошибка отправки мастеру:', err);
     showNotification('Ошибка отправки: ' + err.message, 'error');
-    return { success: false, error: err };
+    return { success: false };
   }
-}, [user, userCompanyId, WAREHOUSE_ENABLED, showNotification, setApplications]);
+}, [user, userCompanyId, supabase, showNotification, setApplications, WAREHOUSE_ENABLED]);
 
-  const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
-    try {
-      const updatedMaterials = materialsFromModal.map((m, index) => {
-        const conf = confirmations.find(c => c.materialIndex === index);
-        const confirmed = conf?.action === 'confirm' ? (Number(conf.quantity) || 0) : 0;
-        const requested = Number(m.quantity) || 0;
-        return {
-          ...m,
-          received: confirmed,
-          unit: m.unit || 'шт',
-          status: confirmed >= requested ? ITEM_STATUS.CONFIRMED :
-            confirmed > 0 ? ITEM_STATUS.SENT_TO_MASTER : ITEM_STATUS.PENDING,
-          confirmed_by_employee_at: confirmed > 0 ? new Date().toISOString() : null,
-          confirmed_by_employee_id: confirmed > 0 ? user?.id : null,
-          reject_reason: conf?.action === 'reject' ? conf.feedback : null
-        };
-      });
-      const allConfirmed = updatedMaterials.every(m =>
-        (m.received || 0) >= (m.quantity || 0)
-      );
-      const anyConfirmed = updatedMaterials.some(m => (m.received || 0) > 0);
-      const newAppStatus = allConfirmed
-        ? APPLICATION_STATUS.RECEIVED
-        : anyConfirmed
-          ? APPLICATION_STATUS.ADMIN_PROCESSING
-          : application.status;
-      const newHistoryEntry = {
-        user_id: user?.id,
-        user_email: user?.email,
-        old_status: application.status,
-        new_status: newAppStatus,
-        action: 'master_confirmed',
-        timestamp: new Date().toISOString(),
-        details: `Подтверждено позиций: ${updatedMaterials.filter(m => m.received > 0).length}`
-      };
-      await supabase
-        .from('applications')
-        .update({
-          status: newAppStatus,
-          materials: updatedMaterials,
-          status_history: [...(application.status_history || []), newHistoryEntry],
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', application.id);
-      if (WAREHOUSE_ENABLED) {
-  for (const mat of updatedMaterials) {
-    const qty = Number(mat.received) || 0;
-    if (qty > 0) {
-      const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
-        p_company_id: userCompanyId,
-        p_item_name: (mat.description || '').trim(),
-        p_quantity: qty,
-        p_transaction_type: 'expense',
-        p_user_id: user?.id,
-        p_user_email: user?.email,
-        p_comment: `Выдача мастеру: ${application.object_name}`,
-        p_application_id: application.id,
-        p_unit: mat.unit || 'шт',
-        p_target_object_name: application.object_name,     // ← ДОБАВИТЬ
-        p_recipient_name: application.foreman_name,        // ← ДОБАВИТЬ
-        p_recipient_phone: application.foreman_phone       // ← ДОБАВИТЬ
-      });
-      
-      if (rpcError) {
-        console.error('❌ RPC ошибка выдачи:', rpcError);
-        showNotification(`⚠️ Ошибка выдачи: ${mat.description}`, 'warning');
-      }
-    }
+  // ============================================================
+// 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (ОБНОВЛЁННАЯ)
+// ============================================================
+const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
+  console.log('✅ Подтверждение мастером, items:', confirmations);
+  
+  if (!application?.id) {
+    showNotification('Ошибка: заявка не найдена', 'error');
+    return { success: false };
   }
-}
-      setApplications(prev => prev.map(app =>
-        app.id === application.id
-          ? { ...app, status: newAppStatus, materials: updatedMaterials, status_history: [...(app.status_history || []), newHistoryEntry] }
-          : app
-      ));
-      showNotification('✅ Подтверждение зафиксировано', 'success');
-      return { success: true, newAppStatus, updatedMaterials };
-    } catch (err) {
-      console.error('❌ Ошибка в handleMasterConfirm:', err);
-      showNotification('Ошибка при подтверждении: ' + err.message, 'error');
-      return { success: false, error: err };
-    }
-  }, [user, userCompanyId, WAREHOUSE_ENABLED, showNotification, setApplications]);
+  
+  try {
+    // 1. Обновляем материалы
+    const updatedMaterials = materialsFromModal.map((m, index) => {
+      const conf = confirmations.find(c => c.materialIndex === index);
+      const confirmed = conf?.action === 'confirm' ? (Number(conf.quantity) || Number(m.quantity) || 0) : 0;
+      const requested = Number(m.quantity) || 0;
+      
+      return {
+        ...m,
+        received: confirmed,
+        status: confirmed >= requested ? ITEM_STATUS.CONFIRMED :
+          confirmed > 0 ? ITEM_STATUS.SENT_TO_MASTER : ITEM_STATUS.PENDING,
+        confirmed_by_employee_at: confirmed > 0 ? new Date().toISOString() : null,
+        confirmed_by_employee_id: confirmed > 0 ? user?.id : null,
+        reject_reason: conf?.action === 'reject' ? (conf.feedback || 'Отклонено мастером') : null
+      };
+    });
+    
+    // 2. Проверяем, все ли подтверждены
+    const allConfirmed = updatedMaterials.every(m =>
+      (m.received || 0) >= (m.quantity || 0)
+    );
+    const anyConfirmed = updatedMaterials.some(m => (m.received || 0) > 0);
+    
+    const newStatus = allConfirmed
+      ? APPLICATION_STATUS.RECEIVED
+      : anyConfirmed
+        ? APPLICATION_STATUS.PARTIAL_RECEIVED
+        : application.status;
+    
+    // 3. Обновляем заявку в БД
+    const { error } = await supabase
+      .from('applications')
+      .update({
+        status: newStatus,
+        materials: updatedMaterials,
+        updated_at: new Date().toISOString(),
+        status_history: [
+          ...(application.status_history || []),
+          {
+            action: 'master_confirmed',
+            user_id: user?.id,
+            user_email: user?.email,
+            timestamp: new Date().toISOString(),
+            details: `Подтверждено позиций: ${updatedMaterials.filter(m => m.received > 0).length}`
+          }
+        ]
+      })
+      .eq('id', application.id);
+    
+    if (error) throw error;
+    
+    // 4. Обновляем UI
+    setApplications(prev => prev.map(app =>
+      app.id === application.id
+        ? { ...app, status: newStatus, materials: updatedMaterials }
+        : app
+    ));
+    
+    showNotification(`✅ Подтверждено получение ${updatedMaterials.filter(m => m.received > 0).length} позиций`, 'success');
+    setShowReceiveModal(false);
+    
+    return { success: true };
+    
+  } catch (err) {
+    console.error('❌ Ошибка подтверждения:', err);
+    showNotification('Ошибка подтверждения: ' + err.message, 'error');
+    return { success: false };
+  }
+}, [user, supabase, showNotification, setApplications]);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -6781,6 +6747,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           else if (path === '/superAdmin') setCurrentView('superAdmin');
           else if (path === '/crm-sales') setCurrentView('crm-sales');
           else if (path === '/merge') setCurrentView('merge');
+          else if (path === '/ready-to-issue') setCurrentView('readyToIssue');
           else if (path === '/search') {
             const params = new URLSearchParams(path.split('?')[1]);
             const query = params.get('q');
@@ -7275,6 +7242,56 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             isExportingXLSX={isExportingXLSX}
           />
         )}
+
+        {currentView === 'readyToIssue' && (
+  <ApplicationList
+    applications={filteredApplications.filter(app => 
+      app.status === APPLICATION_STATUS.READY_FOR_ISSUE
+    )}
+    title={t('readyToIssue') || 'Готовы к выдаче'}
+    emptyMessage={t('noApplicationsReadyToIssue') || 'Нет заявок, готовых к выдаче'}
+    isMobile={isMobile}
+    user={user}
+    userRole={userRole}
+    isAdminMode={isAdminMode}
+    permissions={currentUserPermissions}
+    t={t}
+    language={language}
+    uniqueDates={uniqueDates}
+    page={page}
+    totalPages={totalPages}
+    onAdminLogout={handleAdminLogout}
+    onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
+    onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
+    onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
+    onOpenReceiveModal={openReceiveModal}
+    onCancelApplication={cancelApplication}
+    onAddComment={addComment}
+    onToggleComments={(appId) => setShowComments(prev => ({
+      ...prev,
+      [appId]: !(prev[appId] || false)
+    }))}
+    onPageChange={setPage}
+    searchTerm={searchTerm}
+    statusFilter={statusFilter}
+    dateFilter={dateFilter}
+    viewedFilter={viewedFilter}
+    onSearchChange={setSearchTerm}
+    onStatusFilterChange={setStatusFilter}
+    onDateFilterChange={setDateFilter}
+    onViewedFilterChange={setViewedFilter}
+    onClearFilters={clearFilters}
+    expandedMaterials={expandedMaterials}
+    onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
+      ...prev,
+      [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
+    }))}
+    comments={comments}
+    showComments={showComments}
+    isExportingPDF={isExportingPDF}
+    isExportingXLSX={isExportingXLSX}
+  />
+)}
         
         {currentView === 'analytics' && renderAnalyticsDashboard()}
         
