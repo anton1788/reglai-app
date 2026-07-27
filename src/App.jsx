@@ -1006,24 +1006,68 @@ const App = () => {
   const [userCompanyId, setUserCompanyId] = useState(null);
   // ✅ ДОБАВИТЬ ЭТОТ БЛОК
 const safeSetUserCompanyId = useCallback((value) => {
+  console.log('🔍 [DEBUG] safeSetUserCompanyId called with:', value, 'type:', typeof value);
+  
   if (!value) {
+    console.warn('⚠️ [DEBUG] value is null/undefined');
     setUserCompanyId(null);
     return;
   }
+  
+  // Если это строка
   if (typeof value === 'string') {
-    setUserCompanyId(value);
-    return;
-  }
-  if (typeof value === 'object') {
-    const id = value.id || value.company_id || value._id || null;
-    if (id) {
-      setUserCompanyId(String(id));
+    // Проверяем, что это UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(value)) {
+      console.log('✅ [DEBUG] Valid UUID string:', value);
+      setUserCompanyId(value);
       return;
     }
-    setUserCompanyId(String(value));
+    console.warn('⚠️ [DEBUG] Not a valid UUID:', value);
+    setUserCompanyId(null);
     return;
   }
-  setUserCompanyId(String(value));
+  
+  // Если это объект
+  if (typeof value === 'object' && value !== null) {
+    // Пытаемся найти ID в объекте
+    const id = value.id || value.company_id || value._id || null;
+    if (id && typeof id === 'string') {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(id)) {
+        console.log('✅ [DEBUG] Found valid ID in object:', id);
+        setUserCompanyId(id);
+        return;
+      }
+    }
+    // Если не нашли ID, пробуем JSON.stringify
+    try {
+      const str = JSON.stringify(value);
+      // Проверяем, не является ли это UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(str)) {
+        console.log('✅ [DEBUG] Found UUID in JSON stringified object:', str);
+        setUserCompanyId(str);
+        return;
+      }
+      console.warn('⚠️ [DEBUG] Could not extract ID from object:', value);
+      setUserCompanyId(null);
+    } catch {
+      setUserCompanyId(null);
+    }
+    return;
+  }
+  
+  // Если это число или другой тип
+  if (typeof value === 'number') {
+    const str = String(value);
+    console.log('✅ [DEBUG] Converted number to string:', str);
+    setUserCompanyId(str);
+    return;
+  }
+  
+  console.warn('⚠️ [DEBUG] Unhandled value type:', typeof value, value);
+  setUserCompanyId(null);
 }, []);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -3912,11 +3956,22 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
   console.log('🔍 [DEBUG] handleAdminReceive started', {
     applicationId: application?.id,
     materialsCount: materialsFromModal?.length || 0,
-    userCompanyId
+    userCompanyId,
+    userCompanyIdType: typeof userCompanyId
   });
   
-  if (!application?.id) {
-    showNotification('Ошибка: заявка не найдена', 'error');
+  // ✅ ПРОВЕРКА companyId
+  let safeCompanyId = userCompanyId;
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+  }
+  if (safeCompanyId && typeof safeCompanyId !== 'string') {
+    safeCompanyId = String(safeCompanyId);
+  }
+  
+  if (!safeCompanyId || safeCompanyId === '[object Object]') {
+    console.error('❌ handleAdminReceive: неверный companyId', userCompanyId);
+    showNotification('Ошибка: компания не найдена', 'error');
     return { success: false };
   }
   
@@ -4470,17 +4525,32 @@ useEffect(() => {
   const loadApplications = useCallback(async (pageNumber = 1) => {
   // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
   let safeCompanyId = userCompanyId;
-  
+
   // Если это объект - извлекаем id
   if (safeCompanyId && typeof safeCompanyId === 'object') {
     safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
   }
-  
+
+  // Если всё ещё объект - пробуем JSON
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    try {
+      const str = JSON.stringify(safeCompanyId);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(str)) {
+        safeCompanyId = str;
+      } else {
+        safeCompanyId = null;
+      }
+    } catch {
+      safeCompanyId = null;
+    }
+  }
+
   // Приводим к строке
   if (safeCompanyId && typeof safeCompanyId !== 'string') {
     safeCompanyId = String(safeCompanyId);
   }
-  
+
   // Проверяем валидность
   if (!safeCompanyId || safeCompanyId === '[object Object]') {
     console.warn('⚠️ loadApplications: неверный companyId', userCompanyId);
@@ -4494,7 +4564,7 @@ useEffect(() => {
       return;
     }
   }
-  
+
   console.log('📊 loadApplications с companyId:', safeCompanyId);
   
   // Проверка кэша
