@@ -433,11 +433,21 @@ const getDaysSince = (dateString) => {
 };
 
 const getClientId = async (userId, companyId) => {
+  // ✅ Безопасно приводим к строке
+  const safeCompanyId = typeof companyId === 'object' 
+    ? companyId.id || companyId.company_id || String(companyId) 
+    : String(companyId || '');
+  
+  if (!safeCompanyId || safeCompanyId === '[object Object]') {
+    console.error('❌ getClientId: неверный companyId', companyId);
+    return null;
+  }
+  
   const { data } = await supabase
     .from('company_users')
     .select('id')
     .eq('user_id', userId)
-    .eq('company_id', companyId)
+    .eq('company_id', safeCompanyId)
     .eq('role', 'client')
     .single();
   return data?.id || null;
@@ -1187,7 +1197,17 @@ useEffect(() => {
 useEffect(() => {
   const loadClientId = async () => {
     if (user && userCompanyId && userRole === 'client') {
-      const id = await getClientId(user.id, userCompanyId);
+      // ✅ Безопасно получаем company_id
+      const safeCompanyId = typeof userCompanyId === 'object'
+        ? userCompanyId.id || userCompanyId.company_id || null
+        : userCompanyId;
+      
+      if (!safeCompanyId || safeCompanyId === '[object Object]') {
+        console.warn('⚠️ loadClientId: неверный companyId', userCompanyId);
+        return;
+      }
+      
+      const id = await getClientId(user.id, safeCompanyId);
       setClientId(id);
     }
   };
@@ -4482,13 +4502,37 @@ useEffect(() => {
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
-  if (!user || !userCompanyId) {
-    console.warn('⚠️ loadApplications: нет user или companyId');
-    return;
+  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
+  let safeCompanyId = userCompanyId;
+  
+  // Если это объект - извлекаем id
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
   }
   
+  // Приводим к строке
+  if (safeCompanyId && typeof safeCompanyId !== 'string') {
+    safeCompanyId = String(safeCompanyId);
+  }
+  
+  // Проверяем валидность
+  if (!safeCompanyId || safeCompanyId === '[object Object]') {
+    console.warn('⚠️ loadApplications: неверный companyId', userCompanyId);
+    // Пытаемся восстановить из метаданных
+    const metaId = user?.user_metadata?.company_id;
+    if (metaId) {
+      safeCompanyId = String(metaId);
+      safeSetUserCompanyId(metaId);
+    } else {
+      setIsLoading(false);
+      return;
+    }
+  }
+  
+  console.log('📊 loadApplications с companyId:', safeCompanyId);
+  
   // Проверка кэша
-  const cacheKey = `applications_${userCompanyId}_page_${pageNumber}`;
+  const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}`;
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
     setApplications(cached.userApps);
@@ -4501,34 +4545,30 @@ useEffect(() => {
   
   setIsLoading(true);
   try {
-    // ✅ 1. Сначала получаем ТОЛЬКО количество
+    // ✅ 1. Получаем количество
     const { count, error: countError } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
-      .eq('company_id', userCompanyId);
+      .eq('company_id', safeCompanyId);
     
     if (countError) throw countError;
     
-    // ✅ 2. Вычисляем totalPages
     const calculatedTotalPages = Math.max(1, Math.ceil(count / ITEMS_PER_PAGE));
     setTotalPages(calculatedTotalPages);
     
-    // ✅ 3. Корректируем pageNumber если нужно
     let safePage = pageNumber;
     if (safePage > calculatedTotalPages) {
       safePage = 1;
       setPage(1);
     }
     
-    // ✅ 4. Вычисляем правильный range
     const from = (safePage - 1) * ITEMS_PER_PAGE;
     const to = Math.min(safePage * ITEMS_PER_PAGE - 1, count - 1);
     
-    // ✅ 5. Запрос с правильным range
     let query = supabase
       .from('applications')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', safeCompanyId)
       .order('created_at', { ascending: false })
       .range(from, to > 0 ? to : 0);
     
@@ -4544,7 +4584,7 @@ useEffect(() => {
     const { data: usersData } = await supabase
       .from('company_users')
       .select('user_id, created_at, full_name, role')
-      .eq('company_id', userCompanyId);
+      .eq('company_id', safeCompanyId);
     
     let commentsMap = {};
     if (usersData) setCompanyUsers(usersData);
@@ -4572,7 +4612,7 @@ useEffect(() => {
       const { data: allApps = [] } = await supabase
         .from('applications')
         .select('id, status, created_at, object_name, materials')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', safeCompanyId)
         .order('created_at', { ascending: false })
         .limit(500);
       setAllApplications(allApps || []);

@@ -439,6 +439,30 @@ const ReceiveModal = memo(function({
   // eslint-disable-next-line no-unused-vars
   onQRClick,
 }) {
+  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID КОМПАНИИ
+  const safeCompanyId = useMemo(() => {
+    if (!userCompanyId) return null;
+    
+    // Если это объект - достаем id
+    if (typeof userCompanyId === 'object' && userCompanyId !== null) {
+      const id = userCompanyId.id || userCompanyId.company_id || userCompanyId._id || null;
+      if (id) return String(id);
+      // Если нет полей, пробуем сериализовать
+      try {
+        const str = JSON.stringify(userCompanyId);
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
+          return str;
+        }
+      } catch {
+        // Игнорируем ошибки сериализации
+      }
+      return null;
+    }
+    
+    // Если это строка или число
+    return String(userCompanyId);
+  }, [userCompanyId]);
+  
   const { shouldHidePrices, isMaster } = usePriceVisibility(userRole);
   
   // ─────────────────────────────────────────────────────────
@@ -628,6 +652,13 @@ const ReceiveModal = memo(function({
   
   // Обработка QR
   const handleQRScan = useCallback(function(qrData) {
+    // ✅ Проверяем, что company_id валидный
+    if (!safeCompanyId) {
+      console.error('❌ QRScan: нет валидного companyId');
+      if (showNotification) showNotification('Ошибка: компания не найдена', 'error');
+      return;
+    }
+    
     try {
       const parts = qrData.split('|');
       const materialName = parts[0];
@@ -658,7 +689,7 @@ const ReceiveModal = memo(function({
       console.error('QR parse error:', err);
       if (showNotification) showNotification('Неверный формат QR-кода', 'error');
     }
-  }, [selectedApplication, localMaterials, showNotification]);
+  }, [selectedApplication, localMaterials, showNotification, safeCompanyId]);
   
   // Обработка фото
   const handlePhotoCapture = useCallback(function(capturedPhotos) {
@@ -1243,7 +1274,7 @@ const ReceiveModal = memo(function({
           onClose={function() { setShowQRScanner(false); }}
           language={language}
           applicationId={selectedApplication ? selectedApplication.id : null}
-          companyId={userCompanyId}
+          companyId={safeCompanyId}
         />
       )}
       
@@ -1258,7 +1289,7 @@ const ReceiveModal = memo(function({
           maxPhotos={10}
           applicationId={selectedApplication ? selectedApplication.id : null}
           materialIndex={currentMaterialIndex}
-          companyId={userCompanyId}
+          companyId={safeCompanyId}
           userId={userId}
           showNotification={showNotification}
         />

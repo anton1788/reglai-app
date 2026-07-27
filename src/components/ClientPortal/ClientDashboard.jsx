@@ -15,14 +15,28 @@ const ClientDashboard = ({ clientId, t }) => {
   const [selectedApplication, setSelectedApplication] = useState(null);
 
   const loadData = useCallback(async () => {
-  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
-  const safeClientId = clientId && typeof clientId === 'object' 
-    ? clientId.id || null 
-    : clientId;
+  // ✅ УСИЛЕННАЯ ПРОВЕРКА
+  let safeClientId = clientId;
   
-  // ✅ Если нет ID - выходим
   if (!safeClientId) {
-    console.warn('⚠️ ClientDashboard: нет clientId', { clientId });
+    console.warn('⚠️ ClientDashboard: clientId пуст');
+    setLoading(false);
+    return;
+  }
+  
+  // Если это объект - пытаемся достать id
+  if (typeof safeClientId === 'object' && safeClientId !== null) {
+    safeClientId = safeClientId.id || safeClientId.client_id || null;
+  }
+  
+  // Если это не строка - приводим
+  if (safeClientId && typeof safeClientId !== 'string') {
+    safeClientId = String(safeClientId);
+  }
+  
+  // Проверяем, что это валидный UUID
+  if (safeClientId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(safeClientId)) {
+    console.warn('⚠️ ClientDashboard: неверный формат clientId', safeClientId);
     setLoading(false);
     return;
   }
@@ -32,11 +46,11 @@ const ClientDashboard = ({ clientId, t }) => {
     const { data: apps, error } = await supabase
       .from('applications')
       .select('*')
-      .eq('client_id', safeClientId)  // ← используем safeClientId
+      .eq('client_id', safeClientId)
       .order('created_at', { ascending: false });
       
-      if (error) throw error;
-      setApplications(apps || []);
+    if (error) throw error;
+    setApplications(apps || []);
       
       // Статистика
       const completed = apps?.filter(a => a.status === 'received').length || 0;
@@ -44,12 +58,12 @@ const ClientDashboard = ({ clientId, t }) => {
       const pendingConfirmation = apps?.filter(a => a.status === 'pending_master_confirmation').length || 0;
       
       setStats({ total: apps?.length || 0, completed, inProgress, pendingConfirmation });
-    } catch (err) {
-      console.error('Ошибка загрузки:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [clientId]);
+     } catch (err) {
+    console.error('Ошибка загрузки:', err);
+  } finally {
+    setLoading(false);
+  }
+}, [clientId]);
 
   useEffect(() => {
     loadData();
