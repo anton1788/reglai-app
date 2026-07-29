@@ -1658,7 +1658,22 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
         setUser(session.user);
         setUserRole(role);
         setUserCompany(company_name);
-        safeSetUserCompanyId(company_id);
+        // ✅ ПРИНУДИТЕЛЬНОЕ ПРИВЕДЕНИЕ К СТРОКЕ
+let safeCompanyId = company_id;
+if (safeCompanyId && typeof safeCompanyId === 'object') {
+  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+}
+if (safeCompanyId && typeof safeCompanyId !== 'string') {
+  safeCompanyId = String(safeCompanyId);
+}
+if (!safeCompanyId || safeCompanyId === '[object Object]') {
+  console.error('❌ checkSession: неверный company_id', company_id);
+  showNotification('Ошибка: компания не найдена', 'error');
+  await supabase.auth.signOut();
+  return;
+}
+console.log('✅ checkSession: safeCompanyId =', safeCompanyId);
+safeSetUserCompanyId(safeCompanyId);
         if (company_id && session?.user?.id) {
           const { data: companyData, error: ownerError } = await supabase
             .from('companies')
@@ -1706,7 +1721,22 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
               setUser(newSession.user);
               setUserRole(role);
               setUserCompany(company_name);
-              safeSetUserCompanyId(company_id);
+              // ✅ ПРИНУДИТЕЛЬНОЕ ПРИВЕДЕНИЕ К СТРОКЕ
+let safeCompanyId = company_id;
+if (safeCompanyId && typeof safeCompanyId === 'object') {
+  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+}
+if (safeCompanyId && typeof safeCompanyId !== 'string') {
+  safeCompanyId = String(safeCompanyId);
+}
+if (!safeCompanyId || safeCompanyId === '[object Object]') {
+  console.error('❌ checkSession (setSession): неверный company_id', company_id);
+  showNotification('Ошибка: компания не найдена', 'error');
+  await supabase.auth.signOut();
+  return;
+}
+console.log('✅ checkSession (setSession): safeCompanyId =', safeCompanyId);
+safeSetUserCompanyId(safeCompanyId);
               if (company_id && newSession?.user?.id) {
                 const { data: companyData, error: ownerError } = await supabase
                   .from('companies')
@@ -1763,7 +1793,22 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
         setUser(session.user);
         setUserRole(role);
         setUserCompany(company_name);
-        safeSetUserCompanyId(company_id);
+            // ✅ ПРИНУДИТЕЛЬНОЕ ПРИВЕДЕНИЕ К СТРОКЕ
+    let safeCompanyId = company_id;
+    if (safeCompanyId && typeof safeCompanyId === 'object') {
+      safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+    }
+    if (safeCompanyId && typeof safeCompanyId !== 'string') {
+      safeCompanyId = String(safeCompanyId);
+    }
+    if (!safeCompanyId || safeCompanyId === '[object Object]') {
+      console.error('❌ onAuthStateChange: неверный company_id', company_id);
+      showNotification('Ошибка: компания не найдена', 'error');
+      supabase.auth.signOut();
+      return;
+    }
+    console.log('✅ onAuthStateChange: safeCompanyId =', safeCompanyId);
+    safeSetUserCompanyId(safeCompanyId);
         setProfileDataForHeader({
           fullName: metadata.full_name || '',
           phone: metadata.phone || ''
@@ -4310,10 +4355,21 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
   }
   
   // Проверяем, что company_id валидный (если он понадобится)
-  if (!safeCompanyId || safeCompanyId === '[object Object]') {
-    console.warn('⚠️ handleMasterConfirm: неверный companyId', userCompanyId);
-    // Не блокируем выполнение, но логируем предупреждение
+  // handleMasterConfirm - ИСПРАВЛЕННЫЙ КОД
+if (!safeCompanyId || safeCompanyId === '[object Object]') {
+  console.warn('⚠️ handleMasterConfirm: неверный companyId', userCompanyId);
+  // Пытаемся восстановить из метаданных
+  const metaId = user?.user_metadata?.company_id;
+  if (metaId) {
+    safeCompanyId = String(metaId);
+    safeSetUserCompanyId(metaId);
+    console.log('✅ handleMasterConfirm: восстановлен companyId =', safeCompanyId);
+  } else {
+    // Если не удалось восстановить - блокируем выполнение
+    showNotification('Ошибка: компания не найдена', 'error');
+    return { success: false };
   }
+}
   
   try {
     // 1. Обновляем материалы
@@ -4604,21 +4660,23 @@ useEffect(() => {
   }
   
   // Проверяем валидность
-  if (!safeCompanyId || safeCompanyId === '[object Object]') {
-    console.warn('⚠️ loadApplications: неверный companyId', userCompanyId);
-    // Пытаемся восстановить из метаданных
-    const metaId = user?.user_metadata?.company_id;
-    console.log('🔍 loadApplications: metaId из user_metadata =', metaId);
-    if (metaId) {
-      safeCompanyId = String(metaId);
-      safeSetUserCompanyId(metaId);
-      console.log('✅ loadApplications: восстановлен companyId из метаданных =', safeCompanyId);
-    } else {
-      console.error('❌ loadApplications: нет валидного companyId');
-      setIsLoading(false);
-      return;
-    }
+  // Проверяем валидность
+if (!safeCompanyId || safeCompanyId === '[object Object]') {
+  console.warn('⚠️ loadApplications: неверный companyId', userCompanyId);
+  // Пытаемся восстановить из метаданных
+  const metaId = user?.user_metadata?.company_id;
+  console.log('🔍 loadApplications: metaId из user_metadata =', metaId);
+  if (metaId) {
+    safeCompanyId = String(metaId);
+    // ✅ ДОБАВИТЬ ЭТУ СТРОКУ
+    safeSetUserCompanyId(metaId);
+    console.log('✅ loadApplications: восстановлен и сохранён companyId =', safeCompanyId);
+  } else {
+    console.error('❌ loadApplications: нет валидного companyId');
+    setIsLoading(false);
+    return;
   }
+}
   
   console.log('📊 loadApplications: итоговый safeCompanyId =', safeCompanyId);
   
