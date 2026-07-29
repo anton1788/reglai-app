@@ -1,5 +1,5 @@
 // ✅ Единая точка управления версией приложения
-export const APP_VERSION = '21.30.30-beta';
+export const APP_VERSION = '22.30.30-beta';
 
 export const APP_CONFIG = {
   version: APP_VERSION,

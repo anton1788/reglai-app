@@ -1283,6 +1283,14 @@ const [showConsentUpdate, setShowConsentUpdate] = useState(false);
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK
 // ─────────────────────────────────────────────────────────
+const safeCompanyIdForApproval = useMemo(() => {
+  if (!userCompanyId) return null;
+  if (typeof userCompanyId === 'object') {
+    return userCompanyId.id || userCompanyId.company_id || null;
+  }
+  return userCompanyId;
+}, [userCompanyId]);
+
 const {
   pendingApprovals,
   approvalHistory,
@@ -1290,9 +1298,7 @@ const {
   approveApplication,
   rejectApplication,
   escalateApplication,
-  // eslint-disable-next-line no-unused-vars
-  requiresApproval
-} = useApproval(userCompanyId, user?.id, userRole);
+} = useApproval(safeCompanyIdForApproval, user?.id, userRole);
 
   // ─────────────────────────────────────────────────────────
   // 🎨 INJECT GLOBAL STYLES (Pattern #1)
@@ -1895,25 +1901,34 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   // 📤 SEND OFFLINE DRAFTS
   // ─────────────────────────────────────────────────────────
   const sendWithRetry = useCallback(async (draft, maxRetries = 5) => {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const application = {
-          object_name: draft.objectName,
-          foreman_name: draft.foremanName,
-          foreman_phone: draft.foremanPhone,
-          materials: draft.materials.map(m => ({ ...m, received: 0, status: 'pending' })),
-          status: 'pending',
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id
+      let safeCompanyId = userCompanyId;
+      if (safeCompanyId && typeof safeCompanyId === 'object') {
+        safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+      }
+      if (safeCompanyId && typeof safeCompanyId !== 'string') {
+        safeCompanyId = String(safeCompanyId);
+      }
+      
+      const application = {
+        object_name: draft.objectName,
+        foreman_name: draft.foremanName,
+        foreman_phone: draft.foremanPhone,
+        materials: draft.materials.map(m => ({ ...m, received: 0, status: 'pending' })),
+        status: 'pending',
+        user_id: user?.id,
+        company_id: safeCompanyId,  // ← ИСПОЛЬЗУЕМ БЕЗОПАСНЫЙ ID
+        created_at: draft.timestamp || new Date().toISOString(),
+        status_history: [{
           user_id: user?.id,
-          company_id: userCompanyId,
-          created_at: draft.timestamp || new Date().toISOString(),
-          status_history: [{
-            user_id: user?.id,
-            user_email: user?.email,
-            action: 'created_from_draft',
-            timestamp: new Date().toISOString()
-          }],
-          viewed_by_supply_admin: false
-        };
+          user_email: user?.email,
+          action: 'created_from_draft',
+          timestamp: new Date().toISOString()
+        }],
+        viewed_by_supply_admin: false
+      };
         // 🕐 Замер времени для логирования
         const { data, error } = await supabase
           .from('applications')
@@ -2942,7 +2957,16 @@ const handleSubmit = async (e) => {
   }
   
   const sessionUser = session.user;
-  const safeCompanyId = sessionUser.user_metadata?.company_id || userCompanyId;
+  
+  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id
+  let safeCompanyId = sessionUser.user_metadata?.company_id || userCompanyId;
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+  }
+  if (safeCompanyId && typeof safeCompanyId !== 'string') {
+    safeCompanyId = String(safeCompanyId);
+  }
+  
   const safeCompany = sessionUser.user_metadata?.company_name?.trim() || userCompany;
   
   if (!safeCompanyId) {
@@ -3000,7 +3024,7 @@ const handleSubmit = async (e) => {
     materials: materialsWithTracking,
     status: initialStatus,
     user_id: sessionUser.id,
-    company_id: safeCompanyId,
+    company_id: safeCompanyId,  // ← ИСПОЛЬЗУЕМ БЕЗОПАСНЫЙ ID
     client_id: selectedClientId || null,
     created_at: new Date().toISOString(),
     total_amount: totalAmount,
@@ -3929,6 +3953,21 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     return { success: false };
   }
   
+  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id
+  let safeCompanyId = userCompanyId;
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+  }
+  if (safeCompanyId && typeof safeCompanyId !== 'string') {
+    safeCompanyId = String(safeCompanyId);
+  }
+  
+  if (!safeCompanyId || safeCompanyId === '[object Object]') {
+    console.error('❌ handleAdminReceive: неверный companyId', userCompanyId);
+    showNotification('Ошибка: компания не указана', 'error');
+    return { success: false };
+  }
+  
   try {
     // 1. Формируем данные для RPC
     const receiveItems = materialsFromModal.map(m => ({
@@ -3946,7 +3985,7 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     // 2. Вызываем RPC функцию receive_materials
     const { data, error } = await supabase.rpc('receive_materials', {
       p_application_id: application.id,
-      p_company_id: userCompanyId,
+      p_company_id: safeCompanyId,  // ← ИСПОЛЬЗУЕМ БЕЗОПАСНЫЙ ID
       p_user_id: user?.id,
       p_user_email: user?.email,
       p_materials: receiveItems,
@@ -4100,6 +4139,21 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
     return { success: false };
   }
   
+  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id
+  let safeCompanyId = userCompanyId;
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+  }
+  if (safeCompanyId && typeof safeCompanyId !== 'string') {
+    safeCompanyId = String(safeCompanyId);
+  }
+  
+  if (!safeCompanyId || safeCompanyId === '[object Object]') {
+    console.error('❌ handleSendToMaster: неверный companyId', userCompanyId);
+    showNotification('Ошибка: компания не указана', 'error');
+    return { success: false };
+  }
+  
   try {
     // 1. Обновляем материалы в заявке
     const updatedMaterials = application.materials.map(original => {
@@ -4158,7 +4212,7 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
         const qtyToSend = Number(item.quantityToSend) || 0;
         if (qtyToSend > 0) {
           await supabase.rpc('update_warehouse_balance', {
-            p_company_id: userCompanyId,
+            p_company_id: safeCompanyId,  // ← ИСПОЛЬЗУЕМ БЕЗОПАСНЫЙ ID
             p_item_name: (item.description || item.item_name || '').trim(),
             p_quantity: qtyToSend,
             p_transaction_type: 'expense',
@@ -4200,9 +4254,24 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
 const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
   console.log('✅ Подтверждение мастером, items:', confirmations);
   
+  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id (на всякий случай)
+  let safeCompanyId = userCompanyId;
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+  }
+  if (safeCompanyId && typeof safeCompanyId !== 'string') {
+    safeCompanyId = String(safeCompanyId);
+  }
+  
   if (!application?.id) {
     showNotification('Ошибка: заявка не найдена', 'error');
     return { success: false };
+  }
+  
+  // Проверяем, что company_id валидный (если он понадобится)
+  if (!safeCompanyId || safeCompanyId === '[object Object]') {
+    console.warn('⚠️ handleMasterConfirm: неверный companyId', userCompanyId);
+    // Не блокируем выполнение, но логируем предупреждение
   }
   
   try {
