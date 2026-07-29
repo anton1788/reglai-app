@@ -3945,7 +3945,8 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
   console.log('🔍 [DEBUG] handleAdminReceive started', {
     applicationId: application?.id,
     materialsCount: materialsFromModal?.length || 0,
-    userCompanyId
+    userCompanyId,
+    userCompanyIdType: typeof userCompanyId
   });
   
   if (!application?.id) {
@@ -3953,20 +3954,49 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     return { success: false };
   }
   
-  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id
-  let safeCompanyId = userCompanyId;
-  if (safeCompanyId && typeof safeCompanyId === 'object') {
-    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-  }
-  if (safeCompanyId && typeof safeCompanyId !== 'string') {
-    safeCompanyId = String(safeCompanyId);
+  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id С ПРОВЕРКОЙ
+  let safeCompanyId = null;
+  
+  // 1. Пытаемся получить из userCompanyId
+  if (userCompanyId) {
+    if (typeof userCompanyId === 'string') {
+      safeCompanyId = userCompanyId;
+    } else if (typeof userCompanyId === 'object') {
+      safeCompanyId = userCompanyId.id || userCompanyId.company_id || null;
+    }
   }
   
+  // 2. Если не получилось - пробуем из метаданных пользователя
   if (!safeCompanyId || safeCompanyId === '[object Object]') {
-    console.error('❌ handleAdminReceive: неверный companyId', userCompanyId);
-    showNotification('Ошибка: компания не указана', 'error');
+    safeCompanyId = user?.user_metadata?.company_id || null;
+    if (safeCompanyId && typeof safeCompanyId !== 'string') {
+      safeCompanyId = String(safeCompanyId);
+    }
+  }
+  
+  // 3. Если всё ещё null - пробуем из application
+  if (!safeCompanyId || safeCompanyId === '[object Object]') {
+    safeCompanyId = application.company_id || null;
+    if (safeCompanyId && typeof safeCompanyId !== 'string') {
+      safeCompanyId = String(safeCompanyId);
+    }
+  }
+  
+  // 4. Финальная проверка
+  if (!safeCompanyId || safeCompanyId === '[object Object]' || safeCompanyId === 'null' || safeCompanyId === 'undefined') {
+    console.error('❌ handleAdminReceive: не удалось получить валидный companyId', {
+      userCompanyId,
+      userMetadata: user?.user_metadata,
+      applicationCompanyId: application.company_id
+    });
+    showNotification('Ошибка: идентификатор компании не найден. Выйдите и войдите заново.', 'error');
     return { success: false };
   }
+  
+  // Приводим к строке на всякий случай
+  safeCompanyId = String(safeCompanyId);
+  
+  console.log('✅ handleAdminReceive: safeCompanyId =', safeCompanyId);
   
   try {
     // 1. Формируем данные для RPC
@@ -3983,16 +4013,27 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     }
     
     // 2. Вызываем RPC функцию receive_materials
+    console.log('📤 Вызов receive_materials с параметрами:', {
+      p_application_id: application.id,
+      p_company_id: safeCompanyId,
+      p_user_id: user?.id,
+      p_materials_count: receiveItems.length
+    });
+    
     const { data, error } = await supabase.rpc('receive_materials', {
       p_application_id: application.id,
-      p_company_id: safeCompanyId,  // ← ИСПОЛЬЗУЕМ БЕЗОПАСНЫЙ ID
+      p_company_id: safeCompanyId,  // ← ТЕПЕРЬ ТОЧНО СТРОКА
       p_user_id: user?.id,
       p_user_email: user?.email,
       p_materials: receiveItems,
       p_invoice_url: materialsFromModal[0]?.invoice_url || null
     });
     
-    if (error) throw error;
+    if (error) {
+      console.error('❌ RPC ошибка:', error);
+      showNotification('Ошибка приёмки: ' + error.message, 'error');
+      return { success: false };
+    }
     
     if (data?.success) {
       // 3. Обновляем локальное состояние
@@ -4549,9 +4590,12 @@ useEffect(() => {
   // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
   let safeCompanyId = userCompanyId;
   
+  console.log('🔍 loadApplications: исходный userCompanyId =', userCompanyId, 'тип:', typeof userCompanyId);
+  
   // Если это объект - извлекаем id
   if (safeCompanyId && typeof safeCompanyId === 'object') {
     safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+    console.log('🔍 loadApplications: извлечено из объекта =', safeCompanyId);
   }
   
   // Приводим к строке
@@ -4564,26 +4608,19 @@ useEffect(() => {
     console.warn('⚠️ loadApplications: неверный companyId', userCompanyId);
     // Пытаемся восстановить из метаданных
     const metaId = user?.user_metadata?.company_id;
+    console.log('🔍 loadApplications: metaId из user_metadata =', metaId);
     if (metaId) {
       safeCompanyId = String(metaId);
       safeSetUserCompanyId(metaId);
+      console.log('✅ loadApplications: восстановлен companyId из метаданных =', safeCompanyId);
     } else {
       console.error('❌ loadApplications: нет валидного companyId');
       setIsLoading(false);
       return;
     }
   }
-
-  // ✅ ПРОВЕРКА user.id ДЛЯ МАСТЕРА
-  if (userRole === 'master' && !user?.id) {
-    console.warn('⚠️ loadApplications: мастер без user.id, ждем загрузки...');
-    // Если user ещё не загружен, выходим - данные подгрузятся позже
-    setIsLoading(false);
-    return;
-  }
   
-  console.log('📊 loadApplications с companyId:', safeCompanyId);
-  console.log('📊 userRole:', userRole, 'userId:', user?.id);
+  console.log('📊 loadApplications: итоговый safeCompanyId =', safeCompanyId);
   
   // Проверка кэша
   const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}_${userRole}`;
