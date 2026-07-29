@@ -729,7 +729,7 @@ const ReceiveModal = memo(function({
     });
     if (showNotification) showNotification('Добавлено ' + photosArray.length + ' фото для материала', 'success');
     setCurrentMaterialIndex(null);
-  }, [currentMaterialIndex, localMaterials, showNotification]);
+  }, [currentMaterialIndex, localMaterials, showNotification, safeCompanyId]);
   
   // Открыть фото для конкретного материала
   const handleOpenPhotoForMaterial = useCallback(function(materialIndex) {

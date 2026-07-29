@@ -434,9 +434,13 @@ const getDaysSince = (dateString) => {
 
 const getClientId = async (userId, companyId) => {
   // ✅ Безопасно приводим к строке
-  const safeCompanyId = typeof companyId === 'object' 
-    ? companyId.id || companyId.company_id || String(companyId) 
-    : String(companyId || '');
+  let safeCompanyId = companyId;
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+  }
+  if (safeCompanyId && typeof safeCompanyId !== 'string') {
+    safeCompanyId = String(safeCompanyId);
+  }
   
   if (!safeCompanyId || safeCompanyId === '[object Object]') {
     console.error('❌ getClientId: неверный companyId', companyId);
@@ -1619,6 +1623,11 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
         const company_id = metadata?.company_id;
         const company_name = metadata?.company_name?.trim();
         if (company_id) {
+           console.log('🔍 [DEBUG] company_id из метаданных:', company_id, 'тип:', typeof company_id);
+  if (company_id && typeof company_id === 'object') {
+    console.warn('⚠️ company_id является объектом!', company_id);
+    console.warn('⚠️ Доступные поля:', Object.keys(company_id));
+  }
           try {
             const { data: companyData } = await supabase
               .from('companies')
@@ -2478,7 +2487,7 @@ const checkForUpdates = useCallback(async () => {
         password: signupPassword,
         options: {
           data: {
-            company_id: targetCompanyId,
+            company_id: String(targetCompanyId),
             company_name: invitedCompanyName || signupCompanyName.trim(),
             role: finalRole,
             full_name: signupFullName,
@@ -2496,7 +2505,7 @@ if (authData?.user) {
   if (!userData?.user?.user_metadata?.company_id) {
     await supabase.auth.updateUser({
       data: {
-        company_id: targetCompanyId,
+        company_id: String(targetCompanyId),
         company_name: invitedCompanyName || signupCompanyName.trim(),
         role: finalRole,
         full_name: signupFullName,
@@ -4673,14 +4682,23 @@ useEffect(() => {
 // 💰 Load company plan & quota (ОБНОВЛЁННАЯ ВЕРСИЯ)
 useEffect(() => {
   const loadPlan = async () => {
-    // 🔒 Супер-админ: не загружаем тариф компании
     if (isSuperAdmin(userRole, user?.user_metadata)) {
       setCurrentPlan(null);
       setPlanLoading(false);
       return;
     }
     
-    if (!userCompanyId || !supabase) {
+    // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
+    let safeCompanyId = userCompanyId;
+    if (safeCompanyId && typeof safeCompanyId === 'object') {
+      safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+    }
+    if (safeCompanyId && typeof safeCompanyId !== 'string') {
+      safeCompanyId = String(safeCompanyId);
+    }
+    
+    if (!safeCompanyId || safeCompanyId === '[object Object]') {
+      console.warn('⚠️ loadPlan: неверный companyId');
       setPlanLoading(false);
       return;
     }
@@ -4688,11 +4706,10 @@ useEffect(() => {
     try {
       setPlanLoading(true);
       
-      // Загружаем данные компании
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .select('plan_tier, plan_activated_at, plan_expires_at, trial_started_at, trial_ended_at, promo_code_used, promo_applied_at, promo_discount_percent')
-        .eq('id', userCompanyId)
+        .eq('id', safeCompanyId)
         .single();
       
       if (companyError) throw companyError;
