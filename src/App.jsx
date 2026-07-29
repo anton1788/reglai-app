@@ -4499,15 +4499,25 @@ useEffect(() => {
       safeCompanyId = String(metaId);
       safeSetUserCompanyId(metaId);
     } else {
+      console.error('❌ loadApplications: нет валидного companyId');
       setIsLoading(false);
       return;
     }
   }
+
+  // ✅ ПРОВЕРКА user.id ДЛЯ МАСТЕРА
+  if (userRole === 'master' && !user?.id) {
+    console.warn('⚠️ loadApplications: мастер без user.id, ждем загрузки...');
+    // Если user ещё не загружен, выходим - данные подгрузятся позже
+    setIsLoading(false);
+    return;
+  }
   
   console.log('📊 loadApplications с companyId:', safeCompanyId);
+  console.log('📊 userRole:', userRole, 'userId:', user?.id);
   
   // Проверка кэша
-  const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}`;
+  const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}_${userRole}`;
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
     setApplications(cached.userApps);
@@ -4547,8 +4557,13 @@ useEffect(() => {
       .order('created_at', { ascending: false })
       .range(from, to > 0 ? to : 0);
     
-    if (userRole === 'master') query = query.eq('user_id', user?.id);
-    if (userRole === 'accountant') query = query.eq('status', 'received');
+    // ✅ ФИЛЬТРАЦИЯ ПО РОЛИ С ПРОВЕРКОЙ
+    if (userRole === 'master' && user?.id) {
+      query = query.eq('user_id', user.id);
+    }
+    if (userRole === 'accountant') {
+      query = query.eq('status', 'received');
+    }
     
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
@@ -4607,7 +4622,7 @@ useEffect(() => {
   } finally {
     setIsLoading(false);
   }
-}, [user, userCompanyId, userRole, isAdminMode, showNotification]);
+}, [user, userCompanyId, userRole, isAdminMode, showNotification, safeSetUserCompanyId]);
 
   // 📩 ЗАГРУЗКА УВЕДОМЛЕНИЙ (ВСТАВИТЬ ПОСЛЕ loadApplications)
   const loadNotifications = useCallback(async () => {
@@ -7993,7 +8008,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     />
   </div>
 )}
-// Модальные окна юридических документов
+
 {showPublicOffer && (
   <PublicOfferModal
     isOpen={showPublicOffer}
