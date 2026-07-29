@@ -4536,81 +4536,119 @@ if (!safeCompanyId || safeCompanyId === '[object Object]') {
     fetchSettings();
   }, []);
 
-  // ─────────────────────────────────────────────────────────
-  // 👥 LOAD EMPLOYEES
-  // ─────────────────────────────────────────────────────────
-  const loadEmployees = useCallback(async () => {
-    if (userRole !== 'manager' || !userCompanyId) return;
-    setLoadingEmployees(true);
-    try {
-      const { data: currentEmployees, error: loadError } = await supabase
-        .from('company_users')
-        .select('*')
-        .eq('company_id', userCompanyId);
-      if (!loadError && currentEmployees && currentEmployees.length > 0) {
-        setEmployees(currentEmployees);
-        return;
-      }
-      const { data: apps, error: appsError } = await supabase
-        .from('applications')
-        .select('user_id, foreman_name, foreman_phone')
-        .eq('company_id', userCompanyId)
-        .not('user_id', 'eq', user?.id);
-      if (appsError) {
-        console.error('Ошибка загрузки заявок для миграции:', appsError);
-        setEmployees([]);
-        return;
-      }
-      const uniqueUsers = new Map();
-      apps.forEach(app => {
-        if (app.user_id && !uniqueUsers.has(app.user_id)) {
-          uniqueUsers.set(app.user_id, {
-            user_id: app.user_id,
-            company_id: userCompanyId,
-            full_name: app.foreman_name?.trim() || '—',
-            phone: app.foreman_phone || '—',
-            role: 'foreman',
-            is_active: true
-          });
-        }
-      });
-      if (uniqueUsers.size > 0) {
-        const usersToAdd = Array.from(uniqueUsers.values());
-        const { error: insertError } = await supabase
-          .from('company_users')
-          .insert(usersToAdd);
-        if (insertError) {
-          console.warn('Частичная ошибка добавления сотрудников:', insertError);
-        }
-      }
-      const { data: updatedEmployees } = await supabase
-        .from('company_users')
-        .select('*')
-        .eq('company_id', userCompanyId)
-        .neq('user_id', user?.id);
-      setEmployees(updatedEmployees || []);
-    } catch (err) {
-      console.error('Критическая ошибка загрузки сотрудников:', err);
+  // 👥 LOAD EMPLOYEES - ИСПРАВЛЕННАЯ ВЕРСИЯ
+const loadEmployees = useCallback(async () => {
+  if (userRole !== 'manager' || !userCompanyId) return;
+  
+  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ ID
+  let safeCompanyId = userCompanyId;
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+  }
+  if (safeCompanyId && typeof safeCompanyId !== 'string') {
+    safeCompanyId = String(safeCompanyId);
+  }
+  
+  // ✅ Если ID невалидный - пытаемся восстановить из метаданных
+  if (!safeCompanyId || safeCompanyId === '[object Object]') {
+    const metaId = user?.user_metadata?.company_id;
+    if (metaId) {
+      safeCompanyId = String(metaId);
+      safeSetUserCompanyId(metaId);
+      console.log('✅ loadEmployees: восстановлен companyId =', safeCompanyId);
+    } else {
+      console.error('❌ loadEmployees: нет валидного companyId');
+      return;
+    }
+  }
+  
+  setLoadingEmployees(true);
+  try {
+    // ✅ ИСПОЛЬЗУЕМ БЕЗОПАСНЫЙ ID
+    const { data: currentEmployees, error: loadError } = await supabase
+      .from('company_users')
+      .select('*')
+      .eq('company_id', safeCompanyId);  // ← ИСПРАВЛЕНО
+    
+    if (!loadError && currentEmployees && currentEmployees.length > 0) {
+      setEmployees(currentEmployees);
+      return;
+    }
+    
+    const { data: apps, error: appsError } = await supabase
+      .from('applications')
+      .select('user_id, foreman_name, foreman_phone')
+      .eq('company_id', safeCompanyId)  // ← ИСПРАВЛЕНО
+      .not('user_id', 'eq', user?.id);
+    
+    if (appsError) {
+      console.error('Ошибка загрузки заявок для миграции:', appsError);
       setEmployees([]);
-    } finally {
-      setLoadingEmployees(false);
+      return;
     }
-  }, [userRole, userCompanyId, user]);
-
-  useEffect(() => {
-    if (currentView === 'employees') {
-      loadEmployees();
+    
+    const uniqueUsers = new Map();
+    apps.forEach(app => {
+      if (app.user_id && !uniqueUsers.has(app.user_id)) {
+        uniqueUsers.set(app.user_id, {
+          user_id: app.user_id,
+          company_id: safeCompanyId,  // ← ИСПРАВЛЕНО
+          full_name: app.foreman_name?.trim() || '—',
+          phone: app.foreman_phone || '—',
+          role: 'foreman',
+          is_active: true
+        });
+      }
+    });
+    
+    if (uniqueUsers.size > 0) {
+      const usersToAdd = Array.from(uniqueUsers.values());
+      const { error: insertError } = await supabase
+        .from('company_users')
+        .insert(usersToAdd);
+      if (insertError) {
+        console.warn('Частичная ошибка добавления сотрудников:', insertError);
+      }
     }
-  }, [currentView, loadEmployees]);
+    
+    const { data: updatedEmployees } = await supabase
+      .from('company_users')
+      .select('*')
+      .eq('company_id', safeCompanyId)  // ← ИСПРАВЛЕНО
+      .neq('user_id', user?.id);
+    setEmployees(updatedEmployees || []);
+  } catch (err) {
+    console.error('Критическая ошибка загрузки сотрудников:', err);
+    setEmployees([]);
+  } finally {
+    setLoadingEmployees(false);
+  }
+}, [userRole, userCompanyId, user, safeSetUserCompanyId]);
 
   // Загрузка владельца компании для отображения в списке сотрудников
+// Загрузка владельца компании - ИСПРАВЛЕННАЯ ВЕРСИЯ
 useEffect(() => {
   const loadCompanyOwner = async () => {
     if (!userCompanyId) return;
+    
+    // ✅ БЕЗОПАСНО ПОЛУЧАЕМ ID
+    let safeCompanyId = userCompanyId;
+    if (safeCompanyId && typeof safeCompanyId === 'object') {
+      safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+    }
+    if (safeCompanyId && typeof safeCompanyId !== 'string') {
+      safeCompanyId = String(safeCompanyId);
+    }
+    
+    if (!safeCompanyId || safeCompanyId === '[object Object]') {
+      console.warn('⚠️ loadCompanyOwner: неверный companyId');
+      return;
+    }
+    
     const { data } = await supabase
       .from('companies')
       .select('is_company_owner')
-      .eq('id', userCompanyId)
+      .eq('id', safeCompanyId)  // ← ИСПРАВЛЕНО
       .single();
     if (data) setCompanyOwnerId(data.is_company_owner);
   };
