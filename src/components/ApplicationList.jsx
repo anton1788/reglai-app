@@ -1,4 +1,4 @@
-// src/components/ApplicationList.jsx (ИСПРАВЛЕННАЯ ВЕРСИЯ - БЕЗ ОШИБОК ESLINT)
+// src/components/ApplicationList.jsx (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ)
 
 import React, { useMemo, useCallback, useEffect, memo, useState, useRef } from 'react';
 import {
@@ -410,15 +410,14 @@ const MobileApplicationCard = memo(({
             </div>
           )}
 
-          {/* В action-grid, после других кнопок и перед комментариями */}
-{canEditPrices(userRole) && (
-  <button
-    onClick={() => onOpenPriceEditor?.(application)}
-    className="touch-target px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
-  >
-    💰 {t('prices') || 'Цены'}
-  </button>
-)}
+          {canEditPrices(userRole) && (
+            <button
+              onClick={() => onOpenPriceEditor?.(application)}
+              className="touch-target px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+            >
+              💰 {t('prices') || 'Цены'}
+            </button>
+          )}
           
           <div className="action-grid mt-3">
             {canShowReceiveButton(application, userRole) && (
@@ -441,9 +440,8 @@ const MobileApplicationCard = memo(({
               </button>
             )}
             
-            {userRole === 'foreman' && 
-             requiresMasterConfirmation(application.status) && 
-             application.user_id === user?.id && (
+            {/* ✅ ИСПРАВЛЕНИЕ: Мастер видит заявки, ожидающие подтверждения, даже если он не создавал их */}
+            {userRole === 'foreman' && requiresMasterConfirmation(application.status) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'master_confirm')}
                 className="touch-target px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
@@ -671,20 +669,18 @@ const DesktopApplicationRow = memo(({
             </button>
           )}
 
-          {/* В блоке действий, после кнопки "Отправить" и перед комментариями */}
-{canEditPrices(userRole) && (
-  <button
-    onClick={() => onOpenPriceEditor?.(application)}
-    className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
-    title={t('editPrices') || 'Редактировать цены'}
-  >
-    💰 {t('prices') || 'Цены'}
-  </button>
-)}
+          {canEditPrices(userRole) && (
+            <button
+              onClick={() => onOpenPriceEditor?.(application)}
+              className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
+              title={t('editPrices') || 'Редактировать цены'}
+            >
+              💰 {t('prices') || 'Цены'}
+            </button>
+          )}
           
-          {userRole === 'foreman' && 
-           requiresMasterConfirmation(application.status) && 
-           application.user_id === user?.id && (
+          {/* ✅ ИСПРАВЛЕНИЕ: Мастер видит заявки, ожидающие подтверждения, даже если он не создавал их */}
+          {userRole === 'foreman' && requiresMasterConfirmation(application.status) && (
             <button
               onClick={() => onOpenReceiveModal(application, 'master_confirm')}
               className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
@@ -1048,6 +1044,39 @@ const ApplicationList = memo(({
 
   const hasActiveFilters = searchTerm || statusFilter !== 'all' || dateFilter || viewedFilter !== 'all';
 
+  // ✅ ФИЛЬТРАЦИЯ ЗАЯВОК ДЛЯ МАСТЕРА
+const filteredApplications = useMemo(() => {
+  // Если не мастер — возвращаем все заявки
+  if (userRole !== 'foreman' && userRole !== 'master') {
+    return applications;
+  }
+  
+  return applications.filter(app => {
+    // 1. Свои заявки (созданные мастером)
+    if (app.user_id === user?.id) return true;
+    
+    // 2. Заявки, ожидающие подтверждения (отправленные снабженцем)
+    if (requiresMasterConfirmation(app.status)) return true;
+    
+    // 3. Заявки, где мастер указан как получатель (по имени)
+    const foremanName = app.foreman_name?.trim().toLowerCase() || '';
+    const userName = user?.user_metadata?.full_name?.trim().toLowerCase() || '';
+    const userEmail = user?.email?.split('@')[0]?.toLowerCase() || '';
+    
+    if (foremanName) {
+      // Проверяем по полному имени или его части
+      if (userName && foremanName.includes(userName)) return true;
+      // Проверяем по части email (до @)
+      if (userEmail && foremanName.includes(userEmail)) return true;
+    }
+    
+    // 4. Проверка по foreman_id (если есть в данных)
+    if (app.foreman_id && app.foreman_id === user?.id) return true;
+    
+    return false;
+  });
+}, [applications, userRole, user]);
+
   // ─────────────────────────────────────────────────────────────
   // 📱 МОБИЛЬНЫЙ РЕНДЕРИНГ
   // ─────────────────────────────────────────────────────────────
@@ -1064,7 +1093,7 @@ const ApplicationList = memo(({
             <div>
               <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{title}</h2>
               <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                {formatNumber(applications.length)} {applications.length === 1 ? 'заявка' : applications.length < 5 ? 'заявки' : 'заявок'}
+                {formatNumber(filteredApplications.length)} {applications.length === 1 ? 'заявка' : applications.length < 5 ? 'заявки' : 'заявок'}
               </p>
             </div>
           </div>
@@ -1139,7 +1168,7 @@ const ApplicationList = memo(({
           </div>
         )}
 
-        {!isLoading && applications.length === 0 && page > 1 && totalPages > 0 && (
+        {!isLoading && filteredApplications.length === 0 && page > 1 && totalPages > 0 && (
           <div className="text-center py-8">
             <button
               onClick={() => onPageChange(1)}
@@ -1154,7 +1183,7 @@ const ApplicationList = memo(({
           </div>
         )}
 
-        {!isLoading && applications.length === 0 && (
+        {!isLoading && filteredApplications.length === 0 && (
           <div className="text-center py-12" role="status" aria-live="polite">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 mb-3">
               <Package className="w-8 h-8 text-gray-400 dark:text-gray-500" aria-hidden="true" />
@@ -1167,9 +1196,9 @@ const ApplicationList = memo(({
         )}
 
         {/* Список карточек */}
-        {!isLoading && applications.length > 0 && (
+        {!isLoading && filteredApplications.length > 0 && (
           <div className="space-y-3" role="list">
-            {applications.map((application) => (
+            {filteredApplications.map((application) => (
               <MobileApplicationCard
                 key={application.id}
                 application={application}
@@ -1198,13 +1227,13 @@ const ApplicationList = memo(({
         )}
 
         {/* Infinite Scroll Trigger */}
-        {!isLoading && applications.length > 0 && page < totalPages && (
+        {!isLoading && filteredApplications.length > 0 && page < totalPages && (
           <div ref={loadMoreRef} className="h-10 flex items-center justify-center">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           </div>
         )}
 
-        {!isLoading && applications.length > 0 && page === totalPages && (
+        {!isLoading && filteredApplications.length > 0 && page === totalPages && (
           <div className="h-10 flex items-center justify-center">
             <p className="text-xs text-gray-400">{t('allLoaded') || 'Все заявки загружены'}</p>
           </div>
@@ -1229,7 +1258,7 @@ const ApplicationList = memo(({
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{title}</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {formatNumber(applications.length)} {applications.length === 1 ? 'заявка' : applications.length < 5 ? 'заявки' : 'заявок'}
+                {formatNumber(filteredApplications.length)} {applications.length === 1 ? 'заявка' : applications.length < 5 ? 'заявки' : 'заявок'}
               </p>
             </div>
           </div>
@@ -1345,7 +1374,7 @@ const ApplicationList = memo(({
           </div>
         )}
 
-        {!isLoading && applications.length === 0 && page > 1 && totalPages > 0 && (
+        {!isLoading && filteredApplications.length === 0 && page > 1 && totalPages > 0 && (
           <div className="text-center py-12">
             <button
               onClick={() => onPageChange(1)}
@@ -1360,7 +1389,7 @@ const ApplicationList = memo(({
           </div>
         )}
 
-        {!isLoading && applications.length === 0 && (
+        {!isLoading && filteredApplications.length === 0 && (
           <div className="text-center py-16" role="status" aria-live="polite">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gray-100 dark:bg-gray-800 mb-4">
               <Package className="w-10 h-10 text-gray-400 dark:text-gray-500" aria-hidden="true" />
@@ -1373,7 +1402,7 @@ const ApplicationList = memo(({
         )}
 
         {/* Десктопная таблица */}
-        {!isLoading && applications.length > 0 && (
+        {!isLoading && filteredApplications.length > 0 && (
           <div className="overflow-x-auto">
             {/* Заголовок таблицы */}
             <div className="desktop-table-header grid grid-cols-12 gap-3 px-4 py-2.5 bg-gray-50 dark:bg-gray-700/30 border-b border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -1388,7 +1417,7 @@ const ApplicationList = memo(({
 
             {/* Строки заявок */}
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {applications.map((application) => (
+              {filteredApplications.map((application) => (
                 <DesktopApplicationRow
                   key={application.id}
                   application={application}
@@ -1420,7 +1449,7 @@ const ApplicationList = memo(({
         {/* Пагинация и статус загрузки */}
         <div className="p-4 border-t border-gray-200/50 dark:border-gray-700/50 flex flex-col sm:flex-row justify-between items-center gap-3">
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            {t('showing') || 'Показано'} {applications.length} {t('applications') || 'заявок'}
+  {t('showing') || 'Показано'} {filteredApplications.length} {t('applications') || 'заявок'}
             {totalPages > 1 && ` • ${t('page') || 'Страница'} ${page} ${t('of') || 'из'} ${totalPages}`}
           </span>
           
@@ -1454,13 +1483,13 @@ const ApplicationList = memo(({
         </div>
 
         {/* Infinite Scroll Trigger для десктопа (если есть еще страницы) */}
-        {!isLoading && applications.length > 0 && page < totalPages && (
+        {!isLoading && filteredApplications.length > 0 && page < totalPages && (
           <div ref={loadMoreRef} className="h-6 flex items-center justify-center">
             <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
           </div>
         )}
 
-        {!isLoading && applications.length > 0 && page === totalPages && (
+        {!isLoading && filteredApplications.length > 0 && page === totalPages && (
           <div className="h-6 flex items-center justify-center">
             <p className="text-xs text-gray-400">{t('allLoaded') || 'Все заявки загружены'}</p>
           </div>
