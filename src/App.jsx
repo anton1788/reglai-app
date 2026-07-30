@@ -4000,60 +4000,37 @@ const handleClearFilters = useCallback(() => {
 // 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (ОБНОВЛЁННАЯ)
 // ============================================================
 const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
-  console.log('🔍 [DEBUG] handleAdminReceive started', {
-    applicationId: application?.id,
-    materialsCount: materialsFromModal?.length || 0,
-    userCompanyId,
-    userCompanyIdType: typeof userCompanyId
-  });
+  console.log('🔍 [DEBUG] handleAdminReceive started');
   
   if (!application?.id) {
     showNotification('Ошибка: заявка не найдена', 'error');
     return { success: false };
   }
+
+  // ✅ ЖЕСТКОЕ ИСПРАВЛЕНИЕ ID КОМПАНИИ
+  let safeCompanyId = userCompanyId;
   
-  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id С ПРОВЕРКОЙ
-  let safeCompanyId = null;
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+  }
   
-  // 1. Пытаемся получить из userCompanyId
-  if (userCompanyId) {
-    if (typeof userCompanyId === 'string') {
-      safeCompanyId = userCompanyId;
-    } else if (typeof userCompanyId === 'object') {
-      safeCompanyId = userCompanyId.id || userCompanyId.company_id || null;
+  if (safeCompanyId) {
+    safeCompanyId = String(safeCompanyId);
+  }
+
+  // Финальная проверка и восстановление
+  if (!safeCompanyId || safeCompanyId === '[object Object]' || safeCompanyId === 'undefined') {
+    const metaId = user?.user_metadata?.company_id;
+    if (metaId) {
+      safeCompanyId = String(metaId);
+      safeSetUserCompanyId(safeCompanyId);
+    } else {
+      console.error('❌ handleAdminReceive: нет companyId');
+      showNotification('Ошибка авторизации компании. Перезайдите в систему.', 'error');
+      return { success: false };
     }
   }
-  
-  // 2. Если не получилось - пробуем из метаданных пользователя
-  if (!safeCompanyId || safeCompanyId === '[object Object]') {
-    safeCompanyId = user?.user_metadata?.company_id || null;
-    if (safeCompanyId && typeof safeCompanyId !== 'string') {
-      safeCompanyId = String(safeCompanyId);
-    }
-  }
-  
-  // 3. Если всё ещё null - пробуем из application
-  if (!safeCompanyId || safeCompanyId === '[object Object]') {
-    safeCompanyId = application.company_id || null;
-    if (safeCompanyId && typeof safeCompanyId !== 'string') {
-      safeCompanyId = String(safeCompanyId);
-    }
-  }
-  
-  // 4. Финальная проверка
-  if (!safeCompanyId || safeCompanyId === '[object Object]' || safeCompanyId === 'null' || safeCompanyId === 'undefined') {
-    console.error('❌ handleAdminReceive: не удалось получить валидный companyId', {
-      userCompanyId,
-      userMetadata: user?.user_metadata,
-      applicationCompanyId: application.company_id
-    });
-    showNotification('Ошибка: идентификатор компании не найден. Выйдите и войдите заново.', 'error');
-    return { success: false };
-  }
-  
-  // Приводим к строке на всякий случай
-  safeCompanyId = String(safeCompanyId);
-  
+
   console.log('✅ handleAdminReceive: safeCompanyId =', safeCompanyId);
   
   try {
@@ -4278,18 +4255,16 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
       (Number(m.sent_to_master_quantity) || 0) >= (Number(m.supplier_received_quantity) || 0)
     );
     
-   // 3. Новый статус заявки
-const newStatus = allSent 
-  ? 'pending_master_confirmation'  // ← ПРЯМОЕ ЗНАЧЕНИЕ
-  : APPLICATION_STATUS.PARTIAL_RECEIVED;
-
-console.log('📊 Новый статус:', newStatus, 'allSent:', allSent);
-
-// 4. Обновляем заявку в БД
+    // 3. Новый статус заявки
+    const newStatus = allSent 
+      ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION 
+      : APPLICATION_STATUS.PARTIAL_RECEIVED;
+    
+    // 4. Обновляем заявку в БД
 const { error: updateError } = await supabase
   .from('applications')
   .update({
-    status: newStatus,  // ← ЭТО РАБОТАЕТ!
+    status: newStatus,  // ← ДОБАВЬТЕ ЭТУ СТРОКУ! ВАЖНО!
     materials: updatedMaterials,
     updated_at: new Date().toISOString(),
     status_history: [
@@ -4695,38 +4670,39 @@ useEffect(() => {
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
-  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
-  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
-let safeCompanyId = userCompanyId;
-
-console.log('🔍 loadApplications: исходный userCompanyId =', userCompanyId, 'тип:', typeof userCompanyId);
-
-// Если это объект - извлекаем id
-if (safeCompanyId && typeof safeCompanyId === 'object') {
-  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-  console.log('🔍 loadApplications: извлечено из объекта =', safeCompanyId);
-}
-
-// Приводим к строке
-if (safeCompanyId && typeof safeCompanyId !== 'string') {
-  safeCompanyId = String(safeCompanyId);
-}
-
-// Проверяем валидность
-if (!safeCompanyId || safeCompanyId === '[object Object]') {
-  console.warn('⚠️ loadApplications: неверный companyId', userCompanyId);
-  const metaId = user?.user_metadata?.company_id;
-  if (metaId) {
-    safeCompanyId = String(metaId);
-    safeSetUserCompanyId(metaId);
-    console.log('✅ loadApplications: восстановлен companyId =', safeCompanyId);
-  } else {
-    console.error('❌ loadApplications: нет валидного companyId');
-    setIsLoading(false);
-    return;
-  }
-}
+  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID (ОБНОВЛЕНО)
+  let safeCompanyId = userCompanyId;
   
+  console.log('🔍 loadApplications: исходный userCompanyId =', userCompanyId, 'тип:', typeof userCompanyId);
+
+  // Если это объект - извлекаем id
+  if (safeCompanyId && typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+    console.log('🔍 loadApplications: извлечено из объекта =', safeCompanyId);
+  }
+
+  // Приводим к строке
+  if (safeCompanyId && typeof safeCompanyId !== 'string') {
+    safeCompanyId = String(safeCompanyId);
+  }
+
+  // Проверяем валидность
+  if (!safeCompanyId || safeCompanyId === '[object Object]') {
+    console.warn('⚠️ loadApplications: неверный companyId, пытаемся восстановить...');
+    
+    // Пытаемся взять из метаданных текущего пользователя
+    const metaId = user?.user_metadata?.company_id;
+    if (metaId) {
+      safeCompanyId = String(metaId);
+      safeSetUserCompanyId(safeCompanyId); // Сохраняем исправленный ID
+      console.log('✅ loadApplications: восстановлен companyId из метаданных =', safeCompanyId);
+    } else {
+      console.error('❌ loadApplications: критическая ошибка, нет companyId');
+      setIsLoading(false);
+      return;
+    }
+  }
+
   console.log('📊 loadApplications: итоговый safeCompanyId =', safeCompanyId);
   
   // Проверка кэша
@@ -4770,10 +4746,10 @@ if (!safeCompanyId || safeCompanyId === '[object Object]') {
       .order('created_at', { ascending: false })
       .range(from, to > 0 ? to : 0);
     
-// ✅ ФИЛЬТРАЦИЯ ПО РОЛИ С ПРОВЕРКОЙ
+    // ✅ ФИЛЬТРАЦИЯ ПО РОЛИ С ПРОВЕРКОЙ
 if (userRole === 'master' && user?.id) {
   // Мастер видит свои заявки И заявки, ожидающие подтверждения
-  query = query.or(`user_id.eq.${user.id},status.eq.pending_master_confirmation`);
+  query = query.or(`user_id.eq.${user.id},status.eq.${APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION}`);
 }
 if (userRole === 'accountant') {
   query = query.eq('status', 'received');
@@ -4917,22 +4893,35 @@ useEffect(() => {
       return;
     }
     
-    // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
-    let safeCompanyId = userCompanyId;
-    if (safeCompanyId && typeof safeCompanyId === 'object') {
-      safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-    }
-    if (safeCompanyId && typeof safeCompanyId !== 'string') {
-      safeCompanyId = String(safeCompanyId);
-    }
-    
-    if (!safeCompanyId || safeCompanyId === '[object Object]') {
-      console.warn('⚠️ loadPlan: неверный companyId');
-      setPlanLoading(false);
-      return;
-    }
-    
-    try {
+    // ✅ ЖЕСТКОЕ ИСПРАВЛЕНИЕ ID КОМПАНИИ
+let safeCompanyId = userCompanyId;
+
+// Если это объект, достаем ID
+if (safeCompanyId && typeof safeCompanyId === 'object') {
+  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+}
+
+// Принудительно превращаем в строку
+if (safeCompanyId) {
+  safeCompanyId = String(safeCompanyId);
+}
+
+// Если ID все еще нет или он невалидный, пробуем взять из метаданных пользователя
+if (!safeCompanyId || safeCompanyId === '[object Object]' || safeCompanyId === 'undefined') {
+  const metaId = user?.user_metadata?.company_id;
+  if (metaId) {
+    safeCompanyId = String(metaId);
+    // Обновляем глобальное состояние, чтобы ошибка не повторялась
+    safeSetUserCompanyId(safeCompanyId); 
+    console.log('✅ handleSendToMaster: восстановлен companyId из метаданных =', safeCompanyId);
+  } else {
+    console.error('❌ handleSendToMaster: НЕ УДАЛОСЬ получить companyId', { userCompanyId, metaId });
+    showNotification('Ошибка системы: компания не определена. Перезайдите в аккаунт.', 'error');
+    return { success: false };
+  }
+}
+
+try {
       setPlanLoading(true);
       
       const { data: companyData, error: companyError } = await supabase
