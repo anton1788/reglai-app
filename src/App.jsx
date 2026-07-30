@@ -1565,10 +1565,23 @@ return () => {
     if (!user?.id || !userCompanyId) return;
     const checkSecurityStatus = async () => {
       try {
-        const [companyRes, userRes] = await Promise.all([
-          supabase.from('companies').select('is_blocked').eq('id', userCompanyId).single(),
-          supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', userCompanyId).maybeSingle()
-        ]);
+        // ✅ БЕЗОПАСНО ПОЛУЧАЕМ ID
+let safeCompanyId = userCompanyId;
+if (safeCompanyId && typeof safeCompanyId === 'object') {
+  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+}
+if (safeCompanyId && typeof safeCompanyId !== 'string') {
+  safeCompanyId = String(safeCompanyId);
+}
+if (!safeCompanyId || safeCompanyId === '[object Object]') {
+  console.warn('⚠️ checkSecurityStatus: неверный companyId');
+  return;
+}
+
+const [companyRes, userRes] = await Promise.all([
+  supabase.from('companies').select('is_blocked').eq('id', safeCompanyId).single(),
+  supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', safeCompanyId).maybeSingle()
+]);
         const isCompanyBlocked = companyRes.data?.is_blocked;
         const isUserInactive = userRes.data?.is_active === false;
         if (isCompanyBlocked || isUserInactive) {
@@ -4625,13 +4638,12 @@ const loadEmployees = useCallback(async () => {
   }
 }, [userRole, userCompanyId, user, safeSetUserCompanyId]);
 
-  // Загрузка владельца компании для отображения в списке сотрудников
 // Загрузка владельца компании - ИСПРАВЛЕННАЯ ВЕРСИЯ
 useEffect(() => {
   const loadCompanyOwner = async () => {
     if (!userCompanyId) return;
     
-    // ✅ БЕЗОПАСНО ПОЛУЧАЕМ ID
+    // ✅ БЕЗОПАСНО ПОЛУЧАЕМ ID (ОДИН РАЗ)
     let safeCompanyId = userCompanyId;
     if (safeCompanyId && typeof safeCompanyId === 'object') {
       safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
@@ -4639,17 +4651,17 @@ useEffect(() => {
     if (safeCompanyId && typeof safeCompanyId !== 'string') {
       safeCompanyId = String(safeCompanyId);
     }
-    
     if (!safeCompanyId || safeCompanyId === '[object Object]') {
       console.warn('⚠️ loadCompanyOwner: неверный companyId');
       return;
     }
-    
+
     const { data } = await supabase
       .from('companies')
       .select('is_company_owner')
-      .eq('id', safeCompanyId)  // ← ИСПРАВЛЕНО
+      .eq('id', safeCompanyId)
       .single();
+      
     if (data) setCompanyOwnerId(data.is_company_owner);
   };
   loadCompanyOwner();
@@ -4682,33 +4694,30 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
   // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
-  let safeCompanyId = userCompanyId;
-  
-  console.log('🔍 loadApplications: исходный userCompanyId =', userCompanyId, 'тип:', typeof userCompanyId);
-  
-  // Если это объект - извлекаем id
-  if (safeCompanyId && typeof safeCompanyId === 'object') {
-    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-    console.log('🔍 loadApplications: извлечено из объекта =', safeCompanyId);
-  }
-  
-  // Приводим к строке
-  if (safeCompanyId && typeof safeCompanyId !== 'string') {
-    safeCompanyId = String(safeCompanyId);
-  }
-  
-  // Проверяем валидность
-  // Проверяем валидность
+  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
+let safeCompanyId = userCompanyId;
+
+console.log('🔍 loadApplications: исходный userCompanyId =', userCompanyId, 'тип:', typeof userCompanyId);
+
+// Если это объект - извлекаем id
+if (safeCompanyId && typeof safeCompanyId === 'object') {
+  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+  console.log('🔍 loadApplications: извлечено из объекта =', safeCompanyId);
+}
+
+// Приводим к строке
+if (safeCompanyId && typeof safeCompanyId !== 'string') {
+  safeCompanyId = String(safeCompanyId);
+}
+
+// Проверяем валидность
 if (!safeCompanyId || safeCompanyId === '[object Object]') {
   console.warn('⚠️ loadApplications: неверный companyId', userCompanyId);
-  // Пытаемся восстановить из метаданных
   const metaId = user?.user_metadata?.company_id;
-  console.log('🔍 loadApplications: metaId из user_metadata =', metaId);
   if (metaId) {
     safeCompanyId = String(metaId);
-    // ✅ ДОБАВИТЬ ЭТУ СТРОКУ
     safeSetUserCompanyId(metaId);
-    console.log('✅ loadApplications: восстановлен и сохранён companyId =', safeCompanyId);
+    console.log('✅ loadApplications: восстановлен companyId =', safeCompanyId);
   } else {
     console.error('❌ loadApplications: нет валидного companyId');
     setIsLoading(false);
