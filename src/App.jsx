@@ -4760,12 +4760,13 @@ if (!safeCompanyId || safeCompanyId === '[object Object]') {
       .range(from, to > 0 ? to : 0);
     
     // ✅ ФИЛЬТРАЦИЯ ПО РОЛИ С ПРОВЕРКОЙ
-    if (userRole === 'master' && user?.id) {
-      query = query.eq('user_id', user.id);
-    }
-    if (userRole === 'accountant') {
-      query = query.eq('status', 'received');
-    }
+if (userRole === 'master' && user?.id) {
+  // Мастер видит свои заявки И заявки, ожидающие подтверждения
+  query = query.or(`user_id.eq.${user.id},status.eq.${APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION}`);
+}
+if (userRole === 'accountant') {
+  query = query.eq('status', 'received');
+}
     
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
