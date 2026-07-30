@@ -4284,24 +4284,24 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
       : APPLICATION_STATUS.PARTIAL_RECEIVED;
     
     // 4. Обновляем заявку в БД
-    const { error: updateError } = await supabase
-      .from('applications')
-      .update({
-        status: newStatus,
-        materials: updatedMaterials,
-        updated_at: new Date().toISOString(),
-        status_history: [
-          ...(application.status_history || []),
-          {
-            action: 'sent_to_master',
-            user_id: user?.id,
-            user_email: user?.email,
-            timestamp: new Date().toISOString(),
-            details: `Отправлено мастеру: ${itemsToSend.filter(i => i.quantityToSend > 0).length} позиций`
-          }
-        ]
-      })
-      .eq('id', application.id);
+const { error: updateError } = await supabase
+  .from('applications')
+  .update({
+    status: newStatus,  // ← ДОБАВЬТЕ ЭТУ СТРОКУ! ВАЖНО!
+    materials: updatedMaterials,
+    updated_at: new Date().toISOString(),
+    status_history: [
+      ...(application.status_history || []),
+      {
+        action: 'sent_to_master',
+        user_id: user?.id,
+        user_email: user?.email,
+        timestamp: new Date().toISOString(),
+        details: `Отправлено мастеру: ${itemsToSend.filter(i => i.quantityToSend > 0).length} позиций`
+      }
+    ]
+  })
+  .eq('id', application.id);
     
     if (updateError) throw updateError;
     
