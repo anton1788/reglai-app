@@ -524,7 +524,7 @@ const ReceiveModal = memo(function({
       
       setLocalMaterials(validMaterials);
       
-      if (modalMode === 'admin_send_to_master') {
+     if (modalMode === 'admin_send_to_master') {
   setItemsToSend(selectedApplication.materials
     .filter(function(m) {
       const onWarehouseQty = Number(m.supplier_received_quantity) || 0;

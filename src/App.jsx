@@ -4278,16 +4278,18 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
       (Number(m.sent_to_master_quantity) || 0) >= (Number(m.supplier_received_quantity) || 0)
     );
     
-    // 3. Новый статус заявки
-    const newStatus = allSent 
-      ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION 
-      : APPLICATION_STATUS.PARTIAL_RECEIVED;
-    
-    // 4. Обновляем заявку в БД
+   // 3. Новый статус заявки
+const newStatus = allSent 
+  ? 'pending_master_confirmation'  // ← ПРЯМОЕ ЗНАЧЕНИЕ
+  : APPLICATION_STATUS.PARTIAL_RECEIVED;
+
+console.log('📊 Новый статус:', newStatus, 'allSent:', allSent);
+
+// 4. Обновляем заявку в БД
 const { error: updateError } = await supabase
   .from('applications')
   .update({
-    status: newStatus,  // ← ДОБАВЬТЕ ЭТУ СТРОКУ! ВАЖНО!
+    status: newStatus,  // ← ЭТО РАБОТАЕТ!
     materials: updatedMaterials,
     updated_at: new Date().toISOString(),
     status_history: [
@@ -4768,10 +4770,10 @@ if (!safeCompanyId || safeCompanyId === '[object Object]') {
       .order('created_at', { ascending: false })
       .range(from, to > 0 ? to : 0);
     
-    // ✅ ФИЛЬТРАЦИЯ ПО РОЛИ С ПРОВЕРКОЙ
+// ✅ ФИЛЬТРАЦИЯ ПО РОЛИ С ПРОВЕРКОЙ
 if (userRole === 'master' && user?.id) {
   // Мастер видит свои заявки И заявки, ожидающие подтверждения
-  query = query.or(`user_id.eq.${user.id},status.eq.${APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION}`);
+  query = query.or(`user_id.eq.${user.id},status.eq.pending_master_confirmation`);
 }
 if (userRole === 'accountant') {
   query = query.eq('status', 'received');
