@@ -2900,7 +2900,7 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
   };
 
   
- // 📤 SUBMIT APPLICATION — С ЖЕСТКОЙ БЛОКИРОВКОЙ
+ // 📤 SUBMIT APPLICATION — С ЖЕСТКОЙ БЛОКИРОВКОЙ И ЗАЩИТОЙ ID
 const handleSubmit = async (e) => {
   e.preventDefault();
 
@@ -2911,11 +2911,40 @@ const handleSubmit = async (e) => {
   }
 
   // ============================================================
+  // 🔥 ШАГ 0: ЖЕСТКАЯ ОЧИСТКА COMPANY ID (САМОЕ ВАЖНОЕ!)
+  // ============================================================
+  let rawId = userCompanyId;
+  
+  // Если в стейте случайно оказался объект, достаем из него ID
+  if (rawId && typeof rawId === 'object') {
+    console.warn('⚠️ handleSubmit: userCompanyId был объектом, исправляю...', rawId);
+    rawId = rawId.id || rawId.company_id || rawId._id || null;
+  }
+  
+  let safeCompanyId = rawId ? String(rawId).trim() : null;
+
+  // Если ID все еще мусор ([object Object]), берем из метаданных пользователя (последний шанс)
+  if (!safeCompanyId || safeCompanyId.includes('[object') || safeCompanyId.length < 5) {
+    if (user?.user_metadata?.company_id) {
+      safeCompanyId = String(user.user_metadata.company_id);
+      // Сразу чиним глобальный стейт, чтобы другие функции тоже работали верно
+      safeSetUserCompanyId(safeCompanyId);
+      console.log('✅ Восстановил companyId из user_metadata:', safeCompanyId);
+    } else {
+      showNotification('Ошибка: не удалось определить компанию. Перезайдите в аккаунт.', 'error');
+      setIsSubmitting(false);
+      return;
+    }
+  }
+
+  console.log('✅ Отправка заявки с companyId:', safeCompanyId);
+
+  // ============================================================
   // 🔥 ЖЕСТКАЯ БЛОКИРОВКА ПРИ ИСТЕЧЕНИИ ТАРИФА
   // ============================================================
   if (currentPlan?.id === 'basic' || !currentPlan) {
     try {
-      const quota = await checkQuota(supabase, userCompanyId);
+      const quota = await checkQuota(supabase, safeCompanyId); // Используем safeCompanyId
       
       if (!quota.allowed) {
         showNotification('❌ Лимит заявок исчерпан. Оплатите тариф.', 'error');
@@ -2928,7 +2957,7 @@ const handleSubmit = async (e) => {
         m.description?.trim() && m.quantity && m.quantity > 0 && !isNaN(m.quantity)
       );
       
-      const materialCheck = await checkMaterialsLimit(supabase, userCompanyId, validMaterials.length);
+      const materialCheck = await checkMaterialsLimit(supabase, safeCompanyId, validMaterials.length); // Используем safeCompanyId
       if (!materialCheck.allowed) {
         showNotification(
           `⚠️ В бесплатном тарифе максимум ${materialCheck.limit} материалов в заявке.`,
@@ -2964,14 +2993,6 @@ const handleSubmit = async (e) => {
   }
   
   const sessionUser = session.user;
-  const safeCompanyId = sessionUser.user_metadata?.company_id || userCompanyId;
-  const safeCompany = sessionUser.user_metadata?.company_name?.trim() || userCompany;
-  
-  if (!safeCompanyId) {
-    console.error('❌ company_id отсутствует!', { safeCompanyId, safeCompany });
-    showNotification(`Ошибка: компания "${safeCompany || 'не указана'}"`, 'error');
-    return;
-  }
   
   if (!currentUserPermissions.canCreate) {
     console.error('❌ Нет прав canCreate для роли:', userRole);
@@ -3014,28 +3035,16 @@ const handleSubmit = async (e) => {
   
   const startTime = Date.now();
   
-  // 📦 Формируем объект заявки
-  let safeCompanyIdForCreate = userCompanyId;
-if (typeof safeCompanyIdForCreate === 'object' && safeCompanyIdForCreate !== null) {
-  safeCompanyIdForCreate = safeCompanyIdForCreate.id || safeCompanyIdForCreate.company_id || null;
-}
-safeCompanyIdForCreate = safeCompanyIdForCreate ? String(safeCompanyIdForCreate) : null;
-
-if (!safeCompanyIdForCreate) {
-  showNotification('Ошибка: не удалось определить компанию', 'error');
-  return;
-}
-
-// И используй safeCompanyIdForCreate в объекте заявки:
-const newApplication = {
-  object_name: formData.objectName.trim(),
-  foreman_name: formData.foremanName.trim(),
-  foreman_phone: formData.foremanPhone,
-  materials: materialsWithTracking,
-  status: initialStatus,
-  user_id: sessionUser.id,
-  company_id: safeCompanyIdForCreate, // ✅ Теперь здесь точно строка
-  created_at: new Date().toISOString(),
+  // 📦 Формируем объект заявки С ЧИСТЫМ ID
+  const newApplication = {
+    object_name: formData.objectName.trim(),
+    foreman_name: formData.foremanName.trim(),
+    foreman_phone: formData.foremanPhone,
+    materials: materialsWithTracking,
+    status: initialStatus,
+    user_id: sessionUser.id,
+    company_id: safeCompanyId, // ✅ Теперь здесь ТОЧНО строка UUID
+    created_at: new Date().toISOString(),
     total_amount: totalAmount,
     status_history: [{
       user_id: sessionUser.id,
@@ -3090,7 +3099,7 @@ const newApplication = {
 
     if (currentPlan?.id === 'basic' || !currentPlan) {
       try {
-        await incrementApplicationUsage(supabase, userCompanyId);
+        await incrementApplicationUsage(supabase, safeCompanyId); // Используем safeCompanyId
       } catch (err) {
         console.warn('⚠️ Ошибка увеличения счётчика:', err);
       }
@@ -3107,7 +3116,7 @@ const newApplication = {
     
     setApplications([data[0], ...applications.slice(0, ITEMS_PER_PAGE - 1)]);
     
-    if (user?.id && userCompanyId) {
+    if (user?.id && safeCompanyId) { // Используем safeCompanyId
       const { data: existingApps } = await supabase
         .from('applications')
         .select('id')
@@ -3118,7 +3127,7 @@ const newApplication = {
         await AnalyticsTracker.trackTimeToFirstApplication(user.id, data[0].id);
         await AnalyticsTracker.trackOnboardingStep(
           user.id,
-          userCompanyId,
+          safeCompanyId, // Используем safeCompanyId
           'first_application',
           'created',
           { applicationId: data[0].id }
@@ -3144,15 +3153,15 @@ const newApplication = {
     setPage(1);
     showNotification('✅ Заявка успешно отправлена!', 'success');
     
-    if (userCompanyId) {
-      cacheManager.delete('applications', `applications_${userCompanyId}_page_1`);
-      cacheManager.delete('analytics', `analytics_${userCompanyId}_${isAdminMode}`);
+    if (safeCompanyId) { // Используем safeCompanyId
+      cacheManager.delete('applications', `applications_${safeCompanyId}_page_1`);
+      cacheManager.delete('analytics', `analytics_${safeCompanyId}_${isAdminMode}`);
     }
     
-    if (userCompanyId && currentPlan?.id) {
+    if (safeCompanyId && currentPlan?.id) { // Используем safeCompanyId
       logApiUsage(supabase, {
         apiKeyId: 'frontend-app',
-        companyId: userCompanyId,
+        companyId: safeCompanyId,
         endpoint: '/applications',
         method: 'POST',
         statusCode: 200,
