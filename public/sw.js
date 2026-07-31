@@ -7,7 +7,7 @@ let isUpdating = false;
 let lastUpdateCheck = 0;
 const UPDATE_COOLDOWN = 60000; // 60 секунд
 
-const APP_VERSION = '30.30.39-beta';
+const APP_VERSION = '30.30.40-beta';
 const CACHE_NAME = `reglai-system-v${APP_VERSION}`;
 const DATA_CACHE_NAME = `reglai-data-v${APP_VERSION}`;
 const OFFLINE_CACHE_NAME = `reglai-offline-v${APP_VERSION}`;

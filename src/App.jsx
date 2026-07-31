@@ -3015,16 +3015,27 @@ const handleSubmit = async (e) => {
   const startTime = Date.now();
   
   // 📦 Формируем объект заявки
-  const newApplication = {
-    object_name: formData.objectName.trim(),
-    foreman_name: formData.foremanName.trim(),
-    foreman_phone: formData.foremanPhone,
-    materials: materialsWithTracking,
-    status: initialStatus,
-    user_id: sessionUser.id,
-    company_id: safeCompanyId,
-    client_id: selectedClientId || null,
-    created_at: new Date().toISOString(),
+  let safeCompanyIdForCreate = userCompanyId;
+if (typeof safeCompanyIdForCreate === 'object' && safeCompanyIdForCreate !== null) {
+  safeCompanyIdForCreate = safeCompanyIdForCreate.id || safeCompanyIdForCreate.company_id || null;
+}
+safeCompanyIdForCreate = safeCompanyIdForCreate ? String(safeCompanyIdForCreate) : null;
+
+if (!safeCompanyIdForCreate) {
+  showNotification('Ошибка: не удалось определить компанию', 'error');
+  return;
+}
+
+// И используй safeCompanyIdForCreate в объекте заявки:
+const newApplication = {
+  object_name: formData.objectName.trim(),
+  foreman_name: formData.foremanName.trim(),
+  foreman_phone: formData.foremanPhone,
+  materials: materialsWithTracking,
+  status: initialStatus,
+  user_id: sessionUser.id,
+  company_id: safeCompanyIdForCreate, // ✅ Теперь здесь точно строка
+  created_at: new Date().toISOString(),
     total_amount: totalAmount,
     status_history: [{
       user_id: sessionUser.id,
