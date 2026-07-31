@@ -433,15 +433,16 @@ const getDaysSince = (dateString) => {
 };
 
 const getClientId = async (userId, companyId) => {
-  // ✅ Безопасно приводим к строке
-  const safeCompanyId = typeof companyId === 'object' 
-    ? companyId.id || companyId.company_id || String(companyId) 
-    : String(companyId || '');
-  
-  if (!safeCompanyId || safeCompanyId === '[object Object]') {
-    console.error('❌ getClientId: неверный companyId', companyId);
-    return null;
-  }
+let rawId = companyId;
+if (rawId && typeof rawId === 'object') {
+  rawId = rawId.id || rawId.company_id || rawId._id || null;
+}
+const safeCompanyId = rawId ? String(rawId).trim() : '';
+
+if (!safeCompanyId || safeCompanyId === '[object Object]' || safeCompanyId.length < 5) {
+  console.error('❌ getClientId: неверный companyId', companyId);
+  return null;
+}
   
   const { data } = await supabase
     .from('company_users')
@@ -4468,34 +4469,37 @@ useEffect(() => {
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
-  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
-  let safeCompanyId = userCompanyId;
-  
-  // Если это объект - извлекаем id
-  if (safeCompanyId && typeof safeCompanyId === 'object') {
-    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-  }
-  
-  // Приводим к строке
-  if (safeCompanyId && typeof safeCompanyId !== 'string') {
-    safeCompanyId = String(safeCompanyId);
-  }
-  
-  // Проверяем валидность
-  if (!safeCompanyId || safeCompanyId === '[object Object]') {
-    console.warn('⚠️ loadApplications: неверный companyId', userCompanyId);
-    // Пытаемся восстановить из метаданных
-    const metaId = user?.user_metadata?.company_id;
-    if (metaId) {
-      safeCompanyId = String(metaId);
-      safeSetUserCompanyId(metaId);
-    } else {
-      setIsLoading(false);
-      return;
-    }
-  }
-  
-  console.log('📊 loadApplications с companyId:', safeCompanyId);
+// ✅ ЖЕСТКАЯ ОЧИСТКА COMPANY ID
+let rawId = userCompanyId;
+
+// 1. Если это объект, пытаемся достать ID всеми способами
+if (rawId && typeof rawId === 'object') {
+  rawId = rawId.id || rawId.company_id || rawId._id || null;
+}
+
+// 2. Преобразуем в строку
+let safeCompanyId = rawId ? String(rawId).trim() : null;
+
+// 3. Защита от мусора вроде "[object Object]"
+if (safeCompanyId && safeCompanyId.includes('[object')) {
+  console.error('❌ loadApplications: Обнаружен мусор в companyId', rawId);
+  safeCompanyId = null;
+}
+
+// 4. Фоллбек на метаданные пользователя, если state пуст
+if (!safeCompanyId && user?.user_metadata?.company_id) {
+  safeCompanyId = String(user.user_metadata.company_id);
+  // Обновляем стейт, чтобы в будущем не было проблем
+  safeSetUserCompanyId(safeCompanyId); 
+}
+
+if (!safeCompanyId) {
+  console.warn('⚠️ loadApplications: companyId отсутствует');
+  setIsLoading(false);
+  return;
+}
+
+console.log('📊 loadApplications с companyId:', safeCompanyId);
   
   // Проверка кэша
   const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}`;
@@ -7618,26 +7622,29 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       
       {/* Все модальные окна остаются без изменений */}
       <ReceiveModal
-        isOpen={showReceiveModal}
-        onClose={() => setShowReceiveModal(false)}
-        selectedApplication={selectedApplication}
-        onAdminReceive={handleAdminReceive} 
-        onSendToMaster={handleSendToMaster}
-        onMasterConfirm={handleMasterConfirm}
-        language={language}
-        escapeHtml={escapeHtml}
-        userRole={userRole}
-        t={t}
-        modalMode={selectedApplication?.modalMode || 'admin_receive'}
-        showNotification={showNotification}
-        onPhotoClick={(materialIndex) => {
-          setActiveMaterialIndex(materialIndex);
-          setShowPhotoCapture(true);
-        }}
-        onQRClick={() => setShowQRScanner(true)}
-        onTakeToWork={handleTakeToWork}
-        onSendForApproval={handleSendForApproval} 
-      />
+  isOpen={showReceiveModal}
+  onClose={() => setShowReceiveModal(false)}
+  selectedApplication={selectedApplication}
+  onAdminReceive={handleAdminReceive}
+  onSendToMaster={handleSendToMaster}
+  onMasterConfirm={handleMasterConfirm}
+  language={language}
+  escapeHtml={escapeHtml}
+  userRole={userRole}
+  t={t}
+  modalMode={selectedApplication?.modalMode || 'admin_receive'}
+  showNotification={showNotification}
+  // ✅ Убедитесь, что здесь передается userCompanyId, который проходит очистку в App.jsx
+  userCompanyId={userCompanyId} 
+  userId={user?.id}
+  onPhotoClick={(materialIndex) => {
+    setActiveMaterialIndex(materialIndex);
+    setShowPhotoCapture(true);
+  }}
+  onQRClick={() => setShowQRScanner(true)}
+  onTakeToWork={handleTakeToWork}
+  onSendForApproval={handleSendForApproval}
+/>
       
       {renderAdminLoginModal()}
       {renderNotifications()}

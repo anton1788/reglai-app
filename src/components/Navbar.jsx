@@ -83,14 +83,24 @@ const Navbar = ({
   const tabletNavScrollRef = useRef(null);
 
   // Загрузка текущего тарифа
-  const loadCompanyPlan = useCallback(async () => {
-    if (!companyId || !supabase) {
+    const loadCompanyPlan = useCallback(async () => {
+    // ✅ Очистка ID перед запросом
+    let cleanId = companyId;
+    if (cleanId && typeof cleanId === 'object') {
+      cleanId = cleanId.id || cleanId.company_id || null;
+    }
+    if (cleanId) cleanId = String(cleanId).trim();
+    
+    // Если после очистки ID нет или он невалиден — выходим
+    if (!cleanId || cleanId === '[object Object]' || !supabase) {
       setPlanLoading(false);
       return;
     }
+
     try {
       setPlanLoading(true);
-      const planData = await getCompanyPlan(supabase, companyId);
+      // Передаем только чистый ID
+      const planData = await getCompanyPlan(supabase, cleanId);
       setCurrentPlan(planData);
     } catch (error) {
       console.error('Failed to load company plan:', error);
