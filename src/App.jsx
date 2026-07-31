@@ -4393,87 +4393,93 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
   }, []);
 
   // ─────────────────────────────────────────────────────────
-  // 👥 LOAD EMPLOYEES
-  // ─────────────────────────────────────────────────────────
-  const loadEmployees = useCallback(async () => {
+// 👥 LOAD EMPLOYEES
+// ─────────────────────────────────────────────────────────
+const loadEmployees = useCallback(async () => {
   if (userRole !== 'manager' && userRole !== 'director' && !isCompanyOwner) return;
-  
-  // ✅ ЗАЩИТА ID (копия логики из loadApplications)
+
+  // ✅ ЖЕСТКАЯ ОЧИСТКА ID ПЕРЕД ЗАПРОСОМ
   let rawId = userCompanyId;
   if (rawId && typeof rawId === 'object') {
+    console.warn('⚠️ loadEmployees: userCompanyId был объектом, исправляю...', rawId);
     rawId = rawId.id || rawId.company_id || rawId._id || null;
   }
-  let safeCompanyId = rawId ? String(rawId).trim() : null;
-  if (safeCompanyId && safeCompanyId.includes('[object')) {
-    console.error('❌ loadEmployees: Мусор в companyId', rawId);
-    safeCompanyId = null;
-  }
-  if (!safeCompanyId && user?.user_metadata?.company_id) {
-    safeCompanyId = String(user.user_metadata.company_id);
-  }
   
-  if (!safeCompanyId) {
-    console.warn('⚠️ loadEmployees: companyId отсутствует');
-    setLoadingEmployees(false);
-    return;
+  let safeCompanyId = rawId ? String(rawId).trim() : null;
+
+  // Если ID все еще мусор, берем из метаданных пользователя
+  if (!safeCompanyId || safeCompanyId.includes('[object')) {
+    if (user?.user_metadata?.company_id) {
+      safeCompanyId = String(user.user_metadata.company_id);
+      safeSetUserCompanyId(safeCompanyId); // Чиним стейт
+    } else {
+      console.error('❌ loadEmployees: Невозможно определить company_id');
+      setLoadingEmployees(false);
+      return;
+    }
   }
 
   setLoadingEmployees(true);
-  try {
-    const { data: currentEmployees, error: loadError } = await supabase
-      .from('company_users')
-      .select('*')
-      .eq('company_id', safeCompanyId); // ✅ Используем очищенный ID
+try {
+  const { data: currentEmployees, error: loadError } = await supabase
+    .from('company_users')
+    .select('*')
+    .eq('company_id', safeCompanyId); // ✅ Было правильно
+  if (!loadError && currentEmployees && currentEmployees.length > 0) {
+    setEmployees(currentEmployees);
+    return;
+  }
+  
+  const { data: apps, error: appsError } = await supabase
+    .from('applications')
+    .select('user_id, foreman_name, foreman_phone')
+    .eq('company_id', safeCompanyId) // ✅ ИСПРАВЛЕНО (было userCompanyId)
+    .not('user_id', 'eq', user?.id);
     
-    if (!loadError && currentEmployees && currentEmployees.length > 0) {
-      setEmployees(currentEmployees);
-      return;
-    }
-      const { data: apps, error: appsError } = await supabase
-        .from('applications')
-        .select('user_id, foreman_name, foreman_phone')
-        .eq('company_id', userCompanyId)
-        .not('user_id', 'eq', user?.id);
-      if (appsError) {
-        console.error('Ошибка загрузки заявок для миграции:', appsError);
-        setEmployees([]);
-        return;
-      }
-      const uniqueUsers = new Map();
-      apps.forEach(app => {
-        if (app.user_id && !uniqueUsers.has(app.user_id)) {
-          uniqueUsers.set(app.user_id, {
-            user_id: app.user_id,
-            company_id: userCompanyId,
-            full_name: app.foreman_name?.trim() || '—',
-            phone: app.foreman_phone || '—',
-            role: 'foreman',
-            is_active: true
-          });
-        }
+  if (appsError) {
+    console.error('Ошибка загрузки заявок для миграции:', appsError);
+    setEmployees([]);
+    return;
+  }
+  
+  const uniqueUsers = new Map();
+  apps.forEach(app => {
+    if (app.user_id && !uniqueUsers.has(app.user_id)) {
+      uniqueUsers.set(app.user_id, {
+        user_id: app.user_id,
+        company_id: safeCompanyId, // ✅ ИСПРАВЛЕНО (было userCompanyId)
+        full_name: app.foreman_name?.trim() || '—',
+        phone: app.foreman_phone || '—',
+        role: 'foreman',
+        is_active: true
       });
-      if (uniqueUsers.size > 0) {
-        const usersToAdd = Array.from(uniqueUsers.values());
-        const { error: insertError } = await supabase
-          .from('company_users')
-          .insert(usersToAdd);
-        if (insertError) {
-          console.warn('Частичная ошибка добавления сотрудников:', insertError);
-        }
-      }
-      const { data: updatedEmployees } = await supabase
-        .from('company_users')
-        .select('*')
-        .eq('company_id', userCompanyId)
-        .neq('user_id', user?.id);
-      setEmployees(updatedEmployees || []);
-    } catch (err) {
-      console.error('Критическая ошибка загрузки сотрудников:', err);
-      setEmployees([]);
-    } finally {
-      setLoadingEmployees(false);
     }
-  }, [userRole, userCompanyId, user]);
+  });
+  
+  if (uniqueUsers.size > 0) {
+    const usersToAdd = Array.from(uniqueUsers.values());
+    const { error: insertError } = await supabase
+      .from('company_users')
+      .insert(usersToAdd);
+    if (insertError) {
+      console.warn('Частичная ошибка добавления сотрудников:', insertError);
+    }
+  }
+  
+  const { data: updatedEmployees } = await supabase
+    .from('company_users')
+    .select('*')
+    .eq('company_id', safeCompanyId) // ✅ ИСПРАВЛЕНО (было userCompanyId)
+    .neq('user_id', user?.id);
+    
+  setEmployees(updatedEmployees || []);
+} catch (err) {
+  console.error('Критическая ошибка загрузки сотрудников:', err);
+  setEmployees([]);
+} finally {
+  setLoadingEmployees(false);
+}
+}, [userRole, userCompanyId, user, isCompanyOwner, safeSetUserCompanyId]);
 
   useEffect(() => {
     if (currentView === 'employees') {
@@ -4521,38 +4527,37 @@ useEffect(() => {
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
-  // ✅ ЖЕСТКАЯ ОЧИСТКА COMPANY ID
+  // 🛡️ ШАГ 1: Получаем сырое значение
   let rawId = userCompanyId;
-  
-  // 1. Если это объект, пытаемся достать ID всеми способами
+
+  // 🛡️ ШАГ 2: Если это объект, пытаемся достать ID
   if (rawId && typeof rawId === 'object') {
+    console.warn('⚠️ loadApplications: userCompanyId был объектом!', rawId);
     rawId = rawId.id || rawId.company_id || rawId._id || null;
   }
-  
-  // 2. Преобразуем в строку
+
+  // 🛡️ ШАГ 3: Превращаем в строку
   let safeCompanyId = rawId ? String(rawId).trim() : null;
-  
-  // 3. Защита от мусора вроде "[object Object]"
-  if (safeCompanyId && safeCompanyId.includes('[object')) {
-    console.error('❌ loadApplications: Обнаружен мусор в companyId', rawId);
-    safeCompanyId = null;
-  }
-  
-  // 4. Фоллбек на метаданные пользователя, если state пуст или поврежден
-  if (!safeCompanyId && user?.user_metadata?.company_id) {
-    safeCompanyId = String(user.user_metadata.company_id);
-    // Обновляем стейт, чтобы в будущем не было проблем
-    safeSetUserCompanyId(safeCompanyId); 
+
+  // 🛡️ ШАГ 4: ФИНАЛЬНАЯ ПРОВЕРКА НА МУСОР
+  if (!safeCompanyId || safeCompanyId === '[object Object]' || safeCompanyId.length < 5) {
+    console.error('❌ loadApplications: companyId невалиден даже после очистки!', { rawId, safeCompanyId });
+    
+    // Пытаемся взять из метаданных пользователя как последний шанс
+    const fallbackId = user?.user_metadata?.company_id;
+    if (fallbackId && typeof fallbackId === 'string' && fallbackId.length > 5) {
+      console.log('🔄 Восстанавливаю companyId из user metadata');
+      safeCompanyId = fallbackId;
+      safeSetUserCompanyId(safeCompanyId); // Чиним стейт на будущее
+    } else {
+      console.error('❌ Невозможно загрузить заявки: нет валидного company_id');
+      setIsLoading(false);
+      return;
+    }
   }
 
-  if (!safeCompanyId) {
-    console.warn('⚠️ loadApplications: companyId отсутствует');
-    setIsLoading(false);
-    return;
-  }
+  console.log('✅ loadApplications запускается с чистым ID:', safeCompanyId);
 
-  console.log('📊 loadApplications с companyId:', safeCompanyId);
-  
   // Проверка кэша
   const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}`;
   const cached = cacheManager.get('applications', cacheKey);
@@ -4564,53 +4569,57 @@ useEffect(() => {
     setIsLoading(false);
     return;
   }
-  
+
   setIsLoading(true);
   try {
-    // ✅ 1. Получаем количество
+    // ✅ 1. Сначала получаем ТОЛЬКО количество
     const { count, error: countError } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
-      .eq('company_id', safeCompanyId);
-    
+      .eq('company_id', safeCompanyId); // Теперь здесь ТОЧНО строка
+
     if (countError) throw countError;
-    
+
+    // ✅ 2. Вычисляем totalPages
     const calculatedTotalPages = Math.max(1, Math.ceil(count / ITEMS_PER_PAGE));
     setTotalPages(calculatedTotalPages);
-    
+
+    // ✅ 3. Корректируем pageNumber если нужно
     let safePage = pageNumber;
     if (safePage > calculatedTotalPages) {
       safePage = 1;
       setPage(1);
     }
-    
+
+    // ✅ 4. Вычисляем правильный range
     const from = (safePage - 1) * ITEMS_PER_PAGE;
     const to = Math.min(safePage * ITEMS_PER_PAGE - 1, count - 1);
-    
+
+    // ✅ 5. Запрос с правильным range
     let query = supabase
       .from('applications')
       .select('*')
-      .eq('company_id', safeCompanyId)
+      .eq('company_id', safeCompanyId) // И здесь ТОЧНО строка
       .order('created_at', { ascending: false })
       .range(from, to > 0 ? to : 0);
-    
+
     if (userRole === 'master') query = query.eq('user_id', user?.id);
     if (userRole === 'accountant') query = query.eq('status', 'received');
-    
+
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
-    
+
     setApplications(userApps);
-    
+
     // Загрузка пользователей
     const { data: usersData } = await supabase
       .from('company_users')
       .select('user_id, created_at, full_name, role')
-      .eq('company_id', safeCompanyId);
-    
+      .eq('company_id', safeCompanyId); // И здесь ТОЧНО строка
+
     let commentsMap = {};
     if (usersData) setCompanyUsers(usersData);
-    
+
     if (userApps.length > 0) {
       const appIds = userApps.map(app => app.id);
       const { data: allComments = [] } = await supabase
@@ -4618,7 +4627,7 @@ useEffect(() => {
         .select('*')
         .in('application_id', appIds)
         .order('created_at', { ascending: true });
-      
+
       allComments.forEach(comment => {
         if (!commentsMap[comment.application_id]) {
           commentsMap[comment.application_id] = [];
@@ -4629,7 +4638,7 @@ useEffect(() => {
     } else {
       setComments({});
     }
-    
+
     if (isAdminMode) {
       const { data: allApps = [] } = await supabase
         .from('applications')
@@ -4639,7 +4648,7 @@ useEffect(() => {
         .limit(500);
       setAllApplications(allApps || []);
     }
-    
+
     // Сохраняем в кэш
     cacheManager.set('applications', cacheKey, {
       userApps,
@@ -4647,14 +4656,14 @@ useEffect(() => {
       usersData,
       commentsMap
     });
-    
+
   } catch (err) {
     console.error('Ошибка загрузки заявок:', err);
     showNotification('Ошибка загрузки данных', 'error');
   } finally {
     setIsLoading(false);
   }
-}, [user, userCompanyId, userRole, isAdminMode, showNotification]);
+}, [user, userCompanyId, userRole, isAdminMode, showNotification, safeSetUserCompanyId]);
 
   // 📩 ЗАГРУЗКА УВЕДОМЛЕНИЙ (ВСТАВИТЬ ПОСЛЕ loadApplications)
   const loadNotifications = useCallback(async () => {
