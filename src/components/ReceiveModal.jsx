@@ -524,24 +524,24 @@ const ReceiveModal = memo(function({
       
       setLocalMaterials(validMaterials);
       
-     if (modalMode === 'admin_send_to_master') {
-  setItemsToSend(selectedApplication.materials
-    .filter(function(m) {
-      const onWarehouseQty = Number(m.supplier_received_quantity) || 0;
-      const alreadySent = Number(m.sent_to_master_quantity) || 0;
-      // Отправляем только те материалы, которые есть на складе и ещё не отправлены полностью
-      return onWarehouseQty > 0 && alreadySent < onWarehouseQty;
-    })
-    .map(function(m) {
-      const available = Number(m.supplier_received_quantity) - Number(m.sent_to_master_quantity || 0);
-      return {
-        ...m,
-        quantityToSend: available,  // ← отправляем всё доступное
-        unit: m.unit || 'шт'
-      };
-    })
-  );
-}
+      if (modalMode === 'admin_send_to_master') {
+        setItemsToSend(selectedApplication.materials
+          .filter(function(m) {
+            const onWarehouseQty = Number(m.supplier_received_quantity) || 0;
+            const alreadySent = Number(m.sent_to_master_quantity) || 0;
+            const isAlreadySent = m.status === ITEM_STATUS.SENT_TO_MASTER || 
+                                 m.status === ITEM_STATUS.CONFIRMED;
+            return onWarehouseQty > 0 && !isAlreadySent && alreadySent < onWarehouseQty;
+          })
+          .map(function(m) {
+            return {
+              ...m,
+              quantityToSend: Number(m.supplier_received_quantity) || 0,
+              unit: m.unit || 'шт'
+            };
+          })
+        );
+      }
       
       // ✅ НОВЫЙ РЕЖИМ: Готовы к выдаче
       if (modalMode === 'admin_ready_to_issue') {
@@ -729,7 +729,7 @@ const ReceiveModal = memo(function({
     });
     if (showNotification) showNotification('Добавлено ' + photosArray.length + ' фото для материала', 'success');
     setCurrentMaterialIndex(null);
-  }, [currentMaterialIndex, localMaterials, showNotification, safeCompanyId]);
+  }, [currentMaterialIndex, localMaterials, showNotification]);
   
   // Открыть фото для конкретного материала
   const handleOpenPhotoForMaterial = useCallback(function(materialIndex) {

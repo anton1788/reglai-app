@@ -434,13 +434,9 @@ const getDaysSince = (dateString) => {
 
 const getClientId = async (userId, companyId) => {
   // ✅ Безопасно приводим к строке
-  let safeCompanyId = companyId;
-  if (safeCompanyId && typeof safeCompanyId === 'object') {
-    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-  }
-  if (safeCompanyId && typeof safeCompanyId !== 'string') {
-    safeCompanyId = String(safeCompanyId);
-  }
+  const safeCompanyId = typeof companyId === 'object' 
+    ? companyId.id || companyId.company_id || String(companyId) 
+    : String(companyId || '');
   
   if (!safeCompanyId || safeCompanyId === '[object Object]') {
     console.error('❌ getClientId: неверный companyId', companyId);
@@ -1283,14 +1279,6 @@ const [showConsentUpdate, setShowConsentUpdate] = useState(false);
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK
 // ─────────────────────────────────────────────────────────
-const safeCompanyIdForApproval = useMemo(() => {
-  if (!userCompanyId) return null;
-  if (typeof userCompanyId === 'object') {
-    return userCompanyId.id || userCompanyId.company_id || null;
-  }
-  return userCompanyId;
-}, [userCompanyId]);
-
 const {
   pendingApprovals,
   approvalHistory,
@@ -1298,7 +1286,9 @@ const {
   approveApplication,
   rejectApplication,
   escalateApplication,
-} = useApproval(safeCompanyIdForApproval, user?.id, userRole);
+  // eslint-disable-next-line no-unused-vars
+  requiresApproval
+} = useApproval(userCompanyId, user?.id, userRole);
 
   // ─────────────────────────────────────────────────────────
   // 🎨 INJECT GLOBAL STYLES (Pattern #1)
@@ -1565,23 +1555,10 @@ return () => {
     if (!user?.id || !userCompanyId) return;
     const checkSecurityStatus = async () => {
       try {
-        // ✅ БЕЗОПАСНО ПОЛУЧАЕМ ID
-let safeCompanyId = userCompanyId;
-if (safeCompanyId && typeof safeCompanyId === 'object') {
-  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-}
-if (safeCompanyId && typeof safeCompanyId !== 'string') {
-  safeCompanyId = String(safeCompanyId);
-}
-if (!safeCompanyId || safeCompanyId === '[object Object]') {
-  console.warn('⚠️ checkSecurityStatus: неверный companyId');
-  return;
-}
-
-const [companyRes, userRes] = await Promise.all([
-  supabase.from('companies').select('is_blocked').eq('id', safeCompanyId).single(),
-  supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', safeCompanyId).maybeSingle()
-]);
+        const [companyRes, userRes] = await Promise.all([
+          supabase.from('companies').select('is_blocked').eq('id', userCompanyId).single(),
+          supabase.from('company_users').select('is_active').eq('user_id', user.id).eq('company_id', userCompanyId).maybeSingle()
+        ]);
         const isCompanyBlocked = companyRes.data?.is_blocked;
         const isUserInactive = userRes.data?.is_active === false;
         if (isCompanyBlocked || isUserInactive) {
@@ -1642,11 +1619,6 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
         const company_id = metadata?.company_id;
         const company_name = metadata?.company_name?.trim();
         if (company_id) {
-           console.log('🔍 [DEBUG] company_id из метаданных:', company_id, 'тип:', typeof company_id);
-  if (company_id && typeof company_id === 'object') {
-    console.warn('⚠️ company_id является объектом!', company_id);
-    console.warn('⚠️ Доступные поля:', Object.keys(company_id));
-  }
           try {
             const { data: companyData } = await supabase
               .from('companies')
@@ -1671,22 +1643,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
         setUser(session.user);
         setUserRole(role);
         setUserCompany(company_name);
-        // ✅ ПРИНУДИТЕЛЬНОЕ ПРИВЕДЕНИЕ К СТРОКЕ
-let safeCompanyId = company_id;
-if (safeCompanyId && typeof safeCompanyId === 'object') {
-  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-}
-if (safeCompanyId && typeof safeCompanyId !== 'string') {
-  safeCompanyId = String(safeCompanyId);
-}
-if (!safeCompanyId || safeCompanyId === '[object Object]') {
-  console.error('❌ checkSession: неверный company_id', company_id);
-  showNotification('Ошибка: компания не найдена', 'error');
-  await supabase.auth.signOut();
-  return;
-}
-console.log('✅ checkSession: safeCompanyId =', safeCompanyId);
-safeSetUserCompanyId(safeCompanyId);
+        safeSetUserCompanyId(company_id);
         if (company_id && session?.user?.id) {
           const { data: companyData, error: ownerError } = await supabase
             .from('companies')
@@ -1734,22 +1691,7 @@ safeSetUserCompanyId(safeCompanyId);
               setUser(newSession.user);
               setUserRole(role);
               setUserCompany(company_name);
-              // ✅ ПРИНУДИТЕЛЬНОЕ ПРИВЕДЕНИЕ К СТРОКЕ
-let safeCompanyId = company_id;
-if (safeCompanyId && typeof safeCompanyId === 'object') {
-  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-}
-if (safeCompanyId && typeof safeCompanyId !== 'string') {
-  safeCompanyId = String(safeCompanyId);
-}
-if (!safeCompanyId || safeCompanyId === '[object Object]') {
-  console.error('❌ checkSession (setSession): неверный company_id', company_id);
-  showNotification('Ошибка: компания не найдена', 'error');
-  await supabase.auth.signOut();
-  return;
-}
-console.log('✅ checkSession (setSession): safeCompanyId =', safeCompanyId);
-safeSetUserCompanyId(safeCompanyId);
+              safeSetUserCompanyId(company_id);
               if (company_id && newSession?.user?.id) {
                 const { data: companyData, error: ownerError } = await supabase
                   .from('companies')
@@ -1806,22 +1748,7 @@ safeSetUserCompanyId(safeCompanyId);
         setUser(session.user);
         setUserRole(role);
         setUserCompany(company_name);
-            // ✅ ПРИНУДИТЕЛЬНОЕ ПРИВЕДЕНИЕ К СТРОКЕ
-    let safeCompanyId = company_id;
-    if (safeCompanyId && typeof safeCompanyId === 'object') {
-      safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-    }
-    if (safeCompanyId && typeof safeCompanyId !== 'string') {
-      safeCompanyId = String(safeCompanyId);
-    }
-    if (!safeCompanyId || safeCompanyId === '[object Object]') {
-      console.error('❌ onAuthStateChange: неверный company_id', company_id);
-      showNotification('Ошибка: компания не найдена', 'error');
-      supabase.auth.signOut();
-      return;
-    }
-    console.log('✅ onAuthStateChange: safeCompanyId =', safeCompanyId);
-    safeSetUserCompanyId(safeCompanyId);
+        safeSetUserCompanyId(company_id);
         setProfileDataForHeader({
           fullName: metadata.full_name || '',
           phone: metadata.phone || ''
@@ -1959,34 +1886,25 @@ safeSetUserCompanyId(safeCompanyId);
   // 📤 SEND OFFLINE DRAFTS
   // ─────────────────────────────────────────────────────────
   const sendWithRetry = useCallback(async (draft, maxRetries = 5) => {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id
-      let safeCompanyId = userCompanyId;
-      if (safeCompanyId && typeof safeCompanyId === 'object') {
-        safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-      }
-      if (safeCompanyId && typeof safeCompanyId !== 'string') {
-        safeCompanyId = String(safeCompanyId);
-      }
-      
-      const application = {
-        object_name: draft.objectName,
-        foreman_name: draft.foremanName,
-        foreman_phone: draft.foremanPhone,
-        materials: draft.materials.map(m => ({ ...m, received: 0, status: 'pending' })),
-        status: 'pending',
-        user_id: user?.id,
-        company_id: safeCompanyId,  // ← ИСПОЛЬЗУЕМ БЕЗОПАСНЫЙ ID
-        created_at: draft.timestamp || new Date().toISOString(),
-        status_history: [{
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const application = {
+          object_name: draft.objectName,
+          foreman_name: draft.foremanName,
+          foreman_phone: draft.foremanPhone,
+          materials: draft.materials.map(m => ({ ...m, received: 0, status: 'pending' })),
+          status: 'pending',
           user_id: user?.id,
-          user_email: user?.email,
-          action: 'created_from_draft',
-          timestamp: new Date().toISOString()
-        }],
-        viewed_by_supply_admin: false
-      };
+          company_id: userCompanyId,
+          created_at: draft.timestamp || new Date().toISOString(),
+          status_history: [{
+            user_id: user?.id,
+            user_email: user?.email,
+            action: 'created_from_draft',
+            timestamp: new Date().toISOString()
+          }],
+          viewed_by_supply_admin: false
+        };
         // 🕐 Замер времени для логирования
         const { data, error } = await supabase
           .from('applications')
@@ -2560,7 +2478,7 @@ const checkForUpdates = useCallback(async () => {
         password: signupPassword,
         options: {
           data: {
-            company_id: String(targetCompanyId),
+            company_id: targetCompanyId,
             company_name: invitedCompanyName || signupCompanyName.trim(),
             role: finalRole,
             full_name: signupFullName,
@@ -2578,7 +2496,7 @@ if (authData?.user) {
   if (!userData?.user?.user_metadata?.company_id) {
     await supabase.auth.updateUser({
       data: {
-        company_id: String(targetCompanyId),
+        company_id: targetCompanyId,
         company_name: invitedCompanyName || signupCompanyName.trim(),
         role: finalRole,
         full_name: signupFullName,
@@ -3015,16 +2933,7 @@ const handleSubmit = async (e) => {
   }
   
   const sessionUser = session.user;
-  
-  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id
-  let safeCompanyId = sessionUser.user_metadata?.company_id || userCompanyId;
-  if (safeCompanyId && typeof safeCompanyId === 'object') {
-    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-  }
-  if (safeCompanyId && typeof safeCompanyId !== 'string') {
-    safeCompanyId = String(safeCompanyId);
-  }
-  
+  const safeCompanyId = sessionUser.user_metadata?.company_id || userCompanyId;
   const safeCompany = sessionUser.user_metadata?.company_name?.trim() || userCompany;
   
   if (!safeCompanyId) {
@@ -3082,7 +2991,7 @@ const handleSubmit = async (e) => {
     materials: materialsWithTracking,
     status: initialStatus,
     user_id: sessionUser.id,
-    company_id: safeCompanyId,  // ← ИСПОЛЬЗУЕМ БЕЗОПАСНЫЙ ID
+    company_id: safeCompanyId,
     client_id: selectedClientId || null,
     created_at: new Date().toISOString(),
     total_amount: totalAmount,
@@ -4000,38 +3909,16 @@ const handleClearFilters = useCallback(() => {
 // 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (ОБНОВЛЁННАЯ)
 // ============================================================
 const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
-  console.log('🔍 [DEBUG] handleAdminReceive started');
+  console.log('🔍 [DEBUG] handleAdminReceive started', {
+    applicationId: application?.id,
+    materialsCount: materialsFromModal?.length || 0,
+    userCompanyId
+  });
   
   if (!application?.id) {
     showNotification('Ошибка: заявка не найдена', 'error');
     return { success: false };
   }
-
-  // ✅ ЖЕСТКОЕ ИСПРАВЛЕНИЕ ID КОМПАНИИ
-  let safeCompanyId = userCompanyId;
-  
-  if (safeCompanyId && typeof safeCompanyId === 'object') {
-    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-  }
-  
-  if (safeCompanyId) {
-    safeCompanyId = String(safeCompanyId);
-  }
-
-  // Финальная проверка и восстановление
-  if (!safeCompanyId || safeCompanyId === '[object Object]' || safeCompanyId === 'undefined') {
-    const metaId = user?.user_metadata?.company_id;
-    if (metaId) {
-      safeCompanyId = String(metaId);
-      safeSetUserCompanyId(safeCompanyId);
-    } else {
-      console.error('❌ handleAdminReceive: нет companyId');
-      showNotification('Ошибка авторизации компании. Перезайдите в систему.', 'error');
-      return { success: false };
-    }
-  }
-
-  console.log('✅ handleAdminReceive: safeCompanyId =', safeCompanyId);
   
   try {
     // 1. Формируем данные для RPC
@@ -4048,27 +3935,16 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     }
     
     // 2. Вызываем RPC функцию receive_materials
-    console.log('📤 Вызов receive_materials с параметрами:', {
-      p_application_id: application.id,
-      p_company_id: safeCompanyId,
-      p_user_id: user?.id,
-      p_materials_count: receiveItems.length
-    });
-    
     const { data, error } = await supabase.rpc('receive_materials', {
       p_application_id: application.id,
-      p_company_id: safeCompanyId,  // ← ТЕПЕРЬ ТОЧНО СТРОКА
+      p_company_id: userCompanyId,
       p_user_id: user?.id,
       p_user_email: user?.email,
       p_materials: receiveItems,
       p_invoice_url: materialsFromModal[0]?.invoice_url || null
     });
     
-    if (error) {
-      console.error('❌ RPC ошибка:', error);
-      showNotification('Ошибка приёмки: ' + error.message, 'error');
-      return { success: false };
-    }
+    if (error) throw error;
     
     if (data?.success) {
       // 3. Обновляем локальное состояние
@@ -4215,21 +4091,6 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
     return { success: false };
   }
   
-  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id
-  let safeCompanyId = userCompanyId;
-  if (safeCompanyId && typeof safeCompanyId === 'object') {
-    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-  }
-  if (safeCompanyId && typeof safeCompanyId !== 'string') {
-    safeCompanyId = String(safeCompanyId);
-  }
-  
-  if (!safeCompanyId || safeCompanyId === '[object Object]') {
-    console.error('❌ handleSendToMaster: неверный companyId', userCompanyId);
-    showNotification('Ошибка: компания не указана', 'error');
-    return { success: false };
-  }
-  
   try {
     // 1. Обновляем материалы в заявке
     const updatedMaterials = application.materials.map(original => {
@@ -4261,24 +4122,24 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
       : APPLICATION_STATUS.PARTIAL_RECEIVED;
     
     // 4. Обновляем заявку в БД
-const { error: updateError } = await supabase
-  .from('applications')
-  .update({
-    status: newStatus,  // ← ДОБАВЬТЕ ЭТУ СТРОКУ! ВАЖНО!
-    materials: updatedMaterials,
-    updated_at: new Date().toISOString(),
-    status_history: [
-      ...(application.status_history || []),
-      {
-        action: 'sent_to_master',
-        user_id: user?.id,
-        user_email: user?.email,
-        timestamp: new Date().toISOString(),
-        details: `Отправлено мастеру: ${itemsToSend.filter(i => i.quantityToSend > 0).length} позиций`
-      }
-    ]
-  })
-  .eq('id', application.id);
+    const { error: updateError } = await supabase
+      .from('applications')
+      .update({
+        status: newStatus,
+        materials: updatedMaterials,
+        updated_at: new Date().toISOString(),
+        status_history: [
+          ...(application.status_history || []),
+          {
+            action: 'sent_to_master',
+            user_id: user?.id,
+            user_email: user?.email,
+            timestamp: new Date().toISOString(),
+            details: `Отправлено мастеру: ${itemsToSend.filter(i => i.quantityToSend > 0).length} позиций`
+          }
+        ]
+      })
+      .eq('id', application.id);
     
     if (updateError) throw updateError;
     
@@ -4288,7 +4149,7 @@ const { error: updateError } = await supabase
         const qtyToSend = Number(item.quantityToSend) || 0;
         if (qtyToSend > 0) {
           await supabase.rpc('update_warehouse_balance', {
-            p_company_id: safeCompanyId,  // ← ИСПОЛЬЗУЕМ БЕЗОПАСНЫЙ ID
+            p_company_id: userCompanyId,
             p_item_name: (item.description || item.item_name || '').trim(),
             p_quantity: qtyToSend,
             p_transaction_type: 'expense',
@@ -4330,36 +4191,10 @@ const { error: updateError } = await supabase
 const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
   console.log('✅ Подтверждение мастером, items:', confirmations);
   
-  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ company_id (на всякий случай)
-  let safeCompanyId = userCompanyId;
-  if (safeCompanyId && typeof safeCompanyId === 'object') {
-    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-  }
-  if (safeCompanyId && typeof safeCompanyId !== 'string') {
-    safeCompanyId = String(safeCompanyId);
-  }
-  
   if (!application?.id) {
     showNotification('Ошибка: заявка не найдена', 'error');
     return { success: false };
   }
-  
-  // Проверяем, что company_id валидный (если он понадобится)
-  // handleMasterConfirm - ИСПРАВЛЕННЫЙ КОД
-if (!safeCompanyId || safeCompanyId === '[object Object]') {
-  console.warn('⚠️ handleMasterConfirm: неверный companyId', userCompanyId);
-  // Пытаемся восстановить из метаданных
-  const metaId = user?.user_metadata?.company_id;
-  if (metaId) {
-    safeCompanyId = String(metaId);
-    safeSetUserCompanyId(metaId);
-    console.log('✅ handleMasterConfirm: восстановлен companyId =', safeCompanyId);
-  } else {
-    // Если не удалось восстановить - блокируем выполнение
-    showNotification('Ошибка: компания не найдена', 'error');
-    return { success: false };
-  }
-}
   
   try {
     // 1. Обновляем материалы
@@ -4526,119 +4361,82 @@ if (!safeCompanyId || safeCompanyId === '[object Object]') {
     fetchSettings();
   }, []);
 
-  // 👥 LOAD EMPLOYEES - ИСПРАВЛЕННАЯ ВЕРСИЯ
-const loadEmployees = useCallback(async () => {
-  if (userRole !== 'manager' || !userCompanyId) return;
-  
-  // ✅ БЕЗОПАСНО ПОЛУЧАЕМ ID
-  let safeCompanyId = userCompanyId;
-  if (safeCompanyId && typeof safeCompanyId === 'object') {
-    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-  }
-  if (safeCompanyId && typeof safeCompanyId !== 'string') {
-    safeCompanyId = String(safeCompanyId);
-  }
-  
-  // ✅ Если ID невалидный - пытаемся восстановить из метаданных
-  if (!safeCompanyId || safeCompanyId === '[object Object]') {
-    const metaId = user?.user_metadata?.company_id;
-    if (metaId) {
-      safeCompanyId = String(metaId);
-      safeSetUserCompanyId(metaId);
-      console.log('✅ loadEmployees: восстановлен companyId =', safeCompanyId);
-    } else {
-      console.error('❌ loadEmployees: нет валидного companyId');
-      return;
-    }
-  }
-  
-  setLoadingEmployees(true);
-  try {
-    // ✅ ИСПОЛЬЗУЕМ БЕЗОПАСНЫЙ ID
-    const { data: currentEmployees, error: loadError } = await supabase
-      .from('company_users')
-      .select('*')
-      .eq('company_id', safeCompanyId);  // ← ИСПРАВЛЕНО
-    
-    if (!loadError && currentEmployees && currentEmployees.length > 0) {
-      setEmployees(currentEmployees);
-      return;
-    }
-    
-    const { data: apps, error: appsError } = await supabase
-      .from('applications')
-      .select('user_id, foreman_name, foreman_phone')
-      .eq('company_id', safeCompanyId)  // ← ИСПРАВЛЕНО
-      .not('user_id', 'eq', user?.id);
-    
-    if (appsError) {
-      console.error('Ошибка загрузки заявок для миграции:', appsError);
-      setEmployees([]);
-      return;
-    }
-    
-    const uniqueUsers = new Map();
-    apps.forEach(app => {
-      if (app.user_id && !uniqueUsers.has(app.user_id)) {
-        uniqueUsers.set(app.user_id, {
-          user_id: app.user_id,
-          company_id: safeCompanyId,  // ← ИСПРАВЛЕНО
-          full_name: app.foreman_name?.trim() || '—',
-          phone: app.foreman_phone || '—',
-          role: 'foreman',
-          is_active: true
-        });
-      }
-    });
-    
-    if (uniqueUsers.size > 0) {
-      const usersToAdd = Array.from(uniqueUsers.values());
-      const { error: insertError } = await supabase
+  // ─────────────────────────────────────────────────────────
+  // 👥 LOAD EMPLOYEES
+  // ─────────────────────────────────────────────────────────
+  const loadEmployees = useCallback(async () => {
+    if (userRole !== 'manager' || !userCompanyId) return;
+    setLoadingEmployees(true);
+    try {
+      const { data: currentEmployees, error: loadError } = await supabase
         .from('company_users')
-        .insert(usersToAdd);
-      if (insertError) {
-        console.warn('Частичная ошибка добавления сотрудников:', insertError);
+        .select('*')
+        .eq('company_id', userCompanyId);
+      if (!loadError && currentEmployees && currentEmployees.length > 0) {
+        setEmployees(currentEmployees);
+        return;
       }
+      const { data: apps, error: appsError } = await supabase
+        .from('applications')
+        .select('user_id, foreman_name, foreman_phone')
+        .eq('company_id', userCompanyId)
+        .not('user_id', 'eq', user?.id);
+      if (appsError) {
+        console.error('Ошибка загрузки заявок для миграции:', appsError);
+        setEmployees([]);
+        return;
+      }
+      const uniqueUsers = new Map();
+      apps.forEach(app => {
+        if (app.user_id && !uniqueUsers.has(app.user_id)) {
+          uniqueUsers.set(app.user_id, {
+            user_id: app.user_id,
+            company_id: userCompanyId,
+            full_name: app.foreman_name?.trim() || '—',
+            phone: app.foreman_phone || '—',
+            role: 'foreman',
+            is_active: true
+          });
+        }
+      });
+      if (uniqueUsers.size > 0) {
+        const usersToAdd = Array.from(uniqueUsers.values());
+        const { error: insertError } = await supabase
+          .from('company_users')
+          .insert(usersToAdd);
+        if (insertError) {
+          console.warn('Частичная ошибка добавления сотрудников:', insertError);
+        }
+      }
+      const { data: updatedEmployees } = await supabase
+        .from('company_users')
+        .select('*')
+        .eq('company_id', userCompanyId)
+        .neq('user_id', user?.id);
+      setEmployees(updatedEmployees || []);
+    } catch (err) {
+      console.error('Критическая ошибка загрузки сотрудников:', err);
+      setEmployees([]);
+    } finally {
+      setLoadingEmployees(false);
     }
-    
-    const { data: updatedEmployees } = await supabase
-      .from('company_users')
-      .select('*')
-      .eq('company_id', safeCompanyId)  // ← ИСПРАВЛЕНО
-      .neq('user_id', user?.id);
-    setEmployees(updatedEmployees || []);
-  } catch (err) {
-    console.error('Критическая ошибка загрузки сотрудников:', err);
-    setEmployees([]);
-  } finally {
-    setLoadingEmployees(false);
-  }
-}, [userRole, userCompanyId, user, safeSetUserCompanyId]);
+  }, [userRole, userCompanyId, user]);
 
-// Загрузка владельца компании - ИСПРАВЛЕННАЯ ВЕРСИЯ
+  useEffect(() => {
+    if (currentView === 'employees') {
+      loadEmployees();
+    }
+  }, [currentView, loadEmployees]);
+
+  // Загрузка владельца компании для отображения в списке сотрудников
 useEffect(() => {
   const loadCompanyOwner = async () => {
     if (!userCompanyId) return;
-    
-    // ✅ БЕЗОПАСНО ПОЛУЧАЕМ ID (ОДИН РАЗ)
-    let safeCompanyId = userCompanyId;
-    if (safeCompanyId && typeof safeCompanyId === 'object') {
-      safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-    }
-    if (safeCompanyId && typeof safeCompanyId !== 'string') {
-      safeCompanyId = String(safeCompanyId);
-    }
-    if (!safeCompanyId || safeCompanyId === '[object Object]') {
-      console.warn('⚠️ loadCompanyOwner: неверный companyId');
-      return;
-    }
-
     const { data } = await supabase
       .from('companies')
       .select('is_company_owner')
-      .eq('id', safeCompanyId)
+      .eq('id', userCompanyId)
       .single();
-      
     if (data) setCompanyOwnerId(data.is_company_owner);
   };
   loadCompanyOwner();
@@ -4670,43 +4468,37 @@ useEffect(() => {
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
   const loadApplications = useCallback(async (pageNumber = 1) => {
-  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID (ОБНОВЛЕНО)
+  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID
   let safeCompanyId = userCompanyId;
   
-  console.log('🔍 loadApplications: исходный userCompanyId =', userCompanyId, 'тип:', typeof userCompanyId);
-
   // Если это объект - извлекаем id
   if (safeCompanyId && typeof safeCompanyId === 'object') {
     safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-    console.log('🔍 loadApplications: извлечено из объекта =', safeCompanyId);
   }
-
+  
   // Приводим к строке
   if (safeCompanyId && typeof safeCompanyId !== 'string') {
     safeCompanyId = String(safeCompanyId);
   }
-
+  
   // Проверяем валидность
   if (!safeCompanyId || safeCompanyId === '[object Object]') {
-    console.warn('⚠️ loadApplications: неверный companyId, пытаемся восстановить...');
-    
-    // Пытаемся взять из метаданных текущего пользователя
+    console.warn('⚠️ loadApplications: неверный companyId', userCompanyId);
+    // Пытаемся восстановить из метаданных
     const metaId = user?.user_metadata?.company_id;
     if (metaId) {
       safeCompanyId = String(metaId);
-      safeSetUserCompanyId(safeCompanyId); // Сохраняем исправленный ID
-      console.log('✅ loadApplications: восстановлен companyId из метаданных =', safeCompanyId);
+      safeSetUserCompanyId(metaId);
     } else {
-      console.error('❌ loadApplications: критическая ошибка, нет companyId');
       setIsLoading(false);
       return;
     }
   }
-
-  console.log('📊 loadApplications: итоговый safeCompanyId =', safeCompanyId);
+  
+  console.log('📊 loadApplications с companyId:', safeCompanyId);
   
   // Проверка кэша
-  const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}_${userRole}`;
+  const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}`;
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
     setApplications(cached.userApps);
@@ -4746,14 +4538,8 @@ useEffect(() => {
       .order('created_at', { ascending: false })
       .range(from, to > 0 ? to : 0);
     
-    // ✅ ФИЛЬТРАЦИЯ ПО РОЛИ С ПРОВЕРКОЙ
-if (userRole === 'master' && user?.id) {
-  // Мастер видит свои заявки И заявки, ожидающие подтверждения
-  query = query.or(`user_id.eq.${user.id},status.eq.${APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION}`);
-}
-if (userRole === 'accountant') {
-  query = query.eq('status', 'received');
-}
+    if (userRole === 'master') query = query.eq('user_id', user?.id);
+    if (userRole === 'accountant') query = query.eq('status', 'received');
     
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
@@ -4812,7 +4598,7 @@ if (userRole === 'accountant') {
   } finally {
     setIsLoading(false);
   }
-}, [user, userCompanyId, userRole, isAdminMode, showNotification, safeSetUserCompanyId]);
+}, [user, userCompanyId, userRole, isAdminMode, showNotification]);
 
   // 📩 ЗАГРУЗКА УВЕДОМЛЕНИЙ (ВСТАВИТЬ ПОСЛЕ loadApplications)
   const loadNotifications = useCallback(async () => {
@@ -4887,47 +4673,26 @@ if (userRole === 'accountant') {
 // 💰 Load company plan & quota (ОБНОВЛЁННАЯ ВЕРСИЯ)
 useEffect(() => {
   const loadPlan = async () => {
+    // 🔒 Супер-админ: не загружаем тариф компании
     if (isSuperAdmin(userRole, user?.user_metadata)) {
       setCurrentPlan(null);
       setPlanLoading(false);
       return;
     }
     
-    // ✅ ЖЕСТКОЕ ИСПРАВЛЕНИЕ ID КОМПАНИИ
-let safeCompanyId = userCompanyId;
-
-// Если это объект, достаем ID
-if (safeCompanyId && typeof safeCompanyId === 'object') {
-  safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
-}
-
-// Принудительно превращаем в строку
-if (safeCompanyId) {
-  safeCompanyId = String(safeCompanyId);
-}
-
-// Если ID все еще нет или он невалидный, пробуем взять из метаданных пользователя
-if (!safeCompanyId || safeCompanyId === '[object Object]' || safeCompanyId === 'undefined') {
-  const metaId = user?.user_metadata?.company_id;
-  if (metaId) {
-    safeCompanyId = String(metaId);
-    // Обновляем глобальное состояние, чтобы ошибка не повторялась
-    safeSetUserCompanyId(safeCompanyId); 
-    console.log('✅ handleSendToMaster: восстановлен companyId из метаданных =', safeCompanyId);
-  } else {
-    console.error('❌ handleSendToMaster: НЕ УДАЛОСЬ получить companyId', { userCompanyId, metaId });
-    showNotification('Ошибка системы: компания не определена. Перезайдите в аккаунт.', 'error');
-    return { success: false };
-  }
-}
-
-try {
+    if (!userCompanyId || !supabase) {
+      setPlanLoading(false);
+      return;
+    }
+    
+    try {
       setPlanLoading(true);
       
+      // Загружаем данные компании
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .select('plan_tier, plan_activated_at, plan_expires_at, trial_started_at, trial_ended_at, promo_code_used, promo_applied_at, promo_discount_percent')
-        .eq('id', safeCompanyId)
+        .eq('id', userCompanyId)
         .single();
       
       if (companyError) throw companyError;
@@ -8211,7 +7976,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     />
   </div>
 )}
-
+// Модальные окна юридических документов
 {showPublicOffer && (
   <PublicOfferModal
     isOpen={showPublicOffer}
