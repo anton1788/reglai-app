@@ -1205,11 +1205,19 @@ const handleChurnSubmit = async ({ reason, severity, comment }) => {
 // Загрузка логов (в useEffect после загрузки userCompanyId):
 useEffect(() => {
   const loadAuditLogs = async () => {
+    // ✅ ДОБАВИТЬ ПРОВЕРКУ
     if (!userCompanyId) return;
+    
+    let safeId = userCompanyId;
+    if (typeof safeId === 'object') {
+      safeId = safeId.id || safeId.company_id || null;
+    }
+    if (!safeId || String(safeId).includes('[object')) return;
+
     const { data } = await supabase
       .from('audit_logs')
       .select('*')
-      .eq('company_id', userCompanyId)
+      .eq('company_id', safeId) // ✅ Используем safeId
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
     if (data) setAuditLogs(data);
   };
@@ -4388,17 +4396,39 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
   // 👥 LOAD EMPLOYEES
   // ─────────────────────────────────────────────────────────
   const loadEmployees = useCallback(async () => {
-    if (userRole !== 'manager' || !userCompanyId) return;
-    setLoadingEmployees(true);
-    try {
-      const { data: currentEmployees, error: loadError } = await supabase
-        .from('company_users')
-        .select('*')
-        .eq('company_id', userCompanyId);
-      if (!loadError && currentEmployees && currentEmployees.length > 0) {
-        setEmployees(currentEmployees);
-        return;
-      }
+  if (userRole !== 'manager' && userRole !== 'director' && !isCompanyOwner) return;
+  
+  // ✅ ЗАЩИТА ID (копия логики из loadApplications)
+  let rawId = userCompanyId;
+  if (rawId && typeof rawId === 'object') {
+    rawId = rawId.id || rawId.company_id || rawId._id || null;
+  }
+  let safeCompanyId = rawId ? String(rawId).trim() : null;
+  if (safeCompanyId && safeCompanyId.includes('[object')) {
+    console.error('❌ loadEmployees: Мусор в companyId', rawId);
+    safeCompanyId = null;
+  }
+  if (!safeCompanyId && user?.user_metadata?.company_id) {
+    safeCompanyId = String(user.user_metadata.company_id);
+  }
+  
+  if (!safeCompanyId) {
+    console.warn('⚠️ loadEmployees: companyId отсутствует');
+    setLoadingEmployees(false);
+    return;
+  }
+
+  setLoadingEmployees(true);
+  try {
+    const { data: currentEmployees, error: loadError } = await supabase
+      .from('company_users')
+      .select('*')
+      .eq('company_id', safeCompanyId); // ✅ Используем очищенный ID
+    
+    if (!loadError && currentEmployees && currentEmployees.length > 0) {
+      setEmployees(currentEmployees);
+      return;
+    }
       const { data: apps, error: appsError } = await supabase
         .from('applications')
         .select('user_id, foreman_name, foreman_phone')
@@ -4994,13 +5024,20 @@ useEffect(() => {
 
   useEffect(() => {
   const loadAuditLogs = async () => {
+    // ✅ ДОБАВИТЬ ПРОВЕРКУ
     if (!userCompanyId) return;
+    
+    let safeId = userCompanyId;
+    if (typeof safeId === 'object') {
+      safeId = safeId.id || safeId.company_id || null;
+    }
+    if (!safeId || String(safeId).includes('[object')) return;
+
     const { data } = await supabase
       .from('audit_logs')
       .select('*')
-      .eq('company_id', userCompanyId)
-      .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString())
-      .order('created_at', { ascending: false });
+      .eq('company_id', safeId) // ✅ Используем safeId
+      .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
     if (data) setAuditLogs(data);
   };
   loadAuditLogs();
