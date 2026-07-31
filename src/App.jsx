@@ -1006,27 +1006,48 @@ const App = () => {
   const [userRole, setUserRole] = useState('master');
   const [userCompany, setUserCompany] = useState(null);
   const [userCompanyId, setUserCompanyId] = useState(null);
-  // ✅ ДОБАВИТЬ ЭТОТ БЛОК
+  // ✅ ЗАМЕНИТЕ СУЩЕСТВУЮЩИЙ safeSetUserCompanyId НА ЭТОТ:
 const safeSetUserCompanyId = useCallback((value) => {
   if (!value) {
     setUserCompanyId(null);
     return;
   }
+  
+  let extractedId = null;
+  
   if (typeof value === 'string') {
-    setUserCompanyId(value);
-    return;
-  }
-  if (typeof value === 'object') {
-    const id = value.id || value.company_id || value._id || null;
-    if (id) {
-      setUserCompanyId(String(id));
-      return;
+    extractedId = value.trim();
+  } else if (typeof value === 'object') {
+    extractedId = value.id || value.company_id || value._id || null;
+    if (extractedId) {
+      extractedId = String(extractedId).trim();
     }
-    setUserCompanyId(String(value));
+  } else {
+    extractedId = String(value).trim();
+  }
+  
+  // 🛡️ ЖЕСТКАЯ ЗАЩИТА ОТ "[object Object]" и невалидных ID
+  if (!extractedId || extractedId === '[object Object]' || extractedId.length < 5) {
+    console.error('❌ safeSetUserCompanyId: Неверный или мусорный companyId', value);
+    setUserCompanyId(null);
     return;
   }
-  setUserCompanyId(String(value));
+  
+  setUserCompanyId(extractedId);
 }, []);
+// 🛡️ ДОБАВЬТЕ ЭТОТ useEffect СРАЗУ ПОСЛЕ safeSetUserCompanyId
+useEffect(() => {
+  if (userCompanyId && (typeof userCompanyId !== 'string' || String(userCompanyId).includes('[object'))) {
+    console.warn('⚠️ Обнаружен невалидный userCompanyId в стейте, пытаемся восстановить...', userCompanyId);
+    const fallbackId = user?.user_metadata?.company_id;
+    
+    if (fallbackId && typeof fallbackId === 'string' && !String(fallbackId).includes('[object')) {
+      safeSetUserCompanyId(fallbackId);
+    } else {
+      setUserCompanyId(null);
+    }
+  }
+}, [userCompanyId, user?.user_metadata?.company_id, safeSetUserCompanyId]);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [showSignupModal, setShowSignupModal] = useState(false);
