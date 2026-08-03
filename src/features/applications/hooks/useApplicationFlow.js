@@ -1,7 +1,7 @@
 // src/features/applications/hooks/useApplicationFlow.js
 
 import { useState, useCallback, useRef } from 'react';
-import { applicationApi } from '../api/applicationApi';
+import { applicationApi } from '../applicationApi';
 import {
   canTransition,
   calculateStatusFromMaterials,
