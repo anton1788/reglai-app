@@ -57,6 +57,10 @@ import AnalyticsDetailModal from './components/AnalyticsDetailModal';
 import TutorialModal from './components/TutorialModal';
 import ReceiveModal from './components/ReceiveModal';
 import { getStatusText as getStatusTextHelper } from './utils/applicationStatuses';
+import {
+  updateMaterialStatus,
+  calculateStatusFromMaterials,
+} from './features/applications/services/applicationService';
 import ProgressBar from './components/ProgressBar';
 import MaterialCart from './components/MaterialCart';
 import CommentsSection from './components/CommentsSection';
@@ -3957,140 +3961,184 @@ const handleClearFilters = useCallback(() => {
 }, []);
 
   // ============================================================
-// 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (ОБНОВЛЁННАЯ)
+// 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (НОВАЯ ВЕРСИЯ)
 // ============================================================
-const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
-  console.log('🔍 [DEBUG] handleAdminReceive started', {
-    applicationId: application?.id,
-    materialsCount: materialsFromModal?.length || 0,
-    userCompanyId
-  });
-  
-  if (!application?.id) {
-    showNotification('Ошибка: заявка не найдена', 'error');
+const handleAdminReceive = useCallback(async (itemsToAccept, application) => {
+  if (!application?.id || !itemsToAccept?.length) {
+    showNotification('Нет материалов для приёмки', 'warning');
     return { success: false };
   }
-  
+
   try {
-    // 1. Формируем данные для RPC
-    const receiveItems = materialsFromModal.map(m => ({
-      item_name: m.description || m.item_name || '',
-      quantity: Number(m.supplier_received_quantity) || Number(m.quantityToReceive) || Number(m.quantity) || 0,
-      unit: m.unit || 'шт',
-      invoice_url: m.invoice_url || null
-    })).filter(m => m.quantity > 0 && m.item_name);
-    
-    if (receiveItems.length === 0) {
-      showNotification('Нет материалов для приёмки', 'warning');
-      return { success: false };
-    }
-    
-    // 2. Вызываем RPC функцию receive_materials
-    const { data, error } = await supabase.rpc('receive_materials', {
-      p_application_id: application.id,
-      p_company_id: userCompanyId,
-      p_user_id: user?.id,
-      p_user_email: user?.email,
-      p_materials: receiveItems,
-      p_invoice_url: materialsFromModal[0]?.invoice_url || null
+    // 1. Получаем текущую заявку
+    const { data: currentApp, error: loadError } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('id', application.id)
+      .single();
+
+    if (loadError) throw loadError;
+
+    // 2. Обновляем материалы
+    const updatedMaterials = currentApp.materials.map((m) => {
+      const acceptItem = itemsToAccept.find(
+        (i) => (i.item_name || i.description) === m.description
+      );
+      const acceptedQty = Number(acceptItem?.quantity) || 0;
+      const currentOnWarehouse = Number(m.supplier_received_quantity) || 0;
+
+      const newOnWarehouse = Math.min(
+        Number(m.quantity) || 0,
+        currentOnWarehouse + acceptedQty
+      );
+
+      return {
+        ...m,
+        supplier_received_quantity: newOnWarehouse,
+        supplier_received_at: newOnWarehouse > 0 ? new Date().toISOString() : m.supplier_received_at,
+        status: updateMaterialStatus({
+          ...m,
+          supplier_received_quantity: newOnWarehouse,
+        }),
+      };
     });
-    
-    if (error) throw error;
-    
-    if (data?.success) {
-      // 3. Обновляем локальное состояние
-      setApplications(prev => prev.map(app =>
-        app.id === application.id
-          ? { ...app, status: data.new_status, materials: data.materials }
-          : app
-      ));
-      
-      showNotification(`✅ Принято ${receiveItems.length} позиций на склад`, 'success');
-      setShowReceiveModal(false);
-      
-      // 4. Если все принято - предлагаем отправить мастеру
-      if (data.new_status === APPLICATION_STATUS.READY_FOR_ISSUE) {
-        setTimeout(() => {
-          showNotification('📤 Все материалы на складе. Перейдите в "Готовы к выдаче"', 'info');
-        }, 1000);
-      }
-      
-      return { success: true, data };
-    } else {
-      showNotification('Ошибка: ' + (data?.error || 'Неизвестная ошибка'), 'error');
-      return { success: false };
-    }
+
+    // 3. Рассчитываем новый статус
+    const newStatus = calculateStatusFromMaterials(updatedMaterials);
+
+    // 4. Обновляем заявку в БД
+    const { error: updateError } = await supabase
+      .from('applications')
+      .update({
+        status: newStatus,
+        materials: updatedMaterials,
+        updated_at: new Date().toISOString(),
+        status_history: [
+          ...(currentApp.status_history || []),
+          {
+            action: 'supplier_received',
+            user_id: user?.id,
+            user_email: user?.email,
+            timestamp: new Date().toISOString(),
+            details: `Принято ${itemsToAccept.filter(i => i.quantity > 0).length} позиций`,
+          },
+        ],
+      })
+      .eq('id', application.id);
+
+    if (updateError) throw updateError;
+
+    // 5. Логируем в аудит
+    await logMaterialsReceived(
+      supabase,
+      { ...currentApp, materials: updatedMaterials, status: newStatus },
+      itemsToAccept.filter(i => i.quantity > 0).length,
+      updatedMaterials.length,
+      userContext
+    );
+
+    // 6. Обновляем UI
+    setApplications(prev => prev.map(app =>
+      app.id === application.id
+        ? { ...app, status: newStatus, materials: updatedMaterials }
+        : app
+    ));
+
+    showNotification(`✅ Принято ${itemsToAccept.filter(i => i.quantity > 0).length} позиций`, 'success');
+    return { success: true };
+
   } catch (err) {
     console.error('❌ Ошибка приёмки:', err);
     showNotification('Ошибка приёмки: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, userCompanyId, supabase, showNotification, setApplications]);
+}, [user, supabase, showNotification, setApplications, userContext]);
 
-  // 🔹 Снабженец берет заявку в работу (поиск поставщика, запрос счета)
+  // ============================================================
+// 🔹 СНАБЖЕНЕЦ БЕРЁТ ЗАЯВКУ В РАБОТУ
+// ============================================================
 const handleTakeToWork = useCallback(async (application) => {
-  const { error } = await supabase
-    .from('applications')
-    .update({
-      status: APPLICATION_STATUS.ADMIN_PROCESSING,
-      status_history: [...(application.status_history || []), {
-        user_id: user?.id,
-        action: 'taken_to_work',
-        timestamp: new Date().toISOString(),
-        details: 'Снабженец принял заявку в обработку'
-      }]
-    })
-    .eq('id', application.id);
-
-  if (error) { 
-    showNotification('Ошибка обновления статуса', 'error'); 
-    return; 
+  if (!application?.id) {
+    showNotification('Ошибка: заявка не найдена', 'error');
+    return;
   }
-  
-  setApplications(prev => prev.map(a => 
-    a.id === application.id 
-      ? { ...a, status: APPLICATION_STATUS.ADMIN_PROCESSING } 
-      : a
-  ));
-  setShowReceiveModal(false);
-  showNotification('📦 Заявка взята в работу. Теперь вы ищете поставщика.', 'success');
-}, [user?.id, showNotification]);
 
-// 🔹 Снабженец отправляет на согласование (после получения счета/суммы)
+  try {
+    const { error } = await supabase
+      .from('applications')
+      .update({
+        status: APPLICATION_STATUS.ADMIN_PROCESSING,
+        updated_at: new Date().toISOString(),
+        status_history: [
+          ...(application.status_history || []),
+          {
+            action: 'taken_to_work',
+            user_id: user?.id,
+            user_email: user?.email,
+            timestamp: new Date().toISOString(),
+            details: 'Снабженец принял заявку в обработку',
+          },
+        ],
+      })
+      .eq('id', application.id);
+
+    if (error) throw error;
+
+    setApplications(prev => prev.map(app =>
+      app.id === application.id
+        ? { ...app, status: APPLICATION_STATUS.ADMIN_PROCESSING }
+        : app
+    ));
+
+    showNotification('📦 Заявка взята в работу', 'success');
+  } catch (err) {
+    console.error('❌ Ошибка:', err);
+    showNotification('Ошибка: ' + err.message, 'error');
+  }
+}, [user, supabase, showNotification, setApplications]);
+
+// ============================================================
+// 🔹 СНАБЖЕНЕЦ ОТПРАВЛЯЕТ НА СОГЛАСОВАНИЕ
+// ============================================================
 const handleSendForApproval = useCallback(async (application) => {
-  // ⚠️ ВАРИАНТ А: Если approvalEngine нужен — раскомментируйте импорт внизу
-  // const approvalResult = await approvalEngine.createApprovalRequest(application, userCompanyId);
-  // if (!approvalResult) {
-  //   showNotification('⚠️ Не удалось создать запрос на согласование', 'warning');
-  //   return;
-  // }
-
-  const { error } = await supabase
-    .from('applications')
-    .update({
-      status: APPLICATION_STATUS.PENDING_APPROVAL,
-      status_history: [...(application.status_history || []), {
-        user_id: user?.id,
-        action: 'sent_for_approval',
-        timestamp: new Date().toISOString(),
-        details: 'Отправлено руководителю (получен счет)'
-      }]
-    })
-    .eq('id', application.id);
-
-  if (error) { 
-    showNotification('Ошибка обновления статуса', 'error'); 
-    return; 
+  if (!application?.id) {
+    showNotification('Ошибка: заявка не найдена', 'error');
+    return;
   }
-  
-  setApplications(prev => prev.map(a => 
-    a.id === application.id 
-      ? { ...a, status: APPLICATION_STATUS.PENDING_APPROVAL } 
-      : a
-  ));
-  setShowReceiveModal(false);
-  showNotification('📋 Отправлено руководителю на согласование', 'info');
-}, [user?.id, userCompanyId, showNotification]);
+
+  try {
+    const { error } = await supabase
+      .from('applications')
+      .update({
+        status: APPLICATION_STATUS.PENDING_APPROVAL,
+        updated_at: new Date().toISOString(),
+        status_history: [
+          ...(application.status_history || []),
+          {
+            action: 'sent_for_approval',
+            user_id: user?.id,
+            user_email: user?.email,
+            timestamp: new Date().toISOString(),
+            details: 'Отправлено руководителю на согласование',
+          },
+        ],
+      })
+      .eq('id', application.id);
+
+    if (error) throw error;
+
+    setApplications(prev => prev.map(app =>
+      app.id === application.id
+        ? { ...app, status: APPLICATION_STATUS.PENDING_APPROVAL }
+        : app
+    ));
+
+    showNotification('📋 Отправлено на согласование', 'success');
+  } catch (err) {
+    console.error('❌ Ошибка:', err);
+    showNotification('Ошибка: ' + err.message, 'error');
+  }
+}, [user, supabase, showNotification, setApplications]);
 
 
 
@@ -4132,46 +4180,52 @@ const handleNpsSubmit = async ({ score, comment }) => {
 };
 
   // ============================================================
-// 🔹 ОТПРАВКА МАСТЕРУ (ОБНОВЛЁННАЯ)
+// 🔹 ОТПРАВКА МАСТЕРУ (НОВАЯ ВЕРСИЯ)
 // ============================================================
 const handleSendToMaster = useCallback(async (itemsToSend, application) => {
-  console.log('📦 Отправка мастеру, items:', itemsToSend);
-  
   if (!application?.id || !itemsToSend?.length) {
     showNotification('Нет материалов для отправки', 'warning');
     return { success: false };
   }
-  
+
   try {
-    // 1. Обновляем материалы в заявке
-    const updatedMaterials = application.materials.map(original => {
-      const itemToSend = itemsToSend.find(i => 
-        (i.description || i.item_name) === (original.description || original.item_name)
+    // 1. Получаем текущую заявку
+    const { data: currentApp, error: loadError } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('id', application.id)
+      .single();
+
+    if (loadError) throw loadError;
+
+    // 2. Обновляем материалы
+    const updatedMaterials = currentApp.materials.map((m) => {
+      const sendItem = itemsToSend.find(
+        (i) => (i.description || i.item_name) === m.description
       );
-      
-      if (itemToSend && (Number(itemToSend.quantityToSend) || 0) > 0) {
-        const qtyToSend = Number(itemToSend.quantityToSend);
-        return {
-          ...original,
-          sent_to_master_quantity: (Number(original.sent_to_master_quantity) || 0) + qtyToSend,
-          status: ITEM_STATUS.SENT_TO_MASTER,
-          sent_to_master_at: new Date().toISOString(),
-          sent_to_master_by: user?.id
-        };
-      }
-      return original;
+      const qtyToSend = Number(sendItem?.quantityToSend) || 0;
+      const currentSent = Number(m.sent_to_master_quantity) || 0;
+
+      const newSent = Math.min(
+        Number(m.supplier_received_quantity) || 0,
+        currentSent + qtyToSend
+      );
+
+      return {
+        ...m,
+        sent_to_master_quantity: newSent,
+        sent_to_master_at: newSent > 0 ? new Date().toISOString() : m.sent_to_master_at,
+        sent_to_master_by: newSent > 0 ? user?.id : m.sent_to_master_by,
+        status: updateMaterialStatus({
+          ...m,
+          sent_to_master_quantity: newSent,
+        }),
+      };
     });
-    
-    // 2. Проверяем, все ли материалы отправлены мастеру
-    const allSent = updatedMaterials.every(m => 
-      (Number(m.sent_to_master_quantity) || 0) >= (Number(m.supplier_received_quantity) || 0)
-    );
-    
-    // 3. Новый статус заявки
-    const newStatus = allSent 
-      ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION 
-      : APPLICATION_STATUS.PARTIAL_RECEIVED;
-    
+
+    // 3. Рассчитываем новый статус
+    const newStatus = calculateStatusFromMaterials(updatedMaterials);
+
     // 4. Обновляем заявку в БД
     const { error: updateError } = await supabase
       .from('applications')
@@ -4180,137 +4234,125 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
         materials: updatedMaterials,
         updated_at: new Date().toISOString(),
         status_history: [
-          ...(application.status_history || []),
+          ...(currentApp.status_history || []),
           {
             action: 'sent_to_master',
             user_id: user?.id,
             user_email: user?.email,
             timestamp: new Date().toISOString(),
-            details: `Отправлено мастеру: ${itemsToSend.filter(i => i.quantityToSend > 0).length} позиций`
-          }
-        ]
+            details: `Отправлено мастеру ${itemsToSend.filter(i => i.quantityToSend > 0).length} позиций`,
+          },
+        ],
       })
       .eq('id', application.id);
-    
+
     if (updateError) throw updateError;
-    
-    // 5. Списание со склада (через RPC)
-    if (WAREHOUSE_ENABLED) {
-      for (const item of itemsToSend) {
-        const qtyToSend = Number(item.quantityToSend) || 0;
-        if (qtyToSend > 0) {
-          await supabase.rpc('update_warehouse_balance', {
-            p_company_id: userCompanyId,
-            p_item_name: (item.description || item.item_name || '').trim(),
-            p_quantity: qtyToSend,
-            p_transaction_type: 'expense',
-            p_user_id: user?.id,
-            p_user_email: user?.email,
-            p_comment: `Отправка мастеру: ${application.object_name}`,
-            p_application_id: application.id,
-            p_unit: item.unit || 'шт',
-            p_target_object_name: application.object_name,
-            p_recipient_name: application.foreman_name,
-            p_recipient_phone: application.foreman_phone
-          });
-        }
-      }
-    }
-    
-    // 6. Обновляем UI
+
+    // 5. Обновляем UI
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
-    
+
     showNotification(`✅ Отправлено мастеру ${itemsToSend.filter(i => i.quantityToSend > 0).length} позиций`, 'success');
-    setShowReceiveModal(false);
-    
     return { success: true };
-    
+
   } catch (err) {
     console.error('❌ Ошибка отправки мастеру:', err);
     showNotification('Ошибка отправки: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, userCompanyId, supabase, showNotification, setApplications, WAREHOUSE_ENABLED]);
+}, [user, supabase, showNotification, setApplications]);
 
   // ============================================================
-// 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (ОБНОВЛЁННАЯ)
+// 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (НОВАЯ ВЕРСИЯ)
 // ============================================================
 const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
-  console.log('✅ Подтверждение мастером, items:', confirmations);
-  
   if (!application?.id) {
     showNotification('Ошибка: заявка не найдена', 'error');
     return { success: false };
   }
-  
+
   try {
-    // 1. Обновляем материалы
-    const updatedMaterials = materialsFromModal.map((m, index) => {
+    // 1. Получаем текущую заявку
+    const { data: currentApp, error: loadError } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('id', application.id)
+      .single();
+
+    if (loadError) throw loadError;
+
+    // 2. Обновляем материалы на основе подтверждений
+    const updatedMaterials = currentApp.materials.map((m, index) => {
       const conf = confirmations.find(c => c.materialIndex === index);
-      const confirmed = conf?.action === 'confirm' ? (Number(conf.quantity) || Number(m.quantity) || 0) : 0;
-      const requested = Number(m.quantity) || 0;
-      
+      const isReject = conf?.action === 'reject';
+
+      if (isReject) {
+        return {
+          ...m,
+          received: 0,
+          status: ITEM_STATUS.REJECTED,
+          reject_reason: conf?.feedback || 'Отклонено мастером',
+          confirmed_by_employee_at: new Date().toISOString(),
+          confirmed_by_employee_id: user?.id,
+        };
+      }
+
+      const confirmedQty = Math.min(
+        Number(m.supplier_received_quantity) || 0,
+        Number(conf?.quantity) || Number(m.quantity) || 0
+      );
+
       return {
         ...m,
-        received: confirmed,
-        status: confirmed >= requested ? ITEM_STATUS.CONFIRMED :
-          confirmed > 0 ? ITEM_STATUS.SENT_TO_MASTER : ITEM_STATUS.PENDING,
-        confirmed_by_employee_at: confirmed > 0 ? new Date().toISOString() : null,
-        confirmed_by_employee_id: confirmed > 0 ? user?.id : null,
-        reject_reason: conf?.action === 'reject' ? (conf.feedback || 'Отклонено мастером') : null
+        received: confirmedQty,
+        status: updateMaterialStatus({
+          ...m,
+          received: confirmedQty,
+        }),
+        confirmed_by_employee_at: confirmedQty > 0 ? new Date().toISOString() : null,
+        confirmed_by_employee_id: confirmedQty > 0 ? user?.id : null,
+        reject_reason: null,
       };
     });
-    
-    // 2. Проверяем, все ли подтверждены
-    const allConfirmed = updatedMaterials.every(m =>
-      (m.received || 0) >= (m.quantity || 0)
-    );
-    const anyConfirmed = updatedMaterials.some(m => (m.received || 0) > 0);
-    
-    const newStatus = allConfirmed
-      ? APPLICATION_STATUS.RECEIVED
-      : anyConfirmed
-        ? APPLICATION_STATUS.PARTIAL_RECEIVED
-        : application.status;
-    
-    // 3. Обновляем заявку в БД
-    const { error } = await supabase
+
+    // 3. Рассчитываем новый статус
+    const newStatus = calculateStatusFromMaterials(updatedMaterials);
+
+    // 4. Обновляем заявку в БД
+    const { error: updateError } = await supabase
       .from('applications')
       .update({
         status: newStatus,
         materials: updatedMaterials,
         updated_at: new Date().toISOString(),
         status_history: [
-          ...(application.status_history || []),
+          ...(currentApp.status_history || []),
           {
             action: 'master_confirmed',
             user_id: user?.id,
             user_email: user?.email,
             timestamp: new Date().toISOString(),
-            details: `Подтверждено позиций: ${updatedMaterials.filter(m => m.received > 0).length}`
-          }
-        ]
+            details: `Подтверждено ${updatedMaterials.filter(m => m.received > 0).length} позиций, отклонено ${updatedMaterials.filter(m => m.status === ITEM_STATUS.REJECTED).length}`,
+          },
+        ],
       })
       .eq('id', application.id);
-    
-    if (error) throw error;
-    
-    // 4. Обновляем UI
+
+    if (updateError) throw updateError;
+
+    // 5. Обновляем UI
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
-    
-    showNotification(`✅ Подтверждено получение ${updatedMaterials.filter(m => m.received > 0).length} позиций`, 'success');
-    setShowReceiveModal(false);
-    
+
+    showNotification(`✅ Подтверждено ${updatedMaterials.filter(m => m.received > 0).length} позиций`, 'success');
     return { success: true };
-    
+
   } catch (err) {
     console.error('❌ Ошибка подтверждения:', err);
     showNotification('Ошибка подтверждения: ' + err.message, 'error');
@@ -7716,22 +7758,20 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   onAdminReceive={handleAdminReceive}
   onSendToMaster={handleSendToMaster}
   onMasterConfirm={handleMasterConfirm}
+  onTakeToWork={handleTakeToWork}        // ← ДОБАВИТЬ
+  onSendForApproval={handleSendForApproval} // ← ДОБАВИТЬ
   language={language}
-  escapeHtml={escapeHtml}
-  userRole={userRole}
   t={t}
   modalMode={selectedApplication?.modalMode || 'admin_receive'}
   showNotification={showNotification}
-  // ✅ Убедитесь, что здесь передается userCompanyId, который проходит очистку в App.jsx
-  userCompanyId={userCompanyId} 
+  userCompanyId={userCompanyId}
   userId={user?.id}
+  userRole={userRole}
   onPhotoClick={(materialIndex) => {
     setActiveMaterialIndex(materialIndex);
     setShowPhotoCapture(true);
   }}
   onQRClick={() => setShowQRScanner(true)}
-  onTakeToWork={handleTakeToWork}
-  onSendForApproval={handleSendForApproval}
 />
       
       {renderAdminLoginModal()}
