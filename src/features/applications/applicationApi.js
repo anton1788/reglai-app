@@ -1,12 +1,9 @@
-// src/features/applications/api/applicationApi.js
+// src/features/applications/applicationApi.js
 
-import { supabase } from '../../../utils/supabaseClient';
-import { APPLICATION_STATUS } from '../../../utils/applicationStatuses';
+import { supabase } from '../../utils/supabaseClient';  // ← ИСПРАВЛЕНО!
+import { APPLICATION_STATUS } from '../../utils/applicationStatuses';  // ← ИСПРАВЛЕНО!
 
 export const applicationApi = {
-  /**
-   * Получить заявку по ID
-   */
   getById: async (id, companyId) => {
     const { data, error } = await supabase
       .from('applications')
@@ -19,9 +16,6 @@ export const applicationApi = {
     return data;
   },
 
-  /**
-   * Получить заявки компании с пагинацией
-   */
   getByCompany: async (companyId, page = 1, perPage = 20, filters = {}) => {
     let query = supabase
       .from('applications')
@@ -29,7 +23,6 @@ export const applicationApi = {
       .eq('company_id', companyId)
       .order('created_at', { ascending: false });
 
-    // Применяем фильтры
     if (filters.status) {
       query = query.eq('status', filters.status);
     }
@@ -55,9 +48,6 @@ export const applicationApi = {
     };
   },
 
-  /**
-   * Обновить статус заявки
-   */
   updateStatus: async (id, status, historyEntry) => {
     const { data: current } = await supabase
       .from('applications')
@@ -82,9 +72,6 @@ export const applicationApi = {
     return data;
   },
 
-  /**
-   * Обновить материалы заявки
-   */
   updateMaterials: async (id, materials) => {
     const { data, error } = await supabase
       .from('applications')
@@ -100,9 +87,6 @@ export const applicationApi = {
     return data;
   },
 
-  /**
-   * Приёмка материалов на склад (RPC)
-   */
   receiveMaterials: async (applicationId, companyId, userId, userEmail, items, invoiceUrl = null) => {
     const { data, error } = await supabase.rpc('receive_materials', {
       p_application_id: applicationId,
@@ -126,9 +110,6 @@ export const applicationApi = {
     return data;
   },
 
-  /**
-   * Отправка материалов мастеру (списание со склада)
-   */
   sendToMaster: async (applicationId, companyId, userId, userEmail, items, targetObject, recipientName, recipientPhone) => {
     const { data, error } = await supabase.rpc('send_materials_to_master', {
       p_application_id: applicationId,
@@ -153,9 +134,6 @@ export const applicationApi = {
     return data;
   },
 
-  /**
-   * Подтверждение мастером
-   */
   confirmByMaster: async (applicationId, userId, userEmail, confirmations) => {
     const { data, error } = await supabase.rpc('confirm_materials_by_master', {
       p_application_id: applicationId,
@@ -177,9 +155,6 @@ export const applicationApi = {
     return data;
   },
 
-  /**
-   * Отмена заявки
-   */
   cancel: async (id, userId, userEmail, reason = '') => {
     const { data: current } = await supabase
       .from('applications')
@@ -218,9 +193,6 @@ export const applicationApi = {
     return data;
   },
 
-  /**
-   * Получить комментарии к заявке
-   */
   getComments: async (applicationId) => {
     const { data, error } = await supabase
       .from('comments')
@@ -232,9 +204,6 @@ export const applicationApi = {
     return data || [];
   },
 
-  /**
-   * Добавить комментарий
-   */
   addComment: async (applicationId, userId, userEmail, userRole, companyId, content) => {
     const { data, error } = await supabase
       .from('comments')
