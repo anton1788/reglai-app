@@ -1052,6 +1052,25 @@ useEffect(() => {
     }
   }
 }, [userCompanyId, user?.user_metadata?.company_id, safeSetUserCompanyId]);
+// 🔥 ГЛОБАЛЬНЫЙ ФИКС ДЛЯ МАСТЕРА - ДОБАВИТЬ ПОСЛЕ ВСЕХ useState
+  useEffect(() => {
+    if (userRole === 'master') {
+      console.log('🔍 [MASTER FIX] Проверка userCompanyId:', {
+        userCompanyId,
+        type: typeof userCompanyId,
+        metadata: user?.user_metadata?.company_id
+      });
+      
+      // Автоматический фикс, если ID - объект
+      if (userCompanyId && typeof userCompanyId === 'object') {
+        const fixedId = userCompanyId.id || userCompanyId.company_id || user?.user_metadata?.company_id;
+        if (fixedId && typeof fixedId === 'string' && fixedId.length > 5) {
+          console.log('✅ [MASTER FIX] Исправляю companyId:', fixedId);
+          safeSetUserCompanyId(fixedId);
+        }
+      }
+    }
+  }, [userRole, userCompanyId, user, safeSetUserCompanyId]);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [showSignupModal, setShowSignupModal] = useState(false);
@@ -4567,6 +4586,22 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
     // 🔥 ШАГ 1: ЖЕСТКАЯ ОЧИСТКА COMPANY_ID
     // ============================================================
     let rawId = userCompanyId;
+
+     // ⚠️ ДОБАВИТЬ ДИАГНОСТИКУ ДЛЯ МАСТЕРА
+    if (userRole === 'master') {
+        console.log('🔍 [MASTER DEBUG] userCompanyId перед очисткой:', {
+            raw: rawId,
+            type: typeof rawId,
+            isObject: rawId && typeof rawId === 'object',
+            isString: typeof rawId === 'string',
+            includesObject: typeof rawId === 'string' && rawId.includes('[object')
+        });
+    }
+    
+    if (rawId && typeof rawId === 'object') {
+        console.warn('⚠️ loadApplications: userCompanyId был объектом!', rawId);
+        rawId = rawId.id || rawId.company_id || rawId._id || null;
+    }
     
     if (rawId && typeof rawId === 'object') {
         console.warn('⚠️ loadApplications: userCompanyId был объектом!', rawId);
@@ -4737,16 +4772,37 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
 
   useEffect(() => {
   // ✅ Загружаем только если есть пользователь и компания
-  if (user && userCompanyId) {
-    // ✅ Всегда загружаем страницу 1 при монтировании
-    if (page !== 1) {
-      setPage(1);
+  if (!user) return;
+  
+  // ✅ ЖЕСТКАЯ ПРОВЕРКА ID ПЕРЕД ВЫЗОВОМ
+  let safeCompanyId = userCompanyId;
+  if (typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId?.id || safeCompanyId?.company_id || null;
+  }
+  if (typeof safeCompanyId === 'string' && safeCompanyId.includes('[object')) {
+    safeCompanyId = null;
+  }
+  
+  // Восстановление из метаданных
+  if (!safeCompanyId || typeof safeCompanyId !== 'string' || safeCompanyId.length < 5) {
+    const fallbackId = user?.user_metadata?.company_id;
+    if (fallbackId && typeof fallbackId === 'string' && fallbackId.length > 5) {
+      safeCompanyId = fallbackId;
+      safeSetUserCompanyId(safeCompanyId);
     } else {
-      loadApplications(1);
-      loadNotifications(); // ← ДОБАВЛЕНА ЗАГРУЗКА УВЕДОМЛЕНИЙ
+      console.warn('⚠️ Нет валидного company_id для загрузки');
+      return;
     }
   }
-}, [user, userCompanyId, userRole, isAdminMode, loadNotifications])
+  
+  // ✅ Всегда загружаем страницу 1 при монтировании
+  if (page !== 1) {
+    setPage(1);
+  } else {
+    loadApplications(1);
+    loadNotifications();
+  }
+}, [user, userCompanyId, userRole, isAdminMode, loadNotifications, safeSetUserCompanyId])
 
   // 📡 ПОДПИСКА НА НОВЫЕ УВЕДОМЛЕНИЯ В РЕАЛЬНОМ ВРЕМЕНИ
   useEffect(() => {
@@ -8110,7 +8166,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     />
   </div>
 )}
-// Модальные окна юридических документов
+
 {showPublicOffer && (
   <PublicOfferModal
     isOpen={showPublicOffer}
