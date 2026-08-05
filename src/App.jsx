@@ -1921,25 +1921,38 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   // 📤 SEND OFFLINE DRAFTS
   // ─────────────────────────────────────────────────────────
   const sendWithRetry = useCallback(async (draft, maxRetries = 5) => {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const application = {
-          object_name: draft.objectName,
-          foreman_name: draft.foremanName,
-          foreman_phone: draft.foremanPhone,
-          materials: draft.materials.map(m => ({ ...m, received: 0, status: 'pending' })),
-          status: 'pending',
+  // ✅ ЖЕСТКАЯ ОЧИСТКА ПЕРЕД ИСПОЛЬЗОВАНИЕМ
+  let safeCompanyId = userCompanyId;
+  if (typeof safeCompanyId === 'object') {
+    safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+  }
+  if (!safeCompanyId || String(safeCompanyId).includes('[object')) {
+    safeCompanyId = user?.user_metadata?.company_id;
+  }
+  if (!safeCompanyId) {
+    console.error('❌ sendWithRetry: нет валидного company_id');
+    return { success: false, error: 'Нет компании' };
+  }
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const application = {
+        object_name: draft.objectName,
+        foreman_name: draft.foremanName,
+        foreman_phone: draft.foremanPhone,
+        materials: draft.materials.map(m => ({ ...m, received: 0, status: 'pending' })),
+        status: 'pending',
+        user_id: user?.id,
+        company_id: safeCompanyId,  // ← ИСПРАВЛЕНО
+        created_at: draft.timestamp || new Date().toISOString(),
+        status_history: [{
           user_id: user?.id,
-          company_id: userCompanyId,
-          created_at: draft.timestamp || new Date().toISOString(),
-          status_history: [{
-            user_id: user?.id,
-            user_email: user?.email,
-            action: 'created_from_draft',
-            timestamp: new Date().toISOString()
-          }],
-          viewed_by_supply_admin: false
-        };
+          user_email: user?.email,
+          action: 'created_from_draft',
+          timestamp: new Date().toISOString()
+        }],
+        viewed_by_supply_admin: false
+      };
         // 🕐 Замер времени для логирования
         const { data, error } = await supabase
           .from('applications')
@@ -3261,15 +3274,28 @@ const handleSubmit = async (e) => {
   };
 
   const cloneLastApplication = async () => {
-    try {
-      const { data: lastApp } = await supabase
-        .from('applications')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('company_id', userCompanyId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+  try {
+    // ✅ ЖЕСТКАЯ ОЧИСТКА
+    let safeCompanyId = userCompanyId;
+    if (typeof safeCompanyId === 'object') {
+      safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
+    }
+    if (!safeCompanyId || String(safeCompanyId).includes('[object')) {
+      safeCompanyId = user?.user_metadata?.company_id;
+    }
+    if (!safeCompanyId) {
+      showNotification('Ошибка: не удалось определить компанию', 'error');
+      return;
+    }
+    
+    const { data: lastApp } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('user_id', user?.id)
+      .eq('company_id', safeCompanyId)  // ← ИСПРАВЛЕНО
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
       if (lastApp) {
         setFormData(prev => ({
           ...prev,
@@ -4454,93 +4480,43 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     fetchSettings();
   }, []);
 
-  // ─────────────────────────────────────────────────────────
-// 👥 LOAD EMPLOYEES
-// ─────────────────────────────────────────────────────────
+ // 📍 src/App.jsx - loadEmployees
 const loadEmployees = useCallback(async () => {
-  if (userRole !== 'manager' && userRole !== 'director' && !isCompanyOwner) return;
-
-  // ✅ ЖЕСТКАЯ ОЧИСТКА ID ПЕРЕД ЗАПРОСОМ
-  let rawId = userCompanyId;
-  if (rawId && typeof rawId === 'object') {
-    console.warn('⚠️ loadEmployees: userCompanyId был объектом, исправляю...', rawId);
-    rawId = rawId.id || rawId.company_id || rawId._id || null;
-  }
-  
-  let safeCompanyId = rawId ? String(rawId).trim() : null;
-
-  // Если ID все еще мусор, берем из метаданных пользователя
-  if (!safeCompanyId || safeCompanyId.includes('[object')) {
-    if (user?.user_metadata?.company_id) {
-      safeCompanyId = String(user.user_metadata.company_id);
-      safeSetUserCompanyId(safeCompanyId); // Чиним стейт
-    } else {
-      console.error('❌ loadEmployees: Невозможно определить company_id');
-      setLoadingEmployees(false);
-      return;
-    }
-  }
-
-  setLoadingEmployees(true);
-try {
-  const { data: currentEmployees, error: loadError } = await supabase
-    .from('company_users')
-    .select('*')
-    .eq('company_id', safeCompanyId); // ✅ Было правильно
-  if (!loadError && currentEmployees && currentEmployees.length > 0) {
-    setEmployees(currentEmployees);
-    return;
-  }
-  
-  const { data: apps, error: appsError } = await supabase
-    .from('applications')
-    .select('user_id, foreman_name, foreman_phone')
-    .eq('company_id', safeCompanyId) // ✅ ИСПРАВЛЕНО (было userCompanyId)
-    .not('user_id', 'eq', user?.id);
+    if (userRole !== 'manager' && userRole !== 'director' && !isCompanyOwner) return;
     
-  if (appsError) {
-    console.error('Ошибка загрузки заявок для миграции:', appsError);
-    setEmployees([]);
-    return;
-  }
-  
-  const uniqueUsers = new Map();
-  apps.forEach(app => {
-    if (app.user_id && !uniqueUsers.has(app.user_id)) {
-      uniqueUsers.set(app.user_id, {
-        user_id: app.user_id,
-        company_id: safeCompanyId, // ✅ ИСПРАВЛЕНО (было userCompanyId)
-        full_name: app.foreman_name?.trim() || '—',
-        phone: app.foreman_phone || '—',
-        role: 'foreman',
-        is_active: true
-      });
+    // ✅ ЖЕСТКАЯ ОЧИСТКА
+    let rawId = userCompanyId;
+    if (rawId && typeof rawId === 'object') {
+        rawId = rawId.id || rawId.company_id || rawId._id || null;
     }
-  });
-  
-  if (uniqueUsers.size > 0) {
-    const usersToAdd = Array.from(uniqueUsers.values());
-    const { error: insertError } = await supabase
-      .from('company_users')
-      .insert(usersToAdd);
-    if (insertError) {
-      console.warn('Частичная ошибка добавления сотрудников:', insertError);
-    }
-  }
-  
-  const { data: updatedEmployees } = await supabase
-    .from('company_users')
-    .select('*')
-    .eq('company_id', safeCompanyId) // ✅ ИСПРАВЛЕНО (было userCompanyId)
-    .neq('user_id', user?.id);
+    let safeCompanyId = rawId ? String(rawId).trim() : null;
     
-  setEmployees(updatedEmployees || []);
-} catch (err) {
-  console.error('Критическая ошибка загрузки сотрудников:', err);
-  setEmployees([]);
-} finally {
-  setLoadingEmployees(false);
-}
+    if (!safeCompanyId || safeCompanyId.includes('[object')) {
+        if (user?.user_metadata?.company_id) {
+            safeCompanyId = String(user.user_metadata.company_id);
+            safeSetUserCompanyId(safeCompanyId);
+        } else {
+            setLoadingEmployees(false);
+            return;
+        }
+    }
+    
+    setLoadingEmployees(true);
+    try {
+        const { data: currentEmployees } = await supabase
+            .from('company_users')
+            .select('*')
+            .eq('company_id', safeCompanyId); // ← ИСПРАВЛЕНО
+            
+        if (currentEmployees) {
+            setEmployees(currentEmployees);
+        }
+    } catch (err) {
+        console.error('Ошибка загрузки сотрудников:', err);
+        setEmployees([]);
+    } finally {
+        setLoadingEmployees(false);
+    }
 }, [userRole, userCompanyId, user, isCompanyOwner, safeSetUserCompanyId]);
 
   useEffect(() => {
@@ -4585,146 +4561,152 @@ useEffect(() => {
     }
   };
 
-  // ─────────────────────────────────────────────────────────
-  // 📊 LOAD APPLICATIONS
-  // ─────────────────────────────────────────────────────────
-  const loadApplications = useCallback(async (pageNumber = 1) => {
-  // 🛡️ ШАГ 1: Получаем сырое значение
-  let rawId = userCompanyId;
-
-  // 🛡️ ШАГ 2: Если это объект, пытаемся достать ID
-  if (rawId && typeof rawId === 'object') {
-    console.warn('⚠️ loadApplications: userCompanyId был объектом!', rawId);
-    rawId = rawId.id || rawId.company_id || rawId._id || null;
-  }
-
-  // 🛡️ ШАГ 3: Превращаем в строку
-  let safeCompanyId = rawId ? String(rawId).trim() : null;
-
-  // 🛡️ ШАГ 4: ФИНАЛЬНАЯ ПРОВЕРКА НА МУСОР
-  if (!safeCompanyId || safeCompanyId === '[object Object]' || safeCompanyId.length < 5) {
-    console.error('❌ loadApplications: companyId невалиден даже после очистки!', { rawId, safeCompanyId });
+  // 📍 src/App.jsx
+const loadApplications = useCallback(async (pageNumber = 1) => {
+    // ============================================================
+    // 🔥 ШАГ 1: ЖЕСТКАЯ ОЧИСТКА COMPANY_ID
+    // ============================================================
+    let rawId = userCompanyId;
     
-    // Пытаемся взять из метаданных пользователя как последний шанс
-    const fallbackId = user?.user_metadata?.company_id;
-    if (fallbackId && typeof fallbackId === 'string' && fallbackId.length > 5) {
-      console.log('🔄 Восстанавливаю companyId из user metadata');
-      safeCompanyId = fallbackId;
-      safeSetUserCompanyId(safeCompanyId); // Чиним стейт на будущее
-    } else {
-      console.error('❌ Невозможно загрузить заявки: нет валидного company_id');
-      setIsLoading(false);
-      return;
+    if (rawId && typeof rawId === 'object') {
+        console.warn('⚠️ loadApplications: userCompanyId был объектом!', rawId);
+        rawId = rawId.id || rawId.company_id || rawId._id || null;
     }
-  }
-
-  console.log('✅ loadApplications запускается с чистым ID:', safeCompanyId);
-
-  // Проверка кэша
-  const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}`;
-  const cached = cacheManager.get('applications', cacheKey);
-  if (cached) {
-    setApplications(cached.userApps);
-    setTotalPages(cached.totalPages);
-    setCompanyUsers(cached.usersData || []);
-    setComments(cached.commentsMap || {});
-    setIsLoading(false);
-    return;
-  }
-
-  setIsLoading(true);
-  try {
-    // ✅ 1. Сначала получаем ТОЛЬКО количество
-    const { count, error: countError } = await supabase
-      .from('applications')
-      .select('*', { count: 'exact', head: true })
-      .eq('company_id', safeCompanyId); // Теперь здесь ТОЧНО строка
-
-    if (countError) throw countError;
-
-    // ✅ 2. Вычисляем totalPages
-    const calculatedTotalPages = Math.max(1, Math.ceil(count / ITEMS_PER_PAGE));
-    setTotalPages(calculatedTotalPages);
-
-    // ✅ 3. Корректируем pageNumber если нужно
-    let safePage = pageNumber;
-    if (safePage > calculatedTotalPages) {
-      safePage = 1;
-      setPage(1);
-    }
-
-    // ✅ 4. Вычисляем правильный range
-    const from = (safePage - 1) * ITEMS_PER_PAGE;
-    const to = Math.min(safePage * ITEMS_PER_PAGE - 1, count - 1);
-
-    // ✅ 5. Запрос с правильным range
-    let query = supabase
-      .from('applications')
-      .select('*')
-      .eq('company_id', safeCompanyId) // И здесь ТОЧНО строка
-      .order('created_at', { ascending: false })
-      .range(from, to > 0 ? to : 0);
-
-    if (userRole === 'master') query = query.eq('user_id', user?.id);
-    if (userRole === 'accountant') query = query.eq('status', 'received');
-
-    const { data: userApps = [], error: userError } = await query;
-    if (userError) throw userError;
-
-    setApplications(userApps);
-
-    // Загрузка пользователей
-    const { data: usersData } = await supabase
-      .from('company_users')
-      .select('user_id, created_at, full_name, role')
-      .eq('company_id', safeCompanyId); // И здесь ТОЧНО строка
-
-    let commentsMap = {};
-    if (usersData) setCompanyUsers(usersData);
-
-    if (userApps.length > 0) {
-      const appIds = userApps.map(app => app.id);
-      const { data: allComments = [] } = await supabase
-        .from('comments')
-        .select('*')
-        .in('application_id', appIds)
-        .order('created_at', { ascending: true });
-
-      allComments.forEach(comment => {
-        if (!commentsMap[comment.application_id]) {
-          commentsMap[comment.application_id] = [];
+    
+    let safeCompanyId = rawId ? String(rawId).trim() : null;
+    
+    if (!safeCompanyId || safeCompanyId === '[object Object]' || safeCompanyId.includes('[object') || safeCompanyId.length < 5) {
+        const fallbackId = user?.user_metadata?.company_id;
+        if (fallbackId && typeof fallbackId === 'string' && fallbackId.length > 5) {
+            console.log('🔄 Восстанавливаю companyId из user metadata');
+            safeCompanyId = fallbackId;
+            safeSetUserCompanyId(safeCompanyId);
+        } else {
+            console.error('❌ loadApplications: нет валидного company_id');
+            setIsLoading(false);
+            return;
         }
-        commentsMap[comment.application_id].push(comment);
-      });
-      setComments(commentsMap);
-    } else {
-      setComments({});
     }
-
-    if (isAdminMode) {
-      const { data: allApps = [] } = await supabase
-        .from('applications')
-        .select('id, status, created_at, object_name, materials')
-        .eq('company_id', safeCompanyId)
-        .order('created_at', { ascending: false })
-        .limit(500);
-      setAllApplications(allApps || []);
+    
+    console.log('✅ loadApplications с чистым ID:', safeCompanyId);
+    
+    // ============================================================
+    // 🔥 ШАГ 2: ПРОВЕРКА КЭША
+    // ============================================================
+    const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}`;
+    const cached = cacheManager.get('applications', cacheKey);
+    if (cached) {
+        setApplications(cached.userApps);
+        setTotalPages(cached.totalPages);
+        setCompanyUsers(cached.usersData || []);
+        setComments(cached.commentsMap || {});
+        setIsLoading(false);
+        return;
     }
-
-    // Сохраняем в кэш
-    cacheManager.set('applications', cacheKey, {
-      userApps,
-      totalPages: calculatedTotalPages,
-      usersData,
-      commentsMap
-    });
-
-  } catch (err) {
-    console.error('Ошибка загрузки заявок:', err);
-    showNotification('Ошибка загрузки данных', 'error');
-  } finally {
-    setIsLoading(false);
-  }
+    
+    setIsLoading(true);
+    
+    try {
+        // ============================================================
+        // 🔥 ШАГ 3: ПОЛУЧАЕМ КОЛИЧЕСТВО
+        // ============================================================
+        const { count, error: countError } = await supabase
+            .from('applications')
+            .select('*', { count: 'exact', head: true })
+            .eq('company_id', safeCompanyId); // ← ТЕПЕРЬ ТОЧНО СТРОКА!
+            
+        if (countError) throw countError;
+        
+        const calculatedTotalPages = Math.max(1, Math.ceil(count / ITEMS_PER_PAGE));
+        setTotalPages(calculatedTotalPages);
+        
+        let safePage = pageNumber;
+        if (safePage > calculatedTotalPages) {
+            safePage = 1;
+            setPage(1);
+        }
+        
+        const from = (safePage - 1) * ITEMS_PER_PAGE;
+        const to = Math.min(safePage * ITEMS_PER_PAGE - 1, count - 1);
+        
+        // ============================================================
+        // 🔥 ШАГ 4: ЗАПРОС С ЧИСТЫМ ID
+        // ============================================================
+        let query = supabase
+            .from('applications')
+            .select('*')
+            .eq('company_id', safeCompanyId) // ← ТЕПЕРЬ ТОЧНО СТРОКА!
+            .order('created_at', { ascending: false })
+            .range(from, to > 0 ? to : 0);
+            
+        if (userRole === 'master') query = query.eq('user_id', user?.id);
+        if (userRole === 'accountant') query = query.eq('status', 'received');
+        
+        const { data: userApps = [], error: userError } = await query;
+        if (userError) throw userError;
+        
+        setApplications(userApps);
+        
+        // ============================================================
+        // 🔥 ШАГ 5: ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ
+        // ============================================================
+        const { data: usersData } = await supabase
+            .from('company_users')
+            .select('user_id, created_at, full_name, role')
+            .eq('company_id', safeCompanyId); // ← ТЕПЕРЬ ТОЧНО СТРОКА!
+            
+        if (usersData) setCompanyUsers(usersData);
+        
+        // ============================================================
+        // 🔥 ШАГ 6: ЗАГРУЗКА КОММЕНТАРИЕВ
+        // ============================================================
+        let commentsMap = {};
+        if (userApps.length > 0) {
+            const appIds = userApps.map(app => app.id);
+            const { data: allComments = [] } = await supabase
+                .from('comments')
+                .select('*')
+                .in('application_id', appIds)
+                .order('created_at', { ascending: true });
+                
+            allComments.forEach(comment => {
+                if (!commentsMap[comment.application_id]) {
+                    commentsMap[comment.application_id] = [];
+                }
+                commentsMap[comment.application_id].push(comment);
+            });
+            setComments(commentsMap);
+        }
+        
+        // ============================================================
+        // 🔥 ШАГ 7: АДМИН-РЕЖИМ
+        // ============================================================
+        if (isAdminMode) {
+            const { data: allApps = [] } = await supabase
+                .from('applications')
+                .select('id, status, created_at, object_name, materials')
+                .eq('company_id', safeCompanyId) // ← ТЕПЕРЬ ТОЧНО СТРОКА!
+                .order('created_at', { ascending: false })
+                .limit(500);
+            setAllApplications(allApps || []);
+        }
+        
+        // ============================================================
+        // 🔥 ШАГ 8: СОХРАНЯЕМ В КЭШ
+        // ============================================================
+        cacheManager.set('applications', cacheKey, {
+            userApps,
+            totalPages: calculatedTotalPages,
+            usersData,
+            commentsMap
+        });
+        
+    } catch (err) {
+        console.error('❌ Ошибка загрузки заявок:', err);
+        showNotification('Ошибка загрузки данных', 'error');
+    } finally {
+        setIsLoading(false);
+    }
 }, [user, userCompanyId, userRole, isAdminMode, showNotification, safeSetUserCompanyId]);
 
   // 📩 ЗАГРУЗКА УВЕДОМЛЕНИЙ (ВСТАВИТЬ ПОСЛЕ loadApplications)
@@ -5093,25 +5075,26 @@ useEffect(() => {
   return () => clearInterval(interval);
 }, [userCompanyId, supabase]);
 
-  useEffect(() => {
-  const loadAuditLogs = async () => {
-    // ✅ ДОБАВИТЬ ПРОВЕРКУ
-    if (!userCompanyId) return;
-    
-    let safeId = userCompanyId;
-    if (typeof safeId === 'object') {
-      safeId = safeId.id || safeId.company_id || null;
-    }
-    if (!safeId || String(safeId).includes('[object')) return;
-
-    const { data } = await supabase
-      .from('audit_logs')
-      .select('*')
-      .eq('company_id', safeId) // ✅ Используем safeId
-      .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
-    if (data) setAuditLogs(data);
-  };
-  loadAuditLogs();
+  // 📍 src/App.jsx - useEffect для аудита
+useEffect(() => {
+    const loadAuditLogs = async () => {
+        if (!userCompanyId) return;
+        
+        // ✅ ЖЕСТКАЯ ОЧИСТКА
+        let safeId = userCompanyId;
+        if (typeof safeId === 'object') {
+            safeId = safeId.id || safeId.company_id || null;
+        }
+        if (!safeId || String(safeId).includes('[object')) return;
+        
+        const { data } = await supabase
+            .from('audit_logs')
+            .select('*')
+            .eq('company_id', safeId) // ← ИСПРАВЛЕНО
+            .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
+        if (data) setAuditLogs(data);
+    };
+    loadAuditLogs();
 }, [userCompanyId, supabase]);
 
 useEffect(() => {
@@ -5290,26 +5273,42 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 🔄 AUTO-SYNC CHECK
   // ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!user || !userCompanyId) return;
-    const checkSync = async () => {
-      try {
-        const { count, error } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', userCompanyId);
-        if (!error && count === 0 && applications.length > 0) {
-          console.log('🔄 База пуста, обновляем состояние...');
-          setApplications([]);
-          setAllApplications([]);
-          await loadApplications(1);
-        }
-      } catch (e) {
-        console.warn('Ошибка проверки синхронизации:', e);
+  // 📍 В App.jsx - useEffect для auto-sync check
+useEffect(() => {
+  if (!user || !userCompanyId) return;
+  
+  const checkSync = async () => {
+    try {
+      // ✅ ЖЕСТКАЯ ОЧИСТКА
+      let safeCompanyId = userCompanyId;
+      if (typeof safeCompanyId === 'object') {
+        safeCompanyId = safeCompanyId.id || safeCompanyId.company_id || null;
       }
-    };
-    checkSync();
-  }, [user, userCompanyId, applications.length, loadApplications]);
+      if (!safeCompanyId || String(safeCompanyId).includes('[object')) {
+        safeCompanyId = user?.user_metadata?.company_id;
+      }
+      if (!safeCompanyId) {
+        console.warn('⚠️ checkSync: нет валидного company_id');
+        return;
+      }
+      
+      const { count, error } = await supabase
+        .from('applications')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', safeCompanyId); // ← ИСПРАВЛЕНО!
+      
+      if (!error && count === 0 && applications.length > 0) {
+        console.log('🔄 База пуста, обновляем состояние...');
+        setApplications([]);
+        setAllApplications([]);
+        await loadApplications(1);
+      }
+    } catch (e) {
+      console.warn('Ошибка проверки синхронизации:', e);
+    }
+  };
+  checkSync();
+}, [user, userCompanyId, applications.length, loadApplications]);
 
   // ─────────────────────────────────────────────────────────
 // 🔄 SYNC LISTENER SETUP (Offline Queue)
