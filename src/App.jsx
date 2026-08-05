@@ -3094,34 +3094,42 @@ const handleSubmit = async (e) => {
   setIsSubmitting(true);
 
   // Offline режим
-  if (!isOnline) {
-    const draftId = await saveDraftToDB({
-      ...newApplication,
-      id: `draft_${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      status: 'offline_draft'
-    });
-    
-    if (draftId) {
-      setOfflineDrafts(prev => [...prev, { ...newApplication, id: draftId }]);
-      showNotification(t('draftSaved'), 'warning');
-    } else {
-      showNotification(t('errorSaving'), 'error');
-    }
-    
-    setFormData({
-      objectName: '',
-      foremanName: '',
-      foremanPhone: '',
-      materials: [{ description: '', quantity: 1, unit: 'шт' }],
-      cart: []
-    });
-    await deleteDraftFromDB('current_form_draft');
-    setCurrentView('pending');
-    setPage(1);
-    setIsSubmitting(false);
-    return;
+  // Offline режим
+if (!isOnline) {
+  const draftId = await saveDraftToDB({
+    ...newApplication,
+    id: `draft_${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    status: 'offline_draft'
+  });
+  
+  if (draftId) {
+    setOfflineDrafts(prev => [...prev, { ...newApplication, id: draftId }]);
+    showNotification(t('draftSaved'), 'warning');
+  } else {
+    showNotification(t('errorSaving'), 'error');
   }
+  
+  setFormData({
+    objectName: '',
+    foremanName: '',
+    foremanPhone: '',
+    materials: [{ description: '', quantity: 1, unit: 'шт' }],
+    cart: []
+  });
+  
+  // ✅ БЕЗОПАСНОЕ УДАЛЕНИЕ
+  try {
+    await deleteDraftFromDB('current_form_draft');
+  } catch (err) {
+    console.debug('Черновик не удалён (не критично):', err?.message || err);
+  }
+  
+  setCurrentView('pending');
+  setPage(1);
+  setIsSubmitting(false);
+  return;
+}
   
   try {
     const { data, error } = await supabase
@@ -3178,16 +3186,24 @@ const handleSubmit = async (e) => {
     }
     
     setFormData({
-      objectName: '',
-      foremanName: '',
-      foremanPhone: '',
-      materials: [{ description: '', quantity: 1, unit: 'шт' }],
-      cart: []
-    });
-    await deleteDraftFromDB('current_form_draft');
-    setCurrentView('pending');
-    setPage(1);
-    showNotification('✅ Заявка успешно отправлена!', 'success');
+  objectName: '',
+  foremanName: '',
+  foremanPhone: '',
+  materials: [{ description: '', quantity: 1, unit: 'шт' }],
+  cart: []
+});
+
+// ✅ БЕЗОПАСНОЕ УДАЛЕНИЕ ЧЕРНОВИКА С ОБРАБОТКОЙ ОШИБКИ
+try {
+  await deleteDraftFromDB('current_form_draft');
+} catch (err) {
+  // Игнорируем ошибку - черновик мог уже быть удалён или БД закрыта
+  console.warn('⚠️ Не удалось удалить черновик (не критично):', err.message);
+}
+
+setCurrentView('pending');
+setPage(1);
+showNotification('✅ Заявка успешно отправлена!', 'success');
     
     if (safeCompanyId) { // Используем safeCompanyId
       cacheManager.delete('applications', `applications_${safeCompanyId}_page_1`);
