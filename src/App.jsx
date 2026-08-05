@@ -4326,8 +4326,8 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
   }
 }, [user, supabase, showNotification, setApplications]);
 
-  // ============================================================
-// 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (НОВАЯ ВЕРСИЯ)
+ // ============================================================
+// 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (НОВАЯ ВЕРСИЯ) - ИСПРАВЛЕННАЯ
 // ============================================================
 const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
   if (!application?.id) {
@@ -4410,6 +4410,13 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
         ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
+    
+    // ✅ ДЛЯ МАСТЕРА - ПРИНУДИТЕЛЬНАЯ ПЕРЕЗАГРУЗКА
+    if (userRole === 'master') {
+      setTimeout(() => {
+        loadApplications(page);
+      }, 300);
+    }
 
     showNotification(`✅ Подтверждено ${updatedMaterials.filter(m => m.received > 0).length} позиций`, 'success');
     return { success: true };
@@ -4419,7 +4426,7 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     showNotification('Ошибка подтверждения: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, supabase, showNotification, setApplications]);
+}, [user, supabase, showNotification, setApplications, loadApplications, page, userRole]);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -4612,11 +4619,6 @@ const loadApplications = useCallback(async (pageNumber = 1) => {
             isString: typeof rawId === 'string',
             includesObject: typeof rawId === 'string' && rawId.includes('[object')
         });
-    }
-    
-    if (rawId && typeof rawId === 'object') {
-        console.warn('⚠️ loadApplications: userCompanyId был объектом!', rawId);
-        rawId = rawId.id || rawId.company_id || rawId._id || null;
     }
     
     if (rawId && typeof rawId === 'object') {
