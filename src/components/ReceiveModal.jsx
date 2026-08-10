@@ -1382,16 +1382,14 @@ const ReceiveModal = memo(function({
       
       {/* Модальные окна для QR и фото */}
       {showQRScanner && (
-  <QRScanner
-    onScan={handleQRScan}
-    onClose={() => setShowQRScanner(false)}
-    language={language}
-    applicationId={selectedApplication?.id || null}
-    // ✅ ИСПРАВЛЕНИЕ - передаем ТОЛЬКО строку
-    companyId={typeof safeCompanyId === 'string' && safeCompanyId.length > 5 ? safeCompanyId : null}
-    userId={userId}
-  />
-)}
+        <QRScanner
+          onScan={handleQRScan}
+          onClose={function() { setShowQRScanner(false); }}
+          language={language}
+          applicationId={selectedApplication ? selectedApplication.id : null}
+          companyId={safeCompanyId}
+        />
+      )}
       
       {showPhotoCapture && (
         <PhotoCapture

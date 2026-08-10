@@ -1007,7 +1007,6 @@ const App = () => {
   const [userCompany, setUserCompany] = useState(null);
   const [userCompanyId, setUserCompanyId] = useState(null);
   // ✅ ЗАМЕНИТЕ СУЩЕСТВУЮЩИЙ safeSetUserCompanyId НА ЭТОТ:
-// ✅ ЗАМЕНИТЕ СУЩЕСТВУЮЩИЙ safeSetUserCompanyId НА ЭТОТ:
 const safeSetUserCompanyId = useCallback((value) => {
   if (!value) {
     setUserCompanyId(null);
@@ -1206,19 +1205,24 @@ const handleChurnSubmit = async ({ reason, severity, comment }) => {
 // Загрузка логов (в useEffect после загрузки userCompanyId):
 useEffect(() => {
   const loadAuditLogs = async () => {
-    // ✅ ИСПОЛЬЗУЕМ getCleanCompanyId
-    const cleanId = getCleanCompanyId(userCompanyId);
-    if (!cleanId) return;
+    // ✅ ДОБАВИТЬ ПРОВЕРКУ
+    if (!userCompanyId) return;
+    
+    let safeId = userCompanyId;
+    if (typeof safeId === 'object') {
+      safeId = safeId.id || safeId.company_id || null;
+    }
+    if (!safeId || String(safeId).includes('[object')) return;
 
     const { data } = await supabase
       .from('audit_logs')
       .select('*')
-      .eq('company_id', cleanId) // ← ИСПРАВЛЕНО
+      .eq('company_id', safeId) // ✅ Используем safeId
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
     if (data) setAuditLogs(data);
   };
   loadAuditLogs();
-}, [userCompanyId, supabase, getCleanCompanyId]);
+}, [userCompanyId, supabase]);
 
 // Загрузка clientId для роли client
 useEffect(() => {
@@ -1291,63 +1295,6 @@ const [showFeedbackForm, setShowFeedbackForm] = useState(false);
 const [showPublicOffer, setShowPublicOffer] = useState(false);
 const [showLegalOffer, setShowLegalOffer] = useState(false);
 const [showConsentUpdate, setShowConsentUpdate] = useState(false);
-
-  // ============================================================
-  // 🛡️ УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ЧИСТОГО ID (ВСТАВИТЬ СЮДА)
-  // ============================================================
-  const getCleanCompanyId = useCallback((id) => {
-    // Если ID пустой - возвращаем null
-    if (!id) return null;
-    
-    // Если это строка
-    if (typeof id === 'string') {
-      const trimmed = id.trim();
-      // Если это '[object Object]' или мусор короче 5 символов
-      if (trimmed.includes('[object') || trimmed.length < 5) {
-        console.warn('⚠️ getCleanCompanyId: мусорная строка', trimmed);
-        return null;
-      }
-      return trimmed;
-    }
-    
-    // Если это объект - пытаемся достать ID
-    if (typeof id === 'object' && id !== null) {
-      // Список возможных полей с ID
-      const possibleIds = [id.id, id.company_id, id._id, id.companyId];
-      
-      for (const val of possibleIds) {
-        if (val && typeof val === 'string') {
-          const trimmed = val.trim();
-          if (!trimmed.includes('[object') && trimmed.length >= 5) {
-            return trimmed;
-          }
-        }
-      }
-      
-      // Если ничего не нашли - пытаемся взять из метаданных пользователя
-      if (user?.user_metadata?.company_id) {
-        const fromUser = String(user.user_metadata.company_id);
-        if (fromUser.length > 5 && !fromUser.includes('[object')) {
-          return fromUser;
-        }
-      }
-      
-      console.warn('⚠️ getCleanCompanyId: не удалось извлечь ID из объекта', id);
-      return null;
-    }
-    
-    // Fallback: пытаемся привести к строке
-    try {
-      const str = String(id);
-      if (str.length > 5 && !str.includes('[object')) {
-        return str;
-      }
-    } catch (_) {
-      // Игнорируем ошибки
-    }
-    
-    return null;
-  }, [user]);
 
   // ─────────────────────────────────────────────────────────
   // 🎯 FOCUS MANAGEMENT (Pattern #3)
@@ -1970,32 +1917,25 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   // 📤 SEND OFFLINE DRAFTS
   // ─────────────────────────────────────────────────────────
   const sendWithRetry = useCallback(async (draft, maxRetries = 5) => {
-  // ✅ Добавить очистку
-  const cleanId = getCleanCompanyId(userCompanyId);
-  if (!cleanId) {
-    console.error('❌ sendWithRetry: нет валидного company_id');
-    return { success: false, error: 'Нет валидного company_id' };
-  }
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const application = {
-        object_name: draft.objectName,
-        foreman_name: draft.foremanName,
-        foreman_phone: draft.foremanPhone,
-        materials: draft.materials.map(m => ({ ...m, received: 0, status: 'pending' })),
-        status: 'pending',
-        user_id: user?.id,
-        company_id: cleanId, // ← ✅ ИСПРАВЛЕНО
-        created_at: draft.timestamp || new Date().toISOString(),
-        status_history: [{
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const application = {
+          object_name: draft.objectName,
+          foreman_name: draft.foremanName,
+          foreman_phone: draft.foremanPhone,
+          materials: draft.materials.map(m => ({ ...m, received: 0, status: 'pending' })),
+          status: 'pending',
           user_id: user?.id,
-          user_email: user?.email,
-          action: 'created_from_draft',
-          timestamp: new Date().toISOString()
-        }],
-        viewed_by_supply_admin: false
-      };
+          company_id: userCompanyId,
+          created_at: draft.timestamp || new Date().toISOString(),
+          status_history: [{
+            user_id: user?.id,
+            user_email: user?.email,
+            action: 'created_from_draft',
+            timestamp: new Date().toISOString()
+          }],
+          viewed_by_supply_admin: false
+        };
         // 🕐 Замер времени для логирования
         const { data, error } = await supabase
           .from('applications')
@@ -2051,6 +1991,10 @@ useEffect(() => {
 const checkInvitation = useCallback(async (email) => {
   if (!email || !email.includes('@')) {
     setInvitedCompany(null);
+    // ✅ НЕ очищаем название компании, если пользователь его уже ввел
+    if (!signupCompanyName) {
+      setSignupCompanyName('');
+    }
     return;
   }
 
@@ -2082,7 +2026,7 @@ const checkInvitation = useCallback(async (email) => {
     console.error('Ошибка проверки приглашения:', err);
     setInvitedCompany(null);
   }
-}, [supabase]);
+}, [supabase, signupCompanyName, invitedCompany]);
 
 // И ОСТАВЬТЕ useEffect для автоматической проверки при монтировании
 useEffect(() => {
@@ -2960,14 +2904,9 @@ const handleAssignOwner = async (newOwnerId, newOwnerName) => {
 const handleSubmit = async (e) => {
   e.preventDefault();
 
-  if (isSubmitting) return;
-
-  // ✅ ИСПОЛЬЗУЕМ getCleanCompanyId
-  const cleanId = getCleanCompanyId(userCompanyId);
-  
-  if (!cleanId) {
-    showNotification('Ошибка: не удалось определить компанию. Перезайдите в аккаунт.', 'error');
-    setIsSubmitting(false);
+  // ✅ ЗАЩИТА ОТ ДВОЙНОГО НАЖАТИЯ
+  if (isSubmitting) {
+    console.log('⏳ Заявка уже отправляется, ожидайте...');
     return;
   }
 
@@ -3097,14 +3036,14 @@ const handleSubmit = async (e) => {
   const startTime = Date.now();
   
   // 📦 Формируем объект заявки С ЧИСТЫМ ID
-   const newApplication = {
+  const newApplication = {
     object_name: formData.objectName.trim(),
     foreman_name: formData.foremanName.trim(),
     foreman_phone: formData.foremanPhone,
     materials: materialsWithTracking,
     status: initialStatus,
     user_id: sessionUser.id,
-    company_id: cleanId, // ← ИСПРАВЛЕНО (было safeCompanyId)
+    company_id: safeCompanyId, // ✅ Теперь здесь ТОЧНО строка UUID
     created_at: new Date().toISOString(),
     total_amount: totalAmount,
     status_history: [{
@@ -4479,50 +4418,88 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
 const loadEmployees = useCallback(async () => {
   if (userRole !== 'manager' && userRole !== 'director' && !isCompanyOwner) return;
 
-  // ✅ ИСПОЛЬЗУЕМ getCleanCompanyId
-  const cleanId = getCleanCompanyId(userCompanyId);
+  // ✅ ЖЕСТКАЯ ОЧИСТКА ID ПЕРЕД ЗАПРОСОМ
+  let rawId = userCompanyId;
+  if (rawId && typeof rawId === 'object') {
+    console.warn('⚠️ loadEmployees: userCompanyId был объектом, исправляю...', rawId);
+    rawId = rawId.id || rawId.company_id || rawId._id || null;
+  }
   
-  if (!cleanId) {
-    console.error('❌ loadEmployees: нет валидного company_id');
-    setLoadingEmployees(false);
-    return;
+  let safeCompanyId = rawId ? String(rawId).trim() : null;
+
+  // Если ID все еще мусор, берем из метаданных пользователя
+  if (!safeCompanyId || safeCompanyId.includes('[object')) {
+    if (user?.user_metadata?.company_id) {
+      safeCompanyId = String(user.user_metadata.company_id);
+      safeSetUserCompanyId(safeCompanyId); // Чиним стейт
+    } else {
+      console.error('❌ loadEmployees: Невозможно определить company_id');
+      setLoadingEmployees(false);
+      return;
+    }
   }
 
   setLoadingEmployees(true);
-  try {
-    // ✅ Используем cleanId
-    const { data: currentEmployees, error: loadError } = await supabase
-      .from('company_users')
-      .select('*')
-      .eq('company_id', cleanId); // ← ИСПРАВЛЕНО
-      
-    if (!loadError && currentEmployees && currentEmployees.length > 0) {
-      setEmployees(currentEmployees);
-      return;
-    }
-    
-    const { data: apps, error: appsError } = await supabase
-      .from('applications')
-      .select('user_id, foreman_name, foreman_phone')
-      .eq('company_id', cleanId) // ← ИСПРАВЛЕНО
-      .not('user_id', 'eq', user?.id);
-      
-    // ... остальной код
-    
-    const { data: updatedEmployees } = await supabase
-      .from('company_users')
-      .select('*')
-      .eq('company_id', cleanId) // ← ИСПРАВЛЕНО
-      .neq('user_id', user?.id);
-      
-    setEmployees(updatedEmployees || []);
-  } catch (err) {
-    console.error('Критическая ошибка загрузки сотрудников:', err);
-    setEmployees([]);
-  } finally {
-    setLoadingEmployees(false);
+try {
+  const { data: currentEmployees, error: loadError } = await supabase
+    .from('company_users')
+    .select('*')
+    .eq('company_id', safeCompanyId); // ✅ Было правильно
+  if (!loadError && currentEmployees && currentEmployees.length > 0) {
+    setEmployees(currentEmployees);
+    return;
   }
-}, [userRole, userCompanyId, user, isCompanyOwner, getCleanCompanyId]);
+  
+  const { data: apps, error: appsError } = await supabase
+    .from('applications')
+    .select('user_id, foreman_name, foreman_phone')
+    .eq('company_id', safeCompanyId) // ✅ ИСПРАВЛЕНО (было userCompanyId)
+    .not('user_id', 'eq', user?.id);
+    
+  if (appsError) {
+    console.error('Ошибка загрузки заявок для миграции:', appsError);
+    setEmployees([]);
+    return;
+  }
+  
+  const uniqueUsers = new Map();
+  apps.forEach(app => {
+    if (app.user_id && !uniqueUsers.has(app.user_id)) {
+      uniqueUsers.set(app.user_id, {
+        user_id: app.user_id,
+        company_id: safeCompanyId, // ✅ ИСПРАВЛЕНО (было userCompanyId)
+        full_name: app.foreman_name?.trim() || '—',
+        phone: app.foreman_phone || '—',
+        role: 'foreman',
+        is_active: true
+      });
+    }
+  });
+  
+  if (uniqueUsers.size > 0) {
+    const usersToAdd = Array.from(uniqueUsers.values());
+    const { error: insertError } = await supabase
+      .from('company_users')
+      .insert(usersToAdd);
+    if (insertError) {
+      console.warn('Частичная ошибка добавления сотрудников:', insertError);
+    }
+  }
+  
+  const { data: updatedEmployees } = await supabase
+    .from('company_users')
+    .select('*')
+    .eq('company_id', safeCompanyId) // ✅ ИСПРАВЛЕНО (было userCompanyId)
+    .neq('user_id', user?.id);
+    
+  setEmployees(updatedEmployees || []);
+} catch (err) {
+  console.error('Критическая ошибка загрузки сотрудников:', err);
+  setEmployees([]);
+} finally {
+  setLoadingEmployees(false);
+}
+}, [userRole, userCompanyId, user, isCompanyOwner, safeSetUserCompanyId]);
 
   useEffect(() => {
     if (currentView === 'employees') {
@@ -4569,18 +4546,40 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
- const loadApplications = useCallback(async (pageNumber = 1) => {
-  // ✅ ИСПОЛЬЗУЕМ getCleanCompanyId
-  const cleanId = getCleanCompanyId(userCompanyId);
-  
-  if (!cleanId) {
-    console.error('❌ loadApplications: нет валидного company_id');
-    setIsLoading(false);
-    return;
+  const loadApplications = useCallback(async (pageNumber = 1) => {
+  // 🛡️ ШАГ 1: Получаем сырое значение
+  let rawId = userCompanyId;
+
+  // 🛡️ ШАГ 2: Если это объект, пытаемся достать ID
+  if (rawId && typeof rawId === 'object') {
+    console.warn('⚠️ loadApplications: userCompanyId был объектом!', rawId);
+    rawId = rawId.id || rawId.company_id || rawId._id || null;
   }
 
+  // 🛡️ ШАГ 3: Превращаем в строку
+  let safeCompanyId = rawId ? String(rawId).trim() : null;
+
+  // 🛡️ ШАГ 4: ФИНАЛЬНАЯ ПРОВЕРКА НА МУСОР
+  if (!safeCompanyId || safeCompanyId === '[object Object]' || safeCompanyId.length < 5) {
+    console.error('❌ loadApplications: companyId невалиден даже после очистки!', { rawId, safeCompanyId });
+    
+    // Пытаемся взять из метаданных пользователя как последний шанс
+    const fallbackId = user?.user_metadata?.company_id;
+    if (fallbackId && typeof fallbackId === 'string' && fallbackId.length > 5) {
+      console.log('🔄 Восстанавливаю companyId из user metadata');
+      safeCompanyId = fallbackId;
+      safeSetUserCompanyId(safeCompanyId); // Чиним стейт на будущее
+    } else {
+      console.error('❌ Невозможно загрузить заявки: нет валидного company_id');
+      setIsLoading(false);
+      return;
+    }
+  }
+
+  console.log('✅ loadApplications запускается с чистым ID:', safeCompanyId);
+
   // Проверка кэша
-  const cacheKey = `applications_${cleanId}_page_${pageNumber}`;
+  const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}`;
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
     setApplications(cached.userApps);
@@ -4593,30 +4592,34 @@ useEffect(() => {
 
   setIsLoading(true);
   try {
-    // ✅ 1. Используем cleanId
+    // ✅ 1. Сначала получаем ТОЛЬКО количество
     const { count, error: countError } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
-      .eq('company_id', cleanId); // ← ИСПРАВЛЕНО
+      .eq('company_id', safeCompanyId); // Теперь здесь ТОЧНО строка
 
     if (countError) throw countError;
 
+    // ✅ 2. Вычисляем totalPages
     const calculatedTotalPages = Math.max(1, Math.ceil(count / ITEMS_PER_PAGE));
     setTotalPages(calculatedTotalPages);
 
+    // ✅ 3. Корректируем pageNumber если нужно
     let safePage = pageNumber;
     if (safePage > calculatedTotalPages) {
       safePage = 1;
       setPage(1);
     }
 
+    // ✅ 4. Вычисляем правильный range
     const from = (safePage - 1) * ITEMS_PER_PAGE;
     const to = Math.min(safePage * ITEMS_PER_PAGE - 1, count - 1);
 
+    // ✅ 5. Запрос с правильным range
     let query = supabase
       .from('applications')
       .select('*')
-      .eq('company_id', cleanId) // ← ИСПРАВЛЕНО
+      .eq('company_id', safeCompanyId) // И здесь ТОЧНО строка
       .order('created_at', { ascending: false })
       .range(from, to > 0 ? to : 0);
 
@@ -4632,7 +4635,7 @@ useEffect(() => {
     const { data: usersData } = await supabase
       .from('company_users')
       .select('user_id, created_at, full_name, role')
-      .eq('company_id', cleanId); // ← ИСПРАВЛЕНО
+      .eq('company_id', safeCompanyId); // И здесь ТОЧНО строка
 
     let commentsMap = {};
     if (usersData) setCompanyUsers(usersData);
@@ -4660,12 +4663,13 @@ useEffect(() => {
       const { data: allApps = [] } = await supabase
         .from('applications')
         .select('id, status, created_at, object_name, materials')
-        .eq('company_id', cleanId) // ← ИСПРАВЛЕНО
+        .eq('company_id', safeCompanyId)
         .order('created_at', { ascending: false })
         .limit(500);
       setAllApplications(allApps || []);
     }
 
+    // Сохраняем в кэш
     cacheManager.set('applications', cacheKey, {
       userApps,
       totalPages: calculatedTotalPages,
@@ -4679,36 +4683,46 @@ useEffect(() => {
   } finally {
     setIsLoading(false);
   }
-}, [user, userCompanyId, userRole, isAdminMode, showNotification, getCleanCompanyId]);
+}, [user, userCompanyId, userRole, isAdminMode, showNotification, safeSetUserCompanyId]);
 
   // 📩 ЗАГРУЗКА УВЕДОМЛЕНИЙ (ВСТАВИТЬ ПОСЛЕ loadApplications)
- const loadNotifications = useCallback(async () => {
-  if (!user?.id) return;
-  
-  // ✅ ИСПОЛЬЗУЕМ getCleanCompanyId (если нужно)
-  const cleanId = getCleanCompanyId(userCompanyId);
-  
-  try {
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('company_id', cleanId) // ← ИСПРАВЛЕНО (если есть)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
+  const loadNotifications = useCallback(async () => {
+    if (!user?.id) return;
     
-    const formattedData = data?.map(n => ({
-      ...n,
-      time: new Date(n.created_at).toLocaleString('ru-RU')
-    })) || [];
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
 
-    setNotifications(formattedData);
-    
-  } catch (err) {
-    console.error('Ошибка загрузки уведомлений:', err);
+      if (error) throw error;
+      
+      // Преобразуем дату в читаемый формат для UI
+      const formattedData = data?.map(n => ({
+        ...n,
+        time: new Date(n.created_at).toLocaleString('ru-RU')
+      })) || [];
+
+      setNotifications(formattedData);
+      
+    } catch (err) {
+      console.error('Ошибка загрузки уведомлений:', err);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+  // ✅ Загружаем только если есть пользователь и компания
+  if (user && userCompanyId) {
+    // ✅ Всегда загружаем страницу 1 при монтировании
+    if (page !== 1) {
+      setPage(1);
+    } else {
+      loadApplications(1);
+      loadNotifications(); // ← ДОБАВЛЕНА ЗАГРУЗКА УВЕДОМЛЕНИЙ
+    }
   }
-}, [user?.id, userCompanyId, getCleanCompanyId]);
+}, [user, userCompanyId, userRole, isAdminMode, loadNotifications])
 
   // 📡 ПОДПИСКА НА НОВЫЕ УВЕДОМЛЕНИЯ В РЕАЛЬНОМ ВРЕМЕНИ
   useEffect(() => {
@@ -4744,6 +4758,7 @@ useEffect(() => {
 // 💰 Load company plan & quota (ОБНОВЛЁННАЯ ВЕРСИЯ)
 useEffect(() => {
   const loadPlan = async () => {
+    // 🔒 Супер-админ: не загружаем тариф компании
     if (isSuperAdmin(userRole, user?.user_metadata)) {
       setCurrentPlan(null);
       setPlanLoading(false);
@@ -4754,23 +4769,15 @@ useEffect(() => {
       setPlanLoading(false);
       return;
     }
-
-    // ✅ ИСПОЛЬЗУЕМ getCleanCompanyId
-    const cleanId = getCleanCompanyId(userCompanyId);
-    if (!cleanId) {
-      console.error('❌ loadPlan: нет валидного company_id');
-      setPlanLoading(false);
-      return;
-    }
     
     try {
       setPlanLoading(true);
       
-      // ✅ Используем cleanId
+      // Загружаем данные компании
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .select('plan_tier, plan_activated_at, plan_expires_at, trial_started_at, trial_ended_at, promo_code_used, promo_applied_at, promo_discount_percent')
-        .eq('id', cleanId) // ← ИСПРАВЛЕНО
+        .eq('id', userCompanyId)
         .single();
       
       if (companyError) throw companyError;
@@ -4834,7 +4841,7 @@ useEffect(() => {
       
       // Квота
       try {
-        const quota = await checkQuota(supabase, cleanId); // ← ИСПРАВЛЕНО
+        const quota = await checkQuota(supabase, userCompanyId);
         setQuotaStatus(quota);
       } catch (quotaErr) {
         console.debug('Quota check failed:', quotaErr.message);
@@ -4860,7 +4867,7 @@ useEffect(() => {
   };
   
   loadPlan();
-}, [userCompanyId, supabase, userRole, user, getCleanCompanyId, isSuperAdmin]);
+}, [userCompanyId, supabase, userRole, user, isSuperAdmin]);
 
 // 📝 Отслеживание новых отзывов для супер-админа
 useEffect(() => {
@@ -5007,22 +5014,17 @@ useEffect(() => {
 // ============================================================
 useEffect(() => {
   const resetDailyLimits = async () => {
-    // ✅ Добавить очистку
-    const cleanId = getCleanCompanyId(userCompanyId);
-    if (!cleanId) {
-      console.warn('❌ resetDailyLimits: нет валидного company_id');
-      return;
-    }
+    if (!userCompanyId) return;
     
     try {
       // Проверяем, нужно ли сбрасывать
-      const lastReset = localStorage.getItem(`quota_reset_${cleanId}`);
+      const lastReset = localStorage.getItem(`quota_reset_${userCompanyId}`);
       const today = new Date().toDateString();
       
       if (lastReset !== today) {
         // Вызываем RPC функцию для сброса
         const { error } = await supabase.rpc('reset_company_limits', {
-          p_company_id: cleanId // ← ✅ ИСПРАВЛЕНО
+          p_company_id: userCompanyId
         });
         
         if (error) {
@@ -5031,11 +5033,11 @@ useEffect(() => {
         }
         
         // Обновляем квоту в UI
-        const quota = await checkQuota(supabase, cleanId);
+        const quota = await checkQuota(supabase, userCompanyId);
         setQuotaStatus(quota);
         
-        localStorage.setItem(`quota_reset_${cleanId}`, today);
-        console.log('✅ Лимиты сброшены для компании:', cleanId);
+        localStorage.setItem(`quota_reset_${userCompanyId}`, today);
+        console.log('✅ Лимиты сброшены для компании:', userCompanyId);
       }
     } catch (err) {
       console.debug('Reset limits error (non-critical):', err);
@@ -5047,7 +5049,28 @@ useEffect(() => {
   const interval = setInterval(resetDailyLimits, 60 * 60 * 1000);
   
   return () => clearInterval(interval);
-}, [userCompanyId, supabase, getCleanCompanyId]);
+}, [userCompanyId, supabase]);
+
+  useEffect(() => {
+  const loadAuditLogs = async () => {
+    // ✅ ДОБАВИТЬ ПРОВЕРКУ
+    if (!userCompanyId) return;
+    
+    let safeId = userCompanyId;
+    if (typeof safeId === 'object') {
+      safeId = safeId.id || safeId.company_id || null;
+    }
+    if (!safeId || String(safeId).includes('[object')) return;
+
+    const { data } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .eq('company_id', safeId) // ✅ Используем safeId
+      .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
+    if (data) setAuditLogs(data);
+  };
+  loadAuditLogs();
+}, [userCompanyId, supabase]);
 
 useEffect(() => {
   // Проверка обновлений при загрузке
@@ -5562,33 +5585,30 @@ const _canUseFeature = useCallback((feature) => {
 
 // 📊 Проверка квоты перед вызовом API (ОБНОВЛЁННАЯ С ЖЁСТКОЙ БЛОКИРОВКОЙ)
 const checkApiQuota = useCallback(async (apiKeyId = null) => {
+  // 🔒 Супер-админу не нужна проверка квоты
   if (isSuperAdmin(userRole, user?.user_metadata)) {
     return true;
   }
+  if (!userCompanyId) return false;
   
-  // ✅ ИСПОЛЬЗУЕМ getCleanCompanyId
-  const cleanId = getCleanCompanyId(userCompanyId);
-  if (!cleanId) {
-    console.error('❌ checkApiQuota: нет валидного company_id');
-    return false;
-  }
-  
+  // ✅ Жесткая блокировка для basic тарифа
   if (currentPlan?.id === 'basic' || !currentPlan) {
-    const quota = await checkQuota(supabase, cleanId, apiKeyId); // ← ИСПРАВЛЕНО
+    const quota = await checkQuota(supabase, userCompanyId, apiKeyId);
     setQuotaStatus(quota);
     
     if (!quota.allowed) {
       showNotification('⚠️ Лимит API исчерпан. Обновите тариф.', 'warning');
       setCurrentView('tariffs');
-      return false;
+      return false; // ← ЖЕСТКАЯ БЛОКИРОВКА
     }
     return quota.allowed;
   }
   
-  const quota = await checkQuota(supabase, cleanId, apiKeyId); // ← ИСПРАВЛЕНО
+  // Для платных тарифов - обычная проверка
+  const quota = await checkQuota(supabase, userCompanyId, apiKeyId);
   setQuotaStatus(quota);
   return quota.allowed;
-}, [userCompanyId, supabase, showNotification, userRole, user, currentPlan, getCleanCompanyId, isSuperAdmin]);
+}, [userCompanyId, supabase, showNotification, userRole, user, currentPlan]);
 
 // 🎁 Активация промокода
 const handleActivatePromo = async (code) => {
