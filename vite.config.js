@@ -1,5 +1,5 @@
 // ============================================
-// vite.config.js
+// 0.0.1-beta
 // ============================================
 
 import { defineConfig } from 'vite';
@@ -241,16 +241,26 @@ export default defineConfig({
     
     // ✅ Оптимизация для PWA
     target: 'esnext',
-    cssCodeSplit: true
+    cssCodeSplit: true,
+    
+    // ============================================
+    // 🆕 ФИКС ДЛЯ RECHARTS
+    // ============================================
+    commonjsOptions: {
+      include: [/recharts/, /node_modules/]
+    }
   },
   
-  // ✅ Оптимизация зависимостей
+  // ============================================
+  // 🆕 ОПТИМИЗАЦИЯ ЗАВИСИМОСТЕЙ (ФИКС ДЛЯ RECHARTS)
+  // ============================================
   optimizeDeps: {
     include: [
       'react',
       'react-dom',
       'react-router-dom',
       '@supabase/supabase-js',
+      'recharts > react-is',
       'recharts',
       'xlsx',
       'jspdf',
@@ -258,7 +268,9 @@ export default defineConfig({
     ],
     esbuildOptions: {
       target: 'esnext'
-    }
+    },
+    // ✅ Принудительная пересборка зависимостей
+    force: false
   },
   
   // ✅ Resolve aliases (опционально, если используете @/imports)
