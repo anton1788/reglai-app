@@ -10,6 +10,15 @@ import {
 } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 
+// ✅ ФУНКЦИЯ ДЛЯ ОЧИСТКИ COMPANY ID
+const getCleanCompanyId = (companyId) => {
+  if (!companyId) return null;
+  if (typeof companyId === 'string') return companyId;
+  if (typeof companyId === 'object' && companyId.id) return companyId.id;
+  if (typeof companyId === 'object' && companyId.company_id) return companyId.company_id;
+  return null;
+};
+
 // ─────────────────────────────────────────────────────────────
 // 🎨 КОМПОНЕНТ КАРТОЧКИ ЗАДАЧИ (МОБИЛЬНАЯ ВЕРСИЯ)
 // ─────────────────────────────────────────────────────────────
@@ -674,14 +683,15 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
   const canCreateTasks = userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
   const canEditTasks = userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
   
-  // Загрузка пользователей компании
+  // ✅ Загрузка пользователей компании - ИСПРАВЛЕНО
   useEffect(() => {
     const loadUsers = async () => {
-      if (!userCompanyId) return;
+      const cleanId = getCleanCompanyId(userCompanyId);
+      if (!cleanId) return;
       const { data } = await supabase
         .from('company_users')
         .select('user_id, full_name, role')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', cleanId)
         .eq('is_active', true);
       if (data) setCompanyUsers(data);
     };
@@ -695,9 +705,12 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
     { id: 'canceled', title: 'Отменены', color: 'red', icon: '❌', bg: 'bg-rose-50 dark:bg-rose-900/20' }
   ];
   
+  // ✅ Загрузка задач - ИСПРАВЛЕНО
   const loadTasks = useCallback(async () => {
-    if (!userCompanyId) {
+    const cleanId = getCleanCompanyId(userCompanyId);
+    if (!cleanId) {
       console.log('⚠️ Нет company_id, задачи не загружаются');
+      setIsLoading(false);
       return;
     }
     
@@ -706,7 +719,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
       let query = supabase
         .from('tasks')
         .select('*')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', cleanId)
         .order('created_at', { ascending: false });
       
       if (userRole === 'master' || userRole === 'foreman') {
@@ -750,13 +763,15 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
     loadTasks();
   }, [loadTasks]);
   
+  // ✅ Создание задачи - ИСПРАВЛЕНО
   const handleCreateTask = async (formData) => {
     if (!canCreateTasks) {
       if (showNotification) showNotification('У вас нет прав на создание задач', 'error');
       return;
     }
     
-    if (!userCompanyId) {
+    const cleanId = getCleanCompanyId(userCompanyId);
+    if (!cleanId) {
       if (showNotification) showNotification('Ошибка: компания не идентифицирована', 'error');
       return;
     }
@@ -770,7 +785,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
         application_id: formData.application_id || null,
         status: formData.status,
         assigned_to: formData.assigned_to || null,
-        company_id: userCompanyId,
+        company_id: cleanId,
         created_by: user?.id,
         created_at: new Date().toISOString()
       };
