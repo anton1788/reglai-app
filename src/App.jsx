@@ -194,6 +194,15 @@ import PublicOfferModal from './components/PublicOfferModal';
 import LegalOfferModal from './components/LegalOfferModal';
 import ConsentModal from './components/ConsentModal';
 
+const getCleanCompanyId = (companyId) => {
+  if (!companyId) return null;
+  if (typeof companyId === 'string') return companyId.trim();
+  if (typeof companyId === 'object') {
+    return companyId.id || companyId.company_id || null;
+  }
+  return null;
+};
+
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
 const NOTIFICATIONS_ENABLED = false;
