@@ -10,6 +10,15 @@ import {
   Paperclip, Link2, Copy, Check
 } from 'lucide-react';
 
+// ✅ Глобальная функция для получения чистого company_id
+const getCleanCompanyId = (companyId) => {
+  if (!companyId) return null;
+  if (typeof companyId === 'string') return companyId;
+  if (typeof companyId === 'object' && companyId.id) return companyId.id;
+  if (typeof companyId === 'object' && companyId.company_id) return companyId.company_id;
+  return null;
+};
+
 // Категории проектов
 const PROJECT_CATEGORIES = [
   { id: 'construction', label: '🏗️ Строительные', color: 'bg-blue-100 text-blue-700' },
@@ -55,14 +64,15 @@ const ProjectManager = ({ supabase, userCompanyId, userId, userRole, showNotific
 
   // Загрузка проектов компании
   const loadProjects = useCallback(async () => {
-    if (!userCompanyId) return;
+    const cleanCompanyId = getCleanCompanyId(userCompanyId);
+    if (!cleanCompanyId) return;
     
     setLoading(true);
     try {
       let query = supabase
         .from('projects')
         .select('*')
-        .eq('company_id', userCompanyId)
+        .eq('company_id', cleanCompanyId)
         .order('created_at', { ascending: false });
       
       if (showOnlyFavorites) {
@@ -170,7 +180,7 @@ const ProjectManager = ({ supabase, userCompanyId, userId, userRole, showNotific
         const { data, error: dbError } = await supabase
           .from('projects')
           .insert([{
-            company_id: userCompanyId,
+            company_id: getCleanCompanyId(userCompanyId),
             uploaded_by: userId,
             name: file.name,
             description: '',
