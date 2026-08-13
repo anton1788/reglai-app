@@ -25,6 +25,15 @@ import PublicOfferModal from './PublicOfferModal';
 import LegalOfferModal from './LegalOfferModal';
 import PrivacyPolicyModal from './PrivacyPolicyModal';
 
+// В начале Navbar.jsx, после импортов
+const getCleanCompanyId = (companyId) => {
+  if (!companyId) return null;
+  if (typeof companyId === 'string') return companyId;
+  if (typeof companyId === 'object' && companyId.id) return companyId.id;
+  if (typeof companyId === 'object' && companyId.company_id) return companyId.company_id;
+  return null;
+};
+
 const Navbar = ({ 
   user, 
   companyName, 
@@ -84,22 +93,13 @@ const Navbar = ({
 
   // Загрузка текущего тарифа
     const loadCompanyPlan = useCallback(async () => {
-  // ✅ Очистка ID перед запросом
-  let cleanId = companyId;
-  if (cleanId && typeof cleanId === 'object') {
-    cleanId = cleanId.id || cleanId.company_id || null;
-  }
-  if (cleanId) cleanId = String(cleanId).trim();
-  
-  // Если после очистки ID нет или он невалиден — выходим
-  if (!cleanId || cleanId === '[object Object]' || !supabase) {
+  const cleanId = getCleanCompanyId(companyId);
+  if (!cleanId || !supabase) {
     setPlanLoading(false);
     return;
   }
-
   try {
     setPlanLoading(true);
-    // Передаем только чистый ID
     const planData = await getCompanyPlan(supabase, cleanId);
     setCurrentPlan(planData);
   } catch (error) {
