@@ -5,12 +5,21 @@ import {
   Plus, Search, Filter, Clock, CheckCircle, XCircle,
   AlertCircle, ChevronDown, Edit2, Trash2, Eye,
   PhoneCall, Mail, UserPlus, RefreshCw, Download,
-  LayoutGrid, List, BarChart3, PieChart, TrendingUp
+  LayoutGrid, List, BarChart3, PieChart, TrendingUp, ArrowRight
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import SalesClientCard from './SalesClientCard';
 import SalesClientForm from './SalesClientForm';
 import SalesCallReminder from './SalesCallReminder';
+
+// ✅ ФУНКЦИЯ ДЛЯ ОЧИСТКИ COMPANY ID
+const getCleanCompanyId = (companyId) => {
+  if (!companyId) return null;
+  if (typeof companyId === 'string') return companyId;
+  if (typeof companyId === 'object' && companyId.id) return companyId.id;
+  if (typeof companyId === 'object' && companyId.company_id) return companyId.company_id;
+  return null;
+};
 
 // Статусы потенциальных клиентов (для продаж)
 const SALES_STATUSES = {
@@ -54,14 +63,19 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
 
   // Загрузка потенциальных клиентов
   const loadClients = useCallback(async () => {
-    if (!companyId) return;
+    const cleanId = getCleanCompanyId(companyId);
+    if (!cleanId) {
+      showNotification('Ошибка: компания не определена', 'error');
+      setIsLoading(false);
+      return;
+    }
     
     setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('crm_sales_leads')
         .select('*')
-        .eq('company_id', companyId)
+        .eq('company_id', cleanId)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -80,6 +94,12 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
 
   // Добавление/обновление клиента
   const saveClient = async () => {
+    const cleanId = getCleanCompanyId(companyId);
+    if (!cleanId) {
+      showNotification('Ошибка: компания не определена', 'error');
+      return;
+    }
+
     if (!clientForm.name.trim()) {
       showNotification('Введите имя клиента', 'error');
       return;
@@ -93,7 +113,7 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
     setIsLoading(true);
     try {
       const clientData = {
-        company_id: companyId,
+        company_id: cleanId,
         name: clientForm.name.trim(),
         phone: clientForm.phone.trim(),
         email: clientForm.email.trim(),
@@ -143,6 +163,12 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
 
   // Превращение лида в клиента
   const convertToClient = async (lead) => {
+    const cleanId = getCleanCompanyId(companyId);
+    if (!cleanId) {
+      showNotification('Ошибка: компания не определена', 'error');
+      return;
+    }
+
     if (!window.confirm(`Превратить "${lead.name}" в полноценного клиента?`)) return;
     
     setIsLoading(true);
@@ -156,7 +182,7 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
         options: {
           data: {
             role: 'client',
-            company_id: companyId,
+            company_id: cleanId,
             company_name: lead.company || 'Новый клиент',
             full_name: lead.name,
             phone: lead.phone
@@ -170,7 +196,7 @@ const CRMSalesManager = ({ supabase, companyId, showNotification, onMoveToClient
         .from('company_users')
         .insert([{
           user_id: userData.user.id,
-          company_id: companyId,
+          company_id: cleanId,
           full_name: lead.name,
           phone: lead.phone,
           role: 'client',

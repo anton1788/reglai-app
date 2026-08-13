@@ -15,16 +15,30 @@ export const ClientDetailsModal = ({ isOpen, onClose, client, companyId }) => {
     }
   }, [isOpen, client, companyId]);
 
+  const getCleanCompanyId = (companyId) => {
+  if (!companyId) return null;
+  if (typeof companyId === 'string') return companyId;
+  if (typeof companyId === 'object' && companyId.id) return companyId.id;
+  if (typeof companyId === 'object' && companyId.company_id) return companyId.company_id;
+  return null;
+};
+
   const loadClientApplications = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('applications')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('client_id', client.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
+  const cleanId = getCleanCompanyId(companyId);
+  if (!cleanId) {
+    setLoading(false);
+    return;
+  }
+  
+  setLoading(true);
+  try {
+    const { data, error } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('company_id', cleanId)  // ✅ ИСПРАВЛЕНО
+      .eq('client_id', client.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
 
       if (error) throw error;
       setApplications(data || []);
@@ -36,12 +50,15 @@ export const ClientDetailsModal = ({ isOpen, onClose, client, companyId }) => {
   };
 
   const loadClientStats = async () => {
-    try {
-      const { data: applications, error } = await supabase
-        .from('applications')
-        .select('id, status, created_at, total_amount, object_name')
-        .eq('company_id', companyId)
-        .eq('client_id', client.id);
+  const cleanId = getCleanCompanyId(companyId);
+  if (!cleanId) return;
+  
+  try {
+    const { data: applications, error } = await supabase
+      .from('applications')
+      .select('id, status, created_at, total_amount, object_name')
+      .eq('company_id', cleanId)  // ✅ ИСПРАВЛЕНО
+      .eq('client_id', client.id);
 
       if (error) throw error;
 

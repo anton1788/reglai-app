@@ -12,6 +12,14 @@ import {
 // Импорт UnifiedDocumentManager
 import { UnifiedDocumentManager } from '../DocumentManager/UnifiedDocumentManager';
 
+const getCleanCompanyId = (companyId) => {
+  if (!companyId) return null;
+  if (typeof companyId === 'string') return companyId;
+  if (typeof companyId === 'object' && companyId.id) return companyId.id;
+  if (typeof companyId === 'object' && companyId.company_id) return companyId.company_id;
+  return null;
+};
+
 // Вспомогательные функции
 const formatDate = (date) => {
   if (!date) return '—';
@@ -76,14 +84,20 @@ export const ClientAnalytics = ({ clientId, companyId, clientName, onClose }) =>
   const [showUnifiedDocs, setShowUnifiedDocs] = useState(false);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data: apps, error: appsError } = await supabase
-        .from('applications')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false });
+  const cleanId = getCleanCompanyId(companyId);
+  if (!cleanId) {
+    setLoading(false);
+    return;
+  }
+  
+  setLoading(true);
+  try {
+    const { data: apps, error: appsError } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('company_id', cleanId)  // ✅ ИСПРАВЛЕНО
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false });
 
       if (appsError) throw appsError;
 
