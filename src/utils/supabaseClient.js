@@ -272,3 +272,28 @@ export const hashKey = async (key) => {
 export const rawSupabase = rawClient;
 
 console.log('✅ Supabase client with automatic company_id sanitization initialized');
+
+// ============================================================
+// 🚨 ЭКСТРЕННАЯ ЗАЩИТА
+// ============================================================
+
+// Перехват всех запросов с [object Object]
+const originalFetch = window.fetch;
+
+window.fetch = function(url, options) {
+  if (typeof url === 'string' && url.includes('company_id=eq.%5Bobject+Object%5D')) {
+    console.warn('🚨 [FIX] Блокировка запроса с [object Object], возвращаем пустой результат');
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [], error: null }),
+      text: async () => JSON.stringify({ data: [], error: null }),
+      headers: new Headers(),
+      url: url,
+      clone: function() { return this; }
+    });
+  }
+  return originalFetch.call(this, url, options);
+};
+
+console.log('✅ Экстренная защита от [object Object] активирована');
