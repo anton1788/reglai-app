@@ -4449,65 +4449,65 @@ const loadEmployees = useCallback(async () => {
   }
 
   setLoadingEmployees(true);
-try {
-  const { data: currentEmployees, error: loadError } = await supabase
-    .from('company_users')
-    .select('*')
-    .eq('company_id', safeCompanyId); // ✅ Было правильно
-  if (!loadError && currentEmployees && currentEmployees.length > 0) {
-    setEmployees(currentEmployees);
-    return;
-  }
-  
-  const { data: apps, error: appsError } = await supabase
-    .from('applications')
-    .select('user_id, foreman_name, foreman_phone')
-    .eq('company_id', safeCompanyId) // ✅ ИСПРАВЛЕНО (было userCompanyId)
-    .not('user_id', 'eq', user?.id);
-    
-  if (appsError) {
-    console.error('Ошибка загрузки заявок для миграции:', appsError);
-    setEmployees([]);
-    return;
-  }
-  
-  const uniqueUsers = new Map();
-  apps.forEach(app => {
-    if (app.user_id && !uniqueUsers.has(app.user_id)) {
-      uniqueUsers.set(app.user_id, {
-        user_id: app.user_id,
-        company_id: safeCompanyId, // ✅ ИСПРАВЛЕНО (было userCompanyId)
-        full_name: app.foreman_name?.trim() || '—',
-        phone: app.foreman_phone || '—',
-        role: 'foreman',
-        is_active: true
-      });
-    }
-  });
-  
-  if (uniqueUsers.size > 0) {
-    const usersToAdd = Array.from(uniqueUsers.values());
-    const { error: insertError } = await supabase
+  try {
+    const { data: currentEmployees, error: loadError } = await supabase
       .from('company_users')
-      .insert(usersToAdd);
-    if (insertError) {
-      console.warn('Частичная ошибка добавления сотрудников:', insertError);
+      .select('*')
+      .eq('company_id', safeCompanyId);
+    if (!loadError && currentEmployees && currentEmployees.length > 0) {
+      setEmployees(currentEmployees);
+      return;
     }
-  }
-  
-  const { data: updatedEmployees } = await supabase
-    .from('company_users')
-    .select('*')
-    .eq('company_id', safeCompanyId) // ✅ ИСПРАВЛЕНО (было userCompanyId)
-    .neq('user_id', user?.id);
     
-  setEmployees(updatedEmployees || []);
-} catch (err) {
-  console.error('Критическая ошибка загрузки сотрудников:', err);
-  setEmployees([]);
-} finally {
-  setLoadingEmployees(false);
-}
+    const { data: apps, error: appsError } = await supabase
+      .from('applications')
+      .select('user_id, foreman_name, foreman_phone')
+      .eq('company_id', safeCompanyId)
+      .not('user_id', 'eq', user?.id);
+      
+    if (appsError) {
+      console.error('Ошибка загрузки заявок для миграции:', appsError);
+      setEmployees([]);
+      return;
+    }
+    
+    const uniqueUsers = new Map();
+    apps.forEach(app => {
+      if (app.user_id && !uniqueUsers.has(app.user_id)) {
+        uniqueUsers.set(app.user_id, {
+          user_id: app.user_id,
+          company_id: safeCompanyId,
+          full_name: app.foreman_name?.trim() || '—',
+          phone: app.foreman_phone || '—',
+          role: 'foreman',
+          is_active: true
+        });
+      }
+    });
+    
+    if (uniqueUsers.size > 0) {
+      const usersToAdd = Array.from(uniqueUsers.values());
+      const { error: insertError } = await supabase
+        .from('company_users')
+        .insert(usersToAdd);
+      if (insertError) {
+        console.warn('Частичная ошибка добавления сотрудников:', insertError);
+      }
+    }
+    
+    const { data: updatedEmployees } = await supabase
+      .from('company_users')
+      .select('*')
+      .eq('company_id', safeCompanyId)
+      .neq('user_id', user?.id);
+      
+    setEmployees(updatedEmployees || []);
+  } catch (err) {
+    console.error('Критическая ошибка загрузки сотрудников:', err);
+    setEmployees([]);
+  } finally {
+    setLoadingEmployees(false);
+  }
 }, [userRole, userCompanyId, user, isCompanyOwner, safeSetUserCompanyId]);
 
   useEffect(() => {
@@ -4555,7 +4555,7 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 📊 LOAD APPLICATIONS
   // ─────────────────────────────────────────────────────────
-  const loadApplications = useCallback(async (pageNumber = 1) => {
+ const loadApplications = useCallback(async (pageNumber = 1) => {
   // 🛡️ ШАГ 1: Получаем сырое значение
   let rawId = userCompanyId;
 
@@ -4721,17 +4721,23 @@ useEffect(() => {
   }, [user?.id]);
 
   useEffect(() => {
-  // ✅ Загружаем только если есть пользователь и компания
-  if (user && userCompanyId) {
-    // ✅ Всегда загружаем страницу 1 при монтировании
+  // ✅ Добавляем проверку, что userCompanyId - валидная строка
+  if (user && userCompanyId && typeof userCompanyId === 'string' && !userCompanyId.includes('[object')) {
     if (page !== 1) {
       setPage(1);
     } else {
       loadApplications(1);
-      loadNotifications(); // ← ДОБАВЛЕНА ЗАГРУЗКА УВЕДОМЛЕНИЙ
+      loadNotifications();
+    }
+  } else if (user && userCompanyId && typeof userCompanyId === 'object') {
+    // Если userCompanyId - объект, пытаемся восстановить
+    console.warn('⚠️ userCompanyId - объект в useEffect, пытаемся восстановить');
+    const id = userCompanyId.id || userCompanyId.company_id;
+    if (id) {
+      safeSetUserCompanyId(id);
     }
   }
-}, [user, userCompanyId, userRole, isAdminMode, loadNotifications])
+}, [user, userCompanyId, userRole, isAdminMode, loadNotifications, loadApplications, safeSetUserCompanyId]);
 
   // 📡 ПОДПИСКА НА НОВЫЕ УВЕДОМЛЕНИЯ В РЕАЛЬНОМ ВРЕМЕНИ
   useEffect(() => {
