@@ -4009,7 +4009,7 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
       return { success: false };
     }
     
-    // 1. Формируем данные для RPC
+    // ✅ Формируем данные для RPC с ПРАВИЛЬНЫМИ типами
     const receiveItems = materialsFromModal
       .filter(m => {
         const qty = Number(m.supplier_received_quantity) || Number(m.quantityToReceive) || Number(m.quantity) || 0;
@@ -4022,25 +4022,56 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
         invoice_url: m.invoice_url || null
       }));
     
+    console.log('🔍 [RPC] receiveItems:', receiveItems);
+    
     if (receiveItems.length === 0) {
       showNotification('Нет материалов для приёмки', 'warning');
       return { success: false };
     }
     
-    // 2. Вызываем RPC функцию receive_materials с cleanCompanyId
-    const { data, error } = await supabase.rpc('receive_materials', {
-      p_application_id: String(application.id).trim(),
-      p_company_id: cleanCompanyId,  // ✅ ИСПРАВЛЕНО
+    // ✅ Проверяем application.id
+    const appId = String(application.id).trim();
+    if (!appId || appId.length < 10) {
+      showNotification('Ошибка: неверный ID заявки', 'error');
+      return { success: false };
+    }
+    
+    // ✅ Логируем параметры
+    console.log('🔍 [RPC] Параметры вызова:', {
+      p_application_id: appId,
+      p_company_id: cleanCompanyId,
       p_user_id: user?.id,
       p_user_email: user?.email,
-      p_materials: receiveItems,
+      p_materials: receiveItems,  // для отладки
+      p_materials_json: JSON.stringify(receiveItems),  // что реально передаётся
       p_invoice_url: materialsFromModal[0]?.invoice_url || null
     });
     
-    if (error) throw error;
+    // ✅ Вызываем RPC с JSON.stringify для p_materials
+    const { data, error } = await supabase.rpc('receive_materials', {
+      p_application_id: appId,
+      p_company_id: cleanCompanyId,
+      p_user_id: user?.id,
+      p_user_email: user?.email,
+      p_materials: JSON.stringify(receiveItems),  // ✅ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
+      p_invoice_url: materialsFromModal[0]?.invoice_url || null
+    });
+    
+    if (error) {
+      console.error('❌ [RPC] Ошибка receive_materials:', {
+        error,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      showNotification(`Ошибка: ${error.message || 'Неизвестная ошибка'}`, 'error');
+      return { success: false };
+    }
+    
+    console.log('✅ [RPC] receive_materials ответ:', data);
     
     if (data?.success) {
-      // 3. Обновляем локальное состояние
+      // Обновляем локальное состояние
       setApplications(prev => prev.map(app =>
         app.id === application.id
           ? { ...app, status: data.new_status, materials: data.materials }
