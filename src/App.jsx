@@ -180,7 +180,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import * as XLSX from 'xlsx';
 import cacheManager from './utils/cacheManager';  // ← ДОБАВИТЬ
-import { supabase } from './utils/supabaseClient';
+import { supabase, getSafeCompanyId } from './utils/supabaseClient';
 // === APPROVAL WORKFLOW ===
 import ApprovalModal from './components/ApprovalWorkflow/ApprovalModal';
 import { useApproval } from './hooks/useApproval';
@@ -1928,6 +1928,11 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   const sendWithRetry = useCallback(async (draft, maxRetries = 5) => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        const cleanCompanyId = getSafeCompanyId(userCompanyId);
+if (!cleanCompanyId) {
+  console.warn('⚠️ sendWithRetry: нет валидного company_id');
+  return { success: false, error: 'Invalid company_id' };
+}
         const application = {
           object_name: draft.objectName,
           foreman_name: draft.foremanName,
@@ -1935,7 +1940,7 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
           materials: draft.materials.map(m => ({ ...m, received: 0, status: 'pending' })),
           status: 'pending',
           user_id: user?.id,
-          company_id: userCompanyId,
+          company_id: cleanCompanyId,
           created_at: draft.timestamp || new Date().toISOString(),
           status_history: [{
             user_id: user?.id,
@@ -3267,14 +3272,22 @@ const handleSubmit = async (e) => {
 
   const cloneLastApplication = async () => {
     try {
-      const { data: lastApp } = await supabase
-        .from('applications')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('company_id', userCompanyId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      // ✅ СТАЛО
+// Добавьте в начале функции:
+const cleanCompanyId = getSafeCompanyId(userCompanyId);
+if (!cleanCompanyId) {
+  showNotification('Ошибка: компания не найдена', 'error');
+  return;
+}
+
+const { data: lastApp } = await supabase
+  .from('applications')
+  .select('*')
+  .eq('user_id', user?.id)
+  .eq('company_id', cleanCompanyId)  // ✅ ИСПРАВЛЕНО
+  .order('created_at', { ascending: false })
+  .limit(1)
+  .single();
       if (lastApp) {
         setFormData(prev => ({
           ...prev,
@@ -3892,8 +3905,15 @@ useEffect(() => {
                 unit: material.unit,
                 company_id: userCompanyId
               });
-              const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
-                p_company_id: userCompanyId,
+              const cleanCompanyId = getSafeCompanyId(userCompanyId);
+if (!cleanCompanyId) {
+  showNotification('Ошибка: компания не найдена', 'error');
+  return;
+}
+
+// Затем используйте cleanCompanyId
+const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
+  p_company_id: cleanCompanyId,  // ✅ ИСПРАВЛЕНО
                 p_item_name: (material.description || '').trim(),
                 p_quantity: qtyReceived,
                 p_transaction_type: 'income',
@@ -3968,6 +3988,7 @@ const handleClearFilters = useCallback(() => {
   // ============================================================
 // 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (ОБНОВЛЁННАЯ)
 // ============================================================
+// ✅ СТАЛО
 const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
   console.log('🔍 [DEBUG] handleAdminReceive started', {
     applicationId: application?.id,
@@ -3981,23 +4002,35 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
   }
   
   try {
+    // ✅ Очищаем company_id
+    const cleanCompanyId = getSafeCompanyId(userCompanyId);
+    if (!cleanCompanyId) {
+      showNotification('Ошибка: компания не найдена', 'error');
+      return { success: false };
+    }
+    
     // 1. Формируем данные для RPC
-    const receiveItems = materialsFromModal.map(m => ({
-      item_name: m.description || m.item_name || '',
-      quantity: Number(m.supplier_received_quantity) || Number(m.quantityToReceive) || Number(m.quantity) || 0,
-      unit: m.unit || 'шт',
-      invoice_url: m.invoice_url || null
-    })).filter(m => m.quantity > 0 && m.item_name);
+    const receiveItems = materialsFromModal
+      .filter(m => {
+        const qty = Number(m.supplier_received_quantity) || Number(m.quantityToReceive) || Number(m.quantity) || 0;
+        return qty > 0 && (m.description || m.item_name);
+      })
+      .map(m => ({
+        item_name: String(m.description || m.item_name || '').trim(),
+        quantity: Number(m.supplier_received_quantity) || Number(m.quantityToReceive) || Number(m.quantity) || 0,
+        unit: String(m.unit || 'шт').trim(),
+        invoice_url: m.invoice_url || null
+      }));
     
     if (receiveItems.length === 0) {
       showNotification('Нет материалов для приёмки', 'warning');
       return { success: false };
     }
     
-    // 2. Вызываем RPC функцию receive_materials
+    // 2. Вызываем RPC функцию receive_materials с cleanCompanyId
     const { data, error } = await supabase.rpc('receive_materials', {
-      p_application_id: application.id,
-      p_company_id: userCompanyId,
+      p_application_id: String(application.id).trim(),
+      p_company_id: cleanCompanyId,  // ✅ ИСПРАВЛЕНО
       p_user_id: user?.id,
       p_user_email: user?.email,
       p_materials: receiveItems,
@@ -4017,7 +4050,6 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
       showNotification(`✅ Принято ${receiveItems.length} позиций на склад`, 'success');
       setShowReceiveModal(false);
       
-      // 4. Если все принято - предлагаем отправить мастеру
       if (data.new_status === APPLICATION_STATUS.READY_FOR_ISSUE) {
         setTimeout(() => {
           showNotification('📤 Все материалы на складе. Перейдите в "Готовы к выдаче"', 'info');
@@ -4037,7 +4069,11 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
 }, [user, userCompanyId, supabase, showNotification, setApplications]);
 
   // 🔹 Снабженец берет заявку в работу (поиск поставщика, запрос счета)
+// ✅ СТАЛО
 const handleTakeToWork = useCallback(async (application) => {
+  // ✅ Очищаем company_id (для аудита)
+  const cleanCompanyId = getSafeCompanyId(userCompanyId);
+  
   const { error } = await supabase
     .from('applications')
     .update({
@@ -4046,7 +4082,8 @@ const handleTakeToWork = useCallback(async (application) => {
         user_id: user?.id,
         action: 'taken_to_work',
         timestamp: new Date().toISOString(),
-        details: 'Снабженец принял заявку в обработку'
+        details: 'Снабженец принял заявку в обработку',
+        company_id: cleanCompanyId  // для истории
       }]
     })
     .eq('id', application.id);
@@ -4063,17 +4100,14 @@ const handleTakeToWork = useCallback(async (application) => {
   ));
   setShowReceiveModal(false);
   showNotification('📦 Заявка взята в работу. Теперь вы ищете поставщика.', 'success');
-}, [user?.id, showNotification]);
+}, [user?.id, userCompanyId, showNotification]);
 
 // 🔹 Снабженец отправляет на согласование (после получения счета/суммы)
+// ✅ СТАЛО
 const handleSendForApproval = useCallback(async (application) => {
-  // ⚠️ ВАРИАНТ А: Если approvalEngine нужен — раскомментируйте импорт внизу
-  // const approvalResult = await approvalEngine.createApprovalRequest(application, userCompanyId);
-  // if (!approvalResult) {
-  //   showNotification('⚠️ Не удалось создать запрос на согласование', 'warning');
-  //   return;
-  // }
-
+  // ✅ Очищаем company_id (для аудита)
+  const cleanCompanyId = getSafeCompanyId(userCompanyId);
+  
   const { error } = await supabase
     .from('applications')
     .update({
@@ -4082,7 +4116,8 @@ const handleSendForApproval = useCallback(async (application) => {
         user_id: user?.id,
         action: 'sent_for_approval',
         timestamp: new Date().toISOString(),
-        details: 'Отправлено руководителю (получен счет)'
+        details: 'Отправлено руководителю (получен счет)',
+        company_id: cleanCompanyId  // для истории
       }]
     })
     .eq('id', application.id);
@@ -4143,6 +4178,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
   // ============================================================
 // 🔹 ОТПРАВКА МАСТЕРУ (ОБНОВЛЁННАЯ)
 // ============================================================
+// ✅ СТАЛО
 const handleSendToMaster = useCallback(async (itemsToSend, application) => {
   console.log('📦 Отправка мастеру, items:', itemsToSend);
   
@@ -4152,6 +4188,13 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
   }
   
   try {
+    // ✅ Очищаем company_id
+    const cleanCompanyId = getSafeCompanyId(userCompanyId);
+    if (!cleanCompanyId) {
+      showNotification('Ошибка: компания не найдена', 'error');
+      return { success: false };
+    }
+    
     // 1. Обновляем материалы в заявке
     const updatedMaterials = application.materials.map(original => {
       const itemToSend = itemsToSend.find(i => 
@@ -4203,13 +4246,13 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
     
     if (updateError) throw updateError;
     
-    // 5. Списание со склада (через RPC)
+    // 5. Списание со склада (через RPC) с cleanCompanyId
     if (WAREHOUSE_ENABLED) {
       for (const item of itemsToSend) {
         const qtyToSend = Number(item.quantityToSend) || 0;
         if (qtyToSend > 0) {
           await supabase.rpc('update_warehouse_balance', {
-            p_company_id: userCompanyId,
+            p_company_id: cleanCompanyId,  // ✅ ИСПРАВЛЕНО
             p_item_name: (item.description || item.item_name || '').trim(),
             p_quantity: qtyToSend,
             p_transaction_type: 'expense',
@@ -4248,6 +4291,7 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
   // ============================================================
 // 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (ОБНОВЛЁННАЯ)
 // ============================================================
+// ✅ СТАЛО
 const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
   console.log('✅ Подтверждение мастером, items:', confirmations);
   
@@ -4257,6 +4301,9 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
   }
   
   try {
+    // ✅ Очищаем company_id (нужно для истории статусов)
+    const cleanCompanyId = getSafeCompanyId(userCompanyId);
+    
     // 1. Обновляем материалы
     const updatedMaterials = materialsFromModal.map((m, index) => {
       const conf = confirmations.find(c => c.materialIndex === index);
@@ -4325,7 +4372,7 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     showNotification('Ошибка подтверждения: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, supabase, showNotification, setApplications]);
+}, [user, userCompanyId, supabase, showNotification, setApplications]);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -4517,13 +4564,22 @@ const loadEmployees = useCallback(async () => {
   }, [currentView, loadEmployees]);
 
   // Загрузка владельца компании для отображения в списке сотрудников
+// ✅ СТАЛО
 useEffect(() => {
   const loadCompanyOwner = async () => {
     if (!userCompanyId) return;
+    
+    // Очищаем company_id
+    const cleanCompanyId = getSafeCompanyId(userCompanyId);
+    if (!cleanCompanyId) {
+      console.warn('⚠️ loadCompanyOwner: невалидный companyId');
+      return;
+    }
+    
     const { data } = await supabase
       .from('companies')
       .select('is_company_owner')
-      .eq('id', userCompanyId)
+      .eq('id', cleanCompanyId)  // ✅ ИСПРАВЛЕНО
       .single();
     if (data) setCompanyOwnerId(data.is_company_owner);
   };
@@ -4539,7 +4595,12 @@ useEffect(() => {
     if (error) {
       showNotification('Ошибка при обновлении статуса', 'error');
     } else {
-      await logEmployeeBlocked(supabase, employeeId, newStatus, userContext);
+      // ✅ СТАЛО
+// Добавьте очистку company_id для аудита
+const cleanCompanyId = getSafeCompanyId(userCompanyId);
+const userContextWithCleanId = { ...userContext, companyId: cleanCompanyId };
+
+await logEmployeeBlocked(supabase, employeeId, newStatus, userContextWithCleanId);
       setEmployees(prev =>
         prev.map(emp =>
           emp.id === employeeId ? { ...emp, is_active: newStatus } : emp
