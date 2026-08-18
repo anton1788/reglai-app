@@ -124,7 +124,8 @@ import {
   STATUS_ICONS,
   isApplicationActive,
   isApplicationCompleted,
-  requiresMasterConfirmation
+  requiresMasterConfirmation,
+  hasMaterialsReadyToIssue  // ← ДОБАВИТЬ ЭТУ СТРОКУ
 } from './utils/applicationStatuses';
 import {
   saveDraftToDB,
@@ -1448,6 +1449,13 @@ const mergeableCount = useMemo(() => {
     groups[app.object_name].push(app);
   });
   return Object.values(groups).filter(group => group.length >= 2).length;
+}, [applications]);
+// ===== КОЛИЧЕСТВО ЗАЯВОК, ГОТОВЫХ К ВЫДАЧЕ =====
+const readyToIssueCount = useMemo(() => {
+  return applications.filter(app => 
+    app.status === APPLICATION_STATUS.SUPPLIER_RECEIVED && 
+    hasMaterialsReadyToIssue(app)
+  ).length;
 }, [applications]);
 
 
@@ -3820,38 +3828,67 @@ useEffect(() => {
     }
   };
 
-  const openReceiveModal = useCallback((application, mode = 'admin_receive') => {
+  // App.jsx - обновлённая openReceiveModal
+
+const openReceiveModal = useCallback((application, mode = 'admin_receive') => {
+  // Проверка прав для разных режимов
   if (mode === 'admin_receive' && userRole !== 'supply_admin' && userRole !== 'manager' && userRole !== 'foreman') {
     showNotification('Нет прав на приёмку', 'error');
     return;
   }
+  
+  if (mode === 'admin_ready_to_issue' && userRole !== 'supply_admin' && userRole !== 'manager') {
+    showNotification('Только снабженец может выдавать материалы', 'error');
+    return;
+  }
+  
   if (mode === 'master_confirm' && userRole !== 'master' && userRole !== 'foreman') {
     showNotification('Нет прав на подтверждение', 'error');
     return;
   }
-    if (mode === 'admin_receive') {
-      const hasUnreceivedMaterials = application.materials?.some(m =>
-        (Number(m.supplier_received_quantity) || 0) < (Number(m.quantity) || 0)
-      );
-      if (!hasUnreceivedMaterials) {
-        showNotification('Все материалы уже приняты на склад', 'warning');
-        return;
-      }
+
+  // ✅ ПРОВЕРКА: режим "Выдача со склада"
+  if (mode === 'admin_ready_to_issue') {
+    const hasMaterialsOnWarehouse = application.materials?.some(m => {
+      const onWarehouse = Number(m.supplier_received_quantity) || 0;
+      const alreadySent = Number(m.sent_to_master_quantity) || 0;
+      const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
+      return onWarehouse > 0 && alreadySent < onWarehouse && !isFullyConfirmed;
+    });
+    
+    if (!hasMaterialsOnWarehouse) {
+      showNotification('Нет материалов для выдачи со склада', 'warning');
+      return;
     }
-    if (mode === 'master_confirm') {
-      const hasMaterialsToConfirm = application.materials?.some(m =>
-        (Number(m.supplier_received_quantity) || 0) > 0 &&
-        (Number(m.received) || 0) < (Number(m.quantity) || 0)
-      );
-      if (!hasMaterialsToConfirm) {
-        showNotification('Нет материалов для подтверждения мастером', 'warning');
-        return;
-      }
+  }
+
+  // ✅ Проверка для admin_receive
+  if (mode === 'admin_receive') {
+    const hasUnreceivedMaterials = application.materials?.some(m =>
+      (Number(m.supplier_received_quantity) || 0) < (Number(m.quantity) || 0)
+    );
+    if (!hasUnreceivedMaterials) {
+      showNotification('Все материалы уже приняты на склад', 'warning');
+      return;
     }
-    setSelectedApplication({ ...application, modalMode: mode });
-    setShowReceiveModal(true);
-    markAsViewed(application.id);
-  }, [userRole, showNotification, markAsViewed]);
+  }
+
+  // ✅ Проверка для master_confirm
+  if (mode === 'master_confirm') {
+    const hasMaterialsToConfirm = application.materials?.some(m =>
+      (Number(m.sent_to_master_quantity) || 0) > 0 &&
+      (Number(m.received) || 0) < (Number(m.quantity) || 0)
+    );
+    if (!hasMaterialsToConfirm) {
+      showNotification('Нет материалов для подтверждения мастером', 'warning');
+      return;
+    }
+  }
+
+  setSelectedApplication({ ...application, modalMode: mode });
+  setShowReceiveModal(true);
+  markAsViewed(application.id);
+}, [userRole, showNotification, markAsViewed]);
 
   const _saveReceiveStatus = async (localMaterialsFromModal) => {
   try {
@@ -4320,51 +4357,73 @@ const handleNpsSubmit = async ({ score, comment }) => {
 // 🔹 ОТПРАВКА МАСТЕРУ (ОБНОВЛЁННАЯ)
 // ============================================================
 // ✅ СТАЛО
+// App.jsx - ОБНОВЛЕННАЯ handleSendToMaster
+
 const handleSendToMaster = useCallback(async (itemsToSend, application) => {
-  console.log('📦 Отправка мастеру, items:', itemsToSend);
-  
-  if (!application?.id || !itemsToSend?.length) {
-    showNotification('Нет материалов для отправки', 'warning');
+  if (userRole !== 'supply_admin' && userRole !== 'manager') {
+    showNotification('Только снабженец может выдавать материалы мастеру', 'error');
     return { success: false };
   }
-  
+
+  if (!application?.id || !itemsToSend?.length) {
+    showNotification('Нет материалов для выдачи', 'warning');
+    return { success: false };
+  }
+
   try {
-    // ✅ Очищаем company_id
     const cleanCompanyId = getSafeCompanyId(userCompanyId);
-    if (!cleanCompanyId) {
-      showNotification('Ошибка: компания не найдена', 'error');
+
+    // ✅ Фильтруем только те материалы, где quantityToSend > 0
+    const validItems = itemsToSend.filter(item => (Number(item.quantityToSend) || 0) > 0);
+
+    if (validItems.length === 0) {
+      showNotification('Выберите хотя бы один материал для выдачи', 'warning');
       return { success: false };
     }
-    
-    // 1. Обновляем материалы в заявке
+
+    console.log('📦 Выдача материалов мастеру:', validItems);
+
+    // 1. Обновляем материалы
     const updatedMaterials = application.materials.map(original => {
-      const itemToSend = itemsToSend.find(i => 
+      const itemToSend = validItems.find(i => 
         (i.description || i.item_name) === (original.description || original.item_name)
       );
-      
+
       if (itemToSend && (Number(itemToSend.quantityToSend) || 0) > 0) {
         const qtyToSend = Number(itemToSend.quantityToSend);
+        const currentSent = Number(original.sent_to_master_quantity) || 0;
+        const totalReceived = Number(original.supplier_received_quantity) || 0;
+        
+        const newSent = Math.min(currentSent + qtyToSend, totalReceived);
+
         return {
           ...original,
-          sent_to_master_quantity: (Number(original.sent_to_master_quantity) || 0) + qtyToSend,
-          status: ITEM_STATUS.SENT_TO_MASTER,
-          sent_to_master_at: new Date().toISOString(),
+          sent_to_master_quantity: newSent,
+          status: newSent >= totalReceived ? ITEM_STATUS.SENT_TO_MASTER : ITEM_STATUS.PARTIAL,
+          sent_to_master_at: newSent > currentSent ? new Date().toISOString() : original.sent_to_master_at,
           sent_to_master_by: user?.id
         };
       }
       return original;
     });
-    
-    // 2. Проверяем, все ли материалы отправлены мастеру
-    const allSent = updatedMaterials.every(m => 
-      (Number(m.sent_to_master_quantity) || 0) >= (Number(m.supplier_received_quantity) || 0)
-    );
-    
+
+    // 2. Проверяем, все ли материалы отправлены
+    const allSent = updatedMaterials.every(m => {
+      const totalReceived = Number(m.supplier_received_quantity) || 0;
+      const sent = Number(m.sent_to_master_quantity) || 0;
+      const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
+      
+      // Если материал уже подтверждён мастером — пропускаем
+      if (isFullyConfirmed) return true;
+      
+      return sent >= totalReceived;
+    });
+
     // 3. Новый статус заявки
     const newStatus = allSent 
-      ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION 
+      ? APPLICATION_STATUS.SENT_TO_MASTER 
       : APPLICATION_STATUS.PARTIAL_RECEIVED;
-    
+
     // 4. Обновляем заявку в БД
     const { error: updateError } = await supabase
       .from('applications')
@@ -4379,27 +4438,27 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
             user_id: user?.id,
             user_email: user?.email,
             timestamp: new Date().toISOString(),
-            details: `Отправлено мастеру: ${itemsToSend.filter(i => i.quantityToSend > 0).length} позиций`
+            details: `Выдано материалов: ${validItems.length} позиций`
           }
         ]
       })
       .eq('id', application.id);
-    
+
     if (updateError) throw updateError;
-    
-    // 5. Списание со склада (через RPC) с cleanCompanyId
+
+    // 5. Списание со склада (если включено)
     if (WAREHOUSE_ENABLED) {
-      for (const item of itemsToSend) {
+      for (const item of validItems) {
         const qtyToSend = Number(item.quantityToSend) || 0;
         if (qtyToSend > 0) {
           await supabase.rpc('update_warehouse_balance', {
-            p_company_id: cleanCompanyId,  // ✅ ИСПРАВЛЕНО
+            p_company_id: cleanCompanyId,
             p_item_name: (item.description || item.item_name || '').trim(),
             p_quantity: qtyToSend,
             p_transaction_type: 'expense',
             p_user_id: user?.id,
             p_user_email: user?.email,
-            p_comment: `Отправка мастеру: ${application.object_name}`,
+            p_comment: `Выдача мастеру: ${application.object_name}`,
             p_application_id: application.id,
             p_unit: item.unit || 'шт',
             p_target_object_name: application.object_name,
@@ -4409,22 +4468,30 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
         }
       }
     }
-    
+
     // 6. Обновляем UI
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
-    
-    showNotification(`✅ Отправлено мастеру ${itemsToSend.filter(i => i.quantityToSend > 0).length} позиций`, 'success');
+
+    const totalIssued = validItems.reduce((sum, i) => sum + (Number(i.quantityToSend) || 0), 0);
+    showNotification(`✅ Выдано ${totalIssued} единиц материалов мастеру`, 'success');
     setShowReceiveModal(false);
-    
+
+    // 7. Подсказка мастеру
+    if (newStatus === APPLICATION_STATUS.SENT_TO_MASTER) {
+      setTimeout(() => {
+        showNotification('📦 Материалы выданы мастеру. Ожидайте подтверждения.', 'info');
+      }, 1000);
+    }
+
     return { success: true };
-    
+
   } catch (err) {
-    console.error('❌ Ошибка отправки мастеру:', err);
-    showNotification('Ошибка отправки: ' + err.message, 'error');
+    console.error('❌ Ошибка выдачи материалов:', err);
+    showNotification('Ошибка: ' + err.message, 'error');
     return { success: false };
   }
 }, [user, userCompanyId, supabase, showNotification, setApplications, WAREHOUSE_ENABLED]);
@@ -7151,6 +7218,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         mergeableCount={mergeableCount}
         chatUnreadCount={chatUnreadCount}
         newFeedbackCount={newFeedbackCount}
+        readyToIssueCount={readyToIssueCount}
                onMarkNotificationRead={async (id) => {
           if (!id) {
             console.error('❌ [Notifications] ID уведомления не передан!');

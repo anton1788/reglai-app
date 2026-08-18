@@ -524,6 +524,7 @@ const ReceiveModal = memo(function({
       
       setLocalMaterials(validMaterials);
       
+      // ✅ РЕЖИМ: Отправка мастеру (для обратной совместимости)
       if (modalMode === 'admin_send_to_master') {
         setItemsToSend(selectedApplication.materials
           .filter(function(m) {
@@ -543,25 +544,33 @@ const ReceiveModal = memo(function({
         );
       }
       
-      // ✅ НОВЫЙ РЕЖИМ: Готовы к выдаче
+      // ✅ НОВЫЙ РЕЖИМ: Выдача со склада (ОСНОВНОЙ)
       if (modalMode === 'admin_ready_to_issue') {
-        setItemsToSend(selectedApplication.materials
+        const availableItems = validMaterials
           .filter(function(m) {
-            const onWarehouseQty = Number(m.supplier_received_quantity) || 0;
+            const onWarehouse = Number(m.supplier_received_quantity) || 0;
             const alreadySent = Number(m.sent_to_master_quantity) || 0;
-            return onWarehouseQty > 0 && alreadySent < onWarehouseQty;
+            const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
+            
+            // Не показываем материалы, которые уже полностью подтверждены
+            if (isFullyConfirmed) return false;
+            
+            // Показываем только те, что есть на складе и ещё не отправлены полностью
+            return onWarehouse > 0 && alreadySent < onWarehouse;
           })
           .map(function(m) {
+            const onWarehouse = Number(m.supplier_received_quantity) || 0;
+            const alreadySent = Number(m.sent_to_master_quantity) || 0;
+            const available = onWarehouse - alreadySent;
+            
             return {
               ...m,
-              quantityToSend: Math.min(
-                Number(m.supplier_received_quantity) || 0,
-                (Number(m.supplier_received_quantity) || 0) - (Number(m.sent_to_master_quantity) || 0)
-              ),
+              quantityToSend: available, // По умолчанию — всё доступное
               unit: m.unit || 'шт'
             };
-          })
-        );
+          });
+        
+        setItemsToSend(availableItems);
       }
       
       if (modalMode === 'master_confirm') {
@@ -590,6 +599,13 @@ const ReceiveModal = memo(function({
       }
       else if ((modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && typeof onSendToMaster === 'function') {
         const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
+        
+        if (items.length === 0) {
+          if (showNotification) showNotification('Выберите хотя бы один материал для выдачи', 'warning');
+          setIsSaving(false);
+          return;
+        }
+        
         console.log('🔔 Вызов onSendToMaster с items:', items);
         result = await onSendToMaster(items, selectedApplication);
       }
@@ -619,7 +635,13 @@ const ReceiveModal = memo(function({
       }
       
       if (result && result.success) {
-        if (showNotification) showNotification(t('materialsAcceptedToWarehouse') || '✅ Успешно сохранено', 'success');
+        if (showNotification) {
+          if (modalMode === 'admin_ready_to_issue') {
+            showNotification('✅ Материалы выданы мастеру со склада', 'success');
+          } else {
+            showNotification(t('materialsAcceptedToWarehouse') || '✅ Успешно сохранено', 'success');
+          }
+        }
         if (onClose) onClose();
       }
     } catch (err) {
@@ -659,7 +681,13 @@ const ReceiveModal = memo(function({
   const handleItemToSendUpdate = useCallback(function(index, quantity) {
     setItemsToSend(function(prev) {
       return prev.map(function(item, idx) {
-        return idx === index ? { ...item, quantityToSend: clamp(quantity, 0, item.supplier_received_quantity) } : item;
+        if (idx === index) {
+          const maxQty = Number(item.supplier_received_quantity) || 0;
+          const alreadySent = Number(item.sent_to_master_quantity) || 0;
+          const available = maxQty - alreadySent;
+          return { ...item, quantityToSend: clamp(quantity, 0, available) };
+        }
+        return item;
       });
     });
   }, []);
@@ -754,9 +782,11 @@ const ReceiveModal = memo(function({
       return itemsToSend.some(function(i) { return i.quantityToSend > 0; });
     }
     
-    // ✅ НОВЫЙ РЕЖИМ: Готовы к выдаче
+    // ✅ НОВЫЙ РЕЖИМ: Выдача со склада
     if (modalMode === 'admin_ready_to_issue') {
-      return itemsToSend.some(function(i) { return i.quantityToSend > 0; });
+      return itemsToSend.some(function(i) { 
+        return (Number(i.quantityToSend) || 0) > 0; 
+      });
     }
     
     if (modalMode === 'master_confirm') {
@@ -791,81 +821,201 @@ const ReceiveModal = memo(function({
   }, [confirmations]);
 
   // ============================================================
-  // 🔹 РЕЖИМ: ГОТОВЫ К ВЫДАЧЕ (для снабженца)
+  // 🔹 РЕЖИМ: ВЫДАЧА СО СКЛАДА (для снабженца)
   // ============================================================
   const renderReadyToIssue = function() {
-    // Показываем материалы, которые на складе и ещё не отправлены мастеру
+    // ✅ Показываем только материалы, которые есть на складе
     const availableMaterials = localMaterials.filter(function(m) {
-      return (Number(m.supplier_received_quantity) || 0) > 0 &&
-        (Number(m.sent_to_master_quantity) || 0) < (Number(m.supplier_received_quantity) || 0);
+      const onWarehouse = Number(m.supplier_received_quantity) || 0;
+      const alreadySent = Number(m.sent_to_master_quantity) || 0;
+      const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
+      
+      // Не показываем материалы, которые уже полностью отправлены или подтверждены
+      if (isFullyConfirmed) return false;
+      
+      // Показываем только те, что есть на складе и ещё не отправлены полностью
+      return onWarehouse > 0 && alreadySent < onWarehouse;
     });
 
     if (availableMaterials.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">
           <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-          <p>Все материалы уже отправлены мастеру</p>
-          <p className="text-sm">Нет материалов для выдачи</p>
+          <p className="font-medium">Нет материалов для выдачи</p>
+          <p className="text-sm">Все материалы уже отправлены мастеру или получены</p>
         </div>
       );
     }
 
+    // Вычисляем общее количество к выдаче
+    const totalToIssue = itemsToSend.reduce(function(sum, item) {
+      return sum + (Number(item.quantityToSend) || 0);
+    }, 0);
+
     return (
       <div className="space-y-4">
-        <p className="text-sm text-gray-600">
-          Выберите материалы для выдачи мастеру <strong>{selectedApplication?.foreman_name}</strong>
-        </p>
+        <div className="flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-xl border border-amber-200 dark:border-amber-800">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+          <div>
+            <p className="font-medium">Выдача материалов со склада</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Мастер <strong>{selectedApplication?.foreman_name}</strong> получит указанное количество материалов
+            </p>
+          </div>
+        </div>
 
-        <div className="space-y-3 max-h-60 overflow-y-auto">
+        <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
           {availableMaterials.map(function(m, index) {
-            const available = (Number(m.supplier_received_quantity) || 0) - (Number(m.sent_to_master_quantity) || 0);
+            const onWarehouse = Number(m.supplier_received_quantity) || 0;
+            const alreadySent = Number(m.sent_to_master_quantity) || 0;
+            const available = onWarehouse - alreadySent;
+            
+            // Находим соответствующий элемент в itemsToSend
+            const safeIndex = itemsToSend.findIndex(function(item) {
+              return (item.description || item.item_name) === (m.description || m.item_name);
+            });
+            const sendQuantity = safeIndex >= 0 ? (itemsToSend[safeIndex]?.quantityToSend || 0) : 0;
+
             return (
-              <div key={index} className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{m.description || m.item_name}</p>
-                    <p className="text-xs text-gray-500">
-                      На складе: {available} {m.unit || 'шт'} | 
-                      Запрошено: {m.quantity} {m.unit || 'шт'}
+              <div key={index} className="bg-white dark:bg-gray-800/60 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-white truncate">
+                      {m.description || m.item_name || '—'}
                     </p>
+                    <div className="flex flex-wrap items-center gap-3 mt-1 text-xs">
+                      <span className="text-blue-600 dark:text-blue-400">
+                        📦 На складе: <strong>{formatNumber(available)}</strong> {m.unit || 'шт'}
+                      </span>
+                      <span className="text-gray-400">|</span>
+                      <span className="text-gray-600 dark:text-gray-400">
+                        Запрошено: <strong>{formatNumber(m.quantity)}</strong> {m.unit || 'шт'}
+                      </span>
+                      {alreadySent > 0 && (
+                        <>
+                          <span className="text-gray-400">|</span>
+                          <span className="text-purple-600 dark:text-purple-400">
+                            Уже отправлено: <strong>{formatNumber(alreadySent)}</strong>
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
+                  
                   <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">Выдать:</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max={available}
-                      value={m.quantityToSend || 0}
-                      onChange={function(e) {
-                        const val = Math.min(Number(e.target.value) || 0, available);
-                        handleItemToSendUpdate(index, val);
+                    <div className="quantity-stepper flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 rounded-xl p-1 border border-amber-200 dark:border-amber-800">
+                      <button
+                        type="button"
+                        onClick={function() {
+                          const newVal = Math.max(0, sendQuantity - 1);
+                          if (safeIndex >= 0) {
+                            handleItemToSendUpdate(safeIndex, newVal);
+                          }
+                        }}
+                        disabled={sendQuantity <= 0}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-amber-600 dark:text-amber-400 hover:bg-white dark:hover:bg-amber-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        aria-label={t('decreaseQuantity')}
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                      
+                      <input
+                        type="number"
+                        min="0"
+                        max={available}
+                        value={sendQuantity}
+                        onChange={function(e) {
+                          const val = Math.min(Math.max(0, Number(e.target.value) || 0), available);
+                          if (safeIndex >= 0) {
+                            handleItemToSendUpdate(safeIndex, val);
+                          }
+                        }}
+                        className="w-14 text-center px-1 py-1 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        aria-label={t('quantityToSend')}
+                      />
+                      
+                      <button
+                        type="button"
+                        onClick={function() {
+                          const newVal = Math.min(available, sendQuantity + 1);
+                          if (safeIndex >= 0) {
+                            handleItemToSendUpdate(safeIndex, newVal);
+                          }
+                        }}
+                        disabled={sendQuantity >= available}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-amber-600 dark:text-amber-400 hover:bg-white dark:hover:bg-amber-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        aria-label={t('increaseQuantity')}
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                    
+                    <button
+                      onClick={function() {
+                        if (safeIndex >= 0) {
+                          handleItemToSendUpdate(safeIndex, available);
+                        }
                       }}
-                      className="w-20 px-2 py-1 border rounded text-sm"
-                    />
-                    <span className="text-sm text-gray-500">{m.unit || 'шт'}</span>
+                      className="px-2 py-1 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                      disabled={sendQuantity >= available}
+                    >
+                      Все
+                    </button>
                   </div>
                 </div>
+                
+                {/* Прогресс-бар отправки */}
+                {alreadySent > 0 && (
+                  <div className="mt-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-500">Прогресс выдачи:</span>
+                      <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="h-1.5 bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-300"
+                          style={{ 
+                            width: Math.min((alreadySent / onWarehouse) * 100, 100) + '%' 
+                          }}
+                        />
+                      </div>
+                      <span className="text-gray-600 dark:text-gray-400 font-medium">
+                        {Math.round((alreadySent / onWarehouse) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
 
-        <div className="flex justify-end gap-3 pt-4 border-t">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800"
-            disabled={isSaving}
-          >
-            Отмена
-          </button>
-          <button
-            onClick={function() { handleSave(); }}
-            disabled={isSaving || itemsToSend.every(function(i) { return (i.quantityToSend || 0) === 0; })}
-            className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] disabled:opacity-50 flex items-center gap-2"
-          >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Выдать мастеру
-          </button>
+        {/* Итог */}
+        {totalToIssue > 0 && (
+          <div className="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <Package className="w-5 h-5" aria-hidden="true" />
+              <span className="font-medium">
+                Всего к выдаче: <strong>{formatNumber(totalToIssue)}</strong> ед.
+              </span>
+            </div>
+            <span className="text-xs text-gray-500">
+              Мастер: {selectedApplication?.foreman_name}
+            </span>
+          </div>
+        )}
+
+        {/* Комментарий к выдаче */}
+        <div>
+          <label htmlFor="issue-comment" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            {t('issueComment') || 'Комментарий к выдаче (опционально)'}
+          </label>
+          <textarea
+            id="issue-comment"
+            value={transferComment}
+            onChange={function(e) { setTransferComment(e.target.value); }}
+            placeholder={t('issueCommentPlaceholder') || 'Укажите дополнительные детали выдачи...'}
+            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500 resize-none text-sm"
+            rows="2"
+          />
         </div>
       </div>
     );
@@ -876,11 +1026,12 @@ const ReceiveModal = memo(function({
   // ─────────────────────────────────────────────────────────
   if (!isOpen || !selectedApplication) return null;
   
+  // 🔹 ЗАГОЛОВКИ РЕЖИМОВ
   const modalTitles = {
     admin_receive: t('acceptToWarehouse') || 'Приёмка на склад',
     admin_send_to_master: t('sendToMaster') || 'Отправка мастеру',
     master_confirm: t('confirmReceipt') || 'Подтверждение получения',
-    admin_ready_to_issue: t('readyToIssue') || 'Готовы к выдаче'
+    admin_ready_to_issue: t('readyToIssue') || 'Выдача со склада'
   };
 
   const modalIcons = {
@@ -908,7 +1059,7 @@ const ReceiveModal = memo(function({
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl">
+            <div className="p-2.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl">
               <ModalIcon className="w-5 h-5 text-white" aria-hidden="true" />
             </div>
             <div>
@@ -1081,7 +1232,7 @@ const ReceiveModal = memo(function({
             </div>
           )}
           
-          {/* 🔹 АДМИН: Отправка мастеру */}
+          {/* 🔹 АДМИН: Отправка мастеру (для обратной совместимости) */}
           {modalMode === 'admin_send_to_master' && (
             <>
               <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
@@ -1167,7 +1318,7 @@ const ReceiveModal = memo(function({
             </>
           )}
           
-          {/* 🔹 АДМИН: Готовы к выдаче */}
+          {/* 🔹 АДМИН: Выдача со склада (ОСНОВНОЙ РЕЖИМ) */}
           {modalMode === 'admin_ready_to_issue' && renderReadyToIssue()}
           
           {/* 🔹 МАСТЕР: Подтверждение получения */}
@@ -1359,7 +1510,9 @@ const ReceiveModal = memo(function({
                 disabled={!hasChanges || isSaving}
                 className={`px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg ${
                   hasChanges && !isSaving
-                    ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
+                    ? modalMode === 'admin_ready_to_issue'
+                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white hover:shadow-xl'
+                      : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
                 }`}
               >
@@ -1370,8 +1523,17 @@ const ReceiveModal = memo(function({
                   </>
                 ) : (
                   <>
-                    <CheckCircle className="w-4 h-4" aria-hidden="true" />
-                    <span>{t('save') || 'Сохранить'}</span>
+                    {modalMode === 'admin_ready_to_issue' ? (
+                      <>
+                        <Package className="w-4 h-4" aria-hidden="true" />
+                        <span>{t('issueToMaster') || 'Выдать мастеру'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4" aria-hidden="true" />
+                        <span>{t('save') || 'Сохранить'}</span>
+                      </>
+                    )}
                   </>
                 )}
               </button>

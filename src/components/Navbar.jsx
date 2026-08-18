@@ -15,8 +15,9 @@ import {
   Settings,
   FolderOpen,
   Star,
-  FileCheck, // Добавляем иконку для документов
-  Scale // Добавляем иконку для юридических документов
+  FileCheck,
+  Scale,
+  PackageCheck  // ← ДОБАВЛЕНО ДЛЯ ИКОНКИ "ГОТОВЫ К ВЫДАЧЕ"
 } from 'lucide-react';
 import { getCompanyPlan } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
@@ -66,7 +67,8 @@ const Navbar = ({
   onNotificationClick,
   selectedNotification,
   showNotificationModal,
-  onCloseNotificationModal
+  onCloseNotificationModal,
+  readyToIssueCount = 0  // ← НОВЫЙ ПРОПС
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -92,22 +94,22 @@ const Navbar = ({
   const tabletNavScrollRef = useRef(null);
 
   // Загрузка текущего тарифа
-    const loadCompanyPlan = useCallback(async () => {
-  const cleanId = getCleanCompanyId(companyId);
-  if (!cleanId || !supabase) {
-    setPlanLoading(false);
-    return;
-  }
-  try {
-    setPlanLoading(true);
-    const planData = await getCompanyPlan(supabase, cleanId);
-    setCurrentPlan(planData);
-  } catch (error) {
-    console.error('Failed to load company plan:', error);
-  } finally {
-    setPlanLoading(false);
-  }
-}, [companyId, supabase]);
+  const loadCompanyPlan = useCallback(async () => {
+    const cleanId = getCleanCompanyId(companyId);
+    if (!cleanId || !supabase) {
+      setPlanLoading(false);
+      return;
+    }
+    try {
+      setPlanLoading(true);
+      const planData = await getCompanyPlan(supabase, cleanId);
+      setCurrentPlan(planData);
+    } catch (error) {
+      console.error('Failed to load company plan:', error);
+    } finally {
+      setPlanLoading(false);
+    }
+  }, [companyId, supabase]);
 
   useEffect(() => {
     loadCompanyPlan();
@@ -156,6 +158,7 @@ const Navbar = ({
           '6': '/tasks',
           '7': '/chat',
           '8': '/calendar',
+          '9': '/ready-to-issue',  // ← ДОБАВЛЕНО
         };
         const path = shortcuts[e.key];
         if (path && !e.target.closest('input') && !e.target.closest('textarea')) {
@@ -269,30 +272,30 @@ const Navbar = ({
 
   // Все пункты навигации в зависимости от роли и тарифа
   const getNavItems = () => {
-  const items = [];
+    const items = [];
 
-  // Базовые пункты для всех
-  items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
-  items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
+    // Базовые пункты для всех
+    items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
+    items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
 
-  // 🔹 ГОТОВЫ К ВЫДАЧЕ - для снабженца и руководителя
-  if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-    items.push({ 
-      id: 'readyToIssue', 
-      label: 'Готовы к выдаче', 
-      icon: Package, 
-      path: '/ready-to-issue' 
-    });
-  }
+    // 🔹 ГОТОВЫ К ВЫДАЧЕ - для снабженца, руководителя и владельца
+    if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+      items.push({ 
+        id: 'readyToIssue', 
+        label: 'Готовы к выдаче', 
+        icon: PackageCheck,  // ← ИСПОЛЬЗУЕМ PackageCheck ВМЕСТО Package
+        path: '/ready-to-issue' 
+      });
+    }
 
-  if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'master' || userRole === 'foreman') {
-    items.push({ 
-      id: 'projects', 
-      label: 'Проекты', 
-      icon: FolderOpen, 
-      path: '/projects' 
-    });
-  }
+    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'master' || userRole === 'foreman') {
+      items.push({ 
+        id: 'projects', 
+        label: 'Проекты', 
+        icon: FolderOpen, 
+        path: '/projects' 
+      });
+    }
 
     // CRM Sales - Лиды (для manager и supply_admin)
     if (userRole === 'manager' || userRole === 'supply_admin') {
@@ -855,6 +858,15 @@ const Navbar = ({
                 const Icon = item.icon;
                 const isActive = currentPage === item.id || 
                   (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history'));
+                
+                // Бейдж для "Готовы к выдаче"
+                let badgeCount = 0;
+                let badgeColor = 'bg-amber-500';
+                if (item.id === 'readyToIssue') {
+                  badgeCount = readyToIssueCount || 0;
+                  badgeColor = 'bg-amber-500';
+                }
+                
                 return (
                   <button
                     key={item.id}
@@ -867,6 +879,14 @@ const Navbar = ({
                   >
                     <Icon className="w-5 h-5" />
                     <span className="text-xs font-medium">{item.label}</span>
+                    
+                    {/* Бейдж для "Готовы к выдаче" */}
+                    {item.id === 'readyToIssue' && badgeCount > 0 && (
+                      <span className={`absolute -top-1 -right-1 w-4 h-4 ${badgeColor} text-white text-[10px] rounded-full flex items-center justify-center`}>
+                        {badgeCount}
+                      </span>
+                    )}
+                    
                     {item.id === 'approvals' && pendingApprovalsCount > 0 && (
                       <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
                         {pendingApprovalsCount}
@@ -940,7 +960,16 @@ const Navbar = ({
                     (item.id === 'reports' && currentPage === 'reports') ||
                     (item.id === 'integration' && currentPage === 'integration') ||
                     (item.id === 'api' && currentPage === 'api') ||
-                    (item.id === 'merge' && currentPage === 'merge');
+                    (item.id === 'merge' && currentPage === 'merge') ||
+                    (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
+                  
+                  // Бейдж для "Готовы к выдаче"
+                  let badgeCount = 0;
+                  let badgeColor = 'bg-amber-500';
+                  if (item.id === 'readyToIssue') {
+                    badgeCount = readyToIssueCount || 0;
+                    badgeColor = 'bg-amber-500';
+                  }
                   
                   return (
                     <button
@@ -957,6 +986,14 @@ const Navbar = ({
                     >
                       <Icon className="w-4 h-4" />
                       <span className="text-sm font-medium">{item.label}</span>
+                      
+                      {/* Бейдж для "Готовы к выдаче" */}
+                      {item.id === 'readyToIssue' && badgeCount > 0 && (
+                        <span className={`absolute -top-1 -right-1 w-4 h-4 ${badgeColor} text-white text-[10px] rounded-full flex items-center justify-center`}>
+                          {badgeCount}
+                        </span>
+                      )}
+                      
                       {item.id === 'approvals' && pendingApprovalsCount > 0 && (
                         <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                           {pendingApprovalsCount}
@@ -1104,7 +1141,14 @@ const Navbar = ({
                   (item.id === 'reports' && currentPage === 'reports') ||
                   (item.id === 'integration' && currentPage === 'integration') ||
                   (item.id === 'api' && currentPage === 'api') ||
-                  (item.id === 'merge' && currentPage === 'merge');
+                  (item.id === 'merge' && currentPage === 'merge') ||
+                  (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
+                
+                // Бейдж для "Готовы к выдаче"
+                let badgeCount = 0;
+                if (item.id === 'readyToIssue') {
+                  badgeCount = readyToIssueCount || 0;
+                }
                 
                 return (
                   <button
@@ -1121,6 +1165,12 @@ const Navbar = ({
                   >
                     <Icon className="w-5 h-5 flex-shrink-0" />
                     <span className="flex-1 text-left truncate">{item.label}</span>
+                    
+                    {item.id === 'readyToIssue' && badgeCount > 0 && (
+                      <span className="ml-auto px-2 py-0.5 bg-amber-500 text-white text-xs rounded-full flex-shrink-0">
+                        {badgeCount}
+                      </span>
+                    )}
                     {item.id === 'approvals' && pendingApprovalsCount > 0 && (
                       <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
                         {pendingApprovalsCount}

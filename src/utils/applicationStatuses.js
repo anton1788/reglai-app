@@ -304,3 +304,172 @@ export const getStatusIcon = (status) => {
 export const getStatusPriority = (status) => {
   return STATUS_PRIORITY[status] || 999;
 };
+// ============================================================
+// 🆕 НОВЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С ВЫДАЧЕЙ МАТЕРИАЛОВ
+// ============================================================
+
+/**
+ * Проверяет, есть ли материалы для выдачи мастеру
+ * @param {Object} application - Объект заявки
+ * @returns {boolean} - true если есть материалы для выдачи
+ */
+export const hasMaterialsReadyToIssue = (application) => {
+  if (!application?.materials) return false;
+  
+  return application.materials.some(m => {
+    const onWarehouse = Number(m.supplier_received_quantity) || 0;
+    const alreadySent = Number(m.sent_to_master_quantity) || 0;
+    const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
+    
+    // Материал доступен для выдачи если:
+    // 1. Есть на складе > 0
+    // 2. Ещё не отправлен полностью
+    // 3. Ещё не подтверждён мастером
+    return onWarehouse > 0 && alreadySent < onWarehouse && !isFullyConfirmed;
+  });
+};
+
+/**
+ * Получает количество материалов, доступных для выдачи
+ * @param {Object} application - Объект заявки
+ * @returns {number} - Общее количество доступных единиц
+ */
+export const getTotalAvailableForIssue = (application) => {
+  if (!application?.materials) return 0;
+  
+  return application.materials.reduce((total, m) => {
+    const onWarehouse = Number(m.supplier_received_quantity) || 0;
+    const alreadySent = Number(m.sent_to_master_quantity) || 0;
+    const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
+    
+    if (isFullyConfirmed) return total;
+    
+    return total + Math.max(0, onWarehouse - alreadySent);
+  }, 0);
+};
+
+/**
+ * Получает список материалов, доступных для выдачи
+ * @param {Object} application - Объект заявки
+ * @returns {Array} - Массив материалов для выдачи
+ */
+export const getMaterialsReadyToIssue = (application) => {
+  if (!application?.materials) return [];
+  
+  return application.materials
+    .filter(m => {
+      const onWarehouse = Number(m.supplier_received_quantity) || 0;
+      const alreadySent = Number(m.sent_to_master_quantity) || 0;
+      const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
+      
+      return onWarehouse > 0 && alreadySent < onWarehouse && !isFullyConfirmed;
+    })
+    .map(m => ({
+      ...m,
+      availableToIssue: Math.max(0, 
+        (Number(m.supplier_received_quantity) || 0) - 
+        (Number(m.sent_to_master_quantity) || 0)
+      )
+    }));
+};
+
+/**
+ * Проверяет, все ли материалы заявки подтверждены мастером
+ * @param {Object} application - Объект заявки
+ * @returns {boolean} - true если все материалы подтверждены
+ */
+export const isFullyConfirmed = (application) => {
+  if (!application?.materials) return false;
+  
+  return application.materials.every(m => {
+    return (Number(m.received) || 0) >= (Number(m.quantity) || 0);
+  });
+};
+
+/**
+ * Проверяет, есть ли частично подтверждённые материалы
+ * @param {Object} application - Объект заявки
+ * @returns {boolean} - true если есть частичные подтверждения
+ */
+export const hasPartialConfirmation = (application) => {
+  if (!application?.materials) return false;
+  
+  return application.materials.some(m => {
+    const received = Number(m.received) || 0;
+    const quantity = Number(m.quantity) || 0;
+    return received > 0 && received < quantity;
+  });
+};
+
+/**
+ * Получает следующий статус для заявки на основе её материалов
+ * @param {Object} application - Объект заявки
+ * @returns {string} - Новый статус
+ */
+export const getNextStatusForApplication = (application) => {
+  if (!application?.materials) return application.status;
+
+  const allOnWarehouse = application.materials.every(m => {
+    return (Number(m.supplier_received_quantity) || 0) >= (Number(m.quantity) || 0);
+  });
+
+  const anyOnWarehouse = application.materials.some(m => {
+    return (Number(m.supplier_received_quantity) || 0) > 0;
+  });
+
+  const allSent = application.materials.every(m => {
+    const sent = Number(m.sent_to_master_quantity) || 0;
+    const onWarehouse = Number(m.supplier_received_quantity) || 0;
+    const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
+    return isFullyConfirmed || sent >= onWarehouse;
+  });
+
+  const anySent = application.materials.some(m => {
+    return (Number(m.sent_to_master_quantity) || 0) > 0;
+  });
+
+  const allConfirmed = isFullyConfirmed(application);
+
+  // Логика определения статуса
+  if (allConfirmed) {
+    return APPLICATION_STATUS.RECEIVED;
+  }
+
+  if (allSent && anySent) {
+    return APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
+  }
+
+  if (allOnWarehouse && anyOnWarehouse) {
+    return APPLICATION_STATUS.READY_FOR_ISSUE;
+  }
+
+  if (anyOnWarehouse) {
+    return APPLICATION_STATUS.PARTIAL_RECEIVED;
+  }
+
+  return application.status;
+};
+
+// ============================================================
+// 🆕 ДОПОЛНИТЕЛЬНЫЕ СТАТУСЫ ДЛЯ СОВМЕСТИМОСТИ
+// ============================================================
+
+// Добавляем псевдонимы для обратной совместимости
+export const STATUS_ALIASES = {
+  'ready_to_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
+  'ready_for_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
+  'supplier_received': APPLICATION_STATUS.READY_FOR_ISSUE,
+  'on_warehouse': APPLICATION_STATUS.READY_FOR_ISSUE,
+  'sent': APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+  'confirmed': APPLICATION_STATUS.RECEIVED,
+};
+
+/**
+ * Нормализует статус (приводит к каноническому виду)
+ * @param {string} status - Статус для нормализации
+ * @returns {string} - Нормализованный статус
+ */
+export const normalizeStatus = (status) => {
+  if (!status) return APPLICATION_STATUS.PENDING;
+  return STATUS_ALIASES[status] || status;
+};

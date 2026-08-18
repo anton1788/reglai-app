@@ -1,4 +1,4 @@
-// src/components/ApplicationList.jsx (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ)
+// src/components/ApplicationList.jsx (ПОЛНОСТЬЮ ПЕРЕДЕЛАННАЯ ВЕРСИЯ)
 
 import React, { useMemo, useCallback, useEffect, memo, useState, useRef } from 'react';
 import {
@@ -23,7 +23,8 @@ import {
   STATUS_ICONS,
   STATUS_I18N,
   isApplicationActive,
-  requiresMasterConfirmation
+  requiresMasterConfirmation,
+  hasMaterialsReadyToIssue,
 } from '../utils/applicationStatuses';
 import { canEditPrices } from '../utils/priceManager';
 
@@ -66,6 +67,11 @@ const STATUS_CONFIG = {
     labelKey: STATUS_I18N[APPLICATION_STATUS.PARTIAL_RECEIVED]?.ru || 'statusPartialReceived',
     icon: STATUS_ICONS[APPLICATION_STATUS.PARTIAL_RECEIVED] || AlertCircle,
     colorClass: STATUS_COLORS[APPLICATION_STATUS.PARTIAL_RECEIVED] || 'text-amber-800 bg-amber-200'
+  },
+  [APPLICATION_STATUS.SUPPLIER_RECEIVED]: {
+    labelKey: STATUS_I18N[APPLICATION_STATUS.SUPPLIER_RECEIVED]?.ru || 'statusSupplierReceived',
+    icon: STATUS_ICONS[APPLICATION_STATUS.SUPPLIER_RECEIVED] || Warehouse,
+    colorClass: STATUS_COLORS[APPLICATION_STATUS.SUPPLIER_RECEIVED] || 'text-cyan-800 bg-cyan-200'
   },
   [APPLICATION_STATUS.REJECTED]: {
     labelKey: STATUS_I18N[APPLICATION_STATUS.REJECTED]?.ru || 'statusRejected',
@@ -267,30 +273,6 @@ const MobileApplicationCard = memo(({
   ).length || 0;
   
   const isCompleted = application.status === APPLICATION_STATUS.RECEIVED;
-  
-  const canShowReceiveButton = (app, role) => {
-    if (role !== 'supply_admin' && role !== 'manager') return false;
-    const isActiveStatus = [
-      APPLICATION_STATUS.PENDING,
-      APPLICATION_STATUS.ADMIN_PROCESSING,
-      APPLICATION_STATUS.PARTIAL_RECEIVED
-    ].includes(app.status);
-    const hasUnreceivedMaterials = app.materials?.some(m =>
-      (Number(m.supplier_received_quantity) || 0) < (Number(m.quantity) || 0)
-    );
-    return isActiveStatus && hasUnreceivedMaterials;
-  };
-  
-  const canShowSendToMasterButton = (app, role) => {
-    if (role !== 'supply_admin' && role !== 'manager') return false;
-    if (![APPLICATION_STATUS.ADMIN_PROCESSING, APPLICATION_STATUS.PARTIAL_RECEIVED, APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION].includes(app.status)) return false;
-    const hasReceivedUnsentMaterials = app.materials?.some(m =>
-      (Number(m.supplier_received_quantity) || 0) > 0 &&
-      m.status !== ITEM_STATUS.SENT_TO_MASTER &&
-      (Number(m.received) || 0) < (Number(m.quantity) || 0)
-    );
-    return hasReceivedUnsentMaterials;
-  };
 
   const visibleMaterials = useMemo(() => {
     if (!application.materials) return [];
@@ -419,38 +401,63 @@ const MobileApplicationCard = memo(({
             </button>
           )}
           
+          {/* ✅ НОВЫЕ КНОПКИ ДЕЙСТВИЙ */}
           <div className="action-grid mt-3">
-            {canShowReceiveButton(application, userRole) && (
+            {/* ✅ Кнопка "Принять на склад" - для снабженца */}
+            {userRole === 'supply_admin' && 
+             (application.status === APPLICATION_STATUS.PENDING || 
+              application.status === APPLICATION_STATUS.ADMIN_PROCESSING) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'admin_receive')}
                 className="touch-target px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
               >
-                <Package className="w-4 h-4" />
-                {t('acceptToWarehouse') || 'Приёмка'}
+                <Warehouse className="w-4 h-4" />
+                {t('receiveToWarehouse') || 'Принять на склад'}
               </button>
             )}
             
-            {canShowSendToMasterButton(application, userRole) && (
+            {/* ✅ Кнопка "Выдать со склада" - для снабженца */}
+            {userRole === 'supply_admin' && 
+             application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED && 
+             hasMaterialsReadyToIssue(application) && (
+              <button
+                onClick={() => onOpenReceiveModal(application, 'admin_ready_to_issue')}
+                className="touch-target px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Package className="w-4 h-4" />
+                {t('issueFromWarehouse') || 'Выдать со склада'}
+              </button>
+            )}
+            
+            {/* ✅ Кнопка "Отправить мастеру" (для обратной совместимости) */}
+            {userRole === 'supply_admin' && 
+             application.status === APPLICATION_STATUS.ADMIN_PROCESSING && 
+             application.materials?.some(m => 
+               (Number(m.supplier_received_quantity) || 0) > 0 &&
+               (Number(m.received) || 0) < (Number(m.quantity) || 0)
+             ) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'admin_send_to_master')}
                 className="touch-target px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
               >
                 <Send className="w-4 h-4" />
-                {t('sendToMaster') || 'Отправить'}
+                {t('sendToMaster') || 'Отправить мастеру'}
               </button>
             )}
             
-            {/* ✅ ИСПРАВЛЕНИЕ: Мастер видит заявки, ожидающие подтверждения, даже если он не создавал их */}
-            {userRole === 'foreman' && requiresMasterConfirmation(application.status) && (
+            {/* ✅ Кнопка "Подтвердить получение" - для мастера */}
+            {(userRole === 'foreman' || userRole === 'master') && 
+             requiresMasterConfirmation(application.status) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'master_confirm')}
                 className="touch-target px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
               >
                 <CheckCircle className="w-4 h-4" />
-                {t('confirmReceipt') || 'Подтвердить'}
+                {t('confirmReceipt') || 'Подтвердить получение'}
               </button>
             )}
             
+            {/* ✅ Кнопка "Отменить" - для мастера (свои заявки) */}
             {userRole === 'foreman' && 
              isApplicationActive(application.status) && 
              application.status === APPLICATION_STATUS.PENDING && 
@@ -464,6 +471,7 @@ const MobileApplicationCard = memo(({
               </button>
             )}
             
+            {/* ✅ Кнопка комментариев */}
             <button
               onClick={() => onToggleComments(application.id)}
               className="touch-target px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
@@ -471,6 +479,7 @@ const MobileApplicationCard = memo(({
               💬 {comments[application.id]?.length || 0}
             </button>
             
+            {/* ✅ Кнопки экспорта */}
             <button
               onClick={() => onDownloadHTML(application)}
               className="touch-target px-3 py-2 bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
@@ -548,30 +557,6 @@ const DesktopApplicationRow = memo(({
   const completionPercent = totalMaterials > 0 ? Math.round((completedMaterials / totalMaterials) * 100) : 0;
   
   const isOverdue = application.status === APPLICATION_STATUS.PENDING && getDaysSince(application.created_at) > 2;
-  
-  const canShowReceiveButton = (app, role) => {
-    if (role !== 'supply_admin' && role !== 'manager') return false;
-    const isActiveStatus = [
-      APPLICATION_STATUS.PENDING,
-      APPLICATION_STATUS.ADMIN_PROCESSING,
-      APPLICATION_STATUS.PARTIAL_RECEIVED
-    ].includes(app.status);
-    const hasUnreceivedMaterials = app.materials?.some(m =>
-      (Number(m.supplier_received_quantity) || 0) < (Number(m.quantity) || 0)
-    );
-    return isActiveStatus && hasUnreceivedMaterials;
-  };
-  
-  const canShowSendToMasterButton = (app, role) => {
-    if (role !== 'supply_admin' && role !== 'manager') return false;
-    if (![APPLICATION_STATUS.ADMIN_PROCESSING, APPLICATION_STATUS.PARTIAL_RECEIVED, APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION].includes(app.status)) return false;
-    const hasReceivedUnsentMaterials = app.materials?.some(m =>
-      (Number(m.supplier_received_quantity) || 0) > 0 &&
-      m.status !== ITEM_STATUS.SENT_TO_MASTER &&
-      (Number(m.received) || 0) < (Number(m.quantity) || 0)
-    );
-    return hasReceivedUnsentMaterials;
-  };
 
   const visibleMaterials = useMemo(() => {
     if (!application.materials) return [];
@@ -645,20 +630,43 @@ const DesktopApplicationRow = memo(({
           )}
         </div>
 
-        {/* Действия */}
+        {/* ✅ НОВЫЕ КНОПКИ ДЕЙСТВИЙ */}
         <div className="col-span-3 flex items-center justify-end gap-1.5 flex-wrap">
-          {canShowReceiveButton(application, userRole) && (
+          {/* ✅ Кнопка "Принять на склад" - для снабженца */}
+          {userRole === 'supply_admin' && 
+           (application.status === APPLICATION_STATUS.PENDING || 
+            application.status === APPLICATION_STATUS.ADMIN_PROCESSING) && (
             <button
               onClick={() => onOpenReceiveModal(application, 'admin_receive')}
               className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
-              title={t('acceptToWarehouse') || 'Приёмка на склад'}
+              title={t('receiveToWarehouse') || 'Принять на склад'}
             >
-              <Package className="w-3.5 h-3.5" />
-              {t('accept') || 'Принять'}
+              <Warehouse className="w-3.5 h-3.5" />
+              {t('receive') || 'Принять'}
             </button>
           )}
           
-          {canShowSendToMasterButton(application, userRole) && (
+          {/* ✅ Кнопка "Выдать со склада" - для снабженца */}
+          {userRole === 'supply_admin' && 
+           application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED && 
+           hasMaterialsReadyToIssue(application) && (
+            <button
+              onClick={() => onOpenReceiveModal(application, 'admin_ready_to_issue')}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
+              title={t('issueFromWarehouse') || 'Выдать со склада'}
+            >
+              <Package className="w-3.5 h-3.5" />
+              {t('issue') || 'Выдать'}
+            </button>
+          )}
+          
+          {/* ✅ Кнопка "Отправить мастеру" (для обратной совместимости) */}
+          {userRole === 'supply_admin' && 
+           application.status === APPLICATION_STATUS.ADMIN_PROCESSING && 
+           application.materials?.some(m => 
+             (Number(m.supplier_received_quantity) || 0) > 0 &&
+             (Number(m.received) || 0) < (Number(m.quantity) || 0)
+           ) && (
             <button
               onClick={() => onOpenReceiveModal(application, 'admin_send_to_master')}
               className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
@@ -670,8 +678,7 @@ const DesktopApplicationRow = memo(({
           )}
 
           {canEditPrices(userRole) && (
-            <button
-              onClick={() => onOpenPriceEditor?.(application)}
+            <button              onClick={() => onOpenPriceEditor?.(application)}
               className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
               title={t('editPrices') || 'Редактировать цены'}
             >
@@ -679,8 +686,9 @@ const DesktopApplicationRow = memo(({
             </button>
           )}
           
-          {/* ✅ ИСПРАВЛЕНИЕ: Мастер видит заявки, ожидающие подтверждения, даже если он не создавал их */}
-          {userRole === 'foreman' && requiresMasterConfirmation(application.status) && (
+          {/* ✅ Кнопка "Подтвердить получение" - для мастера */}
+          {(userRole === 'foreman' || userRole === 'master') && 
+           requiresMasterConfirmation(application.status) && (
             <button
               onClick={() => onOpenReceiveModal(application, 'master_confirm')}
               className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
@@ -690,6 +698,7 @@ const DesktopApplicationRow = memo(({
             </button>
           )}
           
+          {/* ✅ Кнопка "Отменить" - для мастера (свои заявки) */}
           {userRole === 'foreman' && 
            isApplicationActive(application.status) && 
            application.status === APPLICATION_STATUS.PENDING && 
@@ -703,6 +712,7 @@ const DesktopApplicationRow = memo(({
             </button>
           )}
           
+          {/* ✅ Кнопка комментариев */}
           <button
             onClick={() => onToggleComments(application.id)}
             className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
@@ -711,6 +721,7 @@ const DesktopApplicationRow = memo(({
             💬 {comments[application.id]?.length || 0}
           </button>
           
+          {/* ✅ Кнопки экспорта */}
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => onDownloadHTML(application)}
@@ -871,6 +882,7 @@ const MobileStatusTabs = memo(({ active, onChange, counts, t }) => {
     { key: 'all', label: t('all'), icon: '📋' },
     { key: APPLICATION_STATUS.PENDING, label: t('statusPending'), icon: '⏳', count: counts?.pending || 0 },
     { key: APPLICATION_STATUS.ADMIN_PROCESSING, label: t('statusAdminProcessing') || 'Приёмка', icon: '📦', count: counts?.admin_processing || 0 },
+    { key: APPLICATION_STATUS.SUPPLIER_RECEIVED, label: t('statusSupplierReceived') || 'На складе', icon: '🏪', count: counts?.supplier_received || 0 },
     { key: APPLICATION_STATUS.RECEIVED, label: t('statusReceived'), icon: '✅', count: counts?.received || 0 },
     { key: APPLICATION_STATUS.CANCELED, label: t('statusCanceled'), icon: '❌', count: counts?.canceled || 0 },
   ];
@@ -1027,10 +1039,17 @@ const ApplicationList = memo(({
 
   // ✅ Подсчет статусов для вкладок
   const statusCounts = useMemo(() => {
-    const counts = { pending: 0, admin_processing: 0, received: 0, canceled: 0 };
+    const counts = { 
+      pending: 0, 
+      admin_processing: 0, 
+      supplier_received: 0,
+      received: 0, 
+      canceled: 0 
+    };
     applications.forEach(app => {
       if (app.status === APPLICATION_STATUS.PENDING) counts.pending++;
       else if (app.status === APPLICATION_STATUS.ADMIN_PROCESSING) counts.admin_processing++;
+      else if (app.status === APPLICATION_STATUS.SUPPLIER_RECEIVED) counts.supplier_received++;
       else if (app.status === APPLICATION_STATUS.RECEIVED) counts.received++;
       else if (app.status === APPLICATION_STATUS.CANCELED) counts.canceled++;
     });
@@ -1045,37 +1064,29 @@ const ApplicationList = memo(({
   const hasActiveFilters = searchTerm || statusFilter !== 'all' || dateFilter || viewedFilter !== 'all';
 
   // ✅ ФИЛЬТРАЦИЯ ЗАЯВОК ДЛЯ МАСТЕРА
-const filteredApplications = useMemo(() => {
-  // Если не мастер — возвращаем все заявки
-  if (userRole !== 'foreman' && userRole !== 'master') {
-    return applications;
-  }
-  
-  return applications.filter(app => {
-    // 1. Свои заявки (созданные мастером)
-    if (app.user_id === user?.id) return true;
-    
-    // 2. Заявки, ожидающие подтверждения (отправленные снабженцем)
-    if (requiresMasterConfirmation(app.status)) return true;
-    
-    // 3. Заявки, где мастер указан как получатель (по имени)
-    const foremanName = app.foreman_name?.trim().toLowerCase() || '';
-    const userName = user?.user_metadata?.full_name?.trim().toLowerCase() || '';
-    const userEmail = user?.email?.split('@')[0]?.toLowerCase() || '';
-    
-    if (foremanName) {
-      // Проверяем по полному имени или его части
-      if (userName && foremanName.includes(userName)) return true;
-      // Проверяем по части email (до @)
-      if (userEmail && foremanName.includes(userEmail)) return true;
+  const filteredApplications = useMemo(() => {
+    if (userRole !== 'foreman' && userRole !== 'master') {
+      return applications;
     }
     
-    // 4. Проверка по foreman_id (если есть в данных)
-    if (app.foreman_id && app.foreman_id === user?.id) return true;
-    
-    return false;
-  });
-}, [applications, userRole, user]);
+    return applications.filter(app => {
+      if (app.user_id === user?.id) return true;
+      if (requiresMasterConfirmation(app.status)) return true;
+      
+      const foremanName = app.foreman_name?.trim().toLowerCase() || '';
+      const userName = user?.user_metadata?.full_name?.trim().toLowerCase() || '';
+      const userEmail = user?.email?.split('@')[0]?.toLowerCase() || '';
+      
+      if (foremanName) {
+        if (userName && foremanName.includes(userName)) return true;
+        if (userEmail && foremanName.includes(userEmail)) return true;
+      }
+      
+      if (app.foreman_id && app.foreman_id === user?.id) return true;
+      
+      return false;
+    });
+  }, [applications, userRole, user]);
 
   // ─────────────────────────────────────────────────────────────
   // 📱 МОБИЛЬНЫЙ РЕНДЕРИНГ
@@ -1311,6 +1322,7 @@ const filteredApplications = useMemo(() => {
                 <option value={APPLICATION_STATUS.PENDING}>{t('statusPending')}</option>
                 <option value={APPLICATION_STATUS.ADMIN_PROCESSING}>{t('statusAdminProcessing') || 'Приёмка'}</option>
                 <option value={APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE}>{t('statusPartialWarehouse') || 'Частично на складе'}</option>
+                <option value={APPLICATION_STATUS.SUPPLIER_RECEIVED}>{t('statusSupplierReceived') || 'На складе'}</option>
                 <option value={APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION}>{t('statusPendingConfirmation') || 'Ожидает подтверждения'}</option>
                 <option value={APPLICATION_STATUS.RECEIVED}>{t('statusReceived')}</option>
                 <option value={APPLICATION_STATUS.PARTIAL_RECEIVED}>{t('statusPartialReceived') || 'Частично получено'}</option>
@@ -1449,7 +1461,7 @@ const filteredApplications = useMemo(() => {
         {/* Пагинация и статус загрузки */}
         <div className="p-4 border-t border-gray-200/50 dark:border-gray-700/50 flex flex-col sm:flex-row justify-between items-center gap-3">
           <span className="text-sm text-gray-500 dark:text-gray-400">
-  {t('showing') || 'Показано'} {filteredApplications.length} {t('applications') || 'заявок'}
+            {t('showing') || 'Показано'} {filteredApplications.length} {t('applications') || 'заявок'}
             {totalPages > 1 && ` • ${t('page') || 'Страница'} ${page} ${t('of') || 'из'} ${totalPages}`}
           </span>
           
@@ -1482,7 +1494,7 @@ const filteredApplications = useMemo(() => {
           )}
         </div>
 
-        {/* Infinite Scroll Trigger для десктопа (если есть еще страницы) */}
+        {/* Infinite Scroll Trigger для десктопа */}
         {!isLoading && filteredApplications.length > 0 && page < totalPages && (
           <div ref={loadMoreRef} className="h-6 flex items-center justify-center">
             <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
