@@ -1451,9 +1451,10 @@ const mergeableCount = useMemo(() => {
   return Object.values(groups).filter(group => group.length >= 2).length;
 }, [applications]);
 // ===== КОЛИЧЕСТВО ЗАЯВОК, ГОТОВЫХ К ВЫДАЧЕ =====
+// ✅ СТАЛО (используем READY_FOR_ISSUE)
 const readyToIssueCount = useMemo(() => {
   return applications.filter(app => 
-    app.status === APPLICATION_STATUS.SUPPLIER_RECEIVED && 
+    app.status === APPLICATION_STATUS.READY_FOR_ISSUE && 
     hasMaterialsReadyToIssue(app)
   ).length;
 }, [applications]);
@@ -7694,7 +7695,9 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         {currentView === 'readyToIssue' && (
   <ApplicationList
     applications={filteredApplications.filter(app => 
-      app.status === APPLICATION_STATUS.READY_FOR_ISSUE
+      (app.status === APPLICATION_STATUS.READY_FOR_ISSUE || 
+       app.status === APPLICATION_STATUS.SUPPLIER_RECEIVED) && 
+      hasMaterialsReadyToIssue(app)
     )}
     title={t('readyToIssue') || 'Готовы к выдаче'}
     emptyMessage={t('noApplicationsReadyToIssue') || 'Нет заявок, готовых к выдаче'}

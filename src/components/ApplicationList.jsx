@@ -428,7 +428,8 @@ const MobileApplicationCard = memo(({
             
             {/* ✅ Кнопка "Выдать со склада" - для снабженца */}
             {userRole === 'supply_admin' && 
-             application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED && 
+              (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
+  application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED) && 
              hasMaterialsReadyToIssue(application) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'admin_ready_to_issue')}
@@ -668,7 +669,8 @@ const DesktopApplicationRow = memo(({
           
           {/* ✅ Кнопка "Выдать со склада" - для снабженца */}
           {userRole === 'supply_admin' && 
-           application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED && 
+            (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
+  application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED) && 
            hasMaterialsReadyToIssue(application) && (
             <button
               onClick={() => onOpenReceiveModal(application, 'admin_ready_to_issue')}
