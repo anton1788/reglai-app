@@ -1,4 +1,4 @@
-// src/components/ApplicationList.jsx (ПОЛНОСТЬЮ ПЕРЕДЕЛАННАЯ ВЕРСИЯ)
+// src/components/ApplicationList.jsx (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ)
 
 import React, { useMemo, useCallback, useEffect, memo, useState, useRef } from 'react';
 import {
@@ -274,6 +274,13 @@ const MobileApplicationCard = memo(({
   
   const isCompleted = application.status === APPLICATION_STATUS.RECEIVED;
 
+  // Проверяем, есть ли материалы для приёмки
+  const hasUnreceivedMaterials = useMemo(() => {
+    return application.materials?.some(m =>
+      (Number(m.supplier_received_quantity) || 0) < (Number(m.quantity) || 0)
+    ) || false;
+  }, [application.materials]);
+
   const visibleMaterials = useMemo(() => {
     if (!application.materials) return [];
     let filtered = application.materials.filter(m => m?.description?.trim() && (Number(m.quantity) || 0) > 0);
@@ -401,12 +408,15 @@ const MobileApplicationCard = memo(({
             </button>
           )}
           
-          {/* ✅ НОВЫЕ КНОПКИ ДЕЙСТВИЙ */}
+          {/* ✅ НОВЫЕ КНОПКИ ДЕЙСТВИЙ — ИСПРАВЛЕННАЯ ВЕРСИЯ */}
           <div className="action-grid mt-3">
             {/* ✅ Кнопка "Принять на склад" - для снабженца */}
+            {/* Теперь показывает для PENDING, ADMIN_PROCESSING и PARTIAL_RECEIVED */}
             {userRole === 'supply_admin' && 
              (application.status === APPLICATION_STATUS.PENDING || 
-              application.status === APPLICATION_STATUS.ADMIN_PROCESSING) && (
+              application.status === APPLICATION_STATUS.ADMIN_PROCESSING ||
+              application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) && 
+             hasUnreceivedMaterials && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'admin_receive')}
                 className="touch-target px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
@@ -558,6 +568,13 @@ const DesktopApplicationRow = memo(({
   
   const isOverdue = application.status === APPLICATION_STATUS.PENDING && getDaysSince(application.created_at) > 2;
 
+  // Проверяем, есть ли материалы для приёмки
+  const hasUnreceivedMaterials = useMemo(() => {
+    return application.materials?.some(m =>
+      (Number(m.supplier_received_quantity) || 0) < (Number(m.quantity) || 0)
+    ) || false;
+  }, [application.materials]);
+
   const visibleMaterials = useMemo(() => {
     if (!application.materials) return [];
     let filtered = application.materials.filter(m => m?.description?.trim() && (Number(m.quantity) || 0) > 0);
@@ -630,12 +647,15 @@ const DesktopApplicationRow = memo(({
           )}
         </div>
 
-        {/* ✅ НОВЫЕ КНОПКИ ДЕЙСТВИЙ */}
+        {/* ✅ НОВЫЕ КНОПКИ ДЕЙСТВИЙ — ИСПРАВЛЕННАЯ ВЕРСИЯ */}
         <div className="col-span-3 flex items-center justify-end gap-1.5 flex-wrap">
           {/* ✅ Кнопка "Принять на склад" - для снабженца */}
+          {/* Теперь показывает для PENDING, ADMIN_PROCESSING и PARTIAL_RECEIVED */}
           {userRole === 'supply_admin' && 
            (application.status === APPLICATION_STATUS.PENDING || 
-            application.status === APPLICATION_STATUS.ADMIN_PROCESSING) && (
+            application.status === APPLICATION_STATUS.ADMIN_PROCESSING ||
+            application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) && 
+           hasUnreceivedMaterials && (
             <button
               onClick={() => onOpenReceiveModal(application, 'admin_receive')}
               className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
