@@ -607,6 +607,11 @@ export const setupSyncListener = (onSuccess, onError, onProgress) => {
         console.log('[Sync] Offline request synced:', payload?.id);
         onSuccess?.(payload);
         break;
+      // ✅ ДОБАВЛЕНО: синхронизация из IndexedDB
+      case 'SYNC_FROM_INDEXEDDB':
+        console.log('[Sync] Synced from IndexedDB:', payload?.id);
+        onSuccess?.(payload);
+        break;
       case 'SYNC_ERROR':
       case 'OFFLINE_REQUEST_FAILED':
         console.warn('[Sync] Sync error:', payload?.error);
@@ -618,6 +623,8 @@ export const setupSyncListener = (onSuccess, onError, onProgress) => {
       case 'QUEUE_UPDATED':
         console.log('[Sync] Queue updated');
         break;
+      default:
+        console.log('[Sync] Unknown message type:', type);
     }
   };
   

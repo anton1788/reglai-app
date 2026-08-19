@@ -3241,8 +3241,15 @@ const handleSubmit = async (e) => {
     }
     
   } catch (error) {
-    console.warn('[App] Network error, queuing request:', error);
-    
+  console.warn('[App] Network error, queuing request:', error);
+  
+  // Проверяем, не является ли ошибка офлайн-ошибкой
+  const isOfflineError = error.message?.includes('Failed to fetch') || 
+                         !navigator.onLine ||
+                         error.code === 'ECONNABORTED';
+  
+  // Если это ошибка соединения — отправляем в офлайн-очередь
+  if (isOfflineError) {
     try {
       await enqueueOfflineRequest({
         url: `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/applications`,
@@ -3262,37 +3269,34 @@ const handleSubmit = async (e) => {
       
       await requestBackgroundSync();
       
-      const optimisticApp = {
-        ...newApplication,
-        id: `pending_${Date.now()}`,
-        status: initialStatus,
-        created_at: new Date().toISOString()
-      };
-      setApplications(prev => [optimisticApp, ...prev.slice(0, ITEMS_PER_PAGE - 1)]);
+      // ✅ НЕ ДОБАВЛЯЕМ ОПТИМИСТИЧНУЮ ЗАЯВКУ, чтобы избежать дублирования
+      showNotification('📭 Заявка сохранена и будет отправлена при восстановлении связи', 'warning');
+      
+      // Очищаем форму
+      setFormData({
+        objectName: '',
+        foremanName: '',
+        foremanPhone: '',
+        materials: [{ description: '', quantity: 1, unit: 'шт' }],
+        cart: []
+      });
+      await deleteDraftFromDB('current_form_draft');
+      setCurrentView('pending');
+      setPage(1);
       
     } catch (queueError) {
       console.error('[App] Failed to queue offline request:', queueError);
-      showNotification('⚠️ Ошибка сохранения заявки', 'error');
-      setIsSubmitting(false);
-      return;
+      showNotification('⚠️ Ошибка сохранения заявки в офлайн-режиме', 'error');
     }
     
-    showNotification('📭 Заявка сохранена и будет отправлена при восстановлении связи', 'warning');
-    
-    setFormData({
-      objectName: '',
-      foremanName: '',
-      foremanPhone: '',
-      materials: [{ description: '', quantity: 1, unit: 'шт' }],
-      cart: []
-    });
-    await deleteDraftFromDB('current_form_draft');
-    setCurrentView('pending');
-    setPage(1);
-    
-  } finally {
     setIsSubmitting(false);
+    return;
   }
+  
+  // Если ошибка не связана с офлайн-режимом — показываем пользователю
+  showNotification('Ошибка при отправке заявки: ' + (error.message || 'Неизвестная ошибка'), 'error');
+  setIsSubmitting(false);
+}
 };
 
   // ─────────────────────────────────────────────────────────
@@ -4907,7 +4911,12 @@ await logEmployeeBlocked(supabase, employeeId, newStatus, userContextWithCleanId
     const { data: userApps = [], error: userError } = await query;
     if (userError) throw userError;
 
-    const uniqueApps = userApps.reduce((acc, current) => {
+    // ✅ Фильтруем временные заявки (pending_*, draft_*)
+const filteredApps = userApps.filter(app => 
+  app.id && !app.id.startsWith('pending_') && !app.id.startsWith('draft_')
+);
+
+const uniqueApps = filteredApps.reduce((acc, current) => {
   const exists = acc.find(item => item.id === current.id);
   if (!exists) {
     acc.push(current);
