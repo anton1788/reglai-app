@@ -100,8 +100,6 @@ export const STATUS_PRIORITY = {
   [APPLICATION_STATUS.CANCELED]: 10
 };
 
-// ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
-
 // Проверка, активна ли заявка (требует действий)
 export const isApplicationActive = (status) => {
   const activeStatuses = [
@@ -111,7 +109,8 @@ export const isApplicationActive = (status) => {
     APPLICATION_STATUS.APPROVED,
     APPLICATION_STATUS.PARTIAL_RECEIVED,
     APPLICATION_STATUS.READY_FOR_ISSUE,
-    APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION
+    APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+    'sent_to_master'  // ← добавить для совместимости
   ];
   return activeStatuses.includes(status);
 };
@@ -128,7 +127,9 @@ export const isApplicationCompleted = (status) => {
 
 // Проверка, требует ли заявка подтверждения мастером
 export const requiresMasterConfirmation = (status) => {
-  return status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
+  return status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION ||
+         status === 'pending_master_confirmation' ||
+         status === 'sent_to_master';  // ← для обратной совместимости
 };
 
 // Проверка, готова ли заявка к выдаче

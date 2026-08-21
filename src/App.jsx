@@ -4362,11 +4362,8 @@ const handleNpsSubmit = async ({ score, comment }) => {
 };
 
   // ============================================================
-// 🔹 ОТПРАВКА МАСТЕРУ (ОБНОВЛЁННАЯ)
+// 🔹 ОТПРАВКА МАСТЕРУ (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 // ============================================================
-// ✅ СТАЛО
-// App.jsx - ОБНОВЛЕННАЯ handleSendToMaster
-
 const handleSendToMaster = useCallback(async (itemsToSend, application) => {
   if (userRole !== 'supply_admin' && userRole !== 'manager') {
     showNotification('Только снабженец может выдавать материалы мастеру', 'error');
@@ -4427,12 +4424,14 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
       return sent >= totalReceived;
     });
 
-    // 3. Новый статус заявки
+    // ✅ ИСПРАВЛЕНО: правильный статус для ожидания подтверждения мастера
     const newStatus = allSent 
-      ? APPLICATION_STATUS.SENT_TO_MASTER 
+      ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION  // ← 'pending_master_confirmation'
       : APPLICATION_STATUS.PARTIAL_RECEIVED;
 
-    // 4. Обновляем заявку в БД
+    console.log('📊 Новый статус заявки:', newStatus);
+
+    // 3. Обновляем заявку в БД
     const { error: updateError } = await supabase
       .from('applications')
       .update({
@@ -4454,7 +4453,7 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
 
     if (updateError) throw updateError;
 
-    // 5. Списание со склада (если включено)
+    // 4. Списание со склада (если включено)
     if (WAREHOUSE_ENABLED) {
       for (const item of validItems) {
         const qtyToSend = Number(item.quantityToSend) || 0;
@@ -4477,7 +4476,7 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
       }
     }
 
-    // 6. Обновляем UI
+    // 5. Обновляем UI
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newStatus, materials: updatedMaterials }
@@ -4488,8 +4487,8 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
     showNotification(`✅ Выдано ${totalIssued} единиц материалов мастеру`, 'success');
     setShowReceiveModal(false);
 
-    // 7. Подсказка мастеру
-    if (newStatus === APPLICATION_STATUS.SENT_TO_MASTER) {
+    // 6. Подсказка мастеру
+    if (newStatus === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION) {
       setTimeout(() => {
         showNotification('📦 Материалы выданы мастеру. Ожидайте подтверждения.', 'info');
       }, 1000);
