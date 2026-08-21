@@ -428,9 +428,11 @@ const MobileApplicationCard = memo(({
             
             {/* ✅ Кнопка "Выдать со склада" - для снабженца */}
             {userRole === 'supply_admin' && 
-              (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
-  application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED) && 
-             hasMaterialsReadyToIssue(application) && (
+ (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
+  application.status === 'ready_for_issue' ||
+  application.status === 'supplier_received' ||
+  application.status === 'ready_to_issue') && 
+ hasMaterialsReadyToIssue(application) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'admin_ready_to_issue')}
                 className="touch-target px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
@@ -669,9 +671,11 @@ const DesktopApplicationRow = memo(({
           
           {/* ✅ Кнопка "Выдать со склада" - для снабженца */}
           {userRole === 'supply_admin' && 
-            (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
-  application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED) && 
-           hasMaterialsReadyToIssue(application) && (
+ (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
+  application.status === 'ready_for_issue' ||
+  application.status === 'supplier_received' ||
+  application.status === 'ready_to_issue') && 
+ hasMaterialsReadyToIssue(application) && (
             <button
               onClick={() => onOpenReceiveModal(application, 'admin_ready_to_issue')}
               className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"

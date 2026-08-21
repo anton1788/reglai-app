@@ -1451,10 +1451,13 @@ const mergeableCount = useMemo(() => {
   return Object.values(groups).filter(group => group.length >= 2).length;
 }, [applications]);
 // ===== КОЛИЧЕСТВО ЗАЯВОК, ГОТОВЫХ К ВЫДАЧЕ =====
-// ✅ СТАЛО (используем READY_FOR_ISSUE)
+// ✅ ПРАВИЛЬНО (добавляем оба статуса)
 const readyToIssueCount = useMemo(() => {
   return applications.filter(app => 
-    app.status === APPLICATION_STATUS.READY_FOR_ISSUE && 
+    (app.status === APPLICATION_STATUS.READY_FOR_ISSUE || 
+     app.status === 'ready_for_issue' ||
+     app.status === 'supplier_received' ||
+     app.status === 'ready_to_issue') && 
     hasMaterialsReadyToIssue(app)
   ).length;
 }, [applications]);
@@ -7694,12 +7697,22 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 
         {currentView === 'readyToIssue' && (
   <ApplicationList
-    applications={filteredApplications.filter(app => 
-      (app.status === APPLICATION_STATUS.READY_FOR_ISSUE || 
-       app.status === APPLICATION_STATUS.SUPPLIER_RECEIVED) && 
-      hasMaterialsReadyToIssue(app)
-    )}
+    applications={filteredApplications.filter(app => {
+      // Проверяем, готовы ли материалы к выдаче
+      const hasReady = hasMaterialsReadyToIssue(app);
+      if (!hasReady) return false;
+      
+      // Проверяем статус
+      const status = app.status;
+      const isReadyStatus = status === APPLICATION_STATUS.READY_FOR_ISSUE || 
+                            status === 'ready_for_issue' ||
+                            status === 'supplier_received' ||
+                            status === 'ready_to_issue';
+      
+      return isReadyStatus;
+    })}
     title={t('readyToIssue') || 'Готовы к выдаче'}
+    emptyMessage={t('noReadyToIssue') || 'Нет заявок, готовых к выдаче'}
     emptyMessage={t('noApplicationsReadyToIssue') || 'Нет заявок, готовых к выдаче'}
     isMobile={isMobile}
     user={user}
