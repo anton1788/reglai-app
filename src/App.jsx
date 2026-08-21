@@ -125,7 +125,8 @@ import {
   isApplicationActive,
   isApplicationCompleted,
   requiresMasterConfirmation,
-  hasMaterialsReadyToIssue  // ← ДОБАВИТЬ ЭТУ СТРОКУ
+  hasMaterialsReadyToIssue,  // ← ДОБАВИТЬ ЭТУ СТРОКУ
+  normalizeStatus 
 } from './utils/applicationStatuses';
 import {
   saveDraftToDB,
@@ -1451,15 +1452,17 @@ const mergeableCount = useMemo(() => {
   return Object.values(groups).filter(group => group.length >= 2).length;
 }, [applications]);
 // ===== КОЛИЧЕСТВО ЗАЯВОК, ГОТОВЫХ К ВЫДАЧЕ =====
-// ✅ ПРАВИЛЬНО (добавляем оба статуса)
 const readyToIssueCount = useMemo(() => {
-  return applications.filter(app => 
-    (app.status === APPLICATION_STATUS.READY_FOR_ISSUE || 
-     app.status === 'ready_for_issue' ||
-     app.status === 'supplier_received' ||
-     app.status === 'ready_to_issue') && 
-    hasMaterialsReadyToIssue(app)
-  ).length;
+  return applications.filter(app => {
+    // Проверяем, есть ли материалы для выдачи
+    const hasReady = hasMaterialsReadyToIssue(app);
+    if (!hasReady) return false;
+    
+    // Проверяем статус (с нормализацией)
+    const normalized = normalizeStatus(app.status);
+    return normalized === APPLICATION_STATUS.READY_FOR_ISSUE ||
+           normalized === APPLICATION_STATUS.PARTIAL_RECEIVED;
+  }).length;
 }, [applications]);
 
 
@@ -7697,22 +7700,17 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         {currentView === 'readyToIssue' && (
   <ApplicationList
     applications={filteredApplications.filter(app => {
-      // Проверяем, готовы ли материалы к выдаче
+      // Проверяем, есть ли материалы для выдачи
       const hasReady = hasMaterialsReadyToIssue(app);
       if (!hasReady) return false;
       
-      // Проверяем статус
-      const status = app.status;
-      const isReadyStatus = status === APPLICATION_STATUS.READY_FOR_ISSUE || 
-                            status === 'ready_for_issue' ||
-                            status === 'supplier_received' ||
-                            status === 'ready_to_issue';
-      
-      return isReadyStatus;
+      // Проверяем статус (с нормализацией)
+      const normalized = normalizeStatus(app.status);
+      return normalized === APPLICATION_STATUS.READY_FOR_ISSUE ||
+             normalized === APPLICATION_STATUS.PARTIAL_RECEIVED;
     })}
     title={t('readyToIssue') || 'Готовы к выдаче'}
     emptyMessage={t('noReadyToIssue') || 'Нет заявок, готовых к выдаче'}
-    emptyMessage={t('noApplicationsReadyToIssue') || 'Нет заявок, готовых к выдаче'}
     isMobile={isMobile}
     user={user}
     userRole={userRole}
