@@ -283,6 +283,7 @@ const AdminReceiveRow = memo(function({
 AdminReceiveRow.displayName = 'AdminReceiveRow';
 
 // ✅ ИСПРАВЛЕННЫЙ MasterConfirmRow (использует sentToMaster)
+// ✅ ИСПРАВЛЕННЫЙ MasterConfirmRow (использует confirmations)
 const MasterConfirmRow = memo(function({
   material,
   index,
@@ -294,10 +295,6 @@ const MasterConfirmRow = memo(function({
   const requestedQty = Number(material.quantity) || 0;
   const onWarehouse = Number(material.supplier_received_quantity) || 0;
   const sentToMaster = Number(material.sent_to_master_quantity) || 0;
-  const confirmed = Number(material.received) || 0;
-  
-  // ✅ ИСПРАВЛЕНО: доступно для подтверждения = отправлено - уже подтверждено
-  const available = sentToMaster - confirmed;
   
   // ✅ ИСПОЛЬЗУЕМ ОРИГИНАЛЬНЫЙ ИНДЕКС
   const originalIndex = material._index !== undefined ? material._index : index;
@@ -307,27 +304,32 @@ const MasterConfirmRow = memo(function({
     return c.materialIndex === originalIndex; 
   }) : null;
   
-  // ✅ ИСПОЛЬЗУЕМ confirmation для определения действия
+  // ✅ БЕРЁМ ЗНАЧЕНИЕ ИЗ confirmations
+  const confirmed = confirmation ? Number(confirmation.quantity) || 0 : Number(material.received) || 0;
   const currentAction = confirmation ? confirmation.action : 'confirm';
   const currentFeedback = confirmation ? confirmation.feedback : '';
+  
+  // ✅ ДОСТУПНО ДЛЯ ПОДТВЕРЖДЕНИЯ = ОТПРАВЛЕНО - УЖЕ ПОДТВЕРЖДЕНО
+  const available = sentToMaster - confirmed;
   
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   
+  // ✅ ОБНОВЛЯЕМ confirmation, А НЕ material
   const handleConfirmChange = useCallback(function(e) {
     const value = clamp(e.target.value, 0, available);
-    onUpdate(originalIndex, 'received', value);
+    onUpdate(originalIndex, 'quantity', value);
   }, [originalIndex, available, onUpdate]);
   
   const handleIncrement = useCallback(function() {
-    const newValue = clamp(confirmed + 1, 0, sentToMaster);
-    onUpdate(originalIndex, 'received', newValue);
-  }, [originalIndex, confirmed, sentToMaster, onUpdate]);
+    const newValue = clamp(confirmed + 1, 0, available);
+    onUpdate(originalIndex, 'quantity', newValue);
+  }, [originalIndex, confirmed, available, onUpdate]);
   
   const handleDecrement = useCallback(function() {
-    const newValue = clamp(confirmed - 1, 0, sentToMaster);
-    onUpdate(originalIndex, 'received', newValue);
-  }, [originalIndex, confirmed, sentToMaster, onUpdate]);
+    const newValue = clamp(confirmed - 1, 0, available);
+    onUpdate(originalIndex, 'quantity', newValue);
+  }, [originalIndex, confirmed, available, onUpdate]);
   
   const handleReject = useCallback(function() {
     if (rejectReason.trim()) {
@@ -355,6 +357,11 @@ const MasterConfirmRow = memo(function({
             onWarehouse={onWarehouse}
             confirmed={confirmed}
           />
+          {available > 0 && !isRejected && (
+            <div className="mt-2 text-xs text-green-600 dark:text-green-400">
+              ✅ Доступно: {available} {material.unit || 'шт'}
+            </div>
+          )}
         </div>
         
         <div className="flex flex-col gap-3">
@@ -372,7 +379,7 @@ const MasterConfirmRow = memo(function({
               <input
                 type="number"
                 min="0"
-                max={available}  // ← ИСПРАВЛЕНО: max = available (сколько отправлено - сколько подтверждено)
+                max={available}
                 value={confirmed}
                 onChange={handleConfirmChange}
                 disabled={isRejected}
@@ -382,7 +389,7 @@ const MasterConfirmRow = memo(function({
               <button
                 type="button"
                 onClick={handleIncrement}
-                disabled={confirmed >= available || isRejected}  // ← ИСПРАВЛЕНО
+                disabled={confirmed >= available || isRejected}
                 className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 aria-label={t('increaseQuantity')}
               >
@@ -393,7 +400,8 @@ const MasterConfirmRow = memo(function({
             <button
               onClick={function() { 
                 if (isRejected) {
-                  onUpdate(originalIndex, 'received', 0);
+                  onUpdate(originalIndex, 'action', 'confirm');
+                  onUpdate(originalIndex, 'quantity', 0);
                 } else {
                   setShowRejectInput(!showRejectInput);
                 }
@@ -731,13 +739,18 @@ const ReceiveModal = memo(function({
     });
   }, []);
   
-  const handleConfirmationUpdate = useCallback(function(index, action, quantity, feedback = '') {
-    setConfirmations(function(prev) {
-      return prev.map(function(conf, idx) {
-        return idx === index ? { ...conf, action: action, quantity: quantity, feedback: feedback } : conf;
-      });
+  // ✅ ИСПРАВЛЕННАЯ handleConfirmationUpdate
+const handleConfirmationUpdate = useCallback(function(index, field, value) {
+  setConfirmations(function(prev) {
+    return prev.map(function(conf) {
+      // Находим подтверждение по materialIndex
+      if (conf.materialIndex === index) {
+        return { ...conf, [field]: value };
+      }
+      return conf;
     });
-  }, []);
+  });
+}, []);
   
   // Обработка QR
   const handleQRScan = useCallback(function(qrData) {
