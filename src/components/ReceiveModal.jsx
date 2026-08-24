@@ -282,8 +282,7 @@ const AdminReceiveRow = memo(function({
 });
 AdminReceiveRow.displayName = 'AdminReceiveRow';
 
-// ✅ Строка материала для мастера (подтверждение/отклонение)
-// ✅ ИСПРАВЛЕННЫЙ MasterConfirmRow (используем confirmation)
+// ✅ ИСПРАВЛЕННЫЙ MasterConfirmRow (использует sentToMaster)
 const MasterConfirmRow = memo(function({
   material,
   index,
@@ -294,8 +293,11 @@ const MasterConfirmRow = memo(function({
 }) {
   const requestedQty = Number(material.quantity) || 0;
   const onWarehouse = Number(material.supplier_received_quantity) || 0;
+  const sentToMaster = Number(material.sent_to_master_quantity) || 0;
   const confirmed = Number(material.received) || 0;
-  const available = onWarehouse - confirmed;
+  
+  // ✅ ИСПРАВЛЕНО: доступно для подтверждения = отправлено - уже подтверждено
+  const available = sentToMaster - confirmed;
   
   // ✅ ИСПОЛЬЗУЕМ ОРИГИНАЛЬНЫЙ ИНДЕКС
   const originalIndex = material._index !== undefined ? material._index : index;
@@ -318,14 +320,14 @@ const MasterConfirmRow = memo(function({
   }, [originalIndex, available, onUpdate]);
   
   const handleIncrement = useCallback(function() {
-    const newValue = clamp(confirmed + 1, 0, onWarehouse);
+    const newValue = clamp(confirmed + 1, 0, sentToMaster);
     onUpdate(originalIndex, 'received', newValue);
-  }, [originalIndex, confirmed, onWarehouse, onUpdate]);
+  }, [originalIndex, confirmed, sentToMaster, onUpdate]);
   
   const handleDecrement = useCallback(function() {
-    const newValue = clamp(confirmed - 1, 0, onWarehouse);
+    const newValue = clamp(confirmed - 1, 0, sentToMaster);
     onUpdate(originalIndex, 'received', newValue);
-  }, [originalIndex, confirmed, onWarehouse, onUpdate]);
+  }, [originalIndex, confirmed, sentToMaster, onUpdate]);
   
   const handleReject = useCallback(function() {
     if (rejectReason.trim()) {
@@ -370,7 +372,7 @@ const MasterConfirmRow = memo(function({
               <input
                 type="number"
                 min="0"
-                max={onWarehouse}
+                max={available}  // ← ИСПРАВЛЕНО: max = available (сколько отправлено - сколько подтверждено)
                 value={confirmed}
                 onChange={handleConfirmChange}
                 disabled={isRejected}
@@ -380,7 +382,7 @@ const MasterConfirmRow = memo(function({
               <button
                 type="button"
                 onClick={handleIncrement}
-                disabled={confirmed >= onWarehouse || isRejected}
+                disabled={confirmed >= available || isRejected}  // ← ИСПРАВЛЕНО
                 className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 aria-label={t('increaseQuantity')}
               >
@@ -391,7 +393,6 @@ const MasterConfirmRow = memo(function({
             <button
               onClick={function() { 
                 if (isRejected) {
-                  // Если уже отклонён, возвращаем к подтверждению
                   onUpdate(originalIndex, 'received', 0);
                 } else {
                   setShowRejectInput(!showRejectInput);
@@ -546,13 +547,12 @@ const ReceiveModal = memo(function({
   if (selectedApplication && selectedApplication.materials) {
     let materials = selectedApplication.materials;
     
-    // ✅ ДЛЯ МАСТЕРА: показываем ТОЛЬКО отправленные материалы
+    // ✅ ДЛЯ МАСТЕРА: показываем ВСЕ отправленные материалы
     if (modalMode === 'master_confirm') {
       materials = materials.filter(function(m) {
         const sentToMaster = Number(m.sent_to_master_quantity) || 0;
-        const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
-        // Показываем только те, что отправлены и ещё не подтверждены полностью
-        return sentToMaster > 0 && !isFullyConfirmed;
+        // Показываем все материалы, которые были отправлены мастеру
+        return sentToMaster > 0;
       });
     }
     
@@ -575,7 +575,7 @@ const ReceiveModal = memo(function({
     if (modalMode === 'master_confirm') {
       setConfirmations(validMaterials.map(function(m, idx) {
         return {
-          materialIndex: idx,
+          materialIndex: m._index || idx,
           action: 'confirm',
           quantity: Number(m.received) || 0,
           feedback: ''
