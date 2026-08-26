@@ -282,8 +282,7 @@ const AdminReceiveRow = memo(function({
 });
 AdminReceiveRow.displayName = 'AdminReceiveRow';
 
-// ✅ ИСПРАВЛЕННЫЙ MasterConfirmRow (использует sentToMaster)
-// ✅ ИСПРАВЛЕННЫЙ MasterConfirmRow (использует confirmations)
+// ✅ ПОЛНОСТЬЮ ИСПРАВЛЕННЫЙ MasterConfirmRow
 const MasterConfirmRow = memo(function({
   material,
   index,
@@ -304,8 +303,8 @@ const MasterConfirmRow = memo(function({
     return c.materialIndex === originalIndex; 
   }) : null;
   
-  // ✅ БЕРЁМ ЗНАЧЕНИЕ ИЗ confirmations
-  const confirmed = confirmation ? Number(confirmation.quantity) || 0 : Number(material.received) || 0;
+  // ✅ БЕРЁМ ЗНАЧЕНИЕ ИЗ confirmations (quantity)
+  const confirmed = confirmation ? Number(confirmation.quantity) || 0 : 0;
   const currentAction = confirmation ? confirmation.action : 'confirm';
   const currentFeedback = confirmation ? confirmation.feedback : '';
   
@@ -315,9 +314,14 @@ const MasterConfirmRow = memo(function({
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   
-  // ✅ ОБНОВЛЯЕМ confirmation, А НЕ material
+  // ✅ ОБНОВЛЯЕМ confirmation (quantity), А НЕ material.received
   const handleConfirmChange = useCallback(function(e) {
-    const value = clamp(e.target.value, 0, available);
+    const rawValue = e.target.value;
+    if (rawValue === '') {
+      onUpdate(originalIndex, 'quantity', 0);
+      return;
+    }
+    const value = clamp(parseInt(rawValue, 10), 0, available);
     onUpdate(originalIndex, 'quantity', value);
   }, [originalIndex, available, onUpdate]);
   
@@ -342,8 +346,20 @@ const MasterConfirmRow = memo(function({
   // Определяем, отклонён ли материал
   const isRejected = currentAction === 'reject';
   
+  // Логируем для отладки
+  console.log('🔍 MasterConfirmRow:', {
+    description: material.description,
+    sentToMaster,
+    confirmed,
+    available,
+    isRejected,
+    confirmation
+  });
+  
   return (
-    <article className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
+    <article className={`material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60 ${
+      isRejected ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-900/10' : ''
+    }`}>
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
@@ -352,70 +368,88 @@ const MasterConfirmRow = memo(function({
             </h4>
             <MaterialStatusBadge status={material.status} t={t} />
           </div>
+          
+          {/* Прогресс-бар */}
           <MaterialProgress
             requested={requestedQty}
             onWarehouse={onWarehouse}
             confirmed={confirmed}
           />
+          
+          {/* Информация о доступном количестве */}
           {available > 0 && !isRejected && (
-            <div className="mt-2 text-xs text-green-600 dark:text-green-400">
-              ✅ Доступно: {available} {material.unit || 'шт'}
+            <div className="mt-2 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+              <CheckCircle className="w-3 h-3" />
+              <strong>Доступно для подтверждения: {available}</strong> {material.unit || 'шт'}
+            </div>
+          )}
+          
+          {sentToMaster > 0 && confirmed === sentToMaster && !isRejected && (
+            <div className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+              <CheckCircle className="w-3 h-3" />
+              ✅ Все материалы подтверждены
             </div>
           )}
         </div>
         
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
-            <div className="quantity-stepper flex items-center gap-1.5 bg-green-50 dark:bg-green-900/20 rounded-xl p-1">
+            {!isRejected ? (
+              <>
+                {/* ⭐ ПОЛЕ ВВОДА С ЦИФРАМИ */}
+                <div className="quantity-stepper flex items-center gap-1.5 bg-green-50 dark:bg-green-900/20 rounded-xl p-1">
+                  <button
+                    type="button"
+                    onClick={handleDecrement}
+                    disabled={confirmed <= 0 || available <= 0}
+                    className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    aria-label={t('decreaseQuantity')}
+                  >
+                    <ChevronDown className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                  <input
+                    type="number"
+                    min="0"
+                    max={available}
+                    value={confirmed}
+                    onChange={handleConfirmChange}
+                    className="w-16 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium text-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    aria-label={t('confirmQuantity')}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleIncrement}
+                    disabled={confirmed >= available || available <= 0}
+                    className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    aria-label={t('increaseQuantity')}
+                  >
+                    <ChevronUp className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                </div>
+                
+                <button
+                  onClick={function() { setShowRejectInput(!showRejectInput); }}
+                  disabled={available <= 0}
+                  className="px-3 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label={t('rejectMaterial')}
+                >
+                  <XCircle className="w-4 h-4" aria-hidden="true" />
+                  {t('reject')}
+                </button>
+              </>
+            ) : (
               <button
-                type="button"
-                onClick={handleDecrement}
-                disabled={confirmed <= 0 || isRejected}
-                className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                aria-label={t('decreaseQuantity')}
-              >
-                <ChevronDown className="w-4 h-4" aria-hidden="true" />
-              </button>
-              <input
-                type="number"
-                min="0"
-                max={available}
-                value={confirmed}
-                onChange={handleConfirmChange}
-                disabled={isRejected}
-                className="w-16 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium disabled:opacity-50"
-                aria-label={t('confirmQuantity')}
-              />
-              <button
-                type="button"
-                onClick={handleIncrement}
-                disabled={confirmed >= available || isRejected}
-                className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                aria-label={t('increaseQuantity')}
-              >
-                <ChevronUp className="w-4 h-4" aria-hidden="true" />
-              </button>
-            </div>
-            
-            <button
-              onClick={function() { 
-                if (isRejected) {
+                onClick={function() {
                   onUpdate(originalIndex, 'action', 'confirm');
                   onUpdate(originalIndex, 'quantity', 0);
-                } else {
-                  setShowRejectInput(!showRejectInput);
-                }
-              }}
-              className={`px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors ${
-                isRejected
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                  : 'text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20'
-              }`}
-              aria-label={t('rejectMaterial')}
-            >
-              <XCircle className="w-4 h-4" aria-hidden="true" />
-              {isRejected ? (t('cancelReject') || 'Отменить') : t('reject')}
-            </button>
+                  onUpdate(originalIndex, 'feedback', '');
+                }}
+                className="px-3 py-2 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors"
+              >
+                <Undo2 className="w-4 h-4" aria-hidden="true" />
+                {t('cancelReject') || 'Отменить'}
+              </button>
+            )}
           </div>
           
           {showRejectInput && !isRejected && (
@@ -445,13 +479,6 @@ const MasterConfirmRow = memo(function({
           )}
         </div>
       </div>
-      
-      {available > 0 && !isRejected && (
-        <div className="mt-3 flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
-          <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
-          {t('availableToConfirm')?.replace('{{available}}', formatNumber(available)) || `Доступно для подтверждения: ${available}`}
-        </div>
-      )}
     </article>
   );
 });
@@ -743,7 +770,6 @@ const ReceiveModal = memo(function({
 const handleConfirmationUpdate = useCallback(function(index, field, value) {
   setConfirmations(function(prev) {
     return prev.map(function(conf) {
-      // Находим подтверждение по materialIndex
       if (conf.materialIndex === index) {
         return { ...conf, [field]: value };
       }
@@ -1383,27 +1409,17 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
     
     <div className="space-y-3">
       {localMaterials.map(function(material, index) {
-        // Используем оригинальный индекс из материала
         const originalIndex = material._index !== undefined ? material._index : index;
-        
-        // Находим подтверждение по оригинальному индексу
-        const confirmation = confirmations.find(function(c) { 
-          return c.materialIndex === originalIndex; 
-        });
-        
-        // Если нет подтверждения для этого материала - пропускаем
-        if (!confirmation) return null;
         
         return (
           <MasterConfirmRow
             key={originalIndex}
             material={material}
             index={originalIndex}
-            onUpdate={function(idx, field, value) {
-              handleConfirmationUpdate(idx, 'confirm', value);
-            }}
+            onUpdate={handleConfirmationUpdate}  // ← Используем handleConfirmationUpdate
             onReject={function(idx, quantity, reason) {
-              handleConfirmationUpdate(idx, 'reject', 0, reason);
+              handleConfirmationUpdate(idx, 'action', 'reject');
+              handleConfirmationUpdate(idx, 'feedback', reason);
             }}
             t={t}
             confirmations={confirmations}
