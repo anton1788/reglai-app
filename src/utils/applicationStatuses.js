@@ -321,13 +321,14 @@ export const hasMaterialsReadyToIssue = (application) => {
   return application.materials.some(m => {
     const onWarehouse = Number(m.supplier_received_quantity) || 0;
     const alreadySent = Number(m.sent_to_master_quantity) || 0;
-    const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
+    const received = Number(m.received) || 0;
+    const quantity = Number(m.quantity) || 0;
     
     // Материал доступен для выдачи если:
     // 1. Есть на складе > 0
     // 2. Ещё не отправлен полностью
-    // 3. Ещё не подтверждён мастером
-    return onWarehouse > 0 && alreadySent < onWarehouse && !isFullyConfirmed;
+    // 3. Ещё не полностью получен мастером
+    return onWarehouse > 0 && alreadySent < onWarehouse && received < quantity;
   });
 };
 

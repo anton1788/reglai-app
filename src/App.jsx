@@ -4507,7 +4507,7 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
 }, [user, userCompanyId, supabase, showNotification, setApplications, WAREHOUSE_ENABLED]);
 
 // ============================================================
-// 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (ИСПРАВЛЕННАЯ ВЕРСИЯ С ПОДДЕРЖКОЙ ЧАСТИЧНОЙ ОТПРАВКИ)
+// 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 // ============================================================
 const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
   console.log('✅ Подтверждение мастером, confirmations:', confirmations);
@@ -4546,8 +4546,6 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
           : 0;
         const requested = Number(m.quantity) || 0;
         
-        // ✅ ВАЖНО: НЕ МЕНЯЕМ sent_to_master_quantity, оно уже установлено при выдаче
-        // Только обновляем received (подтверждённое количество)
         return {
           ...m,
           received: confirmed,
@@ -4563,7 +4561,6 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     });
     
     // ✅ 3. Проверяем статус каждого материала после подтверждения
-    // Для определения общего статуса заявки
     
     // 3.1 Все ли материалы заявки полностью подтверждены
     const allFullyConfirmed = updatedMaterials.every(m => {
@@ -4576,19 +4573,30 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     const hasPendingConfirmation = updatedMaterials.some(m => {
       const sentToMaster = Number(m.sent_to_master_quantity) || 0;
       const received = Number(m.received) || 0;
-      const isFullyConfirmed = received >= Number(m.quantity);
-      
       // Материал отправлен мастеру, но ещё не подтверждён полностью
-      return sentToMaster > 0 && received < sentToMaster && !isFullyConfirmed;
+      // и общее количество ещё не получено
+      return sentToMaster > 0 && received < sentToMaster && received < Number(m.quantity);
     });
     
-    // 3.3 Есть ли материалы на складе для выдачи
+    // 3.3 Есть ли материалы на складе для выдачи (НЕ отправленные мастеру)
     const hasMaterialsOnWarehouse = updatedMaterials.some(m => {
       const onWarehouse = Number(m.supplier_received_quantity) || 0;
       const alreadySent = Number(m.sent_to_master_quantity) || 0;
-      const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
+      const received = Number(m.received) || 0;
+      const quantity = Number(m.quantity) || 0;
       
-      return onWarehouse > 0 && alreadySent < onWarehouse && !isFullyConfirmed;
+      // Материал на складе, ещё не отправлен полностью, и ещё не полностью получен
+      return onWarehouse > 0 && alreadySent < onWarehouse && received < quantity;
+    });
+    
+    // 3.4 Есть ли материалы, которые полностью отправлены, но не подтверждены
+    const hasFullySentNotConfirmed = updatedMaterials.some(m => {
+      const onWarehouse = Number(m.supplier_received_quantity) || 0;
+      const alreadySent = Number(m.sent_to_master_quantity) || 0;
+      const received = Number(m.received) || 0;
+      
+      // Материал полностью отправлен (всё что было на складе), но не подтверждён
+      return onWarehouse > 0 && alreadySent >= onWarehouse && received < onWarehouse;
     });
     
     // ✅ 4. Определяем новый статус заявки
@@ -4597,12 +4605,13 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     if (allFullyConfirmed) {
       // Все материалы заявки полностью подтверждены → ЗАВЕРШЕНА
       newStatus = APPLICATION_STATUS.RECEIVED;
-    } else if (hasPendingConfirmation) {
+    } else if (hasMaterialsOnWarehouse) {
+      // 🔥 КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: если есть материалы на складе для выдачи
+      // устанавливаем PARTIAL_RECEIVED, чтобы снабженец мог продолжить выдачу
+      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
+    } else if (hasPendingConfirmation || hasFullySentNotConfirmed) {
       // Есть материалы, ожидающие подтверждения мастера
       newStatus = APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
-    } else if (hasMaterialsOnWarehouse) {
-      // Есть материалы на складе для выдачи
-      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
     } else {
       // По умолчанию — частично получено
       newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
@@ -4612,6 +4621,7 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     console.log('📊 allFullyConfirmed:', allFullyConfirmed);
     console.log('📊 hasPendingConfirmation:', hasPendingConfirmation);
     console.log('📊 hasMaterialsOnWarehouse:', hasMaterialsOnWarehouse);
+    console.log('📊 hasFullySentNotConfirmed:', hasFullySentNotConfirmed);
     
     // ✅ 5. Обновляем заявку в БД
     const { error } = await supabase
@@ -4653,18 +4663,27 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       setTimeout(() => {
         showNotification('🎉 Все материалы получены! Заявка завершена.', 'success');
       }, 1000);
+    } else if (hasMaterialsOnWarehouse) {
+      // 🔥 НОВАЯ ПОДСКАЗКА: есть ещё материалы на складе
+      const remainingCount = updatedMaterials.filter(m => {
+        const onWarehouse = Number(m.supplier_received_quantity) || 0;
+        const alreadySent = Number(m.sent_to_master_quantity) || 0;
+        const received = Number(m.received) || 0;
+        return onWarehouse > 0 && alreadySent < onWarehouse && received < Number(m.quantity);
+      }).length;
+      
+      setTimeout(() => {
+        showNotification(`📦 На складе осталось ${remainingCount} позиций. Снабженец может выдать их позже.`, 'info');
+      }, 1000);
     } else if (hasPendingConfirmation) {
       setTimeout(() => {
         const pendingCount = updatedMaterials.filter(m => {
           const sent = Number(m.sent_to_master_quantity) || 0;
           const received = Number(m.received) || 0;
-          return sent > 0 && received < sent;
+          const quantity = Number(m.quantity) || 0;
+          return sent > 0 && received < sent && received < quantity;
         }).length;
         showNotification(`📦 Осталось подтвердить ${pendingCount} позиций, ожидающих мастера.`, 'info');
-      }, 1000);
-    } else if (hasMaterialsOnWarehouse) {
-      setTimeout(() => {
-        showNotification('📦 На складе остались материалы. Вы можете выдать их позже.', 'info');
       }, 1000);
     }
     
@@ -7791,6 +7810,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       
       // Проверяем статус (с нормализацией)
       const normalized = normalizeStatus(app.status);
+      // 🔥 ВАЖНО: показываем и PARTIAL_RECEIVED, и READY_FOR_ISSUE
       return normalized === APPLICATION_STATUS.READY_FOR_ISSUE ||
              normalized === APPLICATION_STATUS.PARTIAL_RECEIVED;
     })}
