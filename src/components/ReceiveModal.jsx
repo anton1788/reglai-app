@@ -108,9 +108,11 @@ const MaterialStatusBadge = memo(function({ status, t }) {
 MaterialStatusBadge.displayName = 'MaterialStatusBadge';
 
 /// ✅ Прогресс-бар для материала
-const MaterialProgress = memo(function({ requested, onWarehouse, confirmed }) {
+// MaterialProgress - добавить sentToMaster
+const MaterialProgress = memo(function({ requested, onWarehouse, confirmed, sentToMaster }) {
   const warehouseProgress = requested > 0 ? Math.round((onWarehouse / requested) * 100) : 0;
   const confirmationProgress = requested > 0 ? Math.round((confirmed / requested) * 100) : 0;
+  const sentProgress = requested > 0 ? Math.round((sentToMaster / requested) * 100) : 0;
   
   return (
     <div className="space-y-2">
@@ -127,6 +129,22 @@ const MaterialProgress = memo(function({ requested, onWarehouse, confirmed }) {
           {formatNumber(onWarehouse)}/{formatNumber(requested)}
         </span>
       </div>
+      
+      {/* ✅ Отправлено мастеру */}
+      {sentToMaster > 0 && (
+        <div className="flex items-center gap-2 text-xs">
+          <Send className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" aria-hidden="true" />
+          <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+            <div
+              className="h-1.5 bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all"
+              style={{ width: Math.min(sentProgress, 100) + '%' }}
+            />
+          </div>
+          <span className="text-amber-600 dark:text-amber-400 font-medium w-12 text-right">
+            {formatNumber(sentToMaster)}/{formatNumber(requested)}
+          </span>
+        </div>
+      )}
       
       {/* Подтверждено */}
       {confirmed > 0 && (
@@ -283,6 +301,7 @@ const AdminReceiveRow = memo(function({
 AdminReceiveRow.displayName = 'AdminReceiveRow';
 
 // ✅ ПОЛНОСТЬЮ ИСПРАВЛЕННЫЙ MasterConfirmRow
+// MasterConfirmRow - добавить индикатор частичной отправки
 const MasterConfirmRow = memo(function({
   material,
   index,
@@ -295,26 +314,24 @@ const MasterConfirmRow = memo(function({
   const onWarehouse = Number(material.supplier_received_quantity) || 0;
   const sentToMaster = Number(material.sent_to_master_quantity) || 0;
   
-  // ✅ ИСПОЛЬЗУЕМ ОРИГИНАЛЬНЫЙ ИНДЕКС
   const originalIndex = material._index !== undefined ? material._index : index;
   
-  // ✅ НАХОДИМ ПОДТВЕРЖДЕНИЕ ПО ОРИГИНАЛЬНОМУ ИНДЕКСУ
   const confirmation = confirmations ? confirmations.find(function(c) { 
     return c.materialIndex === originalIndex; 
   }) : null;
   
-  // ✅ БЕРЁМ ЗНАЧЕНИЕ ИЗ confirmations (quantity)
   const confirmed = confirmation ? Number(confirmation.quantity) || 0 : 0;
   const currentAction = confirmation ? confirmation.action : 'confirm';
   const currentFeedback = confirmation ? confirmation.feedback : '';
   
-  // ✅ ДОСТУПНО ДЛЯ ПОДТВЕРЖДЕНИЯ = ОТПРАВЛЕНО - УЖЕ ПОДТВЕРЖДЕНО
   const available = sentToMaster - confirmed;
+  
+  // ✅ Проверяем, частично ли отправлено
+  const isPartial = sentToMaster > 0 && sentToMaster < requestedQty;
   
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   
-  // ✅ ОБНОВЛЯЕМ confirmation (quantity), А НЕ material.received
   const handleConfirmChange = useCallback(function(e) {
     const rawValue = e.target.value;
     if (rawValue === '') {
@@ -343,51 +360,62 @@ const MasterConfirmRow = memo(function({
     }
   }, [originalIndex, available, rejectReason, onReject]);
   
-  // Определяем, отклонён ли материал
   const isRejected = currentAction === 'reject';
-  
-  // Логируем для отладки
-  console.log('🔍 MasterConfirmRow:', {
-    description: material.description,
-    sentToMaster,
-    confirmed,
-    available,
-    isRejected,
-    confirmation
-  });
   
   return (
     <article className={`material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60 ${
-      isRejected ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-900/10' : ''
+      isRejected ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-900/10' : 
+      isPartial ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10' : ''
     }`}>
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <h4 className="font-semibold text-gray-900 dark:text-white">
               {material.description || '—'}
             </h4>
             <MaterialStatusBadge status={material.status} t={t} />
+            
+            {/* ✅ Бейдж "Частично" */}
+            {isPartial && !isRejected && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 rounded-full">
+                🟡 Частично
+              </span>
+            )}
+            
+            {sentToMaster === requestedQty && requestedQty > 0 && !isRejected && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full">
+                ✅ Полностью
+              </span>
+            )}
           </div>
           
-          {/* Прогресс-бар */}
+          {/* Прогресс-бар с дополнительной информацией */}
           <MaterialProgress
             requested={requestedQty}
             onWarehouse={onWarehouse}
             confirmed={confirmed}
           />
           
-          {/* Информация о доступном количестве */}
+          {/* ✅ Информация о частичной отправке */}
+          {isPartial && (
+            <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+              <Info className="w-3 h-3" />
+              Отправлено: <strong>{sentToMaster}</strong> из <strong>{requestedQty}</strong> {material.unit || 'шт'}
+              <span className="text-gray-400 ml-1">(осталось: {requestedQty - sentToMaster})</span>
+            </div>
+          )}
+          
           {available > 0 && !isRejected && (
-            <div className="mt-2 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+            <div className="mt-1 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
               <CheckCircle className="w-3 h-3" />
-              <strong>Доступно для подтверждения: {available}</strong> {material.unit || 'шт'}
+              Доступно для подтверждения: <strong>{available}</strong> {material.unit || 'шт'}
             </div>
           )}
           
           {sentToMaster > 0 && confirmed === sentToMaster && !isRejected && (
-            <div className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+            <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
               <CheckCircle className="w-3 h-3" />
-              ✅ Все материалы подтверждены
+              ✅ Все отправленные материалы подтверждены
             </div>
           )}
         </div>
@@ -396,7 +424,6 @@ const MasterConfirmRow = memo(function({
           <div className="flex items-center gap-3">
             {!isRejected ? (
               <>
-                {/* ⭐ ПОЛЕ ВВОДА С ЦИФРАМИ */}
                 <div className="quantity-stepper flex items-center gap-1.5 bg-green-50 dark:bg-green-900/20 rounded-xl p-1">
                   <button
                     type="button"
@@ -1416,7 +1443,7 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
             key={originalIndex}
             material={material}
             index={originalIndex}
-            onUpdate={handleConfirmationUpdate}  // ← Используем handleConfirmationUpdate
+            onUpdate={handleConfirmationUpdate}
             onReject={function(idx, quantity, reason) {
               handleConfirmationUpdate(idx, 'action', 'reject');
               handleConfirmationUpdate(idx, 'feedback', reason);
