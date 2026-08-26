@@ -19,6 +19,7 @@ export const ITEM_STATUS = {
   PENDING: 'pending', // Ожидает поставки
   ON_WAREHOUSE: 'on_warehouse', // На складе (принято от поставщика)
   SENT_TO_MASTER: 'sent_to_master', // Отправлено мастеру
+  PARTIAL_CONFIRMED: 'partial_confirmed',
   CONFIRMED: 'confirmed', // Подтверждено мастером
   REJECTED: 'rejected' // Отклонено мастером
 };
