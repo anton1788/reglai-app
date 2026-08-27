@@ -27,7 +27,16 @@ let dbInstance = null;
  * @returns {Promise<IDBDatabase>}
  */
 export const openDB = () => {
-  if (dbInstance) return Promise.resolve(dbInstance);
+  // ✅ Если соединение уже есть и оно не закрыто - используем его
+  if (dbInstance && dbInstance.readyState === 'done') {
+    return Promise.resolve(dbInstance);
+  }
+  
+  // ✅ Если соединение есть, но закрыто - пересоздаём
+  if (dbInstance && (dbInstance.readyState === 'closing' || dbInstance.readyState === 'closed')) {
+    console.warn('[IndexedDB] Connection was closed, reopening...');
+    dbInstance = null;
+  }
   
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -39,6 +48,12 @@ export const openDB = () => {
     
     request.onsuccess = () => {
       dbInstance = request.result;
+      
+      // Обработка закрытия соединения
+      dbInstance.onclose = () => {
+        console.warn('[IndexedDB] Connection closed');
+        dbInstance = null;
+      };
       
       window.addEventListener('beforeunload', () => {
         if (dbInstance) dbInstance.close();

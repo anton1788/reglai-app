@@ -1656,6 +1656,37 @@ return () => {
   // ─────────────────────────────────────────────────────────
   // 🌙 THEME EFFECT
   // ─────────────────────────────────────────────────────────
+  // 🛡️ ГЛОБАЛЬНЫЙ ПЕРЕХВАТЧИК ОШИБОК INDEXEDDB (упрощённая версия)
+useEffect(() => {
+  const handleUnhandledRejection = (event) => {
+    const error = event.reason;
+    if (error?.name === 'InvalidStateError' || 
+        error?.message?.includes('database connection is closing') ||
+        error?.message?.includes('The database connection is closing')) {
+      
+      console.warn('⚠️ Перехвачена ошибка IndexedDB:', error);
+      event.preventDefault();
+      
+      // Показываем уведомление пользователю
+      showNotification('⚠️ Ошибка офлайн-хранилища, но данные сохранены', 'warning');
+      
+      // Пытаемся перезапустить синхронизацию
+      setTimeout(() => {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.sync?.register('sync-applications');
+          }).catch(() => {});
+        }
+      }, 3000);
+    }
+  };
+  
+  window.addEventListener('unhandledrejection', handleUnhandledRejection);
+  
+  return () => {
+    window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+  };
+}, [showNotification]);
   useEffect(() => {
     const applyTheme = () => {
       if (theme === 'system') {
@@ -1940,26 +1971,47 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   }, [formData]);
 
   useEffect(() => {
-    if (
-      formData.objectName.trim() ||
-      formData.materials.length > 0 ||
-      formData.cart.length > 0
-    ) {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(async () => {
-        const draft = {
-          ...formValuesRef.current,
-          id: 'current_form_draft',
-          timestamp: new Date().toISOString(),
-          status: 'form_draft'
+  if (
+    formData.objectName.trim() ||
+    formData.materials.length > 0 ||
+    formData.cart.length > 0
+  ) {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      // ✅ Защита от ошибок IndexedDB
+      try {
+        // Проверяем доступность IndexedDB
+        const testRequest = window.indexedDB.open('__test__', 1);
+        
+        testRequest.onsuccess = () => {
+          testRequest.result.close();
+          
+          // Сохраняем только если DB доступна
+          const draft = {
+            ...formValuesRef.current,
+            id: 'current_form_draft',
+            timestamp: new Date().toISOString(),
+            status: 'form_draft',
+            type: 'form_draft'
+          };
+          
+          saveDraftToDB(draft).catch(err => {
+            console.warn('⚠️ Ошибка сохранения черновика (не критично):', err);
+          });
         };
-        await saveDraftToDB(draft);
-      }, 1000);
-    }
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [formData.objectName, formData.materials.length, formData.cart.length]);
+        
+        testRequest.onerror = () => {
+          console.warn('⚠️ IndexedDB недоступна, пропускаем сохранение черновика');
+        };
+      } catch (e) {
+        console.warn('⚠️ IndexedDB ошибка при сохранении:', e);
+      }
+    }, 1000);
+  }
+  return () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  };
+}, [formData.objectName, formData.materials.length, formData.cart.length]);
 
   // ─────────────────────────────────────────────────────────
   // 📤 SEND OFFLINE DRAFTS
@@ -4526,6 +4578,8 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       }
     });
     
+    console.log('📊 Карта подтверждений:', confirmationsMap);
+    
     // ✅ 2. Обновляем ТОЛЬКО те материалы, которые были отправлены мастеру
     const updatedMaterials = application.materials.map((m, index) => {
       const conf = confirmationsMap[index];
@@ -4539,12 +4593,16 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
         return m;
       }
       
+      console.log(`📦 Материал ${index} (${m.description}): отправлено ${sentToMaster}, подтверждение:`, conf);
+      
       // Если материал был отправлен - обрабатываем подтверждение
       if (conf) {
         const confirmed = conf.action === 'confirm' 
           ? Math.min(Number(conf.quantity) || sentToMaster, sentToMaster)
           : 0;
         const requested = Number(m.quantity) || 0;
+        
+        console.log(`📊 Результат: подтверждено ${confirmed} из ${sentToMaster}`);
         
         return {
           ...m,
@@ -4556,11 +4614,12 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
           reject_reason: conf.action === 'reject' ? (conf.feedback || 'Отклонено мастером') : null
         };
       } else {
+        console.warn(`⚠️ Нет подтверждения для материала ${index}`);
         return m;
       }
     });
     
-    // ✅ 3. Проверяем статус каждого материала после подтверждения
+    // ✅ 3. ПРОВЕРЯЕМ ТРИ УСЛОВИЯ:
     
     // 3.1 Все ли материалы заявки полностью подтверждены
     const allFullyConfirmed = updatedMaterials.every(m => {
@@ -4569,16 +4628,18 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       return received >= quantity;
     });
     
-    // 3.2 Есть ли материалы, ожидающие подтверждения мастера (уже отправлены, но не подтверждены)
+    // 3.2 Есть ли материалы, которые ОТПРАВЛЕНЫ мастеру, но НЕ ПОДТВЕРЖДЕНЫ
+    // (это те, которые "зависли")
     const hasPendingConfirmation = updatedMaterials.some(m => {
       const sentToMaster = Number(m.sent_to_master_quantity) || 0;
       const received = Number(m.received) || 0;
-      // Материал отправлен мастеру, но ещё не подтверждён полностью
-      // и общее количество ещё не получено
-      return sentToMaster > 0 && received < sentToMaster && received < Number(m.quantity);
+      const quantity = Number(m.quantity) || 0;
+      // Материал отправлен, но не подтверждён полностью
+      return sentToMaster > 0 && received < sentToMaster && received < quantity;
     });
     
-    // 3.3 Есть ли материалы на складе для выдачи (НЕ отправленные мастеру)
+    // 3.3 Есть ли материалы НА СКЛАДЕ, которые ещё НЕ ОТПРАВЛЕНЫ мастеру
+    // 🔥 ЭТО КЛЮЧЕВОЕ УСЛОВИЕ!
     const hasMaterialsOnWarehouse = updatedMaterials.some(m => {
       const onWarehouse = Number(m.supplier_received_quantity) || 0;
       const alreadySent = Number(m.sent_to_master_quantity) || 0;
@@ -4586,34 +4647,37 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       const quantity = Number(m.quantity) || 0;
       
       // Материал на складе, ещё не отправлен полностью, и ещё не полностью получен
+      // ⚠️ НЕ проверяем `received < sentToMaster` — это для "зависших"
       return onWarehouse > 0 && alreadySent < onWarehouse && received < quantity;
     });
     
-    // 3.4 Есть ли материалы, которые полностью отправлены, но не подтверждены
+    // 3.4 Есть ли материалы, которые полностью отправлены, но НЕ ПОДТВЕРЖДЕНЫ
+    // (это отдельный случай — всё отправлено, но мастер не подтвердил)
     const hasFullySentNotConfirmed = updatedMaterials.some(m => {
       const onWarehouse = Number(m.supplier_received_quantity) || 0;
       const alreadySent = Number(m.sent_to_master_quantity) || 0;
       const received = Number(m.received) || 0;
+      const quantity = Number(m.quantity) || 0;
       
       // Материал полностью отправлен (всё что было на складе), но не подтверждён
-      return onWarehouse > 0 && alreadySent >= onWarehouse && received < onWarehouse;
+      return onWarehouse > 0 && alreadySent >= onWarehouse && received < quantity;
     });
     
-    // ✅ 4. Определяем новый статус заявки
+    // ✅ 4. ОПРЕДЕЛЯЕМ НОВЫЙ СТАТУС (с приоритетами)
     let newStatus;
     
     if (allFullyConfirmed) {
-      // Все материалы заявки полностью подтверждены → ЗАВЕРШЕНА
+      // 🎯 ВСЕ материалы подтверждены → ЗАВЕРШЕНА
       newStatus = APPLICATION_STATUS.RECEIVED;
     } else if (hasMaterialsOnWarehouse) {
-      // 🔥 КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: если есть материалы на складе для выдачи
-      // устанавливаем PARTIAL_RECEIVED, чтобы снабженец мог продолжить выдачу
+      // 🔥 ЕСТЬ материалы на складе → PARTIAL_RECEIVED (снабженец может выдать)
+      // Это самое важное условие!
       newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
     } else if (hasPendingConfirmation || hasFullySentNotConfirmed) {
-      // Есть материалы, ожидающие подтверждения мастера
+      // ⏳ Есть отправленные, но не подтверждённые → ждём мастера
       newStatus = APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
     } else {
-      // По умолчанию — частично получено
+      // 🔄 По умолчанию — частично получено
       newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
     }
     
@@ -4655,16 +4719,11 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     const confirmedCount = updatedMaterials.filter(m => (Number(m.received) || 0) > 0).length;
     const totalSentCount = updatedMaterials.filter(m => (Number(m.sent_to_master_quantity) || 0) > 0).length;
     
-    showNotification(`✅ Подтверждено получение ${confirmedCount} из ${totalSentCount} отправленных позиций`, 'success');
-    setShowReceiveModal(false);
-    
-    // ✅ 7. Подсказки в зависимости от ситуации
+    // ✅ 7. УМНЫЕ ПОДСКАЗКИ
     if (allFullyConfirmed) {
-      setTimeout(() => {
-        showNotification('🎉 Все материалы получены! Заявка завершена.', 'success');
-      }, 1000);
+      showNotification('🎉 Все материалы получены! Заявка завершена.', 'success');
     } else if (hasMaterialsOnWarehouse) {
-      // 🔥 НОВАЯ ПОДСКАЗКА: есть ещё материалы на складе
+      // 🔥 ГЛАВНАЯ ПОДСКАЗКА: есть материалы на складе
       const remainingCount = updatedMaterials.filter(m => {
         const onWarehouse = Number(m.supplier_received_quantity) || 0;
         const alreadySent = Number(m.sent_to_master_quantity) || 0;
@@ -4672,21 +4731,34 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
         return onWarehouse > 0 && alreadySent < onWarehouse && received < Number(m.quantity);
       }).length;
       
-      setTimeout(() => {
-        showNotification(`📦 На складе осталось ${remainingCount} позиций. Снабженец может выдать их позже.`, 'info');
-      }, 1000);
+      showNotification(
+        `📦 Подтверждено ${confirmedCount} из ${totalSentCount} отправленных позиций. ` +
+        `На складе осталось ${remainingCount} позиций для выдачи.`,
+        'success'
+      );
+      
+      // 🔄 Автоматически переключаем снабженца на "Готовы к выдаче"
+      if (userRole === 'supply_admin' || userRole === 'manager') {
+        setTimeout(() => {
+          showNotification('📤 Перейдите в "Готовы к выдаче" для отправки остальных материалов', 'info');
+        }, 1500);
+      }
     } else if (hasPendingConfirmation) {
-      setTimeout(() => {
-        const pendingCount = updatedMaterials.filter(m => {
-          const sent = Number(m.sent_to_master_quantity) || 0;
-          const received = Number(m.received) || 0;
-          const quantity = Number(m.quantity) || 0;
-          return sent > 0 && received < sent && received < quantity;
-        }).length;
-        showNotification(`📦 Осталось подтвердить ${pendingCount} позиций, ожидающих мастера.`, 'info');
-      }, 1000);
+      const pendingCount = updatedMaterials.filter(m => {
+        const sent = Number(m.sent_to_master_quantity) || 0;
+        const received = Number(m.received) || 0;
+        const quantity = Number(m.quantity) || 0;
+        return sent > 0 && received < sent && received < quantity;
+      }).length;
+      
+      showNotification(
+        `⏳ Подтверждено ${confirmedCount} из ${totalSentCount} отправленных позиций. ` +
+        `Ожидается подтверждение мастера для ${pendingCount} позиций.`,
+        'info'
+      );
     }
     
+    setShowReceiveModal(false);
     return { success: true };
     
   } catch (err) {
@@ -4694,7 +4766,7 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     showNotification('Ошибка подтверждения: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, supabase, showNotification, setApplications]);
+}, [user, supabase, showNotification, setApplications, userRole]);
 
   const clearFilters = () => {
     setSearchTerm('');

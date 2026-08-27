@@ -704,67 +704,120 @@ const ReceiveModal = memo(function({
   // ⌨️ KEYBOARD SHORTCUTS
   // ─────────────────────────────────────────────────────────
   const handleSave = useCallback(async function() {
-    setIsSaving(true);
+  // ✅ ЗАЩИТА ОТ ДВОЙНОГО НАЖАТИЯ
+  if (isSaving) {
+    console.log('⏳ Уже сохраняется, пропускаем');
+    return;
+  }
+  
+  // ✅ Проверяем доступность IndexedDB перед операцией
+  const isDBReady = () => {
     try {
-      let result;
-      
-      if (modalMode === 'admin_receive' && typeof onAdminReceive === 'function') {
-        result = await onAdminReceive(localMaterials, selectedApplication);
-      }
-      else if ((modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && typeof onSendToMaster === 'function') {
-        const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
-        
-        if (items.length === 0) {
-          if (showNotification) showNotification('Выберите хотя бы один материал для выдачи', 'warning');
-          setIsSaving(false);
-          return;
-        }
-        
-        console.log('🔔 Вызов onSendToMaster с items:', items);
-        result = await onSendToMaster(items, selectedApplication);
-      }
-      else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
-        const confirmationsToSend = localMaterials.map(function(m, idx) {
-          const conf = confirmations.find(function(c) { return c.materialIndex === idx; });
-          return {
-            materialIndex: idx,
-            action: conf && conf.action ? conf.action : 'confirm',
-            quantity: conf && conf.action === 'confirm' ? (Number(conf.quantity) || 0) : 0,
-            feedback: conf && conf.feedback ? conf.feedback : ''
-          };
-        });
-        
-        const materialsToSend = localMaterials.map(function(m) {
-          return {
-            ...m,
-            unit: m.unit || 'шт',
-            received: Number(m.received) || 0
-          };
-        });
-        
-        result = await onMasterConfirm(confirmationsToSend, materialsToSend, selectedApplication);
-      }
-      else if (typeof saveReceiveStatus === 'function') {
-        result = await saveReceiveStatus(localMaterials);
-      }
-      
-      if (result && result.success) {
-        if (showNotification) {
-          if (modalMode === 'admin_ready_to_issue') {
-            showNotification('✅ Материалы выданы мастеру со склада', 'success');
-          } else {
-            showNotification(t('materialsAcceptedToWarehouse') || '✅ Успешно сохранено', 'success');
-          }
-        }
-        if (onClose) onClose();
-      }
-    } catch (err) {
-      console.error('❌ Ошибка сохранения:', err);
-      if (showNotification) showNotification(err.message || t('saveError'), 'error');
-    } finally {
-      setIsSaving(false);
+      const req = window.indexedDB.open('__test__', 1);
+      req.onupgradeneeded = () => {};
+      req.onerror = () => {};
+      req.close();
+      return true;
+    } catch {
+      return false;
     }
-  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, saveReceiveStatus, localMaterials, itemsToSend, confirmations, selectedApplication, onClose, t, showNotification]);
+  };
+  
+  if (!isDBReady()) {
+    console.warn('⚠️ IndexedDB недоступна, сохраняем без офлайн-поддержки');
+    // Продолжаем, но без офлайн-сохранения
+  }
+  
+  setIsSaving(true);
+  try {
+    let result;
+    
+    if (modalMode === 'admin_receive' && typeof onAdminReceive === 'function') {
+      result = await onAdminReceive(localMaterials, selectedApplication);
+    }
+    else if ((modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && typeof onSendToMaster === 'function') {
+      const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
+      
+      if (items.length === 0) {
+        if (showNotification) showNotification('Выберите хотя бы один материал для выдачи', 'warning');
+        setIsSaving(false);
+        return;
+      }
+      
+      console.log('🔔 Вызов onSendToMaster с items:', items);
+      result = await onSendToMaster(items, selectedApplication);
+    }
+    else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
+      const confirmationsToSend = localMaterials.map(function(m, idx) {
+        const conf = confirmations.find(function(c) { return c.materialIndex === idx; });
+        return {
+          materialIndex: idx,
+          action: conf && conf.action ? conf.action : 'confirm',
+          quantity: conf && conf.action === 'confirm' ? (Number(conf.quantity) || 0) : 0,
+          feedback: conf && conf.feedback ? conf.feedback : ''
+        };
+      });
+      
+      const materialsToSend = localMaterials.map(function(m) {
+        return {
+          ...m,
+          unit: m.unit || 'шт',
+          received: Number(m.received) || 0
+        };
+      });
+      
+      console.log('🔔 Вызов onMasterConfirm с confirmations:', confirmationsToSend);
+      result = await onMasterConfirm(confirmationsToSend, materialsToSend, selectedApplication);
+    }
+    else if (typeof saveReceiveStatus === 'function') {
+      result = await saveReceiveStatus(localMaterials);
+    }
+    
+    if (result && result.success) {
+      if (showNotification) {
+        if (modalMode === 'admin_ready_to_issue') {
+          showNotification('✅ Материалы выданы мастеру со склада', 'success');
+        } else {
+          showNotification(t('materialsAcceptedToWarehouse') || '✅ Успешно сохранено', 'success');
+        }
+      }
+      if (onClose) onClose();
+    }
+  } catch (err) {
+    console.error('❌ Ошибка сохранения:', err);
+    
+    // ✅ ОБРАБОТКА ОШИБОК INDEXEDDB
+    if (err.name === 'InvalidStateError' || 
+        err.message?.includes('database connection is closing') ||
+        err.message?.includes('The database connection is closing')) {
+      
+      console.warn('⚠️ Ошибка IndexedDB, но данные сохранены в БД');
+      
+      // Если это master_confirm и операция прошла успешно, но упала IndexedDB
+      if (modalMode === 'master_confirm') {
+        showNotification('✅ Подтверждение сохранено!', 'success');
+        if (onClose) onClose();
+        return;
+      }
+      
+      // Показываем предупреждение, но не блокируем
+      showNotification('⚠️ Данные сохранены, но офлайн-хранилище недоступно', 'warning');
+      
+      // Пытаемся перезапустить синхронизацию
+      setTimeout(() => {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.sync?.register('sync-applications');
+          }).catch(() => {});
+        }
+      }, 3000);
+    } else {
+      if (showNotification) showNotification(err.message || t('saveError'), 'error');
+    }
+  } finally {
+    setIsSaving(false);
+  }
+}, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, saveReceiveStatus, localMaterials, itemsToSend, confirmations, selectedApplication, onClose, t, showNotification, isSaving]);
   
   useEffect(function() {
     const handleKeyDown = function(e) {

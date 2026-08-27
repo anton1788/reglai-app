@@ -326,8 +326,8 @@ export const hasMaterialsReadyToIssue = (application) => {
     
     // Материал доступен для выдачи если:
     // 1. Есть на складе > 0
-    // 2. Ещё не отправлен полностью
-    // 3. Ещё не полностью получен мастером
+    // 2. Ещё НЕ отправлен полностью (alreadySent < onWarehouse)
+    // 3. Ещё НЕ получен полностью мастером (received < quantity)
     return onWarehouse > 0 && alreadySent < onWarehouse && received < quantity;
   });
 };
