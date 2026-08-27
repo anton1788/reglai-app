@@ -299,7 +299,7 @@ const AdminReceiveRow = memo(function({
 });
 AdminReceiveRow.displayName = 'AdminReceiveRow';
 
-// ✅ ИСПРАВЛЕННЫЙ MasterConfirmRow
+// ✅ ИСПРАВЛЕННЫЙ MasterConfirmRow (теперь показывает ВСЁ отправленное количество)
 const MasterConfirmRow = memo(function({
   material,
   index,
@@ -312,54 +312,55 @@ const MasterConfirmRow = memo(function({
   const onWarehouse = Number(material.supplier_received_quantity) || 0;
   const sentToMaster = Number(material.sent_to_master_quantity) || 0;
   
-  // ✅ ИСПРАВЛЕНО: используем переданный index напрямую
   const originalIndex = index;
   
   const confirmation = confirmations ? confirmations.find(function(c) { 
     return c.materialIndex === originalIndex; 
   }) : null;
   
-  // ✅ ИСПРАВЛЕНО: берем quantity из confirmation
+  // ✅ Это ОБЩЕЕ количество, которое мастер хочет подтвердить
   const confirmed = confirmation ? Number(confirmation.quantity) || 0 : 0;
   const currentAction = confirmation ? confirmation.action : 'confirm';
   const currentFeedback = confirmation ? confirmation.feedback : '';
   
-  // ✅ ИСПРАВЛЕНО: доступное количество для подтверждения
-  const available = sentToMaster - confirmed;
+  // ✅ УДАЛЕНО: const available = sentToMaster - confirmed;
+  // Теперь используем sentToMaster напрямую
   
-  // ✅ Проверяем, частично ли отправлено
+  // Проверяем, частично ли отправлено
   const isPartial = sentToMaster > 0 && sentToMaster < requestedQty;
+  const isFullySent = sentToMaster >= requestedQty && requestedQty > 0;
   
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   
+  // ✅ Используем sentToMaster вместо available
   const handleConfirmChange = useCallback(function(e) {
     const rawValue = e.target.value;
     if (rawValue === '') {
       onUpdate(originalIndex, 'quantity', 0);
       return;
     }
-    const value = clamp(parseInt(rawValue, 10), 0, available);
+    const value = clamp(parseInt(rawValue, 10), 0, sentToMaster);
     onUpdate(originalIndex, 'quantity', value);
-  }, [originalIndex, available, onUpdate]);
+  }, [originalIndex, sentToMaster, onUpdate]);
   
   const handleIncrement = useCallback(function() {
-    const newValue = clamp(confirmed + 1, 0, available);
+    const newValue = clamp(confirmed + 1, 0, sentToMaster);
     onUpdate(originalIndex, 'quantity', newValue);
-  }, [originalIndex, confirmed, available, onUpdate]);
+  }, [originalIndex, confirmed, sentToMaster, onUpdate]);
   
   const handleDecrement = useCallback(function() {
-    const newValue = clamp(confirmed - 1, 0, available);
+    const newValue = clamp(confirmed - 1, 0, sentToMaster);
     onUpdate(originalIndex, 'quantity', newValue);
-  }, [originalIndex, confirmed, available, onUpdate]);
+  }, [originalIndex, confirmed, sentToMaster, onUpdate]);
   
   const handleReject = useCallback(function() {
     if (rejectReason.trim()) {
-      onReject(originalIndex, available, rejectReason.trim());
+      onReject(originalIndex, sentToMaster, rejectReason.trim());
       setShowRejectInput(false);
       setRejectReason('');
     }
-  }, [originalIndex, available, rejectReason, onReject]);
+  }, [originalIndex, sentToMaster, rejectReason, onReject]);
   
   const isRejected = currentAction === 'reject';
   
@@ -376,21 +377,19 @@ const MasterConfirmRow = memo(function({
             </h4>
             <MaterialStatusBadge status={material.status} t={t} />
             
-            {/* ✅ Бейдж "Частично" */}
             {isPartial && !isRejected && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 rounded-full">
                 🟡 Частично
               </span>
             )}
             
-            {sentToMaster === requestedQty && requestedQty > 0 && !isRejected && (
+            {isFullySent && !isRejected && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full">
                 ✅ Полностью
               </span>
             )}
           </div>
           
-          {/* Прогресс-бар с дополнительной информацией */}
           <MaterialProgress
             requested={requestedQty}
             onWarehouse={onWarehouse}
@@ -398,7 +397,6 @@ const MasterConfirmRow = memo(function({
             sentToMaster={sentToMaster}
           />
           
-          {/* ✅ Информация о частичной отправке */}
           {isPartial && (
             <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
               <Info className="w-3 h-3" />
@@ -407,15 +405,23 @@ const MasterConfirmRow = memo(function({
             </div>
           )}
           
-          {available > 0 && !isRejected && (
+          {/* ✅ ИСПРАВЛЕНО: показываем ВСЁ отправленное количество */}
+          {sentToMaster > 0 && !isRejected && (
             <div className="mt-1 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
               <CheckCircle className="w-3 h-3" />
-              Доступно для подтверждения: <strong>{available}</strong> {material.unit || 'шт'}
+              Доступно для подтверждения: <strong>{sentToMaster}</strong> {material.unit || 'шт'}
             </div>
           )}
           
-          {sentToMaster > 0 && confirmed === sentToMaster && !isRejected && (
+          {confirmed > 0 && !isRejected && (
             <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" />
+              Подтверждено: <strong>{confirmed}</strong> {material.unit || 'шт'}
+            </div>
+          )}
+          
+          {sentToMaster > 0 && confirmed >= sentToMaster && !isRejected && (
+            <div className="mt-1 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
               <CheckCircle className="w-3 h-3" />
               ✅ Все отправленные материалы подтверждены
             </div>
@@ -430,7 +436,7 @@ const MasterConfirmRow = memo(function({
                   <button
                     type="button"
                     onClick={handleDecrement}
-                    disabled={confirmed <= 0 || available <= 0}
+                    disabled={confirmed <= 0}
                     className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     aria-label={t('decreaseQuantity')}
                   >
@@ -439,7 +445,7 @@ const MasterConfirmRow = memo(function({
                   <input
                     type="number"
                     min="0"
-                    max={available}
+                    max={sentToMaster}
                     value={confirmed}
                     onChange={handleConfirmChange}
                     className="w-16 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium text-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -448,7 +454,7 @@ const MasterConfirmRow = memo(function({
                   <button
                     type="button"
                     onClick={handleIncrement}
-                    disabled={confirmed >= available || available <= 0}
+                    disabled={confirmed >= sentToMaster}
                     className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     aria-label={t('increaseQuantity')}
                   >
@@ -458,7 +464,7 @@ const MasterConfirmRow = memo(function({
                 
                 <button
                   onClick={function() { setShowRejectInput(!showRejectInput); }}
-                  disabled={available <= 0}
+                  disabled={sentToMaster <= 0}
                   className="px-3 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label={t('rejectMaterial')}
                 >
@@ -543,11 +549,9 @@ const ReceiveModal = memo(function({
   const safeCompanyId = useMemo(() => {
     if (!userCompanyId) return null;
     
-    // Если это объект - достаем id
     if (typeof userCompanyId === 'object' && userCompanyId !== null) {
       const id = userCompanyId.id || userCompanyId.company_id || userCompanyId._id || null;
       if (id) return String(id);
-      // Если нет полей, пробуем сериализовать
       try {
         const str = JSON.stringify(userCompanyId);
         if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
@@ -559,7 +563,6 @@ const ReceiveModal = memo(function({
       return null;
     }
     
-    // Если это строка или число
     return String(userCompanyId);
   }, [userCompanyId]);
   
@@ -575,7 +578,6 @@ const ReceiveModal = memo(function({
   const [confirmations, setConfirmations] = useState([]);
   const modalContentRef = useRef(null);
   
-  // Состояния для фото и QR
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [_photos, _setPhotos] = useState([]);
@@ -611,7 +613,6 @@ const ReceiveModal = memo(function({
     if (selectedApplication && selectedApplication.materials) {
       let materials = selectedApplication.materials;
       
-      // ✅ ДЛЯ МАСТЕРА: показываем ВСЕ отправленные материалы
       if (modalMode === 'master_confirm') {
         materials = materials.filter(function(m) {
           const sentToMaster = Number(m.sent_to_master_quantity) || 0;
@@ -634,7 +635,6 @@ const ReceiveModal = memo(function({
       
       setLocalMaterials(validMaterials);
       
-      // ✅ Для режима master_confirm инициализируем confirmations
       if (modalMode === 'master_confirm') {
         const sentMaterials = validMaterials.filter(function(m) {
           return (Number(m.sent_to_master_quantity) || 0) > 0;
@@ -645,13 +645,13 @@ const ReceiveModal = memo(function({
           return {
             materialIndex: originalIndex,
             action: 'confirm',
-            quantity: Math.min(Number(m.received) || 0, Number(m.sent_to_master_quantity) || 0),
+            // ✅ ИСПРАВЛЕНО: начальное значение = 0 (мастер сам вводит)
+            quantity: 0,
             feedback: ''
           };
         }));
       }
       
-      // ✅ НОВЫЙ РЕЖИМ: Выдача со склада (ОСНОВНОЙ)
       if (modalMode === 'admin_ready_to_issue') {
         const availableItems = validMaterials
           .filter(function(m) {
@@ -686,22 +686,6 @@ const ReceiveModal = memo(function({
     if (isSaving) {
       console.log('⏳ Уже сохраняется, пропускаем');
       return;
-    }
-    
-    const isDBReady = () => {
-      try {
-        const req = window.indexedDB.open('__test__', 1);
-        req.onupgradeneeded = () => {};
-        req.onerror = () => {};
-        req.close();
-        return true;
-      } catch {
-        return false;
-      }
-    };
-    
-    if (!isDBReady()) {
-      console.warn('⚠️ IndexedDB недоступна, сохраняем без офлайн-поддержки');
     }
     
     setIsSaving(true);
@@ -761,31 +745,7 @@ const ReceiveModal = memo(function({
       }
     } catch (err) {
       console.error('❌ Ошибка сохранения:', err);
-      
-      if (err.name === 'InvalidStateError' || 
-          err.message?.includes('database connection is closing') ||
-          err.message?.includes('The database connection is closing')) {
-        
-        console.warn('⚠️ Ошибка IndexedDB, но данные сохранены в БД');
-        
-        if (modalMode === 'master_confirm') {
-          showNotification('✅ Подтверждение сохранено!', 'success');
-          if (onClose) onClose();
-          return;
-        }
-        
-        showNotification('⚠️ Данные сохранены, но офлайн-хранилище недоступно', 'warning');
-        
-        setTimeout(() => {
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.ready.then(reg => {
-              reg.sync?.register('sync-applications');
-            }).catch(() => {});
-          }
-        }, 3000);
-      } else {
-        if (showNotification) showNotification(err.message || t('saveError'), 'error');
-      }
+      if (showNotification) showNotification(err.message || t('saveError'), 'error');
     } finally {
       setIsSaving(false);
     }
@@ -836,18 +796,15 @@ const ReceiveModal = memo(function({
     console.log('🔄 [MASTER] Обновление подтверждения:', { index, field, value });
     
     setConfirmations(function(prev) {
-      // ✅ ИСПРАВЛЕНО: ищем по materialIndex
       const existingIndex = prev.findIndex(function(conf) {
         return conf.materialIndex === index;
       });
       
       if (existingIndex !== -1) {
-        // Обновляем существующее
         const newConf = [...prev];
         newConf[existingIndex] = { ...newConf[existingIndex], [field]: value };
         return newConf;
       } else {
-        // Создаём новое
         return [...prev, { materialIndex: index, action: 'confirm', quantity: 0, feedback: '' }];
       }
     });
@@ -911,7 +868,6 @@ const ReceiveModal = memo(function({
     setCurrentMaterialIndex(null);
   }, [currentMaterialIndex, localMaterials, showNotification]);
   
-  // Открыть фото для конкретного материала
   const handleOpenPhotoForMaterial = useCallback(function(materialIndex) {
     setCurrentMaterialIndex(materialIndex);
     setShowPhotoCapture(true);
