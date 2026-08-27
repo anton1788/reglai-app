@@ -317,8 +317,15 @@ const MasterConfirmRow = memo(function({
   const originalIndex = material._index !== undefined ? material._index : index;
   
   const confirmation = confirmations ? confirmations.find(function(c) { 
-    return c.materialIndex === originalIndex; 
-  }) : null;
+  return c.materialIndex === originalIndex; 
+}) : null;
+
+// ✅ Добавьте отладку:
+console.log('🔍 [MasterConfirmRow] Поиск подтверждения:', {
+  originalIndex,
+  confirmations: confirmations ? confirmations.map(c => c.materialIndex) : [],
+  found: confirmation
+});
   
   const confirmed = confirmation ? Number(confirmation.quantity) || 0 : 0;
   const currentAction = confirmation ? confirmation.action : 'confirm';
@@ -635,15 +642,21 @@ const ReceiveModal = memo(function({
     
     // ✅ Для режима master_confirm инициализируем confirmations
     if (modalMode === 'master_confirm') {
-      setConfirmations(validMaterials.map(function(m, idx) {
-        return {
-          materialIndex: m._index || idx,
-          action: 'confirm',
-          quantity: Number(m.received) || 0,
-          feedback: ''
-        };
-      }));
-    }
+  // Берём ТОЛЬКО материалы, которые были отправлены мастеру
+  const sentMaterials = validMaterials.filter(function(m) {
+    return (Number(m.sent_to_master_quantity) || 0) > 0;
+  });
+  
+  setConfirmations(sentMaterials.map(function(m, idx) {
+    const originalIndex = m._index || idx;
+    return {
+      materialIndex: originalIndex,
+      action: 'confirm',
+      quantity: Math.min(Number(m.received) || 0, Number(m.sent_to_master_quantity) || 0),
+      feedback: ''
+    };
+  }));
+}
       
       // ✅ НОВЫЙ РЕЖИМ: Выдача со склада (ОСНОВНОЙ)
       if (modalMode === 'admin_ready_to_issue') {
@@ -795,13 +808,23 @@ const ReceiveModal = memo(function({
   
   // ✅ ИСПРАВЛЕННАЯ handleConfirmationUpdate
 const handleConfirmationUpdate = useCallback(function(index, field, value) {
+  console.log('🔄 [MASTER] Обновление подтверждения:', { index, field, value });
+  
   setConfirmations(function(prev) {
-    return prev.map(function(conf) {
-      if (conf.materialIndex === index) {
-        return { ...conf, [field]: value };
-      }
-      return conf;
+    // Находим существующее подтверждение по индексу
+    const existingIndex = prev.findIndex(function(conf) {
+      return conf.materialIndex === index;
     });
+    
+    if (existingIndex !== -1) {
+      // Обновляем существующее
+      const newConf = [...prev];
+      newConf[existingIndex] = { ...newConf[existingIndex], [field]: value };
+      return newConf;
+    } else {
+      // Создаём новое
+      return [...prev, { materialIndex: index, action: 'confirm', quantity: 0, feedback: '' }];
+    }
   });
 }, []);
   
@@ -1440,17 +1463,20 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
         
         return (
           <MasterConfirmRow
-            key={originalIndex}
-            material={material}
-            index={originalIndex}
-            onUpdate={handleConfirmationUpdate}
-            onReject={function(idx, quantity, reason) {
-              handleConfirmationUpdate(idx, 'action', 'reject');
-              handleConfirmationUpdate(idx, 'feedback', reason);
-            }}
-            t={t}
-            confirmations={confirmations}
-          />
+  key={originalIndex}
+  material={material}
+  index={originalIndex}
+  onUpdate={function(idx, field, value) {
+    console.log('🔄 [MasterConfirmRow] onUpdate вызван:', { idx, field, value });
+    handleConfirmationUpdate(idx, field, value);
+  }}
+  onReject={function(idx, quantity, reason) {
+    handleConfirmationUpdate(idx, 'action', 'reject');
+    handleConfirmationUpdate(idx, 'feedback', reason);
+  }}
+  t={t}
+  confirmations={confirmations}
+/>
         );
       })}
     </div>
