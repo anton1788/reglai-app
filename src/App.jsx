@@ -4597,20 +4597,22 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       
       // Если материал был отправлен - обрабатываем подтверждение
       if (conf) {
-        const confirmed = conf.action === 'confirm' 
-          ? Math.min(Number(conf.quantity) || sentToMaster, sentToMaster)
+        // ✅ ИСПРАВЛЕНО: используем conf.quantity для расчета
+        const confirmedQuantity = conf.action === 'confirm' 
+          ? Math.min(Number(conf.quantity) || 0, sentToMaster)  // ← Используем conf.quantity
           : 0;
+        
         const requested = Number(m.quantity) || 0;
         
-        console.log(`📊 Результат: подтверждено ${confirmed} из ${sentToMaster}`);
+        console.log(`📊 Результат: подтверждено ${confirmedQuantity} из ${sentToMaster}`);
         
         return {
           ...m,
-          received: confirmed,
-          status: confirmed >= requested ? ITEM_STATUS.CONFIRMED :
-            confirmed > 0 ? ITEM_STATUS.PARTIAL_CONFIRMED : ITEM_STATUS.PENDING,
-          confirmed_by_employee_at: confirmed > 0 ? new Date().toISOString() : null,
-          confirmed_by_employee_id: confirmed > 0 ? user?.id : null,
+          received: confirmedQuantity,  // ← Используем confirmedQuantity
+          status: confirmedQuantity >= requested ? ITEM_STATUS.CONFIRMED :
+            confirmedQuantity > 0 ? ITEM_STATUS.PARTIAL_CONFIRMED : ITEM_STATUS.PENDING,
+          confirmed_by_employee_at: confirmedQuantity > 0 ? new Date().toISOString() : null,
+          confirmed_by_employee_id: confirmedQuantity > 0 ? user?.id : null,
           reject_reason: conf.action === 'reject' ? (conf.feedback || 'Отклонено мастером') : null
         };
       } else {
@@ -4761,7 +4763,7 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     setShowReceiveModal(false);
     return { success: true };
     
-  } catch (err) {
+   } catch (err) {
     console.error('❌ Ошибка подтверждения:', err);
     showNotification('Ошибка подтверждения: ' + err.message, 'error');
     return { success: false };

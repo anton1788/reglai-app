@@ -108,7 +108,6 @@ const MaterialStatusBadge = memo(function({ status, t }) {
 MaterialStatusBadge.displayName = 'MaterialStatusBadge';
 
 /// ✅ Прогресс-бар для материала
-// MaterialProgress - добавить sentToMaster
 const MaterialProgress = memo(function({ requested, onWarehouse, confirmed, sentToMaster }) {
   const warehouseProgress = requested > 0 ? Math.round((onWarehouse / requested) * 100) : 0;
   const confirmationProgress = requested > 0 ? Math.round((confirmed / requested) * 100) : 0;
@@ -300,8 +299,7 @@ const AdminReceiveRow = memo(function({
 });
 AdminReceiveRow.displayName = 'AdminReceiveRow';
 
-// ✅ ПОЛНОСТЬЮ ИСПРАВЛЕННЫЙ MasterConfirmRow
-// MasterConfirmRow - добавить индикатор частичной отправки
+// ✅ ИСПРАВЛЕННЫЙ MasterConfirmRow
 const MasterConfirmRow = memo(function({
   material,
   index,
@@ -314,23 +312,19 @@ const MasterConfirmRow = memo(function({
   const onWarehouse = Number(material.supplier_received_quantity) || 0;
   const sentToMaster = Number(material.sent_to_master_quantity) || 0;
   
-  const originalIndex = material._index !== undefined ? material._index : index;
+  // ✅ ИСПРАВЛЕНО: используем переданный index напрямую
+  const originalIndex = index;
   
   const confirmation = confirmations ? confirmations.find(function(c) { 
-  return c.materialIndex === originalIndex; 
-}) : null;
-
-// ✅ Добавьте отладку:
-console.log('🔍 [MasterConfirmRow] Поиск подтверждения:', {
-  originalIndex,
-  confirmations: confirmations ? confirmations.map(c => c.materialIndex) : [],
-  found: confirmation
-});
+    return c.materialIndex === originalIndex; 
+  }) : null;
   
+  // ✅ ИСПРАВЛЕНО: берем quantity из confirmation
   const confirmed = confirmation ? Number(confirmation.quantity) || 0 : 0;
   const currentAction = confirmation ? confirmation.action : 'confirm';
   const currentFeedback = confirmation ? confirmation.feedback : '';
   
+  // ✅ ИСПРАВЛЕНО: доступное количество для подтверждения
   const available = sentToMaster - confirmed;
   
   // ✅ Проверяем, частично ли отправлено
@@ -401,6 +395,7 @@ console.log('🔍 [MasterConfirmRow] Поиск подтверждения:', {
             requested={requestedQty}
             onWarehouse={onWarehouse}
             confirmed={confirmed}
+            sentToMaster={sentToMaster}
           />
           
           {/* ✅ Информация о частичной отправке */}
@@ -613,50 +608,48 @@ const ReceiveModal = memo(function({
   // 🔁 INIT LOCAL MATERIALS
   // ─────────────────────────────────────────────────────────
   useEffect(function() {
-  if (selectedApplication && selectedApplication.materials) {
-    let materials = selectedApplication.materials;
-    
-    // ✅ ДЛЯ МАСТЕРА: показываем ВСЕ отправленные материалы
-    if (modalMode === 'master_confirm') {
-      materials = materials.filter(function(m) {
-        const sentToMaster = Number(m.sent_to_master_quantity) || 0;
-        // Показываем все материалы, которые были отправлены мастеру
-        return sentToMaster > 0;
-      });
-    }
-    
-    const validMaterials = materials
-      .filter(function(m) { return m.description && m.description.trim(); })
-      .map(function(m, idx) {
-        return {
-          ...m,
-          _index: m._index || idx,
-          unit: m.unit || 'шт',
-          received: Number(m.received) || 0,
-          supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
-          sent_to_master_quantity: Number(m.sent_to_master_quantity) || 0
-        };
-      });
-    
-    setLocalMaterials(validMaterials);
-    
-    // ✅ Для режима master_confirm инициализируем confirmations
-    if (modalMode === 'master_confirm') {
-  // Берём ТОЛЬКО материалы, которые были отправлены мастеру
-  const sentMaterials = validMaterials.filter(function(m) {
-    return (Number(m.sent_to_master_quantity) || 0) > 0;
-  });
-  
-  setConfirmations(sentMaterials.map(function(m, idx) {
-    const originalIndex = m._index || idx;
-    return {
-      materialIndex: originalIndex,
-      action: 'confirm',
-      quantity: Math.min(Number(m.received) || 0, Number(m.sent_to_master_quantity) || 0),
-      feedback: ''
-    };
-  }));
-}
+    if (selectedApplication && selectedApplication.materials) {
+      let materials = selectedApplication.materials;
+      
+      // ✅ ДЛЯ МАСТЕРА: показываем ВСЕ отправленные материалы
+      if (modalMode === 'master_confirm') {
+        materials = materials.filter(function(m) {
+          const sentToMaster = Number(m.sent_to_master_quantity) || 0;
+          return sentToMaster > 0;
+        });
+      }
+      
+      const validMaterials = materials
+        .filter(function(m) { return m.description && m.description.trim(); })
+        .map(function(m, idx) {
+          return {
+            ...m,
+            _index: m._index || idx,
+            unit: m.unit || 'шт',
+            received: Number(m.received) || 0,
+            supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
+            sent_to_master_quantity: Number(m.sent_to_master_quantity) || 0
+          };
+        });
+      
+      setLocalMaterials(validMaterials);
+      
+      // ✅ Для режима master_confirm инициализируем confirmations
+      if (modalMode === 'master_confirm') {
+        const sentMaterials = validMaterials.filter(function(m) {
+          return (Number(m.sent_to_master_quantity) || 0) > 0;
+        });
+        
+        setConfirmations(sentMaterials.map(function(m) {
+          const originalIndex = m._index !== undefined ? m._index : validMaterials.indexOf(m);
+          return {
+            materialIndex: originalIndex,
+            action: 'confirm',
+            quantity: Math.min(Number(m.received) || 0, Number(m.sent_to_master_quantity) || 0),
+            feedback: ''
+          };
+        }));
+      }
       
       // ✅ НОВЫЙ РЕЖИМ: Выдача со склада (ОСНОВНОЙ)
       if (modalMode === 'admin_ready_to_issue') {
@@ -666,10 +659,7 @@ const ReceiveModal = memo(function({
             const alreadySent = Number(m.sent_to_master_quantity) || 0;
             const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
             
-            // Не показываем материалы, которые уже полностью подтверждены
             if (isFullyConfirmed) return false;
-            
-            // Показываем только те, что есть на складе и ещё не отправлены полностью
             return onWarehouse > 0 && alreadySent < onWarehouse;
           })
           .map(function(m) {
@@ -679,23 +669,12 @@ const ReceiveModal = memo(function({
             
             return {
               ...m,
-              quantityToSend: available, // По умолчанию — всё доступное
+              quantityToSend: available,
               unit: m.unit || 'шт'
             };
           });
         
         setItemsToSend(availableItems);
-      }
-      
-      if (modalMode === 'master_confirm') {
-        setConfirmations(selectedApplication.materials.map(function(m, idx) {
-          return {
-            materialIndex: idx,
-            action: 'confirm',
-            quantity: Number(m.received) || 0,
-            feedback: ''
-          };
-        }));
       }
     }
   }, [selectedApplication, modalMode]);
@@ -704,120 +683,113 @@ const ReceiveModal = memo(function({
   // ⌨️ KEYBOARD SHORTCUTS
   // ─────────────────────────────────────────────────────────
   const handleSave = useCallback(async function() {
-  // ✅ ЗАЩИТА ОТ ДВОЙНОГО НАЖАТИЯ
-  if (isSaving) {
-    console.log('⏳ Уже сохраняется, пропускаем');
-    return;
-  }
-  
-  // ✅ Проверяем доступность IndexedDB перед операцией
-  const isDBReady = () => {
+    if (isSaving) {
+      console.log('⏳ Уже сохраняется, пропускаем');
+      return;
+    }
+    
+    const isDBReady = () => {
+      try {
+        const req = window.indexedDB.open('__test__', 1);
+        req.onupgradeneeded = () => {};
+        req.onerror = () => {};
+        req.close();
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    
+    if (!isDBReady()) {
+      console.warn('⚠️ IndexedDB недоступна, сохраняем без офлайн-поддержки');
+    }
+    
+    setIsSaving(true);
     try {
-      const req = window.indexedDB.open('__test__', 1);
-      req.onupgradeneeded = () => {};
-      req.onerror = () => {};
-      req.close();
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  
-  if (!isDBReady()) {
-    console.warn('⚠️ IndexedDB недоступна, сохраняем без офлайн-поддержки');
-    // Продолжаем, но без офлайн-сохранения
-  }
-  
-  setIsSaving(true);
-  try {
-    let result;
-    
-    if (modalMode === 'admin_receive' && typeof onAdminReceive === 'function') {
-      result = await onAdminReceive(localMaterials, selectedApplication);
-    }
-    else if ((modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && typeof onSendToMaster === 'function') {
-      const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
+      let result;
       
-      if (items.length === 0) {
-        if (showNotification) showNotification('Выберите хотя бы один материал для выдачи', 'warning');
-        setIsSaving(false);
-        return;
+      if (modalMode === 'admin_receive' && typeof onAdminReceive === 'function') {
+        result = await onAdminReceive(localMaterials, selectedApplication);
       }
-      
-      console.log('🔔 Вызов onSendToMaster с items:', items);
-      result = await onSendToMaster(items, selectedApplication);
-    }
-    else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
-      const confirmationsToSend = localMaterials.map(function(m, idx) {
-        const conf = confirmations.find(function(c) { return c.materialIndex === idx; });
-        return {
-          materialIndex: idx,
-          action: conf && conf.action ? conf.action : 'confirm',
-          quantity: conf && conf.action === 'confirm' ? (Number(conf.quantity) || 0) : 0,
-          feedback: conf && conf.feedback ? conf.feedback : ''
-        };
-      });
-      
-      const materialsToSend = localMaterials.map(function(m) {
-        return {
-          ...m,
-          unit: m.unit || 'шт',
-          received: Number(m.received) || 0
-        };
-      });
-      
-      console.log('🔔 Вызов onMasterConfirm с confirmations:', confirmationsToSend);
-      result = await onMasterConfirm(confirmationsToSend, materialsToSend, selectedApplication);
-    }
-    else if (typeof saveReceiveStatus === 'function') {
-      result = await saveReceiveStatus(localMaterials);
-    }
-    
-    if (result && result.success) {
-      if (showNotification) {
-        if (modalMode === 'admin_ready_to_issue') {
-          showNotification('✅ Материалы выданы мастеру со склада', 'success');
-        } else {
-          showNotification(t('materialsAcceptedToWarehouse') || '✅ Успешно сохранено', 'success');
+      else if ((modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && typeof onSendToMaster === 'function') {
+        const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
+        
+        if (items.length === 0) {
+          if (showNotification) showNotification('Выберите хотя бы один материал для выдачи', 'warning');
+          setIsSaving(false);
+          return;
         }
+        
+        console.log('🔔 Вызов onSendToMaster с items:', items);
+        result = await onSendToMaster(items, selectedApplication);
       }
-      if (onClose) onClose();
-    }
-  } catch (err) {
-    console.error('❌ Ошибка сохранения:', err);
-    
-    // ✅ ОБРАБОТКА ОШИБОК INDEXEDDB
-    if (err.name === 'InvalidStateError' || 
-        err.message?.includes('database connection is closing') ||
-        err.message?.includes('The database connection is closing')) {
+      else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
+        const confirmationsToSend = localMaterials.map(function(m, idx) {
+          const conf = confirmations.find(function(c) { return c.materialIndex === idx; });
+          return {
+            materialIndex: idx,
+            action: conf && conf.action ? conf.action : 'confirm',
+            quantity: conf && conf.action === 'confirm' ? (Number(conf.quantity) || 0) : 0,
+            feedback: conf && conf.feedback ? conf.feedback : ''
+          };
+        });
+        
+        const materialsToSend = localMaterials.map(function(m) {
+          return {
+            ...m,
+            unit: m.unit || 'шт',
+            received: Number(m.received) || 0
+          };
+        });
+        
+        console.log('🔔 Вызов onMasterConfirm с confirmations:', confirmationsToSend);
+        result = await onMasterConfirm(confirmationsToSend, materialsToSend, selectedApplication);
+      }
+      else if (typeof saveReceiveStatus === 'function') {
+        result = await saveReceiveStatus(localMaterials);
+      }
       
-      console.warn('⚠️ Ошибка IndexedDB, но данные сохранены в БД');
-      
-      // Если это master_confirm и операция прошла успешно, но упала IndexedDB
-      if (modalMode === 'master_confirm') {
-        showNotification('✅ Подтверждение сохранено!', 'success');
+      if (result && result.success) {
+        if (showNotification) {
+          if (modalMode === 'admin_ready_to_issue') {
+            showNotification('✅ Материалы выданы мастеру со склада', 'success');
+          } else {
+            showNotification(t('materialsAcceptedToWarehouse') || '✅ Успешно сохранено', 'success');
+          }
+        }
         if (onClose) onClose();
-        return;
       }
+    } catch (err) {
+      console.error('❌ Ошибка сохранения:', err);
       
-      // Показываем предупреждение, но не блокируем
-      showNotification('⚠️ Данные сохранены, но офлайн-хранилище недоступно', 'warning');
-      
-      // Пытаемся перезапустить синхронизацию
-      setTimeout(() => {
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.ready.then(reg => {
-            reg.sync?.register('sync-applications');
-          }).catch(() => {});
+      if (err.name === 'InvalidStateError' || 
+          err.message?.includes('database connection is closing') ||
+          err.message?.includes('The database connection is closing')) {
+        
+        console.warn('⚠️ Ошибка IndexedDB, но данные сохранены в БД');
+        
+        if (modalMode === 'master_confirm') {
+          showNotification('✅ Подтверждение сохранено!', 'success');
+          if (onClose) onClose();
+          return;
         }
-      }, 3000);
-    } else {
-      if (showNotification) showNotification(err.message || t('saveError'), 'error');
+        
+        showNotification('⚠️ Данные сохранены, но офлайн-хранилище недоступно', 'warning');
+        
+        setTimeout(() => {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then(reg => {
+              reg.sync?.register('sync-applications');
+            }).catch(() => {});
+          }
+        }, 3000);
+      } else {
+        if (showNotification) showNotification(err.message || t('saveError'), 'error');
+      }
+    } finally {
+      setIsSaving(false);
     }
-  } finally {
-    setIsSaving(false);
-  }
-}, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, saveReceiveStatus, localMaterials, itemsToSend, confirmations, selectedApplication, onClose, t, showNotification, isSaving]);
+  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, saveReceiveStatus, localMaterials, itemsToSend, confirmations, selectedApplication, onClose, t, showNotification, isSaving]);
   
   useEffect(function() {
     const handleKeyDown = function(e) {
@@ -860,30 +832,29 @@ const ReceiveModal = memo(function({
   }, []);
   
   // ✅ ИСПРАВЛЕННАЯ handleConfirmationUpdate
-const handleConfirmationUpdate = useCallback(function(index, field, value) {
-  console.log('🔄 [MASTER] Обновление подтверждения:', { index, field, value });
-  
-  setConfirmations(function(prev) {
-    // Находим существующее подтверждение по индексу
-    const existingIndex = prev.findIndex(function(conf) {
-      return conf.materialIndex === index;
-    });
+  const handleConfirmationUpdate = useCallback(function(index, field, value) {
+    console.log('🔄 [MASTER] Обновление подтверждения:', { index, field, value });
     
-    if (existingIndex !== -1) {
-      // Обновляем существующее
-      const newConf = [...prev];
-      newConf[existingIndex] = { ...newConf[existingIndex], [field]: value };
-      return newConf;
-    } else {
-      // Создаём новое
-      return [...prev, { materialIndex: index, action: 'confirm', quantity: 0, feedback: '' }];
-    }
-  });
-}, []);
+    setConfirmations(function(prev) {
+      // ✅ ИСПРАВЛЕНО: ищем по materialIndex
+      const existingIndex = prev.findIndex(function(conf) {
+        return conf.materialIndex === index;
+      });
+      
+      if (existingIndex !== -1) {
+        // Обновляем существующее
+        const newConf = [...prev];
+        newConf[existingIndex] = { ...newConf[existingIndex], [field]: value };
+        return newConf;
+      } else {
+        // Создаём новое
+        return [...prev, { materialIndex: index, action: 'confirm', quantity: 0, feedback: '' }];
+      }
+    });
+  }, []);
   
   // Обработка QR
   const handleQRScan = useCallback(function(qrData) {
-    // ✅ Проверяем, что company_id валидный
     if (!safeCompanyId) {
       console.error('❌ QRScan: нет валидного companyId');
       if (showNotification) showNotification('Ошибка: компания не найдена', 'error');
@@ -963,7 +934,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
       return itemsToSend.some(function(i) { return i.quantityToSend > 0; });
     }
     
-    // ✅ НОВЫЙ РЕЖИМ: Выдача со склада
     if (modalMode === 'admin_ready_to_issue') {
       return itemsToSend.some(function(i) { 
         return (Number(i.quantityToSend) || 0) > 0; 
@@ -1005,16 +975,12 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
   // 🔹 РЕЖИМ: ВЫДАЧА СО СКЛАДА (для снабженца)
   // ============================================================
   const renderReadyToIssue = function() {
-    // ✅ Показываем только материалы, которые есть на складе
     const availableMaterials = localMaterials.filter(function(m) {
       const onWarehouse = Number(m.supplier_received_quantity) || 0;
       const alreadySent = Number(m.sent_to_master_quantity) || 0;
       const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
       
-      // Не показываем материалы, которые уже полностью отправлены или подтверждены
       if (isFullyConfirmed) return false;
-      
-      // Показываем только те, что есть на складе и ещё не отправлены полностью
       return onWarehouse > 0 && alreadySent < onWarehouse;
     });
 
@@ -1028,7 +994,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
       );
     }
 
-    // Вычисляем общее количество к выдаче
     const totalToIssue = itemsToSend.reduce(function(sum, item) {
       return sum + (Number(item.quantityToSend) || 0);
     }, 0);
@@ -1051,7 +1016,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
             const alreadySent = Number(m.sent_to_master_quantity) || 0;
             const available = onWarehouse - alreadySent;
             
-            // Находим соответствующий элемент в itemsToSend
             const safeIndex = itemsToSend.findIndex(function(item) {
               return (item.description || item.item_name) === (m.description || m.item_name);
             });
@@ -1145,7 +1109,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
                   </div>
                 </div>
                 
-                {/* Прогресс-бар отправки */}
                 {alreadySent > 0 && (
                   <div className="mt-2">
                     <div className="flex items-center gap-2 text-xs">
@@ -1169,7 +1132,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
           })}
         </div>
 
-        {/* Итог */}
         {totalToIssue > 0 && (
           <div className="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
             <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
@@ -1184,7 +1146,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
           </div>
         )}
 
-        {/* Комментарий к выдаче */}
         <div>
           <label htmlFor="issue-comment" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             {t('issueComment') || 'Комментарий к выдаче (опционально)'}
@@ -1207,7 +1168,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
   // ─────────────────────────────────────────────────────────
   if (!isOpen || !selectedApplication) return null;
   
-  // 🔹 ЗАГОЛОВКИ РЕЖИМОВ
   const modalTitles = {
     admin_receive: t('acceptToWarehouse') || 'Приёмка на склад',
     admin_send_to_master: t('sendToMaster') || 'Отправка мастеру',
@@ -1321,7 +1281,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
           {/* 🔹 АДМИН: Приёмка на склад */}
           {modalMode === 'admin_receive' && (
             <>
-              {/* Кнопки фото и QR */}
               <div className="flex gap-2 mb-4">
                 <button
                   onClick={() => {
@@ -1350,7 +1309,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
               
               <div className="space-y-3">
                 {localMaterials.map(function(material, index) {
-                  // ✅ Санитайз для мастера
                   const displayMaterial = isMaster 
                     ? sanitizeMaterialForMaster(material)
                     : material;
@@ -1389,7 +1347,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
                 {t('supplyDecision') || 'Как обработать заявку?'}
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* 🔹 В работу */}
                 <button
                   onClick={function() { if (onTakeToWork) onTakeToWork(selectedApplication); }}
                   className="px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/25"
@@ -1398,7 +1355,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
                   {t('takeToWork') || '📦 Взять в работу'}
                 </button>
                 
-                {/* 🔹 На согласование */}
                 <button
                   onClick={function() { if (onSendForApproval) onSendForApproval(selectedApplication); }}
                   className="px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-orange-500/25"
@@ -1504,62 +1460,62 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
           
           {/* 🔹 МАСТЕР: Подтверждение получения */}
           {modalMode === 'master_confirm' && (
-  <>
-    <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-      <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
-      {t('confirmReceiptHint') || 'Подтвердите получение материалов или укажите причину отклонения'}
-    </div>
-    
-    <div className="space-y-3">
-      {localMaterials.map(function(material, index) {
-        const originalIndex = material._index !== undefined ? material._index : index;
-        
-        return (
-          <MasterConfirmRow
-  key={originalIndex}
-  material={material}
-  index={originalIndex}
-  onUpdate={function(idx, field, value) {
-    console.log('🔄 [MasterConfirmRow] onUpdate вызван:', { idx, field, value });
-    handleConfirmationUpdate(idx, field, value);
-  }}
-  onReject={function(idx, quantity, reason) {
-    handleConfirmationUpdate(idx, 'action', 'reject');
-    handleConfirmationUpdate(idx, 'feedback', reason);
-  }}
-  t={t}
-  confirmations={confirmations}
-/>
-        );
-      })}
-    </div>
-    
-    {(totalToConfirm > 0 || totalToReject > 0) && (
-      <div className="grid grid-cols-2 gap-4">
-        {totalToConfirm > 0 && (
-          <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-            <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
-              <CheckCircle className="w-5 h-5" aria-hidden="true" />
-              <span className="font-medium">
-                {t('toConfirm') || 'К подтверждению'}: {formatNumber(totalToConfirm)}
-              </span>
-            </div>
-          </div>
-        )}
-        {totalToReject > 0 && (
-          <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
-            <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
-              <XCircle className="w-5 h-5" aria-hidden="true" />
-              <span className="font-medium">
-                {t('toReject') || 'К отклонению'}: {formatNumber(totalToReject)}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-    )}
-  </>
-)}
+            <>
+              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+                {t('confirmReceiptHint') || 'Подтвердите получение материалов или укажите причину отклонения'}
+              </div>
+              
+              <div className="space-y-3">
+                {localMaterials.map(function(material, index) {
+                  const originalIndex = material._index !== undefined ? material._index : index;
+                  
+                  return (
+                    <MasterConfirmRow
+                      key={originalIndex}
+                      material={material}
+                      index={originalIndex}
+                      onUpdate={function(idx, field, value) {
+                        console.log('🔄 [MasterConfirmRow] onUpdate вызван:', { idx, field, value });
+                        handleConfirmationUpdate(idx, field, value);
+                      }}
+                      onReject={function(idx, quantity, reason) {
+                        handleConfirmationUpdate(idx, 'action', 'reject');
+                        handleConfirmationUpdate(idx, 'feedback', reason);
+                      }}
+                      t={t}
+                      confirmations={confirmations}
+                    />
+                  );
+                })}
+              </div>
+              
+              {(totalToConfirm > 0 || totalToReject > 0) && (
+                <div className="grid grid-cols-2 gap-4">
+                  {totalToConfirm > 0 && (
+                    <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                      <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                        <CheckCircle className="w-5 h-5" aria-hidden="true" />
+                        <span className="font-medium">
+                          {t('toConfirm') || 'К подтверждению'}: {formatNumber(totalToConfirm)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {totalToReject > 0 && (
+                    <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                      <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                        <XCircle className="w-5 h-5" aria-hidden="true" />
+                        <span className="font-medium">
+                          {t('toReject') || 'К отклонению'}: {formatNumber(totalToReject)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Подсказка перед Footer */}
@@ -1588,7 +1544,6 @@ const handleConfirmationUpdate = useCallback(function(index, field, value) {
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть</span>
             </div>
             
-            {/* Кнопка сохранения */}
             {(modalMode === 'admin_receive' || modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && (
               <button
                 onClick={handleSave}
