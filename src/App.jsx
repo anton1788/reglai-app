@@ -4665,9 +4665,7 @@ let newStatus;
 const allSentConfirmed = updatedMaterials.every(m => {
   const sentToMaster = Number(m.sent_to_master_quantity) || 0;
   const received = Number(m.received) || 0;
-  // Если материал не был отправлен - пропускаем
   if (sentToMaster === 0) return true;
-  // Проверяем, что все отправленное подтверждено
   return received >= sentToMaster;
 });
 
@@ -4687,7 +4685,7 @@ if (allFullyConfirmed) {
   });
   
   if (hasMoreOnWarehouse) {
-    // 🔄 Есть еще материалы на складе → ждем выдачи
+    // ✅ ИСПРАВЛЕНО: Есть еще материалы на складе → PARTIAL_RECEIVED (снабженец может выдавать)
     newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
   } else {
     // 📦 Все отправлено и подтверждено, но не все получено (ждем остальные поставки)
