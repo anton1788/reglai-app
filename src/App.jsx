@@ -4564,7 +4564,7 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
 }, [user, userCompanyId, supabase, showNotification, setApplications, WAREHOUSE_ENABLED]);
 
 // ============================================================
-// 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ)
+// 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 // ============================================================
 const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
   console.log('✅ ПОДТВЕРЖДЕНИЕ МАСТЕРОМ');
@@ -4578,15 +4578,7 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
   }
   
   try {
-    // ✅ 1. Создаём карту подтверждений по индексу
-    const confirmationsMap = {};
-    confirmations.forEach(conf => {
-      if (conf.materialIndex !== undefined) {
-        confirmationsMap[conf.materialIndex] = conf;
-      }
-    });
-    
-    // ✅ 2. Создаём карту материалов из модалки по индексу
+    // ✅ 1. Создаём карту материалов из модалки по индексу (ОСНОВНОЙ ИСТОЧНИК)
     const materialsFromModalMap = {};
     if (materialsFromModal && materialsFromModal.length > 0) {
       materialsFromModal.forEach((m, idx) => {
@@ -4594,9 +4586,8 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       });
     }
     
-    // ✅ 3. Обновляем материалы - используем значения из materialsFromModal
+    // ✅ 2. Обновляем материалы - ИСПОЛЬЗУЕМ received ИЗ materialsFromModal
     const updatedMaterials = application.materials.map((m, index) => {
-      const conf = confirmationsMap[index];
       const modalMaterial = materialsFromModalMap[index];
       
       // Проверяем, был ли этот материал отправлен мастеру
@@ -4608,23 +4599,21 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
         return m;
       }
       
-      // ✅ ВАЖНО: берем confirmedQuantity из разных источников
+      // ✅ ОСНОВНОЙ ИСТОЧНИК: берем received из modalMaterial
       let confirmedQuantity = 0;
-      
-      // 1. Сначала из confirmations
-      if (conf && conf.action === 'confirm') {
-        confirmedQuantity = Math.min(Number(conf.quantity) || 0, sentToMaster);
-      }
-      
-      // 2. Если в modalMaterial есть received - используем его (приоритет выше)
       if (modalMaterial && modalMaterial.received !== undefined) {
-        const modalReceived = Number(modalMaterial.received) || 0;
-        // Берем МАКСИМАЛЬНОЕ значение из confirmations и modalMaterial
-        confirmedQuantity = Math.max(confirmedQuantity, Math.min(modalReceived, sentToMaster));
-        console.log(`📊 Материал ${index}: из modalMaterial.received = ${modalReceived}, итого confirmedQuantity = ${confirmedQuantity}`);
+        confirmedQuantity = Math.min(Number(modalMaterial.received) || 0, sentToMaster);
+        console.log(`📊 Материал ${index}: из modalMaterial.received = ${confirmedQuantity}`);
+      } else {
+        // Fallback: если нет в modalMaterial, проверяем confirmations
+        const conf = confirmations.find(c => c.materialIndex === index);
+        if (conf && conf.action === 'confirm') {
+          confirmedQuantity = Math.min(Number(conf.quantity) || 0, sentToMaster);
+        }
       }
       
-      // 3. Если подтверждено больше 0, но материал был отклонен - не сохраняем
+      // Если подтверждено больше 0, но материал был отклонен - не сохраняем
+      const conf = confirmations.find(c => c.materialIndex === index);
       if (conf && conf.action === 'reject') {
         confirmedQuantity = 0;
       }
@@ -4664,21 +4653,21 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       };
     });
     
-    // ✅ 4. Проверяем, все ли материалы полностью получены
+    // ✅ 3. Проверяем, все ли материалы полностью получены
     const allFullyReceived = updatedMaterials.every(m => {
       const received = Number(m.received) || 0;
       const quantity = Number(m.quantity) || 0;
       return received >= quantity;
     });
     
-    // ✅ 5. Проверяем, есть ли материалы, ожидающие подтверждения
+    // ✅ 4. Проверяем, есть ли материалы, ожидающие подтверждения
     const hasPendingConfirmation = updatedMaterials.some(m => {
       const sentToMaster = Number(m.sent_to_master_quantity) || 0;
       const received = Number(m.received) || 0;
       return sentToMaster > 0 && received < sentToMaster;
     });
     
-    // ✅ 6. Проверяем, есть ли материалы на складе для выдачи
+    // ✅ 5. Проверяем, есть ли материалы на складе для выдачи
     const hasMaterialsOnWarehouse = updatedMaterials.some(m => {
       const onWarehouse = Number(m.supplier_received_quantity) || 0;
       const alreadySent = Number(m.sent_to_master_quantity) || 0;
@@ -4687,7 +4676,7 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       return onWarehouse > 0 && alreadySent < onWarehouse && received < quantity;
     });
     
-    // ✅ 7. Все ли отправленные материалы подтверждены
+    // ✅ 6. Все ли отправленные материалы подтверждены
     const allSentConfirmed = updatedMaterials.every(m => {
       const sentToMaster = Number(m.sent_to_master_quantity) || 0;
       const received = Number(m.received) || 0;
@@ -4695,7 +4684,7 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       return received >= sentToMaster;
     });
     
-    // ✅ 8. ОПРЕДЕЛЯЕМ НОВЫЙ СТАТУС ЗАЯВКИ
+    // ✅ 7. ОПРЕДЕЛЯЕМ НОВЫЙ СТАТУС ЗАЯВКИ
     let newStatus;
     
     if (allFullyReceived) {
@@ -4712,7 +4701,7 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     
     console.log('📊 НОВЫЙ СТАТУС ЗАЯВКИ:', newStatus);
     
-    // ✅ 9. Обновляем заявку в БД
+    // ✅ 8. Обновляем заявку в БД
     const { error } = await supabase
       .from('applications')
       .update({
@@ -4734,14 +4723,14 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     
     if (error) throw error;
     
-    // ✅ 10. Обновляем UI
+    // ✅ 9. Обновляем UI
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
     
-    // ✅ 11. Показываем уведомления
+    // ✅ 10. Показываем уведомления
     const confirmedCount = updatedMaterials.filter(m => (Number(m.received) || 0) > 0).length;
     const totalMaterials = updatedMaterials.length;
     const pendingCount = updatedMaterials.filter(m => {
