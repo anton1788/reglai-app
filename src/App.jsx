@@ -4563,6 +4563,7 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
 // ============================================================
 const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal, application) => {
   console.log('✅ Подтверждение мастером, confirmations:', confirmations);
+  console.log('✅ application.id:', application?.id);
   
   if (!application?.id) {
     showNotification('Ошибка: заявка не найдена', 'error');
@@ -4584,23 +4585,18 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
     const updatedMaterials = application.materials.map((m, index) => {
       const conf = confirmationsMap[index];
       
-      // Проверяем, был ли этот материал отправлен мастеру
       const sentToMaster = Number(m.sent_to_master_quantity) || 0;
       const isSent = sentToMaster > 0;
       
-      // Если материал НЕ был отправлен мастеру - пропускаем (не меняем)
       if (!isSent) {
         return m;
       }
       
       console.log(`📦 Материал ${index} (${m.description}): отправлено ${sentToMaster}, подтверждение:`, conf);
       
-      // Если материал был отправлен - обрабатываем подтверждение
       if (conf) {
-        // ✅ ИСПРАВЛЕНО: используем conf.quantity как есть, НЕ перезаписываем sentToMaster
         let confirmedQuantity = 0;
         if (conf.action === 'confirm') {
-          // ✅ Берем ТО, ЧТО ВВЕЛ МАСТЕР, но не больше отправленного
           confirmedQuantity = Math.min(Number(conf.quantity) || 0, sentToMaster);
         }
         
@@ -4623,16 +4619,13 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       }
     });
     
-    // ✅ 3. ПРОВЕРЯЕМ ТРИ УСЛОВИЯ:
-    
-    // 3.1 Все ли материалы заявки полностью подтверждены
+    // ✅ 3. Проверяем условия
     const allFullyConfirmed = updatedMaterials.every(m => {
       const received = Number(m.received) || 0;
       const quantity = Number(m.quantity) || 0;
       return received >= quantity;
     });
     
-    // 3.2 Есть ли материалы, которые отправлены мастеру, но НЕ ПОДТВЕРЖДЕНЫ
     const hasPendingConfirmation = updatedMaterials.some(m => {
       const sentToMaster = Number(m.sent_to_master_quantity) || 0;
       const received = Number(m.received) || 0;
@@ -4640,7 +4633,6 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       return sentToMaster > 0 && received < sentToMaster && received < quantity;
     });
     
-    // 3.3 Есть ли материалы НА СКЛАДЕ, которые ещё НЕ ОТПРАВЛЕНЫ мастеру
     const hasMaterialsOnWarehouse = updatedMaterials.some(m => {
       const onWarehouse = Number(m.supplier_received_quantity) || 0;
       const alreadySent = Number(m.sent_to_master_quantity) || 0;
@@ -4649,64 +4641,41 @@ const handleMasterConfirm = useCallback(async (confirmations, materialsFromModal
       return onWarehouse > 0 && alreadySent < onWarehouse && received < quantity;
     });
     
-    // 3.4 Есть ли материалы, которые полностью отправлены, но НЕ ПОДТВЕРЖДЕНЫ
-    const hasFullySentNotConfirmed = updatedMaterials.some(m => {
-      const onWarehouse = Number(m.supplier_received_quantity) || 0;
-      const alreadySent = Number(m.sent_to_master_quantity) || 0;
+    // ✅ 4. Определяем статус
+    let newStatus;
+    
+    const allSentConfirmed = updatedMaterials.every(m => {
+      const sentToMaster = Number(m.sent_to_master_quantity) || 0;
       const received = Number(m.received) || 0;
-      const quantity = Number(m.quantity) || 0;
-      return onWarehouse > 0 && alreadySent >= onWarehouse && received < quantity;
+      if (sentToMaster === 0) return true;
+      return received >= sentToMaster;
     });
     
-   // ✅ 4. ОПРЕДЕЛЯЕМ НОВЫЙ СТАТУС (ИСПРАВЛЕННАЯ ЛОГИКА)
-let newStatus;
-
-// Проверяем, все ли отправленные материалы подтверждены
-const allSentConfirmed = updatedMaterials.every(m => {
-  const sentToMaster = Number(m.sent_to_master_quantity) || 0;
-  const received = Number(m.received) || 0;
-  if (sentToMaster === 0) return true;
-  return received >= sentToMaster;
-});
-
-// Проверяем, все ли материалы заявки полностью получены
-if (allFullyConfirmed) {
-  // 🎯 ВСЕ материалы полностью получены → ЗАВЕРШЕНА
-  newStatus = APPLICATION_STATUS.RECEIVED;
-} else if (allSentConfirmed) {
-  // ✅ Все отправленные материалы подтверждены мастером
-  // Проверяем, есть ли еще материалы на складе для выдачи
-  const hasMoreOnWarehouse = updatedMaterials.some(m => {
-    const onWarehouse = Number(m.supplier_received_quantity) || 0;
-    const alreadySent = Number(m.sent_to_master_quantity) || 0;
-    const received = Number(m.received) || 0;
-    const quantity = Number(m.quantity) || 0;
-    return onWarehouse > 0 && alreadySent < onWarehouse && received < quantity;
-  });
-  
-  if (hasMoreOnWarehouse) {
-    // ✅ ИСПРАВЛЕНО: Есть еще материалы на складе → PARTIAL_RECEIVED (снабженец может выдавать)
-    newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
-  } else {
-    // 📦 Все отправлено и подтверждено, но не все получено (ждем остальные поставки)
-    newStatus = APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
-  }
-} else if (hasPendingConfirmation) {
-  // ⏳ Есть отправленные, но не подтвержденные → ждем мастера
-  newStatus = APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
-} else if (hasMaterialsOnWarehouse) {
-  // 📦 Есть материалы на складе для выдачи
-  newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
-} else {
-  // 🔄 По умолчанию
-  newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
-}
-
-console.log('📊 Новый статус заявки:', newStatus);
-console.log('📊 allFullyConfirmed:', allFullyConfirmed);
-console.log('📊 allSentConfirmed:', allSentConfirmed);
-console.log('📊 hasPendingConfirmation:', hasPendingConfirmation);
-console.log('📊 hasMaterialsOnWarehouse:', hasMaterialsOnWarehouse);
+    if (allFullyConfirmed) {
+      newStatus = APPLICATION_STATUS.RECEIVED;
+    } else if (allSentConfirmed) {
+      const hasMoreOnWarehouse = updatedMaterials.some(m => {
+        const onWarehouse = Number(m.supplier_received_quantity) || 0;
+        const alreadySent = Number(m.sent_to_master_quantity) || 0;
+        const received = Number(m.received) || 0;
+        const quantity = Number(m.quantity) || 0;
+        return onWarehouse > 0 && alreadySent < onWarehouse && received < quantity;
+      });
+      
+      if (hasMoreOnWarehouse) {
+        newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
+      } else {
+        newStatus = APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
+      }
+    } else if (hasPendingConfirmation) {
+      newStatus = APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
+    } else if (hasMaterialsOnWarehouse) {
+      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
+    } else {
+      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
+    }
+    
+    console.log('📊 Новый статус заявки:', newStatus);
     
     // ✅ 5. Обновляем заявку в БД
     const { error } = await supabase
@@ -4730,17 +4699,33 @@ console.log('📊 hasMaterialsOnWarehouse:', hasMaterialsOnWarehouse);
     
     if (error) throw error;
     
-    // ✅ 6. Обновляем UI
-    setApplications(prev => prev.map(app =>
-      app.id === application.id
-        ? { ...app, status: newStatus, materials: updatedMaterials }
-        : app
-    ));
+    // ✅ 6. ОБНОВЛЯЕМ UI - ИСПРАВЛЕНО
+    const appId = application.id;
+    
+    setApplications(prev => {
+      const exists = prev.some(app => app.id === appId);
+      if (exists) {
+        return prev.map(app =>
+          app.id === appId
+            ? { ...app, status: newStatus, materials: updatedMaterials }
+            : app
+        );
+      }
+      return prev;
+    });
+    
+    // ✅ 7. ПРИНУДИТЕЛЬНАЯ ПЕРЕЗАГРУЗКА
+    // Очищаем кэш
+    cacheManager.delete('applications', `applications_${userCompanyId}_page_${page}`);
+    // Перезагружаем данные
+    setTimeout(() => {
+      loadApplications(page);
+    }, 500);
     
     const confirmedCount = updatedMaterials.filter(m => (Number(m.received) || 0) > 0).length;
     const totalSentCount = updatedMaterials.filter(m => (Number(m.sent_to_master_quantity) || 0) > 0).length;
     
-    // ✅ 7. УМНЫЕ ПОДСКАЗКИ
+    // ✅ 8. Подсказки
     if (allFullyConfirmed) {
       showNotification('🎉 Все материалы получены! Заявка завершена.', 'success');
     } else if (hasMaterialsOnWarehouse) {
@@ -4756,12 +4741,6 @@ console.log('📊 hasMaterialsOnWarehouse:', hasMaterialsOnWarehouse);
         `На складе осталось ${remainingCount} позиций для выдачи.`,
         'success'
       );
-      
-      if (userRole === 'supply_admin' || userRole === 'manager') {
-        setTimeout(() => {
-          showNotification('📤 Перейдите в "Готовы к выдаче" для отправки остальных материалов', 'info');
-        }, 1500);
-      }
     } else if (hasPendingConfirmation) {
       const pendingCount = updatedMaterials.filter(m => {
         const sent = Number(m.sent_to_master_quantity) || 0;
@@ -4785,7 +4764,7 @@ console.log('📊 hasMaterialsOnWarehouse:', hasMaterialsOnWarehouse);
     showNotification('Ошибка подтверждения: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, supabase, showNotification, setApplications, userRole]);
+}, [user, supabase, showNotification, setApplications, setShowReceiveModal, userRole, userCompanyId, page, loadApplications]);
 
   const clearFilters = () => {
     setSearchTerm('');
