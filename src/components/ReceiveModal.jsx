@@ -300,6 +300,7 @@ const AdminReceiveRow = memo(function({
 AdminReceiveRow.displayName = 'AdminReceiveRow';
 
 // ✅ ИСПРАВЛЕННЫЙ MasterConfirmRow (теперь показывает ВСЁ отправленное количество)
+// ✅ ИСПРАВЛЕННЫЙ MasterConfirmRow
 const MasterConfirmRow = memo(function({
   material,
   index,
@@ -318,13 +319,21 @@ const MasterConfirmRow = memo(function({
     return c.materialIndex === originalIndex; 
   }) : null;
   
-  // ✅ Это ОБЩЕЕ количество, которое мастер хочет подтвердить
-  const confirmed = confirmation ? Number(confirmation.quantity) || 0 : 0;
+  // ✅ ИСПРАВЛЕНО: используем состояние для confirmed
+  const [localConfirmed, setLocalConfirmed] = useState(0);
+  
+  // Синхронизируем с confirmations при изменении
+  useEffect(() => {
+    const conf = confirmations ? confirmations.find(function(c) { 
+      return c.materialIndex === originalIndex; 
+    }) : null;
+    if (conf) {
+      setLocalConfirmed(Number(conf.quantity) || 0);
+    }
+  }, [confirmations, originalIndex]);
+  
   const currentAction = confirmation ? confirmation.action : 'confirm';
   const currentFeedback = confirmation ? confirmation.feedback : '';
-  
-  // ✅ УДАЛЕНО: const available = sentToMaster - confirmed;
-  // Теперь используем sentToMaster напрямую
   
   // Проверяем, частично ли отправлено
   const isPartial = sentToMaster > 0 && sentToMaster < requestedQty;
@@ -333,26 +342,30 @@ const MasterConfirmRow = memo(function({
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   
-  // ✅ Используем sentToMaster вместо available
+  // ✅ Используем localConfirmed вместо confirmed
   const handleConfirmChange = useCallback(function(e) {
     const rawValue = e.target.value;
+    let value;
     if (rawValue === '') {
-      onUpdate(originalIndex, 'quantity', 0);
-      return;
+      value = 0;
+    } else {
+      value = clamp(parseInt(rawValue, 10), 0, sentToMaster);
     }
-    const value = clamp(parseInt(rawValue, 10), 0, sentToMaster);
+    setLocalConfirmed(value);
     onUpdate(originalIndex, 'quantity', value);
   }, [originalIndex, sentToMaster, onUpdate]);
   
   const handleIncrement = useCallback(function() {
-    const newValue = clamp(confirmed + 1, 0, sentToMaster);
+    const newValue = clamp(localConfirmed + 1, 0, sentToMaster);
+    setLocalConfirmed(newValue);
     onUpdate(originalIndex, 'quantity', newValue);
-  }, [originalIndex, confirmed, sentToMaster, onUpdate]);
+  }, [originalIndex, localConfirmed, sentToMaster, onUpdate]);
   
   const handleDecrement = useCallback(function() {
-    const newValue = clamp(confirmed - 1, 0, sentToMaster);
+    const newValue = clamp(localConfirmed - 1, 0, sentToMaster);
+    setLocalConfirmed(newValue);
     onUpdate(originalIndex, 'quantity', newValue);
-  }, [originalIndex, confirmed, sentToMaster, onUpdate]);
+  }, [originalIndex, localConfirmed, sentToMaster, onUpdate]);
   
   const handleReject = useCallback(function() {
     if (rejectReason.trim()) {
@@ -393,7 +406,7 @@ const MasterConfirmRow = memo(function({
           <MaterialProgress
             requested={requestedQty}
             onWarehouse={onWarehouse}
-            confirmed={confirmed}
+            confirmed={localConfirmed}
             sentToMaster={sentToMaster}
           />
           
@@ -405,7 +418,6 @@ const MasterConfirmRow = memo(function({
             </div>
           )}
           
-          {/* ✅ ИСПРАВЛЕНО: показываем ВСЁ отправленное количество */}
           {sentToMaster > 0 && !isRejected && (
             <div className="mt-1 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
               <CheckCircle className="w-3 h-3" />
@@ -413,14 +425,14 @@ const MasterConfirmRow = memo(function({
             </div>
           )}
           
-          {confirmed > 0 && !isRejected && (
+          {localConfirmed > 0 && !isRejected && (
             <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
-              Подтверждено: <strong>{confirmed}</strong> {material.unit || 'шт'}
+              Подтверждено: <strong>{localConfirmed}</strong> {material.unit || 'шт'}
             </div>
           )}
           
-          {sentToMaster > 0 && confirmed >= sentToMaster && !isRejected && (
+          {sentToMaster > 0 && localConfirmed >= sentToMaster && !isRejected && (
             <div className="mt-1 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
               <CheckCircle className="w-3 h-3" />
               ✅ Все отправленные материалы подтверждены
@@ -436,7 +448,7 @@ const MasterConfirmRow = memo(function({
                   <button
                     type="button"
                     onClick={handleDecrement}
-                    disabled={confirmed <= 0}
+                    disabled={localConfirmed <= 0}
                     className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     aria-label={t('decreaseQuantity')}
                   >
@@ -446,7 +458,7 @@ const MasterConfirmRow = memo(function({
                     type="number"
                     min="0"
                     max={sentToMaster}
-                    value={confirmed}
+                    value={localConfirmed}
                     onChange={handleConfirmChange}
                     className="w-16 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium text-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     aria-label={t('confirmQuantity')}
@@ -454,7 +466,7 @@ const MasterConfirmRow = memo(function({
                   <button
                     type="button"
                     onClick={handleIncrement}
-                    disabled={confirmed >= sentToMaster}
+                    disabled={localConfirmed >= sentToMaster}
                     className="w-9 h-9 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-green-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     aria-label={t('increaseQuantity')}
                   >
