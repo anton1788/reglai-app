@@ -694,74 +694,71 @@ const ReceiveModal = memo(function({
   // ─────────────────────────────────────────────────────────
   // ⌨️ KEYBOARD SHORTCUTS
   // ─────────────────────────────────────────────────────────
-  const handleSave = useCallback(async function() {
-    if (isSaving) {
-      console.log('⏳ Уже сохраняется, пропускаем');
-      return;
+  // ReceiveModal.jsx - исправленный handleSave
+
+const handleSave = useCallback(async function() {
+  if (isSaving) {
+    console.log('⏳ Уже сохраняется, пропускаем');
+    return;
+  }
+  
+  setIsSaving(true);
+  try {
+    let result;
+    
+    if (modalMode === 'admin_receive' && typeof onAdminReceive === 'function') {
+      result = await onAdminReceive(localMaterials, selectedApplication);
+    }
+    else if ((modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && typeof onSendToMaster === 'function') {
+      const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
+      
+      if (items.length === 0) {
+        if (showNotification) showNotification('Выберите хотя бы один материал для выдачи', 'warning');
+        setIsSaving(false);
+        return;
+      }
+      
+      console.log('🔔 Вызов onSendToMaster с items:', items);
+      result = await onSendToMaster(items, selectedApplication);
+    }
+    else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
+      // ✅ Убеждаемся, что confirmations содержат актуальные данные
+      const confirmationsToSend = localMaterials.map(function(m, idx) {
+        const conf = confirmations.find(function(c) { return c.materialIndex === idx; });
+        return {
+          materialIndex: idx,
+          action: conf && conf.action ? conf.action : 'confirm',
+          quantity: conf && conf.action === 'confirm' ? (Number(conf.quantity) || 0) : 0,
+          feedback: conf && conf.feedback ? conf.feedback : ''
+        };
+      });
+      
+      console.log('🔔 Вызов onMasterConfirm с confirmations:', confirmationsToSend);
+      console.log('🔔 localMaterials:', localMaterials);
+      
+      result = await onMasterConfirm(confirmationsToSend, localMaterials, selectedApplication);
+    }
+    else if (typeof saveReceiveStatus === 'function') {
+      result = await saveReceiveStatus(localMaterials);
     }
     
-    setIsSaving(true);
-    try {
-      let result;
-      
-      if (modalMode === 'admin_receive' && typeof onAdminReceive === 'function') {
-        result = await onAdminReceive(localMaterials, selectedApplication);
-      }
-      else if ((modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && typeof onSendToMaster === 'function') {
-        const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
-        
-        if (items.length === 0) {
-          if (showNotification) showNotification('Выберите хотя бы один материал для выдачи', 'warning');
-          setIsSaving(false);
-          return;
+    if (result && result.success) {
+      if (showNotification) {
+        if (modalMode === 'admin_ready_to_issue') {
+          showNotification('✅ Материалы выданы мастеру со склада', 'success');
+        } else {
+          showNotification(t('materialsAcceptedToWarehouse') || '✅ Успешно сохранено', 'success');
         }
-        
-        console.log('🔔 Вызов onSendToMaster с items:', items);
-        result = await onSendToMaster(items, selectedApplication);
       }
-      else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
-        const confirmationsToSend = localMaterials.map(function(m, idx) {
-          const conf = confirmations.find(function(c) { return c.materialIndex === idx; });
-          return {
-            materialIndex: idx,
-            action: conf && conf.action ? conf.action : 'confirm',
-            quantity: conf && conf.action === 'confirm' ? (Number(conf.quantity) || 0) : 0,
-            feedback: conf && conf.feedback ? conf.feedback : ''
-          };
-        });
-        
-        const materialsToSend = localMaterials.map(function(m) {
-          return {
-            ...m,
-            unit: m.unit || 'шт',
-            received: Number(m.received) || 0
-          };
-        });
-        
-        console.log('🔔 Вызов onMasterConfirm с confirmations:', confirmationsToSend);
-        result = await onMasterConfirm(confirmationsToSend, materialsToSend, selectedApplication);
-      }
-      else if (typeof saveReceiveStatus === 'function') {
-        result = await saveReceiveStatus(localMaterials);
-      }
-      
-      if (result && result.success) {
-        if (showNotification) {
-          if (modalMode === 'admin_ready_to_issue') {
-            showNotification('✅ Материалы выданы мастеру со склада', 'success');
-          } else {
-            showNotification(t('materialsAcceptedToWarehouse') || '✅ Успешно сохранено', 'success');
-          }
-        }
-        if (onClose) onClose();
-      }
-    } catch (err) {
-      console.error('❌ Ошибка сохранения:', err);
-      if (showNotification) showNotification(err.message || t('saveError'), 'error');
-    } finally {
-      setIsSaving(false);
+      if (onClose) onClose();
     }
-  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, saveReceiveStatus, localMaterials, itemsToSend, confirmations, selectedApplication, onClose, t, showNotification, isSaving]);
+  } catch (err) {
+    console.error('❌ Ошибка сохранения:', err);
+    if (showNotification) showNotification(err.message || t('saveError'), 'error');
+  } finally {
+    setIsSaving(false);
+  }
+}, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, saveReceiveStatus, localMaterials, itemsToSend, confirmations, selectedApplication, onClose, t, showNotification, isSaving]);
   
   useEffect(function() {
     const handleKeyDown = function(e) {
@@ -804,23 +801,39 @@ const ReceiveModal = memo(function({
   }, []);
   
   // ✅ ИСПРАВЛЕННАЯ handleConfirmationUpdate
-  const handleConfirmationUpdate = useCallback(function(index, field, value) {
-    console.log('🔄 [MASTER] Обновление подтверждения:', { index, field, value });
-    
-    setConfirmations(function(prev) {
-      const existingIndex = prev.findIndex(function(conf) {
-        return conf.materialIndex === index;
-      });
-      
-      if (existingIndex !== -1) {
-        const newConf = [...prev];
-        newConf[existingIndex] = { ...newConf[existingIndex], [field]: value };
-        return newConf;
-      } else {
-        return [...prev, { materialIndex: index, action: 'confirm', quantity: 0, feedback: '' }];
-      }
+  // ReceiveModal.jsx - исправленная handleConfirmationUpdate
+
+const handleConfirmationUpdate = useCallback(function(index, field, value) {
+  console.log('🔄 [MASTER] Обновление подтверждения:', { index, field, value });
+  
+  // ✅ Обновляем confirmations
+  setConfirmations(function(prev) {
+    const existingIndex = prev.findIndex(function(conf) {
+      return conf.materialIndex === index;
     });
-  }, []);
+    
+    if (existingIndex !== -1) {
+      const newConf = [...prev];
+      newConf[existingIndex] = { ...newConf[existingIndex], [field]: value };
+      return newConf;
+    } else {
+      return [...prev, { materialIndex: index, action: 'confirm', quantity: 0, feedback: '' }];
+    }
+  });
+  
+  // ✅ КРИТИЧЕСКИ ВАЖНО: обновляем localMaterials.received при изменении quantity
+  if (field === 'quantity') {
+    setLocalMaterials(function(prev) {
+      return prev.map(function(m, idx) {
+        if (idx === index) {
+          // Обновляем поле received для правильного отображения в UI
+          return { ...m, received: value };
+        }
+        return m;
+      });
+    });
+  }
+}, []);
   
   // Обработка QR
   const handleQRScan = useCallback(function(qrData) {
