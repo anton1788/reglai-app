@@ -4636,8 +4636,15 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
     // ✅ 4. Определяем новый статус заявки (ИСПРАВЛЕННАЯ ЛОГИКА)
     let newStatus;
     
-    // Если все материалы полностью получены мастером
-    if (allFullyReceived && anyFullyReceived) {
+    // Проверяем, есть ли хоть одна позиция, которая еще не полностью получена
+    const hasAnyNotFullyReceived = updatedMaterials.some(m => {
+      const received = Number(m.received) || 0;
+      const quantity = Number(m.quantity) || 0;
+      return received < quantity;
+    });
+    
+    // Если все материалы полностью получены мастером (ВСЕ позиции получены полностью)
+    if (allFullyReceived && anyFullyReceived && !hasAnyNotFullyReceived) {
       newStatus = APPLICATION_STATUS.RECEIVED;
       console.log('📊 Статус: RECEIVED (все полностью получены)');
     }
@@ -4674,8 +4681,14 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
     }
     // Если есть частичные подтверждения
     else if (anySentConfirmed) {
-      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
-      console.log('📊 Статус: PARTIAL_RECEIVED (частичные подтверждения)');
+      // Проверяем, есть ли позиции, которые еще не получены полностью
+      if (hasAnyNotFullyReceived) {
+        newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
+        console.log('📊 Статус: PARTIAL_RECEIVED (частичные подтверждения)');
+      } else {
+        newStatus = APPLICATION_STATUS.RECEIVED;
+        console.log('📊 Статус: RECEIVED (все получены)');
+      }
     }
     // Ничего не подтверждено
     else {
