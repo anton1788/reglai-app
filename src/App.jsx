@@ -4574,6 +4574,7 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
   }
   
   try {
+    // ✅ 1. Обновляем материалы
     const updatedMaterials = localMaterialsFromModal.map(m => ({
       ...m,
       received: Number(m.received) || 0,
@@ -4585,45 +4586,47 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
       status: m.status || ITEM_STATUS.PENDING
     }));
     
-    // ✅ Проверяем, все ли материалы полностью получены
+    // ✅ 2. Проверяем статус КАЖДОГО материала
     const allFullyReceived = updatedMaterials.every(m => {
       const received = Number(m.received) || 0;
       const quantity = Number(m.quantity) || 0;
       return received >= quantity && quantity > 0;
     });
     
-    // ✅ Проверяем, есть ли материалы, которые НЕ получены полностью
+    // ✅ 3. Проверяем, есть ли материалы, которые НЕ получены полностью
     const hasPendingMaterials = updatedMaterials.some(m => {
       const received = Number(m.received) || 0;
       const quantity = Number(m.quantity) || 0;
-      // Если received >= quantity - материал уже получен полностью
-      if (received >= quantity) return false;
+      const onWarehouse = Number(m.supplier_received_quantity) || 0;
+      const sent = Number(m.sent_to_master_quantity) || 0;
+      
+      // Материал не получен полностью, если:
+      // 1. Ещё не поступил на склад (onWarehouse < quantity)
+      // 2. Или поступил, но не отправлен мастеру (onWarehouse > sent)
+      // 3. Или отправлен, но не подтверждён (sent > received)
+      if (received >= quantity) return false; // уже получен полностью
+      
       return true; // есть что-то, что ещё не получено
     });
     
-    // ✅ Определяем статус
+    // ✅ 4. Определяем новый статус заявки
     let newStatus;
+    
+    // 🔥 КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: заявка завершена ТОЛЬКО если ВСЕ материалы получены
     if (allFullyReceived) {
       newStatus = APPLICATION_STATUS.RECEIVED;
-      console.log('📊 Статус: RECEIVED');
+      console.log('📊 Статус: RECEIVED (все материалы полностью получены)');
     } else if (hasPendingMaterials) {
+      // ✅ Есть материалы, которые ещё не получены → заявка остаётся активной
       newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
-      console.log('📊 Статус: PARTIAL_RECEIVED');
+      console.log('📊 Статус: PARTIAL_RECEIVED (есть ещё материалы для получения)');
     } else {
+      // На всякий случай, если что-то пошло не так
       newStatus = APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
-      console.log('📊 Статус: PENDING_MASTER_CONFIRMATION');
+      console.log('📊 Статус: PENDING_MASTER_CONFIRMATION (ожидание)');
     }
     
-    // 🔥 ЛОГИРУЕМ ВСЕ ДАННЫЕ
-    console.log('🔥 ИТОГОВЫЙ СТАТУС:', newStatus);
-    console.log('🔥 allFullyReceived:', allFullyReceived);
-    console.log('🔥 hasPendingMaterials:', hasPendingMaterials);
-    console.log('🔥 Количество материалов:', updatedMaterials.length);
-    updatedMaterials.forEach((m, i) => {
-      console.log(`  [${i}] ${m.description}: received=${m.received}, quantity=${m.quantity}, sent=${m.sent_to_master_quantity}`);
-    });
-    
-    // ✅ Обновляем БД
+    // ✅ 5. Обновляем заявку в БД
     const { error } = await supabase
       .from('applications')
       .update({
@@ -4648,26 +4651,21 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
       throw error;
     }
     
-    // ✅ Обновляем UI
+    // ✅ 6. Обновляем UI
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
     
-    // ✅ ПРИНУДИТЕЛЬНАЯ ПЕРЕЗАГРУЗКА
-    setTimeout(() => {
-      loadApplications(page);
-    }, 500);
-    
-    // ✅ Показываем уведомление
+    // ✅ 7. Показываем уведомление
     if (newStatus === APPLICATION_STATUS.RECEIVED) {
       showNotification('🎉 Все материалы получены! Заявка завершена.', 'success');
     } else {
       const confirmedCount = updatedMaterials.filter(m => (Number(m.received) || 0) > 0).length;
       const totalCount = updatedMaterials.length;
       showNotification(
-        `✅ Подтверждено ${confirmedCount} из ${totalCount} позиций. Заявка остаётся активной (статус: PARTIAL_RECEIVED).`,
+        `✅ Подтверждено ${confirmedCount} из ${totalCount} позиций. Заявка остаётся активной.`,
         'info'
       );
     }
@@ -4680,7 +4678,7 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
     showNotification('Ошибка подтверждения: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, supabase, showNotification, setApplications, loadApplications, page]);
+}, [user, supabase, showNotification, setApplications]);
 
   const clearFilters = () => {
     setSearchTerm('');
