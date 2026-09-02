@@ -3,25 +3,25 @@
 // ============ КОНСТАНТЫ СТАТУСОВ ============
 
 export const APPLICATION_STATUS = {
-  PENDING: 'pending',
-  ADMIN_PROCESSING: 'admin_processing',
-  PENDING_APPROVAL: 'pending_approval',
-  APPROVED: 'approved',
-  PARTIAL_RECEIVED: 'partial_received',
-  READY_FOR_ISSUE: 'ready_for_issue',
-  PENDING_MASTER_CONFIRMATION: 'pending_master_confirmation',
-  RECEIVED: 'received',
-  REJECTED: 'rejected',
-  CANCELED: 'canceled'
+  PENDING: 'pending', // Ожидает обработки
+  ADMIN_PROCESSING: 'admin_processing', // В обработке у снабженца
+  PENDING_APPROVAL: 'pending_approval', // На согласовании у руководителя
+  APPROVED: 'approved', // Согласовано руководителем
+  PARTIAL_RECEIVED: 'partial_received', // Частично принято на склад
+  READY_FOR_ISSUE: 'ready_for_issue', // Готово к выдаче мастеру (ВСЁ НА СКЛАДЕ)
+  PENDING_MASTER_CONFIRMATION: 'pending_master_confirmation', // Ожидает подтверждения мастера
+  RECEIVED: 'received', // Полностью получено мастером
+  REJECTED: 'rejected', // Отклонено руководителем
+  CANCELED: 'canceled' // Отменено
 };
 
 export const ITEM_STATUS = {
-  PENDING: 'pending',
-  ON_WAREHOUSE: 'on_warehouse',
-  SENT_TO_MASTER: 'sent_to_master',
+  PENDING: 'pending', // Ожидает поставки
+  ON_WAREHOUSE: 'on_warehouse', // На складе (принято от поставщика)
+  SENT_TO_MASTER: 'sent_to_master', // Отправлено мастеру
   PARTIAL_CONFIRMED: 'partial_confirmed',
-  CONFIRMED: 'confirmed',
-  REJECTED: 'rejected'
+  CONFIRMED: 'confirmed', // Подтверждено мастером
+  REJECTED: 'rejected' // Отклонено мастером
 };
 
 // ============ I18N КЛЮЧИ ============
@@ -47,6 +47,7 @@ export const STATUS_I18N = {
 
 // ============ СТИЛИ И ЦВЕТА ============
 
+// Цвета для статусов (Tailwind CSS классы)
 export const STATUS_COLORS = {
   [APPLICATION_STATUS.PENDING]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200',
   [APPLICATION_STATUS.ADMIN_PROCESSING]: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200',
@@ -66,6 +67,7 @@ export const STATUS_COLORS = {
   [ITEM_STATUS.REJECTED]: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200'
 };
 
+// Иконки для статусов (названия компонентов lucide-react)
 export const STATUS_ICONS = {
   [APPLICATION_STATUS.PENDING]: 'Clock',
   [APPLICATION_STATUS.ADMIN_PROCESSING]: 'Loader2',
@@ -85,6 +87,7 @@ export const STATUS_ICONS = {
   [ITEM_STATUS.REJECTED]: 'X'
 };
 
+// Приоритет для сортировки статусов
 export const STATUS_PRIORITY = {
   [APPLICATION_STATUS.PENDING]: 1,
   [APPLICATION_STATUS.PENDING_APPROVAL]: 2,
@@ -98,42 +101,8 @@ export const STATUS_PRIORITY = {
   [APPLICATION_STATUS.CANCELED]: 10
 };
 
-// ============ НОРМАЛИЗАЦИЯ СТАТУСА (ГЛАВНАЯ ФУНКЦИЯ) ============
-
-/**
- * Нормализует статус (приводит к каноническому виду)
- * @param {string} status - Статус для нормализации
- * @returns {string} - Нормализованный статус
- */
-export const normalizeStatus = (status) => {
-  if (!status) return APPLICATION_STATUS.PENDING;
-  
-  const statusMap = {
-    'pending': APPLICATION_STATUS.PENDING,
-    'admin_processing': APPLICATION_STATUS.ADMIN_PROCESSING,
-    'pending_approval': APPLICATION_STATUS.PENDING_APPROVAL,
-    'approved': APPLICATION_STATUS.APPROVED,
-    'partial': APPLICATION_STATUS.PARTIAL_RECEIVED,
-    'partial_received': APPLICATION_STATUS.PARTIAL_RECEIVED,
-    'ready_for_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
-    'ready_to_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
-    'pending_master_confirmation': APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
-    'received': APPLICATION_STATUS.RECEIVED,
-    'rejected': APPLICATION_STATUS.REJECTED,
-    'canceled': APPLICATION_STATUS.CANCELED,
-    'sent': APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
-    'confirmed': APPLICATION_STATUS.RECEIVED,
-    'supplier_received': APPLICATION_STATUS.READY_FOR_ISSUE,
-    'on_warehouse': APPLICATION_STATUS.READY_FOR_ISSUE,
-  };
-  
-  return statusMap[status] || status;
-};
-
-// ============ ПРОВЕРКИ СТАТУСОВ ============
-
+// Проверка, активна ли заявка (требует действий)
 export const isApplicationActive = (status) => {
-  const normalized = normalizeStatus(status);
   const activeStatuses = [
     APPLICATION_STATUS.PENDING,
     APPLICATION_STATUS.ADMIN_PROCESSING,
@@ -142,33 +111,38 @@ export const isApplicationActive = (status) => {
     APPLICATION_STATUS.PARTIAL_RECEIVED,
     APPLICATION_STATUS.READY_FOR_ISSUE,
     APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+    'sent_to_master'  // ← добавить для совместимости
   ];
-  return activeStatuses.includes(normalized);
+  return activeStatuses.includes(status);
 };
 
+// Проверка, завершена ли заявка (финальные статусы)
 export const isApplicationCompleted = (status) => {
-  const normalized = normalizeStatus(status);
   const completedStatuses = [
     APPLICATION_STATUS.RECEIVED,
     APPLICATION_STATUS.REJECTED,
     APPLICATION_STATUS.CANCELED
   ];
-  return completedStatuses.includes(normalized);
+  return completedStatuses.includes(status);
 };
 
+// Проверка, требует ли заявка подтверждения мастером
 export const requiresMasterConfirmation = (status) => {
-  const normalized = normalizeStatus(status);
-  return normalized === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
+  return status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION ||
+         status === 'pending_master_confirmation' ||
+         status === 'sent_to_master';  // ← для обратной совместимости
 };
 
+// Проверка, готова ли заявка к выдаче
 export const isReadyForIssue = (status) => {
-  const normalized = normalizeStatus(status);
-  return normalized === APPLICATION_STATUS.READY_FOR_ISSUE;
+  return status === APPLICATION_STATUS.READY_FOR_ISSUE;
 };
 
+// Проверка, требует ли заявка согласования руководителя
 export const requiresApproval = (materials) => {
   if (!Array.isArray(materials) || materials.length === 0) return false;
 
+  // Логика: если общая сумма > 100000 или есть дорогие позиции
   const totalAmount = materials.reduce((sum, m) => {
     const qty = Number(m.quantity) || 0;
     const price = Number(m.price) || 1000;
@@ -178,12 +152,8 @@ export const requiresApproval = (materials) => {
   return totalAmount > 100000;
 };
 
-// ============ ПЕРЕХОДЫ МЕЖДУ СТАТУСАМИ ============
-
+// Проверка возможности перехода между статусами
 export const canTransitionTo = (fromStatus, toStatus) => {
-  const from = normalizeStatus(fromStatus);
-  const to = normalizeStatus(toStatus);
-  
   const validTransitions = {
     [APPLICATION_STATUS.PENDING]: [
       APPLICATION_STATUS.ADMIN_PROCESSING,
@@ -225,12 +195,11 @@ export const canTransitionTo = (fromStatus, toStatus) => {
     ]
   };
 
-  return validTransitions[from]?.includes(to) || false;
+  return validTransitions[fromStatus]?.includes(toStatus) || false;
 };
 
+// Получение доступных статусов для перехода
 export const getNextAvailableStatuses = (currentStatus) => {
-  const current = normalizeStatus(currentStatus);
-  
   const transitions = {
     [APPLICATION_STATUS.PENDING]: [
       { status: APPLICATION_STATUS.ADMIN_PROCESSING, label: 'Начать обработку' },
@@ -269,14 +238,16 @@ export const getNextAvailableStatuses = (currentStatus) => {
     ]
   };
 
-  return transitions[current] || [];
+  return transitions[currentStatus] || [];
 };
 
 // ============ ПОЛУЧЕНИЕ ТЕКСТОВ СТАТУСОВ ============
 
+// Получить текст статуса с поддержкой i18n
 export const getStatusText = (status, language = 'ru') => {
   const translations = {
     ru: {
+      // Application statuses
       statusPending: 'Ожидает обработки',
       statusProcessing: 'В обработке у снабженца',
       statusPendingApproval: 'На согласовании',
@@ -287,6 +258,7 @@ export const getStatusText = (status, language = 'ru') => {
       statusReceived: 'Получено',
       statusRejected: 'Отклонено',
       statusCanceled: 'Отменено',
+      // Item statuses
       itemStatusPending: 'Ожидает',
       itemStatusOnWarehouse: 'На складе',
       itemStatusSentToMaster: 'Отправлено мастеру',
@@ -294,6 +266,7 @@ export const getStatusText = (status, language = 'ru') => {
       itemStatusRejected: 'Отклонено'
     },
     en: {
+      // Application statuses
       statusPending: 'Pending',
       statusProcessing: 'Processing',
       statusPendingApproval: 'Pending Approval',
@@ -304,6 +277,7 @@ export const getStatusText = (status, language = 'ru') => {
       statusReceived: 'Received',
       statusRejected: 'Rejected',
       statusCanceled: 'Canceled',
+      // Item statuses
       itemStatusPending: 'Pending',
       itemStatusOnWarehouse: 'On Warehouse',
       itemStatusSentToMaster: 'Sent to Master',
@@ -318,25 +292,29 @@ export const getStatusText = (status, language = 'ru') => {
   return translations[language]?.[i18nKey] || translations.ru[i18nKey] || status;
 };
 
+// Получение цвета статуса (Tailwind классы)
 export const getStatusColor = (status) => {
-  const normalized = normalizeStatus(status);
-  return STATUS_COLORS[normalized] || STATUS_COLORS[APPLICATION_STATUS.PENDING];
+  return STATUS_COLORS[status] || STATUS_COLORS[APPLICATION_STATUS.PENDING];
 };
 
+// Получение иконки статуса
 export const getStatusIcon = (status) => {
-  const normalized = normalizeStatus(status);
-  return STATUS_ICONS[normalized] || STATUS_ICONS[APPLICATION_STATUS.PENDING];
+  return STATUS_ICONS[status] || STATUS_ICONS[APPLICATION_STATUS.PENDING];
 };
 
+// Получение приоритета статуса
 export const getStatusPriority = (status) => {
-  const normalized = normalizeStatus(status);
-  return STATUS_PRIORITY[normalized] || 999;
+  return STATUS_PRIORITY[status] || 999;
 };
-
 // ============================================================
-// ФУНКЦИИ ДЛЯ РАБОТЫ С ВЫДАЧЕЙ МАТЕРИАЛОВ
+// 🆕 НОВЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С ВЫДАЧЕЙ МАТЕРИАЛОВ
 // ============================================================
 
+/**
+ * Проверяет, есть ли материалы для выдачи мастеру
+ * @param {Object} application - Объект заявки
+ * @returns {boolean} - true если есть материалы для выдачи
+ */
 export const hasMaterialsReadyToIssue = (application) => {
   if (!application?.materials) return false;
   
@@ -346,10 +324,19 @@ export const hasMaterialsReadyToIssue = (application) => {
     const received = Number(m.received) || 0;
     const quantity = Number(m.quantity) || 0;
     
+    // Материал доступен для выдачи если:
+    // 1. Есть на складе > 0
+    // 2. Ещё НЕ отправлен полностью (alreadySent < onWarehouse)
+    // 3. Ещё НЕ получен полностью мастером (received < quantity)
     return onWarehouse > 0 && alreadySent < onWarehouse && received < quantity;
   });
 };
 
+/**
+ * Получает количество материалов, доступных для выдачи
+ * @param {Object} application - Объект заявки
+ * @returns {number} - Общее количество доступных единиц
+ */
 export const getTotalAvailableForIssue = (application) => {
   if (!application?.materials) return 0;
   
@@ -364,6 +351,11 @@ export const getTotalAvailableForIssue = (application) => {
   }, 0);
 };
 
+/**
+ * Получает список материалов, доступных для выдачи
+ * @param {Object} application - Объект заявки
+ * @returns {Array} - Массив материалов для выдачи
+ */
 export const getMaterialsReadyToIssue = (application) => {
   if (!application?.materials) return [];
   
@@ -384,6 +376,11 @@ export const getMaterialsReadyToIssue = (application) => {
     }));
 };
 
+/**
+ * Проверяет, все ли материалы заявки подтверждены мастером
+ * @param {Object} application - Объект заявки
+ * @returns {boolean} - true если все материалы подтверждены
+ */
 export const isFullyConfirmed = (application) => {
   if (!application?.materials) return false;
   
@@ -392,6 +389,11 @@ export const isFullyConfirmed = (application) => {
   });
 };
 
+/**
+ * Проверяет, есть ли частично подтверждённые материалы
+ * @param {Object} application - Объект заявки
+ * @returns {boolean} - true если есть частичные подтверждения
+ */
 export const hasPartialConfirmation = (application) => {
   if (!application?.materials) return false;
   
@@ -402,6 +404,11 @@ export const hasPartialConfirmation = (application) => {
   });
 };
 
+/**
+ * Получает следующий статус для заявки на основе её материалов
+ * @param {Object} application - Объект заявки
+ * @returns {string} - Новый статус
+ */
 export const getNextStatusForApplication = (application) => {
   if (!application?.materials) return application.status;
 
@@ -426,6 +433,7 @@ export const getNextStatusForApplication = (application) => {
 
   const allConfirmed = isFullyConfirmed(application);
 
+  // Логика определения статуса
   if (allConfirmed) {
     return APPLICATION_STATUS.RECEIVED;
   }
@@ -443,4 +451,28 @@ export const getNextStatusForApplication = (application) => {
   }
 
   return application.status;
+};
+
+// ============================================================
+// 🆕 ДОПОЛНИТЕЛЬНЫЕ СТАТУСЫ ДЛЯ СОВМЕСТИМОСТИ
+// ============================================================
+
+// Добавляем псевдонимы для обратной совместимости
+export const STATUS_ALIASES = {
+  'ready_to_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
+  'ready_for_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
+  'supplier_received': APPLICATION_STATUS.READY_FOR_ISSUE,
+  'on_warehouse': APPLICATION_STATUS.READY_FOR_ISSUE,
+  'sent': APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+  'confirmed': APPLICATION_STATUS.RECEIVED,
+};
+
+/**
+ * Нормализует статус (приводит к каноническому виду)
+ * @param {string} status - Статус для нормализации
+ * @returns {string} - Нормализованный статус
+ */
+export const normalizeStatus = (status) => {
+  if (!status) return APPLICATION_STATUS.PENDING;
+  return STATUS_ALIASES[status] || status;
 };
