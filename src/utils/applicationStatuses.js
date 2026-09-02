@@ -103,6 +103,7 @@ export const STATUS_PRIORITY = {
 
 // Проверка, активна ли заявка (требует действий)
 export const isApplicationActive = (status) => {
+  const normalized = normalizeStatus(status); 
   const activeStatuses = [
     APPLICATION_STATUS.PENDING,
     APPLICATION_STATUS.ADMIN_PROCESSING,
@@ -111,9 +112,8 @@ export const isApplicationActive = (status) => {
     APPLICATION_STATUS.PARTIAL_RECEIVED,
     APPLICATION_STATUS.READY_FOR_ISSUE,
     APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
-    'sent_to_master'  // ← добавить для совместимости
   ];
-  return activeStatuses.includes(status);
+  return activeStatuses.includes(normalized);  // ← ИСПОЛЬЗУЕМ normalized
 };
 
 // Проверка, завершена ли заявка (финальные статусы)
@@ -474,5 +474,26 @@ export const STATUS_ALIASES = {
  */
 export const normalizeStatus = (status) => {
   if (!status) return APPLICATION_STATUS.PENDING;
-  return STATUS_ALIASES[status] || status;
+  
+  // Объединяем оба маппинга
+  const statusMap = {
+    'pending': APPLICATION_STATUS.PENDING,
+    'admin_processing': APPLICATION_STATUS.ADMIN_PROCESSING,
+    'pending_approval': APPLICATION_STATUS.PENDING_APPROVAL,
+    'approved': APPLICATION_STATUS.APPROVED,
+    'partial': APPLICATION_STATUS.PARTIAL_RECEIVED,
+    'partial_received': APPLICATION_STATUS.PARTIAL_RECEIVED,
+    'ready_for_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
+    'ready_to_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
+    'pending_master_confirmation': APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+    'received': APPLICATION_STATUS.RECEIVED,
+    'rejected': APPLICATION_STATUS.REJECTED,
+    'canceled': APPLICATION_STATUS.CANCELED,
+    'sent': APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+    'confirmed': APPLICATION_STATUS.RECEIVED,
+    'supplier_received': APPLICATION_STATUS.READY_FOR_ISSUE,
+    'on_warehouse': APPLICATION_STATUS.READY_FOR_ISSUE,
+  };
+  
+  return statusMap[status] || status;  // ← используем statusMap
 };
