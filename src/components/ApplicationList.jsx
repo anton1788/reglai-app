@@ -282,16 +282,39 @@ const MobileApplicationCard = memo(({
   }, [application.materials]);
 
   const visibleMaterials = useMemo(() => {
-    if (!application.materials) return [];
-    let filtered = application.materials.filter(m => m?.description?.trim() && (Number(m.quantity) || 0) > 0);
-    
-    if (viewMode === 'received') {
-      filtered = filtered.filter(m => (Number(m.received) || 0) >= (Number(m.quantity) || 0));
-    } else if (viewMode === 'inwork' || viewMode === 'confirmation') {
-      filtered = filtered.filter(m => (Number(m.received) || 0) < (Number(m.quantity) || 0));
-    }
-    return filtered;
-  }, [application.materials, viewMode]);
+  if (!application.materials) return [];
+  
+  // Фильтруем пустые материалы
+  const filtered = application.materials.filter(m => 
+    m?.description?.trim() && (Number(m.quantity) || 0) > 0
+  );
+  
+  if (viewMode === 'received') {
+    return filtered.filter(m => 
+      (Number(m.received) || 0) >= (Number(m.quantity) || 0)
+    );
+  }
+  
+  if (viewMode === 'inwork' || viewMode === 'confirmation') {
+    // 🔥 ПОКАЗЫВАЕМ ВСЕ МАТЕРИАЛЫ, ГДЕ ЕСТЬ ДВИЖЕНИЕ
+    return filtered.filter(m => {
+      const sentToMaster = Number(m.sent_to_master_quantity) || 0;
+      const onWarehouse = Number(m.supplier_received_quantity) || 0;
+      const received = Number(m.received) || 0;
+      const quantity = Number(m.quantity) || 0;
+      
+      // Материал активен для мастера если:
+      // 1. Отправлен мастеру (ждёт подтверждения)
+      // 2. ИЛИ на складе (ждёт выдачи)
+      // 3. ИЛИ частично подтверждён
+      return sentToMaster > 0 || 
+             (onWarehouse > 0 && received < quantity) ||
+             (received > 0 && received < quantity);
+    });
+  }
+  
+  return filtered;
+}, [application.materials, viewMode]);
 
   return (
     <article className="app-card-enter application-card bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl border border-gray-200/60 dark:border-gray-700/60 overflow-hidden">

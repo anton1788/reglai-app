@@ -4136,10 +4136,6 @@ const handleClearFilters = useCallback(() => {
   // ============================================================
 // 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (ОБНОВЛЁННАЯ)
 // ============================================================
-// ✅ СТАЛО
-// ============================================================
-// 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (РАБОЧАЯ ВЕРСИЯ БЕЗ RPC)
-// ============================================================
 const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
   console.log('🔍 [DEBUG] handleAdminReceive started', {
     applicationId: application?.id,
@@ -4195,11 +4191,15 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     const totalReceived = updatedMaterials.filter(m => (Number(m.supplier_received_quantity) || 0) > 0).length;
     const totalMaterials = updatedMaterials.length;
     
+    // ============================================================
+    // 🔥 ОСНОВНОЕ ИЗМЕНЕНИЕ: ПРАВИЛЬНОЕ ОПРЕДЕЛЕНИЕ СТАТУСА
+    // ============================================================
+    
     // ✅ 3. Проверяем, все ли материалы полностью приняты
     const allFullyReceived = updatedMaterials.every(m => {
       const received = Number(m.supplier_received_quantity) || 0;
-      const requested = Number(m.quantity) || 0;
-      return received >= requested;
+      const quantity = Number(m.quantity) || 0;
+      return received >= quantity;
     });
     
     // ✅ 4. Определяем новый статус заявки
@@ -4207,7 +4207,7 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     if (allFullyReceived && totalReceived > 0) {
       newStatus = APPLICATION_STATUS.READY_FOR_ISSUE;
     } else if (totalReceived > 0) {
-      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
+      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;  // ← КЛЮЧЕВОЕ ИЗМЕНЕНИЕ!
     } else {
       newStatus = APPLICATION_STATUS.ADMIN_PROCESSING;
     }
@@ -4219,11 +4219,14 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
       newStatus
     });
     
-    // ✅ 5. Обновляем заявку в БД (без RPC)
+    // ============================================================
+    // ✅ 5. Обновляем заявку в БД (С ИСПРАВЛЕННЫМ СТАТУСОМ)
+    // ============================================================
+    
     const { error: updateError } = await supabase
       .from('applications')
       .update({
-        status: newStatus,
+        status: newStatus,  // ← ТЕПЕРЬ ПРАВИЛЬНЫЙ СТАТУС
         materials: updatedMaterials,
         updated_at: new Date().toISOString(),
         status_history: [
