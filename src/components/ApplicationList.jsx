@@ -278,7 +278,7 @@ const MobileApplicationCard = memo(({
   }, [application.materials]);
 
   // ✅ ИСПРАВЛЕННАЯ ЛОГИКА visibleMaterials
-  const visibleMaterials = useMemo(() => {
+ const visibleMaterials = useMemo(() => {
   if (!application.materials) return [];
   
   const filtered = application.materials.filter(m => 

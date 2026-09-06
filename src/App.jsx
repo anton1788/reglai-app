@@ -3779,7 +3779,7 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 🔍 FILTERING
   // ─────────────────────────────────────────────────────────
-    const filteredApplications = useMemo(() => {
+   const filteredApplications = useMemo(() => {
   const apps = isAdminMode ? allApplications : applications;
   
   let smartSearchTerm = searchTerm;
@@ -3838,7 +3838,7 @@ useEffect(() => {
     
     return matchesSearch && matchesStatus && matchesDate && matchesViewed && matchesOverdue;
   });
-}, [applications, allApplications, isAdminMode, searchTerm, statusFilter, dateFilter, viewedFilter, userRole]); 
+}, [applications, allApplications, isAdminMode, searchTerm, statusFilter, dateFilter, viewedFilter, userRole]); // ← Добавлен userRole
 
   const uniqueDates = useMemo(() => {
     const apps = isAdminMode ? allApplications : applications;
@@ -7650,7 +7650,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         const isActive = isApplicationActive(app.status) ||
           app.status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION ||
           app.status === APPLICATION_STATUS.PENDING_APPROVAL ||
-          app.status === APPLICATION_STATUS.PARTIAL_RECEIVED; // 🔥 ДОБАВЛЕНО: чтобы заявка не пропадала
+          app.status === APPLICATION_STATUS.PARTIAL_RECEIVED;
         
         return isActive && app.user_id === user?.id;
       }
@@ -7659,7 +7659,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       const isActive = isApplicationActive(app.status) ||
         app.status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION ||
         app.status === APPLICATION_STATUS.PENDING_APPROVAL ||
-        app.status === APPLICATION_STATUS.PARTIAL_RECEIVED; // 🔥 ДОБАВЛЕНО
+        app.status === APPLICATION_STATUS.PARTIAL_RECEIVED;
       
       return isActive;
     })}
