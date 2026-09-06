@@ -4157,7 +4157,6 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     
     // ✅ 1. Создаём копию материалов с обновлёнными количествами
     const updatedMaterials = application.materials.map((originalMaterial, index) => {
-      // Находим соответствующий материал из модалки
       const modalMaterial = materialsFromModal.find(m => {
         const originalName = (originalMaterial.description || originalMaterial.item_name || '').trim().toLowerCase();
         const modalName = (m.description || m.item_name || '').trim().toLowerCase();
@@ -4168,7 +4167,6 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
         const qtyReceived = Number(modalMaterial.supplier_received_quantity) || 0;
         const requested = Number(originalMaterial.quantity) || 0;
         
-        // Определяем статус материала
         let materialStatus = originalMaterial.status || 'pending';
         if (qtyReceived >= requested && requested > 0) {
           materialStatus = 'on_warehouse';
@@ -4191,10 +4189,6 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     const totalReceived = updatedMaterials.filter(m => (Number(m.supplier_received_quantity) || 0) > 0).length;
     const totalMaterials = updatedMaterials.length;
     
-    // ============================================================
-    // 🔥 ОСНОВНОЕ ИЗМЕНЕНИЕ: ПРАВИЛЬНОЕ ОПРЕДЕЛЕНИЕ СТАТУСА
-    // ============================================================
-    
     // ✅ 3. Проверяем, все ли материалы полностью приняты
     const allFullyReceived = updatedMaterials.every(m => {
       const received = Number(m.supplier_received_quantity) || 0;
@@ -4207,26 +4201,37 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     if (allFullyReceived && totalReceived > 0) {
       newStatus = APPLICATION_STATUS.READY_FOR_ISSUE;
     } else if (totalReceived > 0) {
-      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;  // ← КЛЮЧЕВОЕ ИЗМЕНЕНИЕ!
+      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
     } else {
       newStatus = APPLICATION_STATUS.ADMIN_PROCESSING;
     }
     
-    console.log('📊 [RECEIVE] Результат:', {
+    // ============================================================
+    // 🔥 ДИАГНОСТИКА - ПРОВЕРЯЕМ, ЧТО ПОПАДАЕТ В БД
+    // ============================================================
+    console.log('📊 [DIAGNOSTIC] Детали обновления:', {
+      applicationId: application.id,
       totalReceived,
       totalMaterials,
       allFullyReceived,
-      newStatus
+      newStatus,
+      oldStatus: application.status,
+      materials: updatedMaterials.map(m => ({
+        description: m.description,
+        quantity: m.quantity,
+        supplier_received_quantity: m.supplier_received_quantity,
+        status: m.status
+      }))
     });
     
     // ============================================================
-    // ✅ 5. Обновляем заявку в БД (С ИСПРАВЛЕННЫМ СТАТУСОМ)
+    // ✅ 5. ОБНОВЛЯЕМ БД И ПРОВЕРЯЕМ РЕЗУЛЬТАТ
     // ============================================================
     
-    const { error: updateError } = await supabase
+    const { data: updatedData, error: updateError } = await supabase
       .from('applications')
       .update({
-        status: newStatus,  // ← ТЕПЕРЬ ПРАВИЛЬНЫЙ СТАТУС
+        status: newStatus,
         materials: updatedMaterials,
         updated_at: new Date().toISOString(),
         status_history: [
@@ -4236,11 +4241,14 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
             user_id: user?.id,
             user_email: user?.email,
             timestamp: new Date().toISOString(),
-            details: `Принято ${totalReceived} из ${totalMaterials} позиций`
+            details: `Принято ${totalReceived} из ${totalMaterials} позиций`,
+            new_status: newStatus,
+            old_status: application.status
           }
         ]
       })
-      .eq('id', application.id);
+      .eq('id', application.id)
+      .select(); // ← ДОБАВЛЯЕМ .select() ЧТОБЫ УВИДЕТЬ РЕЗУЛЬТАТ
     
     if (updateError) {
       console.error('❌ [UPDATE] Ошибка обновления:', updateError);
@@ -4248,7 +4256,26 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
       return { success: false };
     }
     
-    // ✅ 6. Обновляем склад (через работающую RPC)
+    // ============================================================
+    // 🔥 ПРОВЕРЯЕМ, ЧТО РЕАЛЬНО СОХРАНИЛОСЬ В БД
+    // ============================================================
+    console.log('✅ [DIAGNOSTIC] Результат обновления БД:', {
+      updatedData,
+      expectedStatus: newStatus,
+      actualStatus: updatedData?.[0]?.status,
+      materialsCount: updatedData?.[0]?.materials?.length
+    });
+    
+    // Если статус в БД не совпадает с ожидаемым - ошибка!
+    if (updatedData?.[0]?.status !== newStatus) {
+      console.error('❌ [DIAGNOSTIC] СТАТУС НЕ СОХРАНИЛСЯ!', {
+        expected: newStatus,
+        actual: updatedData?.[0]?.status
+      });
+      showNotification(`⚠️ Ошибка: статус не сохранился (ожидался ${newStatus}, получен ${updatedData?.[0]?.status})`, 'error');
+    }
+    
+    // ✅ 6. Обновляем склад (если включено)
     if (WAREHOUSE_ENABLED) {
       const materialsToWarehouse = updatedMaterials.filter(m => {
         return (Number(m.supplier_received_quantity) || 0) > 0;
