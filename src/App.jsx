@@ -3780,67 +3780,65 @@ useEffect(() => {
   // 🔍 FILTERING
   // ─────────────────────────────────────────────────────────
     const filteredApplications = useMemo(() => {
-    const apps = isAdminMode ? allApplications : applications;
-    
-    // 🔍 Парсинг умного поиска
-    let smartSearchTerm = searchTerm;
-    let customFilters = {};
-    
-    if (searchTerm.includes(':')) {
-        // Парсим команды типа "status:pending" или "overdue:true"
-        const parts = searchTerm.split(' ');
-        parts.forEach(part => {
-            if (part.includes(':')) {
-                const [key, value] = part.split(':');
-                customFilters[key] = value;
-            } else {
-                smartSearchTerm = part;
-            }
-        });
+  const apps = isAdminMode ? allApplications : applications;
+  
+  let smartSearchTerm = searchTerm;
+  let customFilters = {};
+  
+  if (searchTerm.includes(':')) {
+    const parts = searchTerm.split(' ');
+    parts.forEach(part => {
+      if (part.includes(':')) {
+        const [key, value] = part.split(':');
+        customFilters[key] = value;
+      } else {
+        smartSearchTerm = part;
+      }
+    });
+  }
+  
+  return apps.filter(app => {
+    let matchesSearch = true;
+    if (smartSearchTerm && !customFilters.object) {
+      matchesSearch = app.object_name.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
+        app.foreman_name.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
+        (app.foreman_phone && app.foreman_phone.includes(smartSearchTerm));
     }
     
-    return apps.filter(app => {
-      // Обычный поиск
-      let matchesSearch = true;
-      if (smartSearchTerm && !customFilters.object) {
-        matchesSearch = app.object_name.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
-          app.foreman_name.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
-          (app.foreman_phone && app.foreman_phone.includes(smartSearchTerm));
-      }
-      
-      // Поиск по объекту
-      if (customFilters.object) {
-        matchesSearch = app.object_name.toLowerCase().includes(customFilters.object.toLowerCase());
-      }
-      
-      // Фильтр по статусу из умного поиска
-      let matchesStatus = statusFilter === 'all' ||
+    if (customFilters.object) {
+      matchesSearch = app.object_name.toLowerCase().includes(customFilters.object.toLowerCase());
+    }
+    
+    // 🔥 ФИЛЬТР ПО СТАТУСУ — ДЛЯ СНАБЖЕНЦА И МЕНЕДЖЕРА ОТКЛЮЧАЕМ
+    let matchesStatus = true;
+    if (userRole !== 'supply_admin' && userRole !== 'manager' && userRole !== 'director') {
+      matchesStatus = statusFilter === 'all' ||
         app.status === statusFilter ||
         (statusFilter === 'pending' && [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ADMIN_PROCESSING].includes(app.status));
       
       if (customFilters.status) {
         if (customFilters.status === 'pending') {
-            matchesStatus = [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ADMIN_PROCESSING].includes(app.status);
+          matchesStatus = [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ADMIN_PROCESSING].includes(app.status);
         } else if (customFilters.status === 'active') {
-            matchesStatus = ['pending', 'admin_processing', 'partial_received'].includes(app.status);
+          matchesStatus = ['pending', 'admin_processing', 'partial_received'].includes(app.status);
         } else if (customFilters.status === 'received') {
-            matchesStatus = app.status === 'received';
+          matchesStatus = app.status === 'received';
         }
       }
-      
-      // Фильтр просроченных
-      let matchesOverdue = true;
-      if (customFilters.overdue === 'true') {
-        matchesOverdue = app.status === 'pending' && getDaysSince(app.created_at) > 2;
-      }
-      
-      const matchesDate = !dateFilter || app.created_at.startsWith(dateFilter);
-      const matchesViewed = viewedFilter === 'all' ||
-        (viewedFilter === 'new' && !app.viewed_by_supply_admin);
-      
-      return matchesSearch && matchesStatus && matchesDate && matchesViewed && matchesOverdue;
-    });
-  }, [applications, allApplications, isAdminMode, searchTerm, statusFilter, dateFilter, viewedFilter]);
+    }
+    
+    let matchesOverdue = true;
+    if (customFilters.overdue === 'true') {
+      matchesOverdue = app.status === 'pending' && getDaysSince(app.created_at) > 2;
+    }
+    
+    const matchesDate = !dateFilter || app.created_at.startsWith(dateFilter);
+    const matchesViewed = viewedFilter === 'all' ||
+      (viewedFilter === 'new' && !app.viewed_by_supply_admin);
+    
+    return matchesSearch && matchesStatus && matchesDate && matchesViewed && matchesOverdue;
+  });
+}, [applications, allApplications, isAdminMode, searchTerm, statusFilter, dateFilter, viewedFilter, userRole]); 
 
   const uniqueDates = useMemo(() => {
     const apps = isAdminMode ? allApplications : applications;

@@ -279,40 +279,39 @@ const MobileApplicationCard = memo(({
 
   // ✅ ИСПРАВЛЕННАЯ ЛОГИКА visibleMaterials
   const visibleMaterials = useMemo(() => {
-    if (!application.materials) return [];
-    
-    const filtered = application.materials.filter(m => 
-      m?.description?.trim() && (Number(m.quantity) || 0) > 0
-    );
-    
-    if (viewMode === 'received') {
-      // В истории показываем только полностью полученные
-      return filtered.filter(m => 
-        (Number(m.received) || 0) >= (Number(m.quantity) || 0)
-      );
-    }
-    
-    if (viewMode === 'inwork' || viewMode === 'confirmation') {
-      // Для мастера и в работе показываем:
-      // 1. Отправленные мастеру
-      // 2. На складе, но еще не полученные полностью
-      // 3. Частично полученные
-      // 4. ✅ ПОЛНОСТЬЮ ПОЛУЧЕННЫЕ (чтобы мастер видел результат)
-      return filtered.filter(m => {
-        const sentToMaster = Number(m.sent_to_master_quantity) || 0;
-        const onWarehouse = Number(m.supplier_received_quantity) || 0;
-        const received = Number(m.received) || 0;
-        const quantity = Number(m.quantity) || 0;
-        
-        return sentToMaster > 0 || 
-               (onWarehouse > 0 && received < quantity) ||
-               (received > 0 && received < quantity) ||
-               (received >= quantity && quantity > 0); // Добавлено условие для полностью полученных
-      });
-    }
-    
+  if (!application.materials) return [];
+  
+  const filtered = application.materials.filter(m => 
+    m?.description?.trim() && (Number(m.quantity) || 0) > 0
+  );
+  
+  // 🔥 Для снабженца и менеджера — показываем ВСЕ материалы
+  if (userRole === 'supply_admin' || userRole === 'manager') {
     return filtered;
-  }, [application.materials, viewMode]);
+  }
+  
+  if (viewMode === 'received') {
+    return filtered.filter(m => 
+      (Number(m.received) || 0) >= (Number(m.quantity) || 0)
+    );
+  }
+  
+  if (viewMode === 'inwork' || viewMode === 'confirmation') {
+    return filtered.filter(m => {
+      const sentToMaster = Number(m.sent_to_master_quantity) || 0;
+      const onWarehouse = Number(m.supplier_received_quantity) || 0;
+      const received = Number(m.received) || 0;
+      const quantity = Number(m.quantity) || 0;
+      
+      return sentToMaster > 0 || 
+             (onWarehouse > 0 && received < quantity) ||
+             (received > 0 && received < quantity) ||
+             (received >= quantity && quantity > 0);
+    });
+  }
+  
+  return filtered;
+}, [application.materials, viewMode, userRole]); // ← Добавлен userRole
 
   return (
     <article className="app-card-enter application-card bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl border border-gray-200/60 dark:border-gray-700/60 overflow-hidden">
@@ -590,34 +589,39 @@ const DesktopApplicationRow = memo(({
 
   // ✅ ИСПРАВЛЕННАЯ ЛОГИКА visibleMaterials
   const visibleMaterials = useMemo(() => {
-    if (!application.materials) return [];
-    
-    const filtered = application.materials.filter(m => 
-      m?.description?.trim() && (Number(m.quantity) || 0) > 0
-    );
-    
-    if (viewMode === 'received') {
-      return filtered.filter(m => 
-        (Number(m.received) || 0) >= (Number(m.quantity) || 0)
-      );
-    }
-    
-    if (viewMode === 'inwork' || viewMode === 'confirmation') {
-      return filtered.filter(m => {
-        const sentToMaster = Number(m.sent_to_master_quantity) || 0;
-        const onWarehouse = Number(m.supplier_received_quantity) || 0;
-        const received = Number(m.received) || 0;
-        const quantity = Number(m.quantity) || 0;
-        
-        return sentToMaster > 0 || 
-               (onWarehouse > 0 && received < quantity) ||
-               (received > 0 && received < quantity) ||
-               (received >= quantity && quantity > 0); // Добавлено условие для полностью полученных
-      });
-    }
-    
+  if (!application.materials) return [];
+  
+  const filtered = application.materials.filter(m => 
+    m?.description?.trim() && (Number(m.quantity) || 0) > 0
+  );
+  
+  // 🔥 Для снабженца и менеджера — показываем ВСЕ материалы
+  if (userRole === 'supply_admin' || userRole === 'manager') {
     return filtered;
-  }, [application.materials, viewMode]);
+  }
+  
+  if (viewMode === 'received') {
+    return filtered.filter(m => 
+      (Number(m.received) || 0) >= (Number(m.quantity) || 0)
+    );
+  }
+  
+  if (viewMode === 'inwork' || viewMode === 'confirmation') {
+    return filtered.filter(m => {
+      const sentToMaster = Number(m.sent_to_master_quantity) || 0;
+      const onWarehouse = Number(m.supplier_received_quantity) || 0;
+      const received = Number(m.received) || 0;
+      const quantity = Number(m.quantity) || 0;
+      
+      return sentToMaster > 0 || 
+             (onWarehouse > 0 && received < quantity) ||
+             (received > 0 && received < quantity) ||
+             (received >= quantity && quantity > 0);
+    });
+  }
+  
+  return filtered;
+}, [application.materials, viewMode, userRole]); // ← Добавлен userRole
 
   return (
     <div className={`border-b border-gray-200 dark:border-gray-700 transition-all ${isOverdue ? 'bg-red-50/30 dark:bg-red-900/10' : ''} ${expanded ? 'desktop-row-expanded' : ''}`}>
