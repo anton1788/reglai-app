@@ -7642,23 +7642,27 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
        {currentView === 'inwork' && (
   <ApplicationList
     applications={filteredApplications.filter(app => {
-      // 🔥 Для снабженца — показываем ВСЕ заявки (активные и неактивные)
+      // 🔥 Для снабженца/менеджера — показываем ВСЕ заявки
       if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director') {
-        return true; // ← ВСЕ ЗАЯВКИ, БЕЗ ФИЛЬТРАЦИИ
+        return true;
       }
       
-      // Для мастера/прораба — только свои активные
+      // 🔥 Для мастера/прораба — показываем свои активные заявки + ЧАСТИЧНО ПОЛУЧЕННЫЕ
       if (userRole === 'master' || userRole === 'foreman') {
-        const isActive = isApplicationActive(app.status) || 
-                         app.status === 'pending_master_confirmation' ||
-                         app.status === 'pending_approval';
+        const isActive = isApplicationActive(app.status) ||
+          app.status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION ||
+          app.status === APPLICATION_STATUS.PENDING_APPROVAL ||
+          app.status === APPLICATION_STATUS.PARTIAL_RECEIVED; // 🔥 ДОБАВЛЕНО: чтобы заявка не пропадала
+        
         return isActive && app.user_id === user?.id;
       }
       
-      // Остальные — активные заявки
-      const isActive = isApplicationActive(app.status) || 
-                       app.status === 'pending_master_confirmation' ||
-                       app.status === 'pending_approval';
+      // Остальные роли — активные заявки
+      const isActive = isApplicationActive(app.status) ||
+        app.status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION ||
+        app.status === APPLICATION_STATUS.PENDING_APPROVAL ||
+        app.status === APPLICATION_STATUS.PARTIAL_RECEIVED; // 🔥 ДОБАВЛЕНО
+      
       return isActive;
     })}
     title={language === 'ru' ? 'В работе' : 'In Work'}
@@ -7707,10 +7711,17 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 )}
         
         {currentView === 'confirmation' && (
-          <ApplicationList
-            applications={filteredApplications.filter(app =>
-              requiresMasterConfirmation(app.status) && app.user_id === user?.id
-            )}
+  <ApplicationList
+    applications={filteredApplications.filter(app => {
+      if (app.user_id !== user?.id) return false;
+      
+      // 🔥 Показываем, если требует подтверждения ИЛИ если статус PARTIAL_RECEIVED 
+      // (так как там могут быть еще неподтвержденные позиции)
+      const needsConfirmation = requiresMasterConfirmation(app.status);
+      const isPartial = app.status === APPLICATION_STATUS.PARTIAL_RECEIVED;
+      
+      return (needsConfirmation || isPartial);
+    })}
             title={language === 'ru' ? 'Заявки на подтверждение' : 'Applications for Confirmation'}
             emptyMessage={language === 'ru' ? 'Нет заявок, требующих подтверждения' : 'No applications requiring confirmation'}
             isMobile={isMobile}
