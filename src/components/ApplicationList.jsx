@@ -297,18 +297,9 @@ const MobileApplicationCard = memo(({
   }
   
   if (viewMode === 'inwork' || viewMode === 'confirmation') {
-    return filtered.filter(m => {
-      const sentToMaster = Number(m.sent_to_master_quantity) || 0;
-      const onWarehouse = Number(m.supplier_received_quantity) || 0;
-      const received = Number(m.received) || 0;
-      const quantity = Number(m.quantity) || 0;
-      
-      return sentToMaster > 0 || 
-             (onWarehouse > 0 && received < quantity) ||
-             (received > 0 && received < quantity) ||
-             (received >= quantity && quantity > 0);
-    });
-  }
+  // 🔥 Для мастера показываем ВСЕ материалы заявки
+  return filtered;
+}
   
   return filtered;
 }, [application.materials, viewMode, userRole]); // ← Добавлен userRole
@@ -607,18 +598,9 @@ const DesktopApplicationRow = memo(({
   }
   
   if (viewMode === 'inwork' || viewMode === 'confirmation') {
-    return filtered.filter(m => {
-      const sentToMaster = Number(m.sent_to_master_quantity) || 0;
-      const onWarehouse = Number(m.supplier_received_quantity) || 0;
-      const received = Number(m.received) || 0;
-      const quantity = Number(m.quantity) || 0;
-      
-      return sentToMaster > 0 || 
-             (onWarehouse > 0 && received < quantity) ||
-             (received > 0 && received < quantity) ||
-             (received >= quantity && quantity > 0);
-    });
-  }
+  // 🔥 Для мастера показываем ВСЕ материалы заявки
+  return filtered;
+}
   
   return filtered;
 }, [application.materials, viewMode, userRole]); // ← Добавлен userRole
