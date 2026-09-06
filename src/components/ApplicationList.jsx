@@ -277,7 +277,7 @@ const MobileApplicationCard = memo(({
     ) || false;
   }, [application.materials]);
 
-  // ✅ ПРАВИЛЬНАЯ ВЕРСИЯ
+  // ✅ ИСПРАВЛЕННАЯ ЛОГИКА visibleMaterials
   const visibleMaterials = useMemo(() => {
     if (!application.materials) return [];
     
@@ -286,13 +286,18 @@ const MobileApplicationCard = memo(({
     );
     
     if (viewMode === 'received') {
+      // В истории показываем только полностью полученные
       return filtered.filter(m => 
         (Number(m.received) || 0) >= (Number(m.quantity) || 0)
       );
     }
     
     if (viewMode === 'inwork' || viewMode === 'confirmation') {
-      // ✅ ПОКАЗЫВАЕМ ВСЕ МАТЕРИАЛЫ, ГДЕ ЕСТЬ ДВИЖЕНИЕ
+      // Для мастера и в работе показываем:
+      // 1. Отправленные мастеру
+      // 2. На складе, но еще не полученные полностью
+      // 3. Частично полученные
+      // 4. ✅ ПОЛНОСТЬЮ ПОЛУЧЕННЫЕ (чтобы мастер видел результат)
       return filtered.filter(m => {
         const sentToMaster = Number(m.sent_to_master_quantity) || 0;
         const onWarehouse = Number(m.supplier_received_quantity) || 0;
@@ -301,7 +306,8 @@ const MobileApplicationCard = memo(({
         
         return sentToMaster > 0 || 
                (onWarehouse > 0 && received < quantity) ||
-               (received > 0 && received < quantity);
+               (received > 0 && received < quantity) ||
+               (received >= quantity && quantity > 0); // Добавлено условие для полностью полученных
       });
     }
     
@@ -582,9 +588,7 @@ const DesktopApplicationRow = memo(({
     ) || false;
   }, [application.materials]);
 
-  // ============================================================
-  // ✅ ИСПРАВЛЕННАЯ ВЕРСИЯ visibleMaterials
-  // ============================================================
+  // ✅ ИСПРАВЛЕННАЯ ЛОГИКА visibleMaterials
   const visibleMaterials = useMemo(() => {
     if (!application.materials) return [];
     
@@ -599,7 +603,6 @@ const DesktopApplicationRow = memo(({
     }
     
     if (viewMode === 'inwork' || viewMode === 'confirmation') {
-      // ✅ ПОКАЗЫВАЕМ ВСЕ МАТЕРИАЛЫ, ГДЕ ЕСТЬ ДВИЖЕНИЕ
       return filtered.filter(m => {
         const sentToMaster = Number(m.sent_to_master_quantity) || 0;
         const onWarehouse = Number(m.supplier_received_quantity) || 0;
@@ -608,7 +611,8 @@ const DesktopApplicationRow = memo(({
         
         return sentToMaster > 0 || 
                (onWarehouse > 0 && received < quantity) ||
-               (received > 0 && received < quantity);
+               (received > 0 && received < quantity) ||
+               (received >= quantity && quantity > 0); // Добавлено условие для полностью полученных
       });
     }
     
@@ -1086,28 +1090,44 @@ const ApplicationList = memo(({
 
   const hasActiveFilters = searchTerm || statusFilter !== 'all' || dateFilter || viewedFilter !== 'all';
 
+  // ============================================================
+  // 🔥 ИСПРАВЛЕННАЯ ФИЛЬТРАЦИЯ - ПОКАЗЫВАЕМ ВСЕ ЗАЯВКИ ДЛЯ СНАБЖЕНЦА
+  // ============================================================
   const filteredApplications = useMemo(() => {
-    if (userRole !== 'foreman' && userRole !== 'master') {
+    // 🔥 Для снабженца, менеджера, бухгалтера — показываем ВСЕ заявки без фильтрации
+    if (userRole === 'supply_admin' || 
+        userRole === 'manager' || 
+        userRole === 'director' || 
+        userRole === 'accountant') {
       return applications;
     }
     
-    return applications.filter(app => {
-      if (app.user_id === user?.id) return true;
-      if (requiresMasterConfirmation(app.status)) return true;
-      
-      const foremanName = app.foreman_name?.trim().toLowerCase() || '';
-      const userName = user?.user_metadata?.full_name?.trim().toLowerCase() || '';
-      const userEmail = user?.email?.split('@')[0]?.toLowerCase() || '';
-      
-      if (foremanName) {
-        if (userName && foremanName.includes(userName)) return true;
-        if (userEmail && foremanName.includes(userEmail)) return true;
-      }
-      
-      if (app.foreman_id && app.foreman_id === user?.id) return true;
-      
-      return false;
-    });
+    // Для мастера/прораба — показываем свои + заявки на подтверждение
+    if (userRole === 'foreman' || userRole === 'master') {
+      return applications.filter(app => {
+        // Свои заявки
+        if (app.user_id === user?.id) return true;
+        
+        // Заявки, требующие подтверждения мастера
+        if (requiresMasterConfirmation(app.status)) return true;
+        
+        // Поиск по имени прораба
+        const foremanName = app.foreman_name?.trim().toLowerCase() || '';
+        const userName = user?.user_metadata?.full_name?.trim().toLowerCase() || '';
+        const userEmail = user?.email?.split('@')[0]?.toLowerCase() || '';
+        
+        if (foremanName) {
+          if (userName && foremanName.includes(userName)) return true;
+          if (userEmail && foremanName.includes(userEmail)) return true;
+        }
+        
+        if (app.foreman_id && app.foreman_id === user?.id) return true;
+        
+        return false;
+      });
+    }
+    
+    return applications;
   }, [applications, userRole, user]);
 
   // ─────────────────────────────────────────────────────────────

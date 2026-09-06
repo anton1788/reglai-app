@@ -7639,20 +7639,26 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
   />
 )}
         
-        {currentView === 'inwork' && (
+       {currentView === 'inwork' && (
   <ApplicationList
     applications={filteredApplications.filter(app => {
-      // 🔥 Для снабженца показываем ВСЕ активные заявки
-      const isActive = isApplicationActive(app.status) || 
-                       app.status === 'pending_master_confirmation' ||
-                       app.status === 'pending_approval';
+      // 🔥 Для снабженца — показываем ВСЕ заявки (активные и неактивные)
+      if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director') {
+        return true; // ← ВСЕ ЗАЯВКИ, БЕЗ ФИЛЬТРАЦИИ
+      }
       
-      // Для мастера - только свои заявки
+      // Для мастера/прораба — только свои активные
       if (userRole === 'master' || userRole === 'foreman') {
+        const isActive = isApplicationActive(app.status) || 
+                         app.status === 'pending_master_confirmation' ||
+                         app.status === 'pending_approval';
         return isActive && app.user_id === user?.id;
       }
       
-      // Для снабженца и других - все активные заявки
+      // Остальные — активные заявки
+      const isActive = isApplicationActive(app.status) || 
+                       app.status === 'pending_master_confirmation' ||
+                       app.status === 'pending_approval';
       return isActive;
     })}
     title={language === 'ru' ? 'В работе' : 'In Work'}
