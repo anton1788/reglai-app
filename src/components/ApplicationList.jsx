@@ -296,7 +296,7 @@ const MobileApplicationCard = memo(({
   }
   
   if (viewMode === 'inwork' || viewMode === 'confirmation') {
-    // 🔥 ПОКАЗЫВАЕМ ВСЕ МАТЕРИАЛЫ, ГДЕ ЕСТЬ ДВИЖЕНИЕ
+    // ✅ ПОКАЗЫВАЕМ ВСЕ МАТЕРИАЛЫ, ГДЕ ЕСТЬ ДВИЖЕНИЕ
     return filtered.filter(m => {
       const sentToMaster = Number(m.sent_to_master_quantity) || 0;
       const onWarehouse = Number(m.supplier_received_quantity) || 0;
