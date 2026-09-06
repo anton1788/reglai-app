@@ -7414,20 +7414,25 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         {/* Весь существующий контент main остается без изменений */}
         {currentView === 'create' && (
   <div className="max-w-7xl mx-auto px-4">
-    {/* 🆕 Отображение лимитов */}
+    {/* 🆕 Отображение лимитов - только для нужных ролей */}
     {userCompanyId && currentPlan && (
-      <div className="mb-4 max-w-2xl">
-        <QuotaUsage
-          userCompanyId={userCompanyId}
-          supabase={supabase}
-          currentPlan={currentPlan}
-          onUpgradeClick={() => setCurrentView('tariffs')}
-          showDetailed={true}
-        />
-      </div>
+      // ✅ СКРЫВАЕМ ДЛЯ МАСТЕРА, ПРОРАБА И КЛИЕНТА
+      userRole !== 'master' && 
+      userRole !== 'foreman' && 
+      userRole !== 'client' && (
+        <div className="mb-4 max-w-2xl">
+          <QuotaUsage
+            userCompanyId={userCompanyId}
+            supabase={supabase}
+            currentPlan={currentPlan}
+            onUpgradeClick={() => setCurrentView('tariffs')}
+            showDetailed={true}
+          />
+        </div>
+      )
     )}
 
-     <CreateApplicationForm
+    <CreateApplicationForm
       formData={formData}
       setFormData={setFormData}
       templates={templates}
