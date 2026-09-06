@@ -7418,14 +7418,15 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             </div>
         )}
         {/* Весь существующий контент main остается без изменений */}
-        {currentView === 'create' && (
+       {currentView === 'create' && (
   <div className="max-w-7xl mx-auto px-4">
     {/* 🆕 Отображение лимитов - только для нужных ролей */}
     {userCompanyId && currentPlan && (
-      // ✅ СКРЫВАЕМ ДЛЯ МАСТЕРА, ПРОРАБА И КЛИЕНТА
+      // ✅ СКРЫВАЕМ ДЛЯ МАСТЕРА, ПРОРАБА, КЛИЕНТА И СНАБЖЕНЦА
       userRole !== 'master' && 
       userRole !== 'foreman' && 
-      userRole !== 'client' && (
+      userRole !== 'client' && 
+      userRole !== 'supply_admin' && (
         <div className="mb-4 max-w-2xl">
           <QuotaUsage
             userCompanyId={userCompanyId}
@@ -7484,7 +7485,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       fileInputRef={fileInputRef}
       capturedPhotos={capturedPhotos}
       isSubmitting={isSubmitting}
-      // 🆕 НОВЫЕ ПРОПСЫ
       quotaStatus={quotaStatus}
       currentPlan={currentPlan}
       onUpgradeClick={() => setCurrentView('tariffs')}
