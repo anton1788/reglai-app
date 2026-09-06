@@ -5577,14 +5577,14 @@ useEffect(() => {
 //         setInitialViewSet(true);
 //     }
 // }, [user, userRole, currentUserPermissions.canCreate, currentUserPermissions.canViewAnalytics, currentView, initialViewSet, isCompanyOwner]);
-// 🧭 ПРОСТАЯ МАРШРУТИЗАЦИЯ - ТОЛЬКО ПРИ ПЕРВОЙ ЗАГРУЗКЕ
+// 🧭 МАРШРУТИЗАЦИЯ ПРИ ПЕРВОЙ ЗАГРУЗКЕ
 useEffect(() => {
   if (!user) return;
   
   if (!initialViewSet) {
-    // ✅ МАСТЕР И ПРОРАБ → НА ГЛАВНУЮ (inwork)
+    // Мастер и прораб → видят свои заявки (НЕ форму создания!)
     if (userRole === 'master' || userRole === 'foreman') {
-      setCurrentView('inwork');  // ← ИЗМЕНЕНО С 'create' НА 'inwork'
+      setCurrentView('inwork');
     }
     // Руководитель
     else if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
@@ -5598,13 +5598,17 @@ useEffect(() => {
     else if (userRole === 'client') {
       setCurrentView('clientDashboard');
     }
-    // Остальные (снабженец, менеджер клиентов и т.д.)
-    else if (currentUserPermissions.canCreate) {
-      setCurrentView('create');
-    } else if (currentUserPermissions.canViewAnalytics) {
-      setCurrentView('analytics');
-    } else {
-      setCurrentView('pending');
+    // Снабженец → склад
+    else if (userRole === 'supply_admin') {
+      setCurrentView('warehouse');
+    }
+    // Менеджер клиентов
+    else if (userRole === 'client_manager') {
+      setCurrentView('clients');
+    }
+    // Все остальные → видят заявки (НЕ форму создания!)
+    else {
+      setCurrentView('inwork');
     }
     setInitialViewSet(true);
   }
@@ -7645,74 +7649,102 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 )}
         
        {currentView === 'inwork' && (
-  <ApplicationList
-    applications={filteredApplications.filter(app => {
-      // 🔥 Для снабженца/менеджера — показываем ВСЕ заявки
-      if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director') {
-        return true;
-      }
-      
-      // 🔥 Для мастера/прораба — показываем свои активные заявки + ЧАСТИЧНО ПОЛУЧЕННЫЕ
-      if (userRole === 'master' || userRole === 'foreman') {
+  <>
+    {/* 🆕 Приветствие для мастеров у которых нет заявок */}
+    {userRole === 'master' && filteredApplications.filter(app => app.user_id === user?.id).length === 0 && (
+      <div className="max-w-7xl mx-auto px-4 mb-6">
+        <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-8 text-center border border-gray-200/50 dark:border-gray-700/50">
+          <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-[#4A6572]/10 to-[#F9AA33]/10 rounded-full flex items-center justify-center">
+            <span className="text-4xl">👋</span>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            Добро пожаловать, {profileDataForHeader.fullName || 'Мастер'}!
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            У вас пока нет заявок. Создайте первую заявку, чтобы начать работу.
+          </p>
+          <button
+            onClick={() => setCurrentView('create')}
+            className="px-6 py-3 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-xl hover:shadow-lg transition-all"
+          >
+            ✨ Создать первую заявку
+          </button>
+        </div>
+      </div>
+    )}
+    
+    <ApplicationList
+      applications={filteredApplications.filter(app => {
+        // 🔥 Для мастера/прораба — показываем свои активные заявки + ЧАСТИЧНО ПОЛУЧЕННЫЕ
+        if (userRole === 'master' || userRole === 'foreman') {
+          const isActive = isApplicationActive(app.status) ||
+            app.status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION ||
+            app.status === APPLICATION_STATUS.PENDING_APPROVAL ||
+            app.status === APPLICATION_STATUS.PARTIAL_RECEIVED;
+          
+          return isActive && app.user_id === user?.id;
+        }
+        
+        // Для снабженца/менеджера — показываем ВСЕ заявки
+        if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director') {
+          return true;
+        }
+        
+        // Остальные роли — активные заявки
         const isActive = isApplicationActive(app.status) ||
           app.status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION ||
           app.status === APPLICATION_STATUS.PENDING_APPROVAL ||
           app.status === APPLICATION_STATUS.PARTIAL_RECEIVED;
         
-        return isActive && app.user_id === user?.id;
+        return isActive;
+      })}
+      title={language === 'ru' ? 'Мои заявки' : 'My Applications'}
+      emptyMessage={language === 'ru' 
+        ? '📋 У вас пока нет активных заявок' 
+        : 'You have no active applications'
       }
-      
-      // Остальные роли — активные заявки
-      const isActive = isApplicationActive(app.status) ||
-        app.status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION ||
-        app.status === APPLICATION_STATUS.PENDING_APPROVAL ||
-        app.status === APPLICATION_STATUS.PARTIAL_RECEIVED;
-      
-      return isActive;
-    })}
-    title={language === 'ru' ? 'В работе' : 'In Work'}
-    emptyMessage={language === 'ru' ? 'Нет заявок в работе' : 'No applications in work'}
-    isMobile={isMobile}
-    user={user}
-    userRole={userRole}
-    isAdminMode={isAdminMode}
-    permissions={currentUserPermissions}
-    t={t}
-    language={language}
-    uniqueDates={uniqueDates}
-    page={page}
-    totalPages={totalPages}
-    onAdminLogout={handleAdminLogout}
-    onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
-    onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
-    onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
-    onOpenReceiveModal={openReceiveModal}
-    onCancelApplication={cancelApplication}
-    onAddComment={addComment}
-    onToggleComments={(appId) => setShowComments(prev => ({
-      ...prev,
-      [appId]: !(prev[appId] || false)
-    }))}
-    onPageChange={setPage}
-    searchTerm={searchTerm}
-    statusFilter={statusFilter}
-    dateFilter={dateFilter}
-    viewedFilter={viewedFilter}
-    onSearchChange={setSearchTerm}
-    onStatusFilterChange={setStatusFilter}
-    onDateFilterChange={setDateFilter}
-    onViewedFilterChange={setViewedFilter}
-    onClearFilters={clearFilters}
-    expandedMaterials={expandedMaterials}
-    onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
-      ...prev,
-      [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
-    }))}
-    comments={comments}
-    showComments={showComments}
-    isExportingPDF={isExportingPDF}
-    isExportingXLSX={isExportingXLSX}
-  />
+      isMobile={isMobile}
+      user={user}
+      userRole={userRole}
+      isAdminMode={isAdminMode}
+      permissions={currentUserPermissions}
+      t={t}
+      language={language}
+      uniqueDates={uniqueDates}
+      page={page}
+      totalPages={totalPages}
+      onAdminLogout={handleAdminLogout}
+      onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
+      onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
+      onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
+      onOpenReceiveModal={openReceiveModal}
+      onCancelApplication={cancelApplication}
+      onAddComment={addComment}
+      onToggleComments={(appId) => setShowComments(prev => ({
+        ...prev,
+        [appId]: !(prev[appId] || false)
+      }))}
+      onPageChange={setPage}
+      searchTerm={searchTerm}
+      statusFilter={statusFilter}
+      dateFilter={dateFilter}
+      viewedFilter={viewedFilter}
+      onSearchChange={setSearchTerm}
+      onStatusFilterChange={setStatusFilter}
+      onDateFilterChange={setDateFilter}
+      onViewedFilterChange={setViewedFilter}
+      onClearFilters={clearFilters}
+      expandedMaterials={expandedMaterials}
+      onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
+        ...prev,
+        [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
+      }))}
+      comments={comments}
+      showComments={showComments}
+      isExportingPDF={isExportingPDF}
+      isExportingXLSX={isExportingXLSX}
+    />
+  </>
 )}
         
         {currentView === 'confirmation' && (
