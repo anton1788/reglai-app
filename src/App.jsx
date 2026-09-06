@@ -5581,31 +5581,33 @@ useEffect(() => {
 useEffect(() => {
   if (!user) return;
   
-  // Только при первой загрузке устанавливаем начальный вид
-  // В useEffect с initialViewSet:
-if (!initialViewSet) {
-  // Руководитель
-  if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-    setCurrentView('dashboard'); // ← ИЗМЕНИТЬ С 'managerDashboard' НА 'dashboard'
+  if (!initialViewSet) {
+    // ✅ МАСТЕР И ПРОРАБ → НА ГЛАВНУЮ (inwork)
+    if (userRole === 'master' || userRole === 'foreman') {
+      setCurrentView('inwork');  // ← ИЗМЕНЕНО С 'create' НА 'inwork'
+    }
+    // Руководитель
+    else if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+      setCurrentView('dashboard');
+    }
+    // Бухгалтер
+    else if (userRole === 'accountant') {
+      setCurrentView('accountantDashboard');
+    }
+    // Клиент
+    else if (userRole === 'client') {
+      setCurrentView('clientDashboard');
+    }
+    // Остальные (снабженец, менеджер клиентов и т.д.)
+    else if (currentUserPermissions.canCreate) {
+      setCurrentView('create');
+    } else if (currentUserPermissions.canViewAnalytics) {
+      setCurrentView('analytics');
+    } else {
+      setCurrentView('pending');
+    }
+    setInitialViewSet(true);
   }
-  // Бухгалтер
-  else if (userRole === 'accountant') {
-    setCurrentView('accountantDashboard');
-  }
-  // Клиент
-  else if (userRole === 'client') {
-    setCurrentView('clientDashboard');
-  }
-  // Остальные
-  else if (currentUserPermissions.canCreate) {
-    setCurrentView('create');
-  } else if (currentUserPermissions.canViewAnalytics) {
-    setCurrentView('analytics');
-  } else {
-    setCurrentView('pending');
-  }
-  setInitialViewSet(true);
-}
 }, [user, userRole, isCompanyOwner, currentUserPermissions.canCreate, currentUserPermissions.canViewAnalytics, initialViewSet]);
 
   // ─────────────────────────────────────────────────────────
