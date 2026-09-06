@@ -4157,6 +4157,7 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     
     // ✅ 1. Создаём копию материалов с обновлёнными количествами
     const updatedMaterials = application.materials.map((originalMaterial, index) => {
+      // Находим соответствующий материал из модалки
       const modalMaterial = materialsFromModal.find(m => {
         const originalName = (originalMaterial.description || originalMaterial.item_name || '').trim().toLowerCase();
         const modalName = (m.description || m.item_name || '').trim().toLowerCase();
@@ -4167,6 +4168,7 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
         const qtyReceived = Number(modalMaterial.supplier_received_quantity) || 0;
         const requested = Number(originalMaterial.quantity) || 0;
         
+        // Определяем статус материала
         let materialStatus = originalMaterial.status || 'pending';
         if (qtyReceived >= requested && requested > 0) {
           materialStatus = 'on_warehouse';
@@ -4189,6 +4191,10 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     const totalReceived = updatedMaterials.filter(m => (Number(m.supplier_received_quantity) || 0) > 0).length;
     const totalMaterials = updatedMaterials.length;
     
+    // ============================================================
+    // 🔥 КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: ПРАВИЛЬНОЕ ОПРЕДЕЛЕНИЕ СТАТУСА
+    // ============================================================
+    
     // ✅ 3. Проверяем, все ли материалы полностью приняты
     const allFullyReceived = updatedMaterials.every(m => {
       const received = Number(m.supplier_received_quantity) || 0;
@@ -4199,39 +4205,28 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     // ✅ 4. Определяем новый статус заявки
     let newStatus;
     if (allFullyReceived && totalReceived > 0) {
-      newStatus = APPLICATION_STATUS.READY_FOR_ISSUE;
+      newStatus = 'ready_for_issue'; // ← ВСЁ принято → готово к выдаче
     } else if (totalReceived > 0) {
-      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
+      newStatus = 'partial_received'; // ← ЧАСТИЧНО принято → остаётся активной
     } else {
-      newStatus = APPLICATION_STATUS.ADMIN_PROCESSING;
+      newStatus = 'admin_processing'; // ← НИЧЕГО не принято
     }
     
-    // ============================================================
-    // 🔥 ДИАГНОСТИКА - ПРОВЕРЯЕМ, ЧТО ПОПАДАЕТ В БД
-    // ============================================================
-    console.log('📊 [DIAGNOSTIC] Детали обновления:', {
-      applicationId: application.id,
+    console.log('📊 [RECEIVE] Результат:', {
       totalReceived,
       totalMaterials,
       allFullyReceived,
-      newStatus,
-      oldStatus: application.status,
-      materials: updatedMaterials.map(m => ({
-        description: m.description,
-        quantity: m.quantity,
-        supplier_received_quantity: m.supplier_received_quantity,
-        status: m.status
-      }))
+      newStatus  // ← ДОЛЖНО БЫТЬ 'partial_received' если принята часть!
     });
     
     // ============================================================
-    // ✅ 5. ОБНОВЛЯЕМ БД И ПРОВЕРЯЕМ РЕЗУЛЬТАТ
+    // ✅ 5. Обновляем заявку в БД
     // ============================================================
     
-    const { data: updatedData, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from('applications')
       .update({
-        status: newStatus,
+        status: newStatus,  // ← ТЕПЕРЬ ПРАВИЛЬНЫЙ СТАТУС
         materials: updatedMaterials,
         updated_at: new Date().toISOString(),
         status_history: [
@@ -4247,32 +4242,12 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
           }
         ]
       })
-      .eq('id', application.id)
-      .select(); // ← ДОБАВЛЯЕМ .select() ЧТОБЫ УВИДЕТЬ РЕЗУЛЬТАТ
+      .eq('id', application.id);
     
     if (updateError) {
       console.error('❌ [UPDATE] Ошибка обновления:', updateError);
       showNotification('Ошибка обновления заявки: ' + updateError.message, 'error');
       return { success: false };
-    }
-    
-    // ============================================================
-    // 🔥 ПРОВЕРЯЕМ, ЧТО РЕАЛЬНО СОХРАНИЛОСЬ В БД
-    // ============================================================
-    console.log('✅ [DIAGNOSTIC] Результат обновления БД:', {
-      updatedData,
-      expectedStatus: newStatus,
-      actualStatus: updatedData?.[0]?.status,
-      materialsCount: updatedData?.[0]?.materials?.length
-    });
-    
-    // Если статус в БД не совпадает с ожидаемым - ошибка!
-    if (updatedData?.[0]?.status !== newStatus) {
-      console.error('❌ [DIAGNOSTIC] СТАТУС НЕ СОХРАНИЛСЯ!', {
-        expected: newStatus,
-        actual: updatedData?.[0]?.status
-      });
-      showNotification(`⚠️ Ошибка: статус не сохранился (ожидался ${newStatus}, получен ${updatedData?.[0]?.status})`, 'error');
     }
     
     // ✅ 6. Обновляем склад (если включено)
@@ -4317,7 +4292,7 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     setShowReceiveModal(false);
     
     // ✅ 8. Если всё принято - показываем подсказку
-    if (newStatus === APPLICATION_STATUS.READY_FOR_ISSUE) {
+    if (newStatus === 'ready_for_issue') {
       setTimeout(() => {
         showNotification('📤 Все материалы на складе. Перейдите в "Готовы к выдаче"', 'info');
       }, 1000);
