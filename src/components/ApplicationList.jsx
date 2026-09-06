@@ -1,4 +1,4 @@
-// src/components/ApplicationList.jsx (ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ)
+// src/components/ApplicationList.jsx
 
 import React, { useMemo, useCallback, useEffect, memo, useState, useRef } from 'react';
 import {
@@ -13,9 +13,6 @@ import MobileMaterialCard from './MobileMaterialCard';
 import { useInView } from 'react-intersection-observer';
 import { saveCommentDraft, getCommentDraft, clearCommentDraft } from '../utils/autoSaveUtils';
 
-// ─────────────────────────────────────────────────────────────
-// 📦 ИМПОРТ СТАТУСОВ ИЗ ЦЕНТРАЛИЗОВАННОГО ФАЙЛА
-// ─────────────────────────────────────────────────────────────
 import {
   APPLICATION_STATUS,
   ITEM_STATUS,
@@ -274,47 +271,42 @@ const MobileApplicationCard = memo(({
   
   const isCompleted = application.status === APPLICATION_STATUS.RECEIVED;
 
-  // Проверяем, есть ли материалы для приёмки
   const hasUnreceivedMaterials = useMemo(() => {
     return application.materials?.some(m =>
       (Number(m.supplier_received_quantity) || 0) < (Number(m.quantity) || 0)
     ) || false;
   }, [application.materials]);
 
+  // ✅ ПРАВИЛЬНАЯ ВЕРСИЯ
   const visibleMaterials = useMemo(() => {
-  if (!application.materials) return [];
-  
-  // Фильтруем пустые материалы
-  const filtered = application.materials.filter(m => 
-    m?.description?.trim() && (Number(m.quantity) || 0) > 0
-  );
-  
-  if (viewMode === 'received') {
-    return filtered.filter(m => 
-      (Number(m.received) || 0) >= (Number(m.quantity) || 0)
+    if (!application.materials) return [];
+    
+    const filtered = application.materials.filter(m => 
+      m?.description?.trim() && (Number(m.quantity) || 0) > 0
     );
-  }
-  
-  if (viewMode === 'inwork' || viewMode === 'confirmation') {
-    // ✅ ПОКАЗЫВАЕМ ВСЕ МАТЕРИАЛЫ, ГДЕ ЕСТЬ ДВИЖЕНИЕ
-    return filtered.filter(m => {
-      const sentToMaster = Number(m.sent_to_master_quantity) || 0;
-      const onWarehouse = Number(m.supplier_received_quantity) || 0;
-      const received = Number(m.received) || 0;
-      const quantity = Number(m.quantity) || 0;
-      
-      // Материал активен для мастера если:
-      // 1. Отправлен мастеру (ждёт подтверждения)
-      // 2. ИЛИ на складе (ждёт выдачи)
-      // 3. ИЛИ частично подтверждён
-      return sentToMaster > 0 || 
-             (onWarehouse > 0 && received < quantity) ||
-             (received > 0 && received < quantity);
-    });
-  }
-  
-  return filtered;
-}, [application.materials, viewMode]);
+    
+    if (viewMode === 'received') {
+      return filtered.filter(m => 
+        (Number(m.received) || 0) >= (Number(m.quantity) || 0)
+      );
+    }
+    
+    if (viewMode === 'inwork' || viewMode === 'confirmation') {
+      // ✅ ПОКАЗЫВАЕМ ВСЕ МАТЕРИАЛЫ, ГДЕ ЕСТЬ ДВИЖЕНИЕ
+      return filtered.filter(m => {
+        const sentToMaster = Number(m.sent_to_master_quantity) || 0;
+        const onWarehouse = Number(m.supplier_received_quantity) || 0;
+        const received = Number(m.received) || 0;
+        const quantity = Number(m.quantity) || 0;
+        
+        return sentToMaster > 0 || 
+               (onWarehouse > 0 && received < quantity) ||
+               (received > 0 && received < quantity);
+      });
+    }
+    
+    return filtered;
+  }, [application.materials, viewMode]);
 
   return (
     <article className="app-card-enter application-card bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl border border-gray-200/60 dark:border-gray-700/60 overflow-hidden">
@@ -431,10 +423,7 @@ const MobileApplicationCard = memo(({
             </button>
           )}
           
-          {/* ✅ НОВЫЕ КНОПКИ ДЕЙСТВИЙ — ИСПРАВЛЕННАЯ ВЕРСИЯ */}
           <div className="action-grid mt-3">
-            {/* ✅ Кнопка "Принять на склад" - для снабженца */}
-            {/* Теперь показывает для PENDING, ADMIN_PROCESSING и PARTIAL_RECEIVED */}
             {userRole === 'supply_admin' && 
              (application.status === APPLICATION_STATUS.PENDING || 
               application.status === APPLICATION_STATUS.ADMIN_PROCESSING ||
@@ -449,7 +438,6 @@ const MobileApplicationCard = memo(({
               </button>
             )}
             
-            {/* ✅ Кнопка "Выдать со склада" - для снабженца */}
             {userRole === 'supply_admin' && 
  (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
   application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED ||
@@ -464,7 +452,6 @@ const MobileApplicationCard = memo(({
               </button>
             )}
             
-            {/* ✅ Кнопка "Отправить мастеру" (для обратной совместимости) */}
             {userRole === 'supply_admin' && 
              application.status === APPLICATION_STATUS.ADMIN_PROCESSING && 
              application.materials?.some(m => 
@@ -480,7 +467,6 @@ const MobileApplicationCard = memo(({
               </button>
             )}
             
-            {/* ✅ Кнопка "Подтвердить получение" - для мастера */}
             {(userRole === 'foreman' || userRole === 'master') && 
              requiresMasterConfirmation(application.status) && (
               <button
@@ -492,7 +478,6 @@ const MobileApplicationCard = memo(({
               </button>
             )}
             
-            {/* ✅ Кнопка "Отменить" - для мастера (свои заявки) */}
             {userRole === 'foreman' && 
              isApplicationActive(application.status) && 
              application.status === APPLICATION_STATUS.PENDING && 
@@ -506,7 +491,6 @@ const MobileApplicationCard = memo(({
               </button>
             )}
             
-            {/* ✅ Кнопка комментариев */}
             <button
               onClick={() => onToggleComments(application.id)}
               className="touch-target px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
@@ -514,7 +498,6 @@ const MobileApplicationCard = memo(({
               💬 {comments[application.id]?.length || 0}
             </button>
             
-            {/* ✅ Кнопки экспорта */}
             <button
               onClick={() => onDownloadHTML(application)}
               className="touch-target px-3 py-2 bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
@@ -593,30 +576,48 @@ const DesktopApplicationRow = memo(({
   
   const isOverdue = application.status === APPLICATION_STATUS.PENDING && getDaysSince(application.created_at) > 2;
 
-  // Проверяем, есть ли материалы для приёмки
   const hasUnreceivedMaterials = useMemo(() => {
     return application.materials?.some(m =>
       (Number(m.supplier_received_quantity) || 0) < (Number(m.quantity) || 0)
     ) || false;
   }, [application.materials]);
 
+  // ============================================================
+  // ✅ ИСПРАВЛЕННАЯ ВЕРСИЯ visibleMaterials
+  // ============================================================
   const visibleMaterials = useMemo(() => {
     if (!application.materials) return [];
-    let filtered = application.materials.filter(m => m?.description?.trim() && (Number(m.quantity) || 0) > 0);
+    
+    const filtered = application.materials.filter(m => 
+      m?.description?.trim() && (Number(m.quantity) || 0) > 0
+    );
     
     if (viewMode === 'received') {
-      filtered = filtered.filter(m => (Number(m.received) || 0) >= (Number(m.quantity) || 0));
-    } else if (viewMode === 'inwork' || viewMode === 'confirmation') {
-      filtered = filtered.filter(m => (Number(m.received) || 0) < (Number(m.quantity) || 0));
+      return filtered.filter(m => 
+        (Number(m.received) || 0) >= (Number(m.quantity) || 0)
+      );
     }
+    
+    if (viewMode === 'inwork' || viewMode === 'confirmation') {
+      // ✅ ПОКАЗЫВАЕМ ВСЕ МАТЕРИАЛЫ, ГДЕ ЕСТЬ ДВИЖЕНИЕ
+      return filtered.filter(m => {
+        const sentToMaster = Number(m.sent_to_master_quantity) || 0;
+        const onWarehouse = Number(m.supplier_received_quantity) || 0;
+        const received = Number(m.received) || 0;
+        const quantity = Number(m.quantity) || 0;
+        
+        return sentToMaster > 0 || 
+               (onWarehouse > 0 && received < quantity) ||
+               (received > 0 && received < quantity);
+      });
+    }
+    
     return filtered;
   }, [application.materials, viewMode]);
 
   return (
     <div className={`border-b border-gray-200 dark:border-gray-700 transition-all ${isOverdue ? 'bg-red-50/30 dark:bg-red-900/10' : ''} ${expanded ? 'desktop-row-expanded' : ''}`}>
-      {/* Основная строка */}
       <div className="grid grid-cols-12 gap-3 px-4 py-3 items-center hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors">
-        {/* Объект + Прораб */}
         <div className="col-span-3 min-w-0">
           <div className="flex items-center gap-2">
             <button
@@ -637,7 +638,6 @@ const DesktopApplicationRow = memo(({
           </div>
         </div>
 
-        {/* Статус */}
         <div className="col-span-2">
           <StatusBadge 
             status={application.status} 
@@ -646,7 +646,6 @@ const DesktopApplicationRow = memo(({
           />
         </div>
 
-        {/* Прогресс */}
         <div className="col-span-2">
           <div className="flex items-center gap-2">
             <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -661,7 +660,6 @@ const DesktopApplicationRow = memo(({
           </div>
         </div>
 
-        {/* Дата */}
         <div className="col-span-2 text-xs text-gray-500 dark:text-gray-400">
           {formatDate(application.created_at)}
           {isOverdue && (
@@ -672,10 +670,7 @@ const DesktopApplicationRow = memo(({
           )}
         </div>
 
-        {/* ✅ НОВЫЕ КНОПКИ ДЕЙСТВИЙ — ИСПРАВЛЕННАЯ ВЕРСИЯ */}
         <div className="col-span-3 flex items-center justify-end gap-1.5 flex-wrap">
-          {/* ✅ Кнопка "Принять на склад" - для снабженца */}
-          {/* Теперь показывает для PENDING, ADMIN_PROCESSING и PARTIAL_RECEIVED */}
           {userRole === 'supply_admin' && 
            (application.status === APPLICATION_STATUS.PENDING || 
             application.status === APPLICATION_STATUS.ADMIN_PROCESSING ||
@@ -691,7 +686,6 @@ const DesktopApplicationRow = memo(({
             </button>
           )}
           
-          {/* ✅ Кнопка "Выдать со склада" - для снабженца */}
           {userRole === 'supply_admin' && 
  (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
   application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED ||
@@ -707,7 +701,6 @@ const DesktopApplicationRow = memo(({
             </button>
           )}
           
-          {/* ✅ Кнопка "Отправить мастеру" (для обратной совместимости) */}
           {userRole === 'supply_admin' && 
            application.status === APPLICATION_STATUS.ADMIN_PROCESSING && 
            application.materials?.some(m => 
@@ -733,7 +726,6 @@ const DesktopApplicationRow = memo(({
             </button>
           )}
           
-          {/* ✅ Кнопка "Подтвердить получение" - для мастера */}
           {(userRole === 'foreman' || userRole === 'master') && 
            requiresMasterConfirmation(application.status) && (
             <button
@@ -745,7 +737,6 @@ const DesktopApplicationRow = memo(({
             </button>
           )}
           
-          {/* ✅ Кнопка "Отменить" - для мастера (свои заявки) */}
           {userRole === 'foreman' && 
            isApplicationActive(application.status) && 
            application.status === APPLICATION_STATUS.PENDING && 
@@ -759,7 +750,6 @@ const DesktopApplicationRow = memo(({
             </button>
           )}
           
-          {/* ✅ Кнопка комментариев */}
           <button
             onClick={() => onToggleComments(application.id)}
             className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
@@ -768,7 +758,6 @@ const DesktopApplicationRow = memo(({
             💬 {comments[application.id]?.length || 0}
           </button>
           
-          {/* ✅ Кнопки экспорта */}
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => onDownloadHTML(application)}
@@ -788,10 +777,8 @@ const DesktopApplicationRow = memo(({
         </div>
       </div>
 
-      {/* Раскрывающаяся часть */}
       {expanded && (
         <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-gray-700/50">
-          {/* Детали */}
           <div className="grid grid-cols-3 gap-4 text-sm mb-3">
             <div>
               <span className="text-gray-400">{t('foremanPhone')}:</span>
@@ -807,7 +794,6 @@ const DesktopApplicationRow = memo(({
             </div>
           </div>
 
-          {/* Материалы — таблица */}
           {visibleMaterials.length > 0 && (
             <div className="mt-3">
               <div className="flex items-center justify-between mb-2">
@@ -870,7 +856,6 @@ const DesktopApplicationRow = memo(({
             </div>
           )}
 
-          {/* Комментарии */}
           <CommentsSection
             application={application}
             comments={comments}
@@ -1005,17 +990,14 @@ const ApplicationList = memo(({
   showComments = {},
   isLoading = false,
 }) => {
-  // ✅ Infinite Scroll
   const { ref: loadMoreRef, inView } = useInView({
     threshold: 0.1,
     triggerOnce: false,
   });
 
-  // ✅ Состояния для автосохранения комментариев
   const [commentDrafts, setCommentDrafts] = useState({});
   const commentTimerRef = useRef({});
 
-  // ✅ Инжект стилей
   useEffect(() => {
     const styleEl = document.createElement('style');
     styleEl.textContent = styles;
@@ -1023,14 +1005,12 @@ const ApplicationList = memo(({
     return () => document.head.removeChild(styleEl);
   }, []);
 
-  // ✅ Загрузка следующей страницы при прокрутке
   useEffect(() => {
     if (inView && !isLoading && page < totalPages) {
       onPageChange(page + 1);
     }
   }, [inView, isLoading, page, totalPages, onPageChange]);
 
-  // ✅ Автосохранение комментариев
   const loadCommentDraft = useCallback((applicationId) => {
     const savedDraft = getCommentDraft(applicationId);
     if (savedDraft) {
@@ -1063,7 +1043,6 @@ const ApplicationList = memo(({
     }
   }, []);
 
-  // ✅ Очистка таймеров
   useEffect(() => {
     const timers = commentTimerRef.current;
     return () => {
@@ -1073,7 +1052,6 @@ const ApplicationList = memo(({
     };
   }, []);
 
-  // ✅ Получение роли
   const getRoleLabel = useCallback((role) => {
     const ROLE_OPTIONS = [
       { value: 'foreman', label: t('foremanName') },
@@ -1084,7 +1062,6 @@ const ApplicationList = memo(({
     return ROLE_OPTIONS.find(r => r.value === role)?.label || role;
   }, [t]);
 
-  // ✅ Подсчет статусов для вкладок
   const statusCounts = useMemo(() => {
     const counts = { 
       pending: 0, 
@@ -1103,14 +1080,12 @@ const ApplicationList = memo(({
     return counts;
   }, [applications]);
 
-  // ✅ Фильтр для мобильных вкладок
   const handleTabChange = useCallback((tabKey) => {
     onStatusFilterChange(tabKey);
   }, [onStatusFilterChange]);
 
   const hasActiveFilters = searchTerm || statusFilter !== 'all' || dateFilter || viewedFilter !== 'all';
 
-  // ✅ ФИЛЬТРАЦИЯ ЗАЯВОК ДЛЯ МАСТЕРА
   const filteredApplications = useMemo(() => {
     if (userRole !== 'foreman' && userRole !== 'master') {
       return applications;
@@ -1142,7 +1117,6 @@ const ApplicationList = memo(({
     <div className="max-w-7xl mx-auto p-2 sm:p-4 app-card-enter">
       <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-3 sm:p-6 border border-gray-200/50 dark:border-gray-700/50">
         
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/20">
@@ -1166,7 +1140,6 @@ const ApplicationList = memo(({
           )}
         </div>
 
-        {/* Мобильные вкладки */}
         <div className="mb-4">
           <MobileStatusTabs
             active={statusFilter}
@@ -1176,7 +1149,6 @@ const ApplicationList = memo(({
           />
         </div>
 
-        {/* Filters */}
         <div className="mb-4">
           <div className="flex flex-wrap gap-2 sm:gap-3 items-end">
             <div className="flex-1 min-w-[150px] sm:min-w-[200px]">
@@ -1219,7 +1191,6 @@ const ApplicationList = memo(({
           </div>
         </div>
 
-        {/* Loading / Empty States */}
         {isLoading && (
           <div className="space-y-3">
             {[...Array(3)].map((_, i) => <ApplicationCardSkeleton key={i} />)}
@@ -1253,7 +1224,6 @@ const ApplicationList = memo(({
           </div>
         )}
 
-        {/* Список карточек */}
         {!isLoading && filteredApplications.length > 0 && (
           <div className="space-y-3" role="list">
             {filteredApplications.map((application) => (
@@ -1284,7 +1254,6 @@ const ApplicationList = memo(({
           </div>
         )}
 
-        {/* Infinite Scroll Trigger */}
         {!isLoading && filteredApplications.length > 0 && page < totalPages && (
           <div ref={loadMoreRef} className="h-10 flex items-center justify-center">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -1307,7 +1276,6 @@ const ApplicationList = memo(({
     <div className="max-w-7xl mx-auto p-4 app-card-enter">
       <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
         
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 sm:p-6 border-b border-gray-200/50 dark:border-gray-700/50">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/20">
@@ -1331,7 +1299,6 @@ const ApplicationList = memo(({
           )}
         </div>
 
-        {/* Filters */}
         <div className="p-4 border-b border-gray-200/50 dark:border-gray-700/50">
           <div className="flex flex-wrap gap-3 items-end">
             <div className="flex-1 min-w-[200px]">
@@ -1424,7 +1391,6 @@ const ApplicationList = memo(({
           </div>
         </div>
 
-        {/* Loading / Empty States */}
         {isLoading && (
           <div className="p-4 space-y-1">
             {[...Array(5)].map((_, i) => (
@@ -1460,10 +1426,8 @@ const ApplicationList = memo(({
           </div>
         )}
 
-        {/* Десктопная таблица */}
         {!isLoading && filteredApplications.length > 0 && (
           <div className="overflow-x-auto">
-            {/* Заголовок таблицы */}
             <div className="desktop-table-header grid grid-cols-12 gap-3 px-4 py-2.5 bg-gray-50 dark:bg-gray-700/30 border-b border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               <div className="col-span-3 flex items-center gap-2">
                 <span>{t('objectAndForeman') || 'Объект / Прораб'}</span>
@@ -1474,7 +1438,6 @@ const ApplicationList = memo(({
               <div className="col-span-3 text-right">{t('actions') || 'Действия'}</div>
             </div>
 
-            {/* Строки заявок */}
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {filteredApplications.map((application) => (
                 <DesktopApplicationRow
@@ -1505,7 +1468,6 @@ const ApplicationList = memo(({
           </div>
         )}
 
-        {/* Пагинация и статус загрузки */}
         <div className="p-4 border-t border-gray-200/50 dark:border-gray-700/50 flex flex-col sm:flex-row justify-between items-center gap-3">
           <span className="text-sm text-gray-500 dark:text-gray-400">
             {t('showing') || 'Показано'} {filteredApplications.length} {t('applications') || 'заявок'}
@@ -1541,7 +1503,6 @@ const ApplicationList = memo(({
           )}
         </div>
 
-        {/* Infinite Scroll Trigger для десктопа */}
         {!isLoading && filteredApplications.length > 0 && page < totalPages && (
           <div ref={loadMoreRef} className="h-6 flex items-center justify-center">
             <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
@@ -1557,9 +1518,6 @@ const ApplicationList = memo(({
     </div>
   );
 
-  // ─────────────────────────────────────────────────────────────
-  // 📋 ОСНОВНОЙ РЕНДЕРИНГ - ВЫБОР ВЕРСИИ
-  // ─────────────────────────────────────────────────────────────
   if (!user) {
     return null;
   }

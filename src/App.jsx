@@ -7640,55 +7640,65 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 )}
         
         {currentView === 'inwork' && (
-          <ApplicationList
-            applications={filteredApplications.filter(app => {
-              return isApplicationActive(app.status) &&
-                (userRole !== 'master' || app.user_id === user?.id);
-            })}
-            title={language === 'ru' ? 'В работе' : 'In Work'}
-            emptyMessage={language === 'ru' ? 'Нет заявок в работе' : 'No applications in work'}
-            isMobile={isMobile}
-            user={user}
-            userRole={userRole}
-            isAdminMode={isAdminMode}
-            permissions={currentUserPermissions}
-            t={t}
-            language={language}
-            uniqueDates={uniqueDates}
-            page={page}
-            totalPages={totalPages}
-            onAdminLogout={handleAdminLogout}
-            onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
-            onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
-            onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
-            onOpenReceiveModal={openReceiveModal}
-            onCancelApplication={cancelApplication}
-            onAddComment={addComment}
-            onToggleComments={(appId) => setShowComments(prev => ({
-              ...prev,
-              [appId]: !(prev[appId] || false)
-            }))}
-            onPageChange={setPage}
-            searchTerm={searchTerm}
-            statusFilter={statusFilter}
-            dateFilter={dateFilter}
-            viewedFilter={viewedFilter}
-            onSearchChange={setSearchTerm}
-            onStatusFilterChange={setStatusFilter}
-            onDateFilterChange={setDateFilter}
-            onViewedFilterChange={setViewedFilter}
-            onClearFilters={clearFilters}
-            expandedMaterials={expandedMaterials}
-            onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
-              ...prev,
-              [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
-            }))}
-            comments={comments}
-            showComments={showComments}
-            isExportingPDF={isExportingPDF}
-            isExportingXLSX={isExportingXLSX}
-          />
-        )}
+  <ApplicationList
+    applications={filteredApplications.filter(app => {
+      // 🔥 Для снабженца показываем ВСЕ активные заявки
+      const isActive = isApplicationActive(app.status) || 
+                       app.status === 'pending_master_confirmation' ||
+                       app.status === 'pending_approval';
+      
+      // Для мастера - только свои заявки
+      if (userRole === 'master' || userRole === 'foreman') {
+        return isActive && app.user_id === user?.id;
+      }
+      
+      // Для снабженца и других - все активные заявки
+      return isActive;
+    })}
+    title={language === 'ru' ? 'В работе' : 'In Work'}
+    emptyMessage={language === 'ru' ? 'Нет заявок в работе' : 'No applications in work'}
+    isMobile={isMobile}
+    user={user}
+    userRole={userRole}
+    isAdminMode={isAdminMode}
+    permissions={currentUserPermissions}
+    t={t}
+    language={language}
+    uniqueDates={uniqueDates}
+    page={page}
+    totalPages={totalPages}
+    onAdminLogout={handleAdminLogout}
+    onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
+    onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
+    onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
+    onOpenReceiveModal={openReceiveModal}
+    onCancelApplication={cancelApplication}
+    onAddComment={addComment}
+    onToggleComments={(appId) => setShowComments(prev => ({
+      ...prev,
+      [appId]: !(prev[appId] || false)
+    }))}
+    onPageChange={setPage}
+    searchTerm={searchTerm}
+    statusFilter={statusFilter}
+    dateFilter={dateFilter}
+    viewedFilter={viewedFilter}
+    onSearchChange={setSearchTerm}
+    onStatusFilterChange={setStatusFilter}
+    onDateFilterChange={setDateFilter}
+    onViewedFilterChange={setViewedFilter}
+    onClearFilters={clearFilters}
+    expandedMaterials={expandedMaterials}
+    onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
+      ...prev,
+      [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
+    }))}
+    comments={comments}
+    showComments={showComments}
+    isExportingPDF={isExportingPDF}
+    isExportingXLSX={isExportingXLSX}
+  />
+)}
         
         {currentView === 'confirmation' && (
           <ApplicationList
