@@ -719,15 +719,30 @@ const ReceiveModal = memo(function({
         result = await onSendToMaster(items, selectedApplication);
       }
       else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
-        // ✅ Передаем localMaterials с обновленными received
-        console.log('🔔 Вызов onMasterConfirm');
-        console.log('📊 localMaterials (с received):', JSON.stringify(localMaterials, null, 2));
-        
-        result = await onMasterConfirm(localMaterials, selectedApplication);
-      }
-      else if (typeof saveReceiveStatus === 'function') {
-        result = await saveReceiveStatus(localMaterials);
-      }
+  // ✅ ФИКС: Получаем полный список материалов заявки
+  const fullMaterials = selectedApplication.materials.map((originalMaterial) => {
+    // Ищем обновленный материал в localMaterials
+    const updatedMaterial = localMaterials.find(m => 
+      (m.description || m.item_name) === (originalMaterial.description || originalMaterial.item_name)
+    );
+
+    if (updatedMaterial) {
+      // Если нашли, возвращаем обновленный (с новым received, reject_reason и т.д.)
+      return {
+        ...originalMaterial,
+        ...updatedMaterial,
+        // Убеждаемся, что сюда не попали временные поля модалки, если они есть
+        _index: undefined
+      };
+    }
+    
+    // Если не нашли (материал не был отправлен мастеру) — оставляем его БЕЗ ИЗМЕНЕНИЙ
+    return originalMaterial;
+  }).filter(m => m._index !== undefined || m.description); // Убираем мусор, если он есть
+
+  console.log('🔔 Вызов onMasterConfirm с ПОЛНЫМ списком материалов (включая неотправленные):', fullMaterials);
+  result = await onMasterConfirm(fullMaterials, selectedApplication);
+}
       
       if (result && result.success) {
         if (showNotification) {
