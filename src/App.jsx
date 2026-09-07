@@ -5579,39 +5579,38 @@ useEffect(() => {
 // }, [user, userRole, currentUserPermissions.canCreate, currentUserPermissions.canViewAnalytics, currentView, initialViewSet, isCompanyOwner]);
 // 🧭 МАРШРУТИЗАЦИЯ ПРИ ПЕРВОЙ ЗАГРУЗКЕ
 useEffect(() => {
-  if (!user) return;
-  
-  if (!initialViewSet) {
-    // Мастер и прораб → видят свои заявки (НЕ форму создания!)
-    if (userRole === 'master' || userRole === 'foreman') {
-      setCurrentView('inwork');
+    if (!user) return;
+    if (!initialViewSet) {
+        // Мастер и прораб → видят свои заявки (НЕ форму создания!)
+        if (userRole === 'master' || userRole === 'foreman') {
+            setCurrentView('inwork');
+        }
+        // Руководитель
+        else if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+            setCurrentView('dashboard');
+        }
+        // Бухгалтер
+        else if (userRole === 'accountant') {
+            setCurrentView('accountantDashboard');
+        }
+        // Клиент
+        else if (userRole === 'client') {
+            setCurrentView('clientDashboard');
+        }
+        // Снабженец → склад
+        else if (userRole === 'supply_admin') {
+            setCurrentView('warehouse');
+        }
+        // Менеджер клиентов
+        else if (userRole === 'client_manager') {
+            setCurrentView('clients');
+        }
+        // Все остальные → видят заявки
+        else {
+            setCurrentView('inwork');
+        }
+        setInitialViewSet(true);
     }
-    // Руководитель
-    else if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-      setCurrentView('dashboard');
-    }
-    // Бухгалтер
-    else if (userRole === 'accountant') {
-      setCurrentView('accountantDashboard');
-    }
-    // Клиент
-    else if (userRole === 'client') {
-      setCurrentView('clientDashboard');
-    }
-    // Снабженец → склад
-    else if (userRole === 'supply_admin') {
-      setCurrentView('warehouse');
-    }
-    // Менеджер клиентов
-    else if (userRole === 'client_manager') {
-      setCurrentView('clients');
-    }
-    // Все остальные → видят заявки (НЕ форму создания!)
-    else {
-      setCurrentView('inwork');
-    }
-    setInitialViewSet(true);
-  }
 }, [user, userRole, isCompanyOwner, currentUserPermissions.canCreate, currentUserPermissions.canViewAnalytics, initialViewSet]);
 
   // ─────────────────────────────────────────────────────────
@@ -7270,23 +7269,23 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         onNavigate={(path) => {
     console.log('🔍 Навигация:', path);
     if (path === '/' || path === '/home') {
-        // Перенаправляем на персональную главную страницу в зависимости от роли
-        if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-            setCurrentView('dashboard'); // Универсальный дашборд руководителя
-        } else if (userRole === 'accountant') {
-            setCurrentView('accountantDashboard');
-        } else if (userRole === 'client') {
-            setCurrentView('clientDashboard');
-        } else if (userRole === 'supply_admin') {
-            setCurrentView('warehouse'); // Для снабженца главная - это склад/приёмка
-        } else if (userRole === 'super_admin') {
-            setCurrentView('superAdmin');
-        } else {
-            // Для мастеров и прорабов главная - это их активные заявки
-            setCurrentView('inwork');
-        }
-        return;
+    // Перенаправляем на персональную главную страницу в зависимости от роли
+    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+        setCurrentView('dashboard');
+    } else if (userRole === 'accountant') {
+        setCurrentView('accountantDashboard');
+    } else if (userRole === 'client') {
+        setCurrentView('clientDashboard');
+    } else if (userRole === 'supply_admin') {
+        setCurrentView('warehouse');
+    } else if (userRole === 'super_admin') {
+        setCurrentView('superAdmin');
+    } else {
+        // Для мастеров и прорабов главная - это их активные заявки
+        setCurrentView('inwork');
     }
+    return;
+}
           else if (path === '/estimates') setCurrentView('estimates');
           else if (path === '/reports') setCurrentView('reports');
           else if (path === '/integration') setCurrentView('integration');
