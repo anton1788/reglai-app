@@ -7269,7 +7269,24 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         onLogout={handleLogout}
         onNavigate={(path) => {
           console.log('🔍 Навигация:', path);
-          if (path === '/') { setCurrentView('dashboard'); return; }
+          if (path === '/' || path === '/home') { 
+    // Перенаправляем на персональную главную страницу в зависимости от роли
+    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+        setCurrentView('dashboard'); // Универсальный дашборд руководителя
+    } else if (userRole === 'accountant') {
+        setCurrentView('accountantDashboard');
+    } else if (userRole === 'client') {
+        setCurrentView('clientDashboard');
+    } else if (userRole === 'supply_admin') {
+        setCurrentView('warehouse'); // Для снабженца главная - это склад/приёмка
+    } else if (userRole === 'super_admin') {
+        setCurrentView('superAdmin');
+    } else {
+        // Для мастеров и прорабов главная - это их активные заявки
+        setCurrentView('inwork'); 
+    }
+    return; 
+}
           else if (path === '/estimates') setCurrentView('estimates');
           else if (path === '/reports') setCurrentView('reports');
           else if (path === '/integration') setCurrentView('integration');
