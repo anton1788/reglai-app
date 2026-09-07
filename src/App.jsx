@@ -215,7 +215,7 @@ const COMPANY_LOGO_TEXT = 'Реглай';
 const ITEMS_PER_PAGE = 20;
 
 // ─────────────────────────────────────────────────────────────
-// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1) - ФИНАЛЬНАЯ МОБИЛЬНАЯ ВЕРСИЯ
+// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1) - ULTIMATE MOBILE VERSION
 // ─────────────────────────────────────────────────────────────
 const GLOBAL_STYLES = `
 @keyframes slideIn {
@@ -259,71 +259,76 @@ const GLOBAL_STYLES = `
 }
 
 /* ==========================================================
-   📱 МОБИЛЬНАЯ ШАПКА (Высота 56px, 5 иконок по 24px)
+   📱 ULTIMATE MOBILE HEADER (Лучший вариант)
    ========================================================== */
 @media (max-width: 768px) {
-  /* Шапка */
+  /* Принудительно скрываем ЛЮБЫЕ div, которые являются обертками внутри nav */
+  nav > div:not(:has(button)):not(:has(a)) {
+    display: none !important;
+  }
+
+  /* Основная шапка: 56px, тонкая тень */
   nav {
     height: 56px !important;
     min-height: 56px !important;
     max-height: 56px !important;
-    padding: 0 12px !important;
+    padding: 0 8px !important;
     position: sticky !important;
     top: 0 !important;
     z-index: 50 !important;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    overflow: visible;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    overflow: visible !important;
     background: white !important;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.06) !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
   }
 
-  /* Кнопки в шапке: 40x40px - удобно нажимать пальцем */
+  /* ВСЕ кнопки и ссылки: 36x36, без фона, выровнены по центру */
   nav button, 
-  nav a,
-  nav > div {
-    width: 40px !important;
-    height: 40px !important;
-    min-width: 40px !important;
-    min-height: 40px !important;
+  nav a {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
     padding: 0 !important;
-    margin: 0 !important;
+    margin: 0 2px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    border-radius: 12px !important;
+    border-radius: 10px !important;
+    background: transparent !important;
     font-size: 0 !important; /* Прячем весь текст внутри кнопок */
   }
 
-  /* Иконки: 24x24px - стандарт для мобильных */
+  /* Иконки внутри кнопок: 22px */
   nav button svg, 
-  nav a svg,
-  nav > div svg {
-    width: 24px !important;
-    height: 24px !important;
+  nav a svg {
+    width: 22px !important;
+    height: 22px !important;
     margin: 0 !important;
+    color: #4A6572 !important;
   }
 
-  /* Скрываем ВСЕ элементы, кроме первых 5 (Бургер, Логотип, Поддержка, Уведомления, Профиль) */
-  nav > *:nth-child(n+6) {
-    display: none !important;
+  /* Если есть огромный логотип слева, делаем его компактным */
+  nav img {
+    width: 28px !important;
+    height: 28px !important;
   }
-
-  /* Все первые 5 элементов остаются видимыми */
-  nav > *:nth-child(-n+5) {
-    display: flex !important;
-    flex-shrink: 0;
-  }
-
-  /* Скрываем текстовые кнопки */
+  
+  /* Прячем ВСЕ текстовые подписи */
   nav button span, nav a span {
     display: none !important;
+  }
+  
+  /* Скрываем мусорные элементы, которые не являются кнопками/ссылками */
+  nav > *, nav > div > * {
+    max-height: 40px !important;
   }
 }
 
 /* ==========================================================
-   📱 КОМПАКТНОЕ ВЫПАДАЮЩЕЕ МЕНЮ (Остается аккуратным)
+   📱 КОМПАКТНОЕ ВЫПАДАЮЩЕЕ МЕНЮ (Узкое, аккуратное)
    ========================================================== */
 @media (max-width: 768px) {
   .dropdown-menu, 
@@ -331,18 +336,19 @@ const GLOBAL_STYLES = `
   [class*="dropdown"], 
   [class*="menu"] {
     width: 280px !important;
-    max-width: 90vw !important;
+    max-width: 88vw !important;
     position: absolute !important;
-    top: 60px !important;
+    top: 62px !important;
     left: 8px !important;
     right: auto !important;
-    border-radius: 14px !important;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.14) !important;
     background: white !important;
-    padding: 6px !important;
+    padding: 8px !important;
     z-index: 9999 !important;
     max-height: 70vh !important;
     overflow-y: auto !important;
+    border: 1px solid rgba(0,0,0,0.05) !important;
   }
   
   /* Сжимаем элементы внутри меню */
@@ -350,15 +356,16 @@ const GLOBAL_STYLES = `
   .mobile-menu button,
   [class*="dropdown"] button,
   [class*="menu"] button {
-    height: 38px !important;
-    padding: 0 10px !important;
-    font-size: 13px !important;
-    border-radius: 8px !important;
+    height: 44px !important;
+    padding: 0 14px !important;
+    font-size: 14px !important;
+    border-radius: 10px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: flex-start !important;
-    gap: 8px !important;
+    gap: 10px !important;
     margin-bottom: 2px !important;
+    font-weight: 500 !important;
   }
 }
 
