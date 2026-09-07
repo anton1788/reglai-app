@@ -215,7 +215,7 @@ const COMPANY_LOGO_TEXT = 'Реглай';
 const ITEMS_PER_PAGE = 20;
 
 // ─────────────────────────────────────────────────────────────
-// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1) - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1) - ФИНАЛЬНАЯ МОБИЛЬНАЯ ВЕРСИЯ
 // ─────────────────────────────────────────────────────────────
 const GLOBAL_STYLES = `
 @keyframes slideIn {
@@ -259,35 +259,104 @@ const GLOBAL_STYLES = `
 }
 
 /* ==========================================================
-   📱 МОБИЛЬНАЯ ШАПКА И НАВИГАЦИЯ
+   📱 МАКСИМАЛЬНО КОМПАКТНАЯ МОБИЛЬНАЯ ШАПКА (ВЫСОТА 44px)
    ========================================================== */
 @media (max-width: 768px) {
-  /* Скрываем ВСЕ внутренние кнопки навигации, оставляя только логотип и бургер */
-  nav > *:not(:first-child):not(:last-child) {
-    display: none !important;
+  /* Сжимаем саму навигацию */
+  nav {
+    height: 44px !important;
+    min-height: 44px !important;
+    max-height: 44px !important;
+    padding: 0 8px !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2px;
+    overflow: visible;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
   }
-  nav > div, nav > button, nav > a {
-    display: none !important;
-  }
-  /* Оставляем видимыми: логотип (обычно 1-й), кнопку меню-бургер (обычно последняя или первая) */
-  nav > *:first-child, nav > *:last-child {
+
+  /* Уменьшаем иконки и кнопки внутри навигации */
+  nav button, 
+  nav a,
+  nav > div {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    padding: 0 !important;
+    margin: 0 !important;
     display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 8px !important;
+    font-size: 0 !important; /* Прячем весь текст внутри кнопок */
   }
-  /* Скрываем текстовые кнопки типа "Поддержка" внутри логотипа */
+
+  /* Уменьшаем размер самих SVG иконок */
+  nav button svg, 
+  nav a svg,
+  nav > div svg {
+    width: 18px !important;
+    height: 18px !important;
+    margin: 0 !important;
+  }
+
+  /* Оставляем ВИДИМЫМИ только 2 элемента: Бургер и Логотип (или Профиль) */
+  nav > *:nth-child(1), /* Бургер */
+  nav > *:last-child { /* Логотип или профиль */
+    display: flex !important;
+    flex-shrink: 0;
+  }
+  
+  /* Скрываем ВСЕ остальные элементы (Поддержка, Плюс, Колокольчик и т.д.) */
+  nav > *:not(:nth-child(1)):not(:last-child) {
+    display: none !important;
+  }
+
+  /* Скрываем текстовые кнопки, если они вдруг остались */
   nav button span, nav a span {
     display: none !important;
   }
-  nav {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    height: 60px;
-    padding: 0 16px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: white;
+}
+
+/* ==========================================================
+   📱 КОМПАКТНОЕ ВЫПАДАЮЩЕЕ МЕНЮ (Без обрезов)
+   ========================================================== */
+@media (max-width: 768px) {
+  .dropdown-menu, 
+  .mobile-menu, 
+  [class*="dropdown"], 
+  [class*="menu"] {
+    width: 280px !important;
+    max-width: 90vw !important;
+    position: absolute !important;
+    top: 50px !important;
+    left: 8px !important;
+    right: auto !important;
+    border-radius: 14px !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important;
+    background: white !important;
+    padding: 6px !important;
+    z-index: 9999 !important;
+    max-height: 70vh !important;
+    overflow-y: auto !important;
+  }
+  
+  /* Сжимаем элементы внутри меню */
+  .dropdown-menu button,
+  .mobile-menu button,
+  [class*="dropdown"] button,
+  [class*="menu"] button {
+    height: 38px !important;
+    padding: 0 10px !important;
+    font-size: 13px !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    margin-bottom: 2px !important;
   }
 }
 
@@ -308,7 +377,6 @@ const GLOBAL_STYLES = `
    📱 СКРЫВАЕМ РЕКЛАМНЫЙ БЛОК "Гибкая оплата 990₽" НА МОБИЛЬНОМ
    ========================================================== */
 @media (max-width: 768px) {
-  /* Скрываем любые рекламные блоки и футер с тарифами */
   .text-center.mb-4,
   .text-center.mt-8,
   .fixed.bottom-0,
