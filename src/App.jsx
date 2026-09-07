@@ -7268,25 +7268,25 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         userRole={userRole}
         onLogout={handleLogout}
         onNavigate={(path) => {
-          console.log('🔍 Навигация:', path);
-          if (path === '/' || path === '/home') { 
-    // Перенаправляем на персональную главную страницу в зависимости от роли
-    if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-        setCurrentView('dashboard'); // Универсальный дашборд руководителя
-    } else if (userRole === 'accountant') {
-        setCurrentView('accountantDashboard');
-    } else if (userRole === 'client') {
-        setCurrentView('clientDashboard');
-    } else if (userRole === 'supply_admin') {
-        setCurrentView('warehouse'); // Для снабженца главная - это склад/приёмка
-    } else if (userRole === 'super_admin') {
-        setCurrentView('superAdmin');
-    } else {
-        // Для мастеров и прорабов главная - это их активные заявки
-        setCurrentView('inwork'); 
+    console.log('🔍 Навигация:', path);
+    if (path === '/' || path === '/home') {
+        // Перенаправляем на персональную главную страницу в зависимости от роли
+        if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+            setCurrentView('dashboard'); // Универсальный дашборд руководителя
+        } else if (userRole === 'accountant') {
+            setCurrentView('accountantDashboard');
+        } else if (userRole === 'client') {
+            setCurrentView('clientDashboard');
+        } else if (userRole === 'supply_admin') {
+            setCurrentView('warehouse'); // Для снабженца главная - это склад/приёмка
+        } else if (userRole === 'super_admin') {
+            setCurrentView('superAdmin');
+        } else {
+            // Для мастеров и прорабов главная - это их активные заявки
+            setCurrentView('inwork');
+        }
+        return;
     }
-    return; 
-}
           else if (path === '/estimates') setCurrentView('estimates');
           else if (path === '/reports') setCurrentView('reports');
           else if (path === '/integration') setCurrentView('integration');
@@ -7564,6 +7564,26 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         }}
         t={t}
     />
+)}
+
+{/* ️ FALLBACK: Если dashboard открыт, но у пользователя нет прав на UniversalDashboard */}
+{currentView === 'dashboard' && !(userRole === 'manager' || userRole === 'director' || isCompanyOwner) && (
+    <div className="max-w-7xl mx-auto px-4">
+        <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                Добро пожаловать!
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+                Выберите раздел в меню навигации
+            </p>
+            <button
+                onClick={() => setCurrentView('inwork')}
+                className="px-6 py-3 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-xl hover:shadow-lg transition-all"
+            >
+                Перейти к заявкам
+            </button>
+        </div>
+    </div>
 )}
         
         {/* Дашборд для бухгалтера */}
