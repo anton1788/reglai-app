@@ -8004,6 +8004,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         {currentView === 'warehouse' && (
           <WarehouseView
             supabase={supabase}
+            isMobile={isMobile}
             userCompanyId={userCompanyId}
             user={user}
             userRole={userRole}
