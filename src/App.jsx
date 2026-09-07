@@ -259,69 +259,71 @@ const GLOBAL_STYLES = `
 }
 
 /* ==========================================================
-   📱 МАКСИМАЛЬНО КОМПАКТНАЯ МОБИЛЬНАЯ ШАПКА (ВЫСОТА 44px)
+   📱 МОБИЛЬНАЯ ШАПКА (Высота 56px, 5 иконок по 24px)
    ========================================================== */
 @media (max-width: 768px) {
-  /* Сжимаем саму навигацию */
+  /* Шапка */
   nav {
-    height: 44px !important;
-    min-height: 44px !important;
-    max-height: 44px !important;
-    padding: 0 8px !important;
+    height: 56px !important;
+    min-height: 56px !important;
+    max-height: 56px !important;
+    padding: 0 12px !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 50 !important;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 2px;
     overflow: visible;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+    background: white !important;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06) !important;
   }
 
-  /* Уменьшаем иконки и кнопки внутри навигации */
+  /* Кнопки в шапке: 40x40px - удобно нажимать пальцем */
   nav button, 
   nav a,
   nav > div {
-    width: 34px !important;
-    height: 34px !important;
-    min-width: 34px !important;
-    min-height: 34px !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
     padding: 0 !important;
     margin: 0 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    border-radius: 8px !important;
+    border-radius: 12px !important;
     font-size: 0 !important; /* Прячем весь текст внутри кнопок */
   }
 
-  /* Уменьшаем размер самих SVG иконок */
+  /* Иконки: 24x24px - стандарт для мобильных */
   nav button svg, 
   nav a svg,
   nav > div svg {
-    width: 18px !important;
-    height: 18px !important;
+    width: 24px !important;
+    height: 24px !important;
     margin: 0 !important;
   }
 
-  /* Оставляем ВИДИМЫМИ только 2 элемента: Бургер и Логотип (или Профиль) */
-  nav > *:nth-child(1), /* Бургер */
-  nav > *:last-child { /* Логотип или профиль */
-    display: flex !important;
-    flex-shrink: 0;
-  }
-  
-  /* Скрываем ВСЕ остальные элементы (Поддержка, Плюс, Колокольчик и т.д.) */
-  nav > *:not(:nth-child(1)):not(:last-child) {
+  /* Скрываем ВСЕ элементы, кроме первых 5 (Бургер, Логотип, Поддержка, Уведомления, Профиль) */
+  nav > *:nth-child(n+6) {
     display: none !important;
   }
 
-  /* Скрываем текстовые кнопки, если они вдруг остались */
+  /* Все первые 5 элементов остаются видимыми */
+  nav > *:nth-child(-n+5) {
+    display: flex !important;
+    flex-shrink: 0;
+  }
+
+  /* Скрываем текстовые кнопки */
   nav button span, nav a span {
     display: none !important;
   }
 }
 
 /* ==========================================================
-   📱 КОМПАКТНОЕ ВЫПАДАЮЩЕЕ МЕНЮ (Без обрезов)
+   📱 КОМПАКТНОЕ ВЫПАДАЮЩЕЕ МЕНЮ (Остается аккуратным)
    ========================================================== */
 @media (max-width: 768px) {
   .dropdown-menu, 
@@ -331,7 +333,7 @@ const GLOBAL_STYLES = `
     width: 280px !important;
     max-width: 90vw !important;
     position: absolute !important;
-    top: 50px !important;
+    top: 60px !important;
     left: 8px !important;
     right: auto !important;
     border-radius: 14px !important;
