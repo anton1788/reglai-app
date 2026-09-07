@@ -218,6 +218,26 @@ const ITEMS_PER_PAGE = 20;
 // 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1)
 // ─────────────────────────────────────────────────────────────
 const GLOBAL_STYLES = `
+@media (max-width: 768px) {
+  /* Скрываем ВСЕ внутренние кнопки навигации */
+  nav > *:not(:first-child):not(:last-child) {
+    display: none !important;
+  }
+  
+  /* Оставляем только логотип (слева) и кнопку меню-бургер (справа) */
+  nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    height: 60px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: white;
+  }
+}
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(20px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -274,6 +294,17 @@ const GLOBAL_STYLES = `
   .filter-bar::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* ФИКС ДЛЯ МОБИЛЬНЫХ МОДАЛОК */
+@media (max-width: 768px) {
+    .fade-enter {
+        animation: slideUp 0.3s ease-out forwards;
+    }
+    @keyframes slideUp {
+        from { transform: translateY(100%); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
 }
 
 /* Планшеты */
@@ -8722,6 +8753,39 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     t={t}
   />
 )}
+      
+      {/* ⬇️ ДОБАВИТЬ ЭТОТ БЛОК ПОСЛЕ </main> ⬇️ */}
+      {isMobile && user && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="grid grid-cols-5 h-16">
+            {/* Вкладка 1: Заявки */}
+            <button onClick={() => setCurrentView('inwork')} className={`flex flex-col items-center justify-center ${currentView === 'inwork' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
+                <Package className="w-6 h-6" />
+                <span className="text-[10px] font-medium">Заявки</span>
+            </button>
+            {/* Вкладка 2: Склад */}
+            <button onClick={() => setCurrentView('warehouse')} className={`flex flex-col items-center justify-center ${currentView === 'warehouse' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
+                <Warehouse className="w-6 h-6" />
+                <span className="text-[10px] font-medium">Склад</span>
+            </button>
+            {/* Вкладка 3: Создать (Центральная, выделенная) */}
+            <button onClick={() => setCurrentView('create')} className={`flex flex-col items-center justify-center ${currentView === 'create' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
+                <Plus className="w-8 h-8 p-1 bg-[#4A6572] text-white rounded-full shadow-lg -mt-4" />
+                <span className="text-[10px] font-medium mt-1">Создать</span>
+            </button>
+            {/* Вкладка 4: Аналитика */}
+            <button onClick={() => setCurrentView('analytics')} className={`flex flex-col items-center justify-center ${currentView === 'analytics' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
+                <BarChart3 className="w-6 h-6" />
+                <span className="text-[10px] font-medium">Аналитика</span>
+            </button>
+            {/* Вкладка 5: Профиль */}
+            <button onClick={() => setCurrentView('profile')} className={`flex flex-col items-center justify-center ${currentView === 'profile' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
+                <User className="w-6 h-6" />
+                <span className="text-[10px] font-medium">Профиль</span>
+            </button>
+          </div>
+        </div>
+      )}
   </ErrorBoundary>
 );
 };

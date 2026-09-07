@@ -239,6 +239,8 @@ StatusBadge.displayName = 'StatusBadge';
 // ─────────────────────────────────────────────────────────────
 // 🧩 МОБИЛЬНАЯ КАРТОЧКА ЗАЯВКИ
 // ─────────────────────────────────────────────────────────────
+// ⬇️ ЗАМЕНИТЕ ВЕСЬ КОМПОНЕНТ MobileApplicationCard (от начала до строки "MobileApplicationCard.displayName = 'MobileApplicationCard';") НА ЭТОТ КОД:
+
 const MobileApplicationCard = memo(({ 
   application, 
   t, 
@@ -270,6 +272,7 @@ const MobileApplicationCard = memo(({
   ).length || 0;
   
   const isCompleted = application.status === APPLICATION_STATUS.RECEIVED;
+  const completionPercent = totalMaterials > 0 ? Math.round((completedMaterials / totalMaterials) * 100) : 0;
 
   const hasUnreceivedMaterials = useMemo(() => {
     return application.materials?.some(m =>
@@ -277,131 +280,113 @@ const MobileApplicationCard = memo(({
     ) || false;
   }, [application.materials]);
 
-  // ✅ ИСПРАВЛЕННАЯ ЛОГИКА visibleMaterials
- const visibleMaterials = useMemo(() => {
-  if (!application.materials) return [];
-  
-  const filtered = application.materials.filter(m => 
-    m?.description?.trim() && (Number(m.quantity) || 0) > 0
-  );
-  
-  // 🔥 Для снабженца и менеджера — показываем ВСЕ материалы
-  if (userRole === 'supply_admin' || userRole === 'manager') {
+  const visibleMaterials = useMemo(() => {
+    if (!application.materials) return [];
+    const filtered = application.materials.filter(m => m?.description?.trim() && (Number(m.quantity) || 0) > 0);
+    if (userRole === 'supply_admin' || userRole === 'manager') return filtered;
+    if (viewMode === 'received') return filtered.filter(m => (Number(m.received) || 0) >= (Number(m.quantity) || 0));
     return filtered;
-  }
-  
-  if (viewMode === 'received') {
-    return filtered.filter(m => 
-      (Number(m.received) || 0) >= (Number(m.quantity) || 0)
-    );
-  }
-  
-  if (viewMode === 'inwork' || viewMode === 'confirmation') {
-  // 🔥 Для мастера показываем ВСЕ материалы заявки
-  return filtered;
-}
-  
-  return filtered;
-}, [application.materials, viewMode, userRole]); // ← Добавлен userRole
+  }, [application.materials, viewMode, userRole]);
 
   return (
-    <article className="app-card-enter application-card bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl border border-gray-200/60 dark:border-gray-700/60 overflow-hidden">
+    <article className="app-card-enter bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden mb-3">
+      {/* Верхняя часть - нажатие раскрывает */}
       <div 
-        className="p-3 sm:p-4 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 transition-colors"
+        className="p-4 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 transition-colors"
         onClick={() => setExpanded(!expanded)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded); } }}
         aria-expanded={expanded}
       >
-        <div className="flex items-start justify-between gap-2">
+        {/* Заголовок и статус */}
+        <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white truncate">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white truncate">
               {application.object_name}
             </h3>
-            <div className="flex flex-wrap items-center gap-1.5 mt-1">
-              <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]">
-                {application.foreman_name}
+            <div className="flex flex-wrap items-center gap-2 mt-1.5">
+              <span className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-[140px]">
+                👷 {application.foreman_name}
               </span>
               <StatusBadge 
                 status={application.status} 
                 createdAt={application.created_at}
                 t={t}
-                className="text-[10px] px-1.5 py-0.5"
+                className="text-[10px] px-2 py-0.5"
               />
-              {isCompleted && (
-                <span className="text-[10px] px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
-                  ✅ {t('completed')}
-                </span>
-              )}
             </div>
           </div>
           
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
-              {totalMaterials}
-            </span>
-            <ChevronDown 
-              className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} 
-            />
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
+                {totalMaterials} поз.
+              </span>
+              <ChevronDown 
+                className={`w-5 h-5 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} 
+              />
+            </div>
           </div>
         </div>
         
+        {/* Прогресс бар */}
         {totalMaterials > 0 && (
-          <div className="mt-2 flex items-center gap-2">
-            <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
               <div 
-                className={`h-full rounded-full transition-all ${isCompleted ? 'bg-green-500' : 'bg-blue-500'}`}
-                style={{ width: `${totalMaterials > 0 ? Math.round((completedMaterials / totalMaterials) * 100) : 0}%` }}
+                className={`h-full rounded-full transition-all duration-500 ${isCompleted ? 'bg-green-500' : 'bg-blue-500'}`}
+                style={{ width: `${completionPercent}%` }}
               />
             </div>
-            <span className="text-[10px] text-gray-400 flex-shrink-0">
-              {completedMaterials}/{totalMaterials}
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 flex-shrink-0">
+              {completionPercent}%
             </span>
           </div>
         )}
       </div>
       
+      {/* Раскрывающаяся часть */}
       {expanded && (
-        <div className="p-3 pt-0 border-t border-gray-100 dark:border-gray-700">
-          <div className="grid grid-cols-2 gap-1 text-xs py-2">
+        <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700">
+          <div className="grid grid-cols-2 gap-2 text-xs py-3">
             <div>
-              <span className="text-gray-400">{t('foremanPhone')}:</span>
-              <span className="ml-1 text-gray-700 dark:text-gray-300">{application.foreman_phone || '—'}</span>
+              <span className="text-gray-400">📞 {t('foremanPhone')}:</span>
+              <span className="ml-1 text-gray-700 dark:text-gray-300 font-medium">{application.foreman_phone || '—'}</span>
             </div>
             <div>
-              <span className="text-gray-400">{t('created')}:</span>
-              <span className="ml-1 text-gray-700 dark:text-gray-300">
+              <span className="text-gray-400">📅 {t('created')}:</span>
+              <span className="ml-1 text-gray-700 dark:text-gray-300 font-medium">
                 {formatDate(application.created_at)}
               </span>
             </div>
           </div>
           
           {visibleMaterials.length > 0 && (
-            <div className="mt-2">
+            <div className="mt-1">
               <button
                 onClick={() => setMaterialsExpanded(!materialsExpanded)}
-                className="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 mb-2"
+                className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2"
               >
-                <Package className="w-3.5 h-3.5" />
+                <Package className="w-4 h-4 text-blue-500" />
                 {t('materials')} ({visibleMaterials.length})
-                <ChevronDown className={`w-3 h-3 transition-transform ${materialsExpanded ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 transition-transform ${materialsExpanded ? 'rotate-180' : ''}`} />
               </button>
               
               {materialsExpanded && (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto scrollable-content">
+                <div className="space-y-2 max-h-52 overflow-y-auto scrollable-content bg-gray-50 dark:bg-gray-700/30 rounded-xl p-2">
                   {visibleMaterials.slice(0, 10).map((m, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-xs py-1.5 px-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
-                      <span className="text-gray-700 dark:text-gray-300 truncate flex-1 mr-2">
+                    <div key={idx} className="flex items-center justify-between text-sm py-2 px-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                      <span className="text-gray-700 dark:text-gray-300 truncate flex-1 mr-2 font-medium">
                         {m.description || '—'}
                       </span>
-                      <span className="text-gray-500 flex-shrink-0">
+                      <span className="text-gray-500 flex-shrink-0 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
                         {m.quantity} {m.unit}
                       </span>
                     </div>
                   ))}
                   {visibleMaterials.length > 10 && (
-                    <p className="text-center text-xs text-gray-400 py-1">
+                    <p className="text-center text-xs text-gray-400 py-2">
                       + ещё {visibleMaterials.length - 10} {t('materials')}
                     </p>
                   )}
@@ -413,13 +398,14 @@ const MobileApplicationCard = memo(({
           {canEditPrices(userRole) && (
             <button
               onClick={() => onOpenPriceEditor?.(application)}
-              className="touch-target px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+              className="mt-3 w-full py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
             >
               💰 {t('prices') || 'Цены'}
             </button>
           )}
           
-          <div className="action-grid mt-3">
+          {/* Блок действий (выровнен по 2 в ряд) */}
+          <div className="grid grid-cols-2 gap-2 mt-4">
             {userRole === 'supply_admin' && 
              (application.status === APPLICATION_STATUS.PENDING || 
               application.status === APPLICATION_STATUS.ADMIN_PROCESSING ||
@@ -427,23 +413,23 @@ const MobileApplicationCard = memo(({
              hasUnreceivedMaterials && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'admin_receive')}
-                className="touch-target px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                className="col-span-2 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md shadow-blue-500/20"
               >
-                <Warehouse className="w-4 h-4" />
+                <Warehouse className="w-5 h-5" />
                 {t('receiveToWarehouse') || 'Принять на склад'}
               </button>
             )}
             
             {userRole === 'supply_admin' && 
- (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
-  application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED ||
-  application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) && 
- hasMaterialsReadyToIssue(application) && (
+             (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
+              application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED ||
+              application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) && 
+             hasMaterialsReadyToIssue(application) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'admin_ready_to_issue')}
-                className="touch-target px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                className="col-span-2 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md shadow-amber-500/20"
               >
-                <Package className="w-4 h-4" />
+                <Package className="w-5 h-5" />
                 {t('issueFromWarehouse') || 'Выдать со склада'}
               </button>
             )}
@@ -456,9 +442,9 @@ const MobileApplicationCard = memo(({
              ) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'admin_send_to_master')}
-                className="touch-target px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                className="col-span-2 py-3 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md shadow-purple-500/20"
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-5 h-5" />
                 {t('sendToMaster') || 'Отправить мастеру'}
               </button>
             )}
@@ -467,9 +453,9 @@ const MobileApplicationCard = memo(({
              requiresMasterConfirmation(application.status) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'master_confirm')}
-                className="touch-target px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                className="col-span-2 py-3 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md shadow-green-500/20"
               >
-                <CheckCircle className="w-4 h-4" />
+                <CheckCircle className="w-5 h-5" />
                 {t('confirmReceipt') || 'Подтвердить получение'}
               </button>
             )}
@@ -480,7 +466,7 @@ const MobileApplicationCard = memo(({
              application.user_id === user?.id && (
               <button
                 onClick={() => onCancelApplication(application.id)}
-                className="touch-target px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                className="py-3 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
               >
                 <Ban className="w-4 h-4" />
                 {t('cancelApplication')}
@@ -489,26 +475,28 @@ const MobileApplicationCard = memo(({
             
             <button
               onClick={() => onToggleComments(application.id)}
-              className="touch-target px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+              className="py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
             >
               💬 {comments[application.id]?.length || 0}
             </button>
             
-            <button
-              onClick={() => onDownloadHTML(application)}
-              className="touch-target px-3 py-2 bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <FileText className="w-4 h-4" />
-              HTML
-            </button>
-            
-            <button
-              onClick={() => onDownloadPDF(application)}
-              className="touch-target px-3 py-2 bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              PDF
-            </button>
+            {/* Кнопки экспорта - компактные иконки внизу */}
+            <div className="col-span-2 flex gap-2">
+              <button
+                onClick={() => onDownloadHTML(application)}
+                className="flex-1 py-2.5 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-medium rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                HTML
+              </button>
+              <button
+                onClick={() => onDownloadPDF(application)}
+                className="flex-1 py-2.5 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-medium rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                PDF
+              </button>
+            </div>
           </div>
           
           <CommentsSection
@@ -912,29 +900,29 @@ const MobileStatusTabs = memo(({ active, onChange, counts, t }) => {
   return (
     <div className="mobile-status-tabs -mx-1 px-1">
       {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          onClick={() => onChange(tab.key)}
-          className={`mobile-status-tab touch-target ${
-            active === tab.key
-              ? 'bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-lg shadow-indigo-500/25'
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-          }`}
-        >
-          <span className="flex items-center gap-1.5">
-            {tab.icon}
-            {tab.label}
-            {tab.count !== undefined && tab.count > 0 && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                active === tab.key 
-                  ? 'bg-white/20 text-white' 
-                  : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
-              }`}>
-                {tab.count}
-              </span>
-            )}
-          </span>
-        </button>
+       <button
+  key={tab.key}
+  onClick={() => onChange(tab.key)}
+  className={`mobile-status-tab touch-target ${
+    active === tab.key
+      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
+      : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
+  }`}
+>
+  <span className="flex items-center gap-1.5 font-semibold text-sm">
+    {tab.icon}
+    {tab.label}
+    {tab.count !== undefined && tab.count > 0 && (
+      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+        active === tab.key 
+          ? 'bg-white/20 text-white' 
+          : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
+      }`}>
+        {tab.count}
+      </span>
+    )}
+  </span>
+</button>
       ))}
     </div>
   );
@@ -1119,9 +1107,12 @@ const ApplicationList = memo(({
   // ─────────────────────────────────────────────────────────────
   // 📱 МОБИЛЬНЫЙ РЕНДЕРИНГ
   // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+  // 📱 МОБИЛЬНЫЙ РЕНДЕРИНГ (ОБНОВЛЕННЫЙ)
+  // ─────────────────────────────────────────────────────────────
   const renderMobileView = () => (
-    <div className="max-w-7xl mx-auto p-2 sm:p-4 app-card-enter">
-      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-3 sm:p-6 border border-gray-200/50 dark:border-gray-700/50">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 pb-24 app-card-enter">
+      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-6 border border-gray-200/50 dark:border-gray-700/50">
         
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
           <div className="flex items-center gap-3">
@@ -1164,7 +1155,7 @@ const ApplicationList = memo(({
                   type="search"
                   value={searchTerm}
                   onChange={(e) => onSearchChange(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
+                  className="w-full pl-9 pr-8 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
                   placeholder={t('searchByObjectOrForeman')}
                   aria-label={t('search')}
                 />

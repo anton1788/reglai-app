@@ -202,7 +202,7 @@ const AdminReceiveRow = memo(function({
   
   return (
     <article className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
           <div className="flex items-center justify-between mb-2">
             <h4 className="font-semibold text-gray-900 dark:text-white">
@@ -382,7 +382,7 @@ const MasterConfirmRow = memo(function({
       allConfirmed ? 'border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10' :
       isPartial ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10' : ''
     }`}>
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <h4 className="font-semibold text-gray-900 dark:text-white">
@@ -1174,22 +1174,22 @@ const ReceiveModal = memo(function({
       aria-labelledby="receive-modal-title"
       onClick={function(e) { if (e.target === e.currentTarget && onClose) onClose(); }}
     >
-      <div
+     <div
         ref={modalContentRef}
-        className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col border border-gray-200/50 dark:border-gray-700/50 outline-none"
+        className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl shadow-2xl w-full sm:max-w-4xl max-h-[92vh] sm:max-h-[85vh] flex flex-col border border-gray-200/50 dark:border-gray-700/50 outline-none rounded-t-3xl sm:rounded-3xl"
         tabIndex={-1}
       >
-        {/* Header */}
+               {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl">
+            <div className="p-2 sm:p-2.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl">
               <ModalIcon className="w-5 h-5 text-white" aria-hidden="true" />
             </div>
-            <div>
-              <h3 id="receive-modal-title" className="text-lg font-bold text-gray-900 dark:text-white">
+            <div className="min-w-0">
+              <h3 id="receive-modal-title" className="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">
                 {modalTitles[modalMode]}
               </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">
                 {selectedApplication.object_name}
               </p>
             </div>
@@ -1206,16 +1206,16 @@ const ReceiveModal = memo(function({
         
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-          {/* Инфо о заявке */}
-          <div className="bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 p-4 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                    {/* Инфо о заявке */}
+          <div className="bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 p-3 sm:p-4 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-sm">
               <div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">{t('foremanName')}</div>
-                <div className="font-medium text-gray-900 dark:text-white">{escapeHtml ? escapeHtml(selectedApplication.foreman_name) : selectedApplication.foreman_name}</div>
+                <div className="font-medium text-gray-900 dark:text-white truncate">{escapeHtml ? escapeHtml(selectedApplication.foreman_name) : selectedApplication.foreman_name}</div>
               </div>
               <div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">{t('foremanPhone')}</div>
-                <div className="font-medium text-gray-900 dark:text-white">{selectedApplication.foreman_phone || '—'}</div>
+                <div className="font-medium text-gray-900 dark:text-white truncate">{selectedApplication.foreman_phone || '—'}</div>
               </div>
               <div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">{t('status')}</div>
@@ -1375,7 +1375,7 @@ const ReceiveModal = memo(function({
                 {itemsToSend.map(function(item, index) {
                   return (
                     <article key={index} className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
-                      <div className="flex flex-col lg:flex-row gap-4">
+                      <div className="flex flex-col sm:flex-row gap-4">
                         <div className="flex-1">
                           <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
                             {item.description || '—'}
@@ -1521,17 +1521,17 @@ const ReceiveModal = memo(function({
           </div>
         )}
         
-        {/* Footer */}
-        <div className="p-4 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-3xl flex justify-between items-center gap-3">
+                {/* Footer */}
+        <div className="p-3 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-3xl flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 pb-safe">
           <button
             onClick={onClose}
             disabled={isSaving}
-            className="px-5 py-2.5 text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 disabled:opacity-50 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            className="px-5 py-3 text-gray-700 hover:text-gray-900 font-medium dark:text-gray-300 dark:hover:text-gray-100 disabled:opacity-50 rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors order-2 sm:order-1"
           >
             {t('cancel')}
           </button>
           
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 order-1 sm:order-2 w-full sm:w-auto">
             <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded mr-2">Ctrl+Enter — сохранить</span>
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть</span>
@@ -1541,7 +1541,7 @@ const ReceiveModal = memo(function({
               <button
                 onClick={handleSave}
                 disabled={!hasChanges || isSaving}
-                className={`px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-lg ${
+                className={`px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all shadow-lg w-full sm:w-auto ${
                   hasChanges && !isSaving
                     ? modalMode === 'admin_ready_to_issue'
                       ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white hover:shadow-xl'
