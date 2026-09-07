@@ -215,29 +215,9 @@ const COMPANY_LOGO_TEXT = 'Реглай';
 const ITEMS_PER_PAGE = 20;
 
 // ─────────────────────────────────────────────────────────────
-// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1)
+// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1) - ИСПРАВЛЕННАЯ ВЕРСИЯ
 // ─────────────────────────────────────────────────────────────
 const GLOBAL_STYLES = `
-@media (max-width: 768px) {
-  /* Скрываем ВСЕ внутренние кнопки навигации */
-  nav > *:not(:first-child):not(:last-child) {
-    display: none !important;
-  }
-  
-  /* Оставляем только логотип (слева) и кнопку меню-бургер (справа) */
-  nav {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 16px;
-    height: 60px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: white;
-  }
-}
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(20px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -278,94 +258,71 @@ const GLOBAL_STYLES = `
   transform: translateZ(0);
 }
 
-/* Мобильные устройства для TaskBoard */
-@media (max-width: 640px) {
-  .task-card {
-    margin-bottom: 12px;
-  }
-  .task-title {
-    font-size: 14px;
-  }
-  .filter-bar {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .filter-bar::-webkit-scrollbar {
-    display: none;
-  }
-}
-
-/* ФИКС ДЛЯ МОБИЛЬНЫХ МОДАЛОК */
+/* ==========================================================
+   📱 МОБИЛЬНАЯ ШАПКА И НАВИГАЦИЯ
+   ========================================================== */
 @media (max-width: 768px) {
-    .fade-enter {
-        animation: slideUp 0.3s ease-out forwards;
-    }
-    @keyframes slideUp {
-        from { transform: translateY(100%); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-    }
-}
-
-/* Планшеты */
-@media (min-width: 641px) and (max-width: 1024px) {
-  .kanban-grid {
-    grid-template-columns: repeat(2, 1fr);
+  /* Скрываем ВСЕ внутренние кнопки навигации, оставляя только логотип и бургер */
+  nav > *:not(:first-child):not(:last-child) {
+    display: none !important;
   }
-}
-
-/* Навигация на мобильных — адаптивная, текст всегда виден */
-@media (max-width: 768px) {
+  nav > div, nav > button, nav > a {
+    display: none !important;
+  }
+  /* Оставляем видимыми: логотип (обычно 1-й), кнопку меню-бургер (обычно последняя или первая) */
+  nav > *:first-child, nav > *:last-child {
+    display: flex !important;
+  }
+  /* Скрываем текстовые кнопки типа "Поддержка" внутри логотипа */
+  nav button span, nav a span {
+    display: none !important;
+  }
   nav {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
-    padding: 6px;
-  }
-  nav button, 
-  nav a {
-    padding: 8px 12px;
-    font-size: 12px;
-    min-height: 44px;
-    display: inline-flex;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 6px;
-  }
-  /* Текст всегда виден — НЕ скрываем */
-  nav button span {
-    display: inline-block !important;
-    font-size: 12px;
-  }
-  /* Иконки остаются видимыми */
-  nav button svg {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
+    height: 60px;
+    padding: 0 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: white;
   }
 }
 
-/* Отключение зума на инпутах для iOS */
+/* ==========================================================
+   📱 МОБИЛЬНЫЕ МОДАЛКИ (Выезжают снизу)
+   ========================================================== */
 @media (max-width: 768px) {
-  input, select, textarea {
-    font-size: 16px !important;
+  .fade-enter {
+    animation: slideUp 0.3s ease-out forwards;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
   }
 }
 
-/* Плавная прокрутка для модальных окон */
-.modal-content {
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Увеличенные touch-цели для мобильных */
+/* ==========================================================
+   📱 СКРЫВАЕМ РЕКЛАМНЫЙ БЛОК "Гибкая оплата 990₽" НА МОБИЛЬНОМ
+   ========================================================== */
 @media (max-width: 768px) {
-  button, 
-  [role="button"],
-  .touch-target {
-    min-height: 44px;
-    min-width: 44px;
+  /* Скрываем любые рекламные блоки и футер с тарифами */
+  .text-center.mb-4,
+  .text-center.mt-8,
+  .fixed.bottom-0,
+  nav > div.mt-8,
+  nav > div.mt-4,
+  div.mb-4.flex.justify-center,
+  div.mt-8.text-center {
+    display: none !important;
   }
 }
-  /* Мобильные стили для ApplicationList */
+
+/* ==========================================================
+   📱 МОБИЛЬНЫЕ СТИЛИ ДЛЯ ЗАЯВОК (ApplicationList)
+   ========================================================== */
 @media (max-width: 640px) {
   .touch-target {
     min-height: 44px !important;
@@ -422,21 +379,30 @@ const GLOBAL_STYLES = `
   }
 }
 
-@media (min-width: 641px) and (max-width: 1024px) {
-  .application-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+/* ==========================================================
+   📱 ТАЧ-ЦЕЛИ И ОТКЛЮЧЕНИЕ ЗУМА
+   ========================================================== */
+@media (max-width: 768px) {
+  button, 
+  [role="button"],
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  input, select, textarea {
+    font-size: 16px !important; /* Предотвращает автоматический зум на iOS */
   }
 }
 
-  /* iOS/Safari фиксы для модальных окон */
+/* ==========================================================
+   🍎 iOS / SAFARI ФИКСЫ
+   ========================================================== */
 @supports (-webkit-touch-callout: none) {
   .fixed.inset-0 {
     height: -webkit-fill-available;
   }
   
-  /* Фикс для модальных окон на iPhone */
   .modal-overlay {
     position: fixed;
     top: 0;
@@ -454,11 +420,43 @@ const GLOBAL_STYLES = `
   }
 }
 
-/* Отключение зума на инпутах для iOS */
-@media (max-width: 768px) {
-  input, select, textarea {
-    font-size: 16px !important; /* Предотвращает автоматический зум на iOS */
+/* ==========================================================
+   📱 TaskBoard
+   ========================================================== */
+@media (max-width: 640px) {
+  .task-card {
+    margin-bottom: 12px;
   }
+  .task-title {
+    font-size: 14px;
+  }
+  .filter-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filter-bar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ==========================================================
+   📱 Планшеты
+   ========================================================== */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .kanban-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .application-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+}
+
+/* Плавная прокрутка для модальных окон */
+.modal-content {
+  -webkit-overflow-scrolling: touch;
 }
 `;
 
