@@ -215,7 +215,7 @@ const COMPANY_LOGO_TEXT = 'Реглай';
 const ITEMS_PER_PAGE = 20;
 
 // ─────────────────────────────────────────────────────────────
-// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1) - ULTIMATE MOBILE VERSION
+// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1) - МАКСИМАЛЬНО ЧИСТЫЙ UI
 // ─────────────────────────────────────────────────────────────
 const GLOBAL_STYLES = `
 @keyframes slideIn {
@@ -259,86 +259,83 @@ const GLOBAL_STYLES = `
 }
 
 /* ==========================================================
-   📱 ULTIMATE MOBILE HEADER (Лучший вариант)
+   📱 МОБИЛЬНАЯ ШАПКА: 56px, ЧИСТО И КОМПАКТНО
    ========================================================== */
 @media (max-width: 768px) {
-  /* Принудительно скрываем ЛЮБЫЕ div, которые являются обертками внутри nav */
-  nav > div:not(:has(button)):not(:has(a)) {
-    display: none !important;
-  }
-
-  /* Основная шапка: 56px, тонкая тень */
+  /* Сжимаем саму шапку и добавляем тонкую тень */
   nav {
     height: 56px !important;
     min-height: 56px !important;
     max-height: 56px !important;
-    padding: 0 8px !important;
+    padding: 0 12px !important;
     position: sticky !important;
     top: 0 !important;
     z-index: 50 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
-    overflow: visible !important;
     background: white !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.04) !important;
   }
 
-  /* ВСЕ кнопки и ссылки: 36x36, без фона, выровнены по центру */
-  nav button, 
+  /* ВСЕ кнопки внутри навигации: 40x40 (удобно для пальца) */
+  nav button,
   nav a {
-    width: 36px !important;
-    height: 36px !important;
-    min-width: 36px !important;
-    min-height: 36px !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
     padding: 0 !important;
-    margin: 0 2px !important;
+    margin: 0 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     border-radius: 10px !important;
     background: transparent !important;
-    font-size: 0 !important; /* Прячем весь текст внутри кнопок */
+    font-size: 0 !important; /* Прячем весь текст */
   }
 
-  /* Иконки внутри кнопок: 22px */
-  nav button svg, 
+  /* Иконки стандартного размера: 24px */
+  nav button svg,
   nav a svg {
-    width: 22px !important;
-    height: 22px !important;
+    width: 24px !important;
+    height: 24px !important;
     margin: 0 !important;
-    color: #4A6572 !important;
   }
 
-  /* Если есть огромный логотип слева, делаем его компактным */
+  /* Логотип: компактный 32x32 */
   nav img {
-    width: 28px !important;
-    height: 28px !important;
+    width: 32px !important;
+    height: 32px !important;
   }
-  
-  /* Прячем ВСЕ текстовые подписи */
-  nav button span, nav a span {
+
+  /* Прячем текстовые подписи */
+  nav button span,
+  nav a span {
     display: none !important;
   }
-  
-  /* Скрываем мусорные элементы, которые не являются кнопками/ссылками */
-  nav > *, nav > div > * {
-    max-height: 40px !important;
+
+  /* ✅ ЧИСТИМ ВСЁ ЛИШНЕЕ: 
+     Скрываем пустые обертки и лишние блоки, 
+     чтобы не было белых прямоугольников */
+  nav > div:not(:has(button)):not(:has(img)):not(:has(a)),
+  nav > div:not(:has(svg)) {
+    display: none !important;
   }
 }
 
 /* ==========================================================
-   📱 КОМПАКТНОЕ ВЫПАДАЮЩЕЕ МЕНЮ (Узкое, аккуратное)
+   📱 КОМПАКТНОЕ ВЫПАДАЮЩЕЕ МЕНЮ
    ========================================================== */
 @media (max-width: 768px) {
-  .dropdown-menu, 
-  .mobile-menu, 
-  [class*="dropdown"], 
+  .dropdown-menu,
+  .mobile-menu,
+  [class*="dropdown"],
   [class*="menu"] {
     width: 280px !important;
     max-width: 88vw !important;
     position: absolute !important;
-    top: 62px !important;
+    top: 60px !important;
     left: 8px !important;
     right: auto !important;
     border-radius: 16px !important;
@@ -351,7 +348,7 @@ const GLOBAL_STYLES = `
     border: 1px solid rgba(0,0,0,0.05) !important;
   }
   
-  /* Сжимаем элементы внутри меню */
+  /* Элементы меню: 44px высота (стандарт) */
   .dropdown-menu button,
   .mobile-menu button,
   [class*="dropdown"] button,
