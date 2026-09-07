@@ -3198,7 +3198,7 @@ const handleSubmit = async (e) => {
       cart: []
     });
     await deleteDraftFromDB('current_form_draft');
-    setCurrentView('pending');
+    setCurrentView('inwork');
     setPage(1);
     setIsSubmitting(false);
     return;
@@ -3275,7 +3275,7 @@ const handleSubmit = async (e) => {
       cart: []
     });
     await deleteDraftFromDB('current_form_draft');
-    setCurrentView('pending');
+    setCurrentView('inwork');
     setPage(1);
     showNotification('✅ Заявка успешно отправлена!', 'success');
     
@@ -3340,7 +3340,7 @@ const handleSubmit = async (e) => {
         cart: []
       });
       await deleteDraftFromDB('current_form_draft');
-      setCurrentView('pending');
+      setCurrentView('inwork');
       setPage(1);
       
     } catch (queueError) {
@@ -4711,7 +4711,7 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
 
   const handleAdminLogout = () => {
     setIsAdminMode(false);
-    setCurrentView('pending');
+    setCurrentView('inwork');
   };
 
   // ─────────────────────────────────────────────────────────
@@ -8232,6 +8232,62 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     showNotification={showNotification}
     applications={applications}
   />
+)}
+{/* 🛡️ FALLBACK: Если ни одно условие не сработало */}
+{!['create', 'crm-sales', 'managerDashboard', 'dashboard', 'accountantDashboard', 
+  'received', 'audit', 'calendar', 'inwork', 'confirmation', 'history', 'readyToIssue', 
+  'analytics', 'employees', 'clients', 'warehouse', 'documents', 'profile', 'cart', 
+  'superAdmin', 'tariffs', 'clientDashboard', 'clientChat', 'clientDocuments', 
+  'clientApplications', 'clientCalendar', 'clientConfirmation', 'clientPhotos', 
+  'clientWorkAct', 'companyProfile', 'merge', 'estimates', 'reports', 'integration', 
+  'help', 'settings', 'projects', 'tasks', 'chat', 'approvals', 'api'].includes(currentView) && (
+    <div className="max-w-7xl mx-auto px-4">
+        <ApplicationList
+            applications={filteredApplications}
+            title="Заявки"
+            emptyMessage="Нет заявок"
+            isMobile={isMobile}
+            user={user}
+            userRole={userRole}
+            isAdminMode={isAdminMode}
+            permissions={currentUserPermissions}
+            t={t}
+            language={language}
+            uniqueDates={uniqueDates}
+            page={page}
+            totalPages={totalPages}
+            onAdminLogout={handleAdminLogout}
+            onDownloadHTML={(app) => downloadHTMLFile(app, t, language, userCompany)}
+            onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
+            onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
+            onOpenReceiveModal={openReceiveModal}
+            onCancelApplication={cancelApplication}
+            onAddComment={addComment}
+            onToggleComments={(appId) => setShowComments(prev => ({
+                ...prev,
+                [appId]: !(prev[appId] || false)
+            }))}
+            onPageChange={setPage}
+            searchTerm={searchTerm}
+            statusFilter={statusFilter}
+            dateFilter={dateFilter}
+            viewedFilter={viewedFilter}
+            onSearchChange={setSearchTerm}
+            onStatusFilterChange={setStatusFilter}
+            onDateFilterChange={setDateFilter}
+            onViewedFilterChange={setViewedFilter}
+            onClearFilters={clearFilters}
+            expandedMaterials={expandedMaterials}
+            onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
+                ...prev,
+                [`${appId}-${idx}`]: !prev[`${appId}-${idx}`]
+            }))}
+            comments={comments}
+            showComments={showComments}
+            isExportingPDF={isExportingPDF}
+            isExportingXLSX={isExportingXLSX}
+        />
+    </div>
 )}
       </main>
       
