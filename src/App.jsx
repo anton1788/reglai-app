@@ -213,9 +213,8 @@ const NOTIFICATIONS_ENABLED = false;
 const unitOptions = ['шт', 'м', 'кг', 'л', 'упак', 'комплект', 'партия'];
 const COMPANY_LOGO_TEXT = 'Реглай';
 const ITEMS_PER_PAGE = 20;
-
 // ─────────────────────────────────────────────────────────────
-// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1) - МАКСИМАЛЬНО ЧИСТЫЙ UI
+// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1) - НОРМАЛЬНЫЙ РАБОЧИЙ ВИД
 // ─────────────────────────────────────────────────────────────
 const GLOBAL_STYLES = `
 @keyframes slideIn {
@@ -259,115 +258,56 @@ const GLOBAL_STYLES = `
 }
 
 /* ==========================================================
-   📱 МОБИЛЬНАЯ ШАПКА: 56px, ЧИСТО И КОМПАКТНО
+   📱 БАЗОВЫЕ МОБИЛЬНЫЕ СТИЛИ (ВСЁ РАБОТАЕТ)
    ========================================================== */
 @media (max-width: 768px) {
-  /* Сжимаем саму шапку и добавляем тонкую тень */
+  /* Шапка */
   nav {
     height: 56px !important;
     min-height: 56px !important;
     max-height: 56px !important;
-    padding: 0 12px !important;
+    padding: 0 10px !important;
     position: sticky !important;
     top: 0 !important;
     z-index: 50 !important;
+    background: white !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
-    background: white !important;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.04) !important;
   }
 
-  /* ВСЕ кнопки внутри навигации: 40x40 (удобно для пальца) */
-  nav button,
-  nav a {
+  /* Кнопки внутри шапки: компактные, без текста */
+  nav button, nav a {
     width: 40px !important;
     height: 40px !important;
     min-width: 40px !important;
     min-height: 40px !important;
     padding: 0 !important;
     margin: 0 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    border-radius: 10px !important;
     background: transparent !important;
-    font-size: 0 !important; /* Прячем весь текст */
+    border-radius: 10px !important;
   }
 
-  /* Иконки стандартного размера: 24px */
-  nav button svg,
-  nav a svg {
+  /* Иконки внутри шапки */
+  nav button svg, nav a svg {
     width: 24px !important;
     height: 24px !important;
     margin: 0 !important;
   }
 
-  /* Логотип: компактный 32x32 */
-  nav img {
-    width: 32px !important;
-    height: 32px !important;
-  }
-
-  /* Прячем текстовые подписи */
-  nav button span,
-  nav a span {
+  /* Прячем только подписи к кнопкам */
+  nav button span, nav a span {
     display: none !important;
   }
 
-  /* ✅ ЧИСТИМ ВСЁ ЛИШНЕЕ: 
-     Скрываем пустые обертки и лишние блоки, 
-     чтобы не было белых прямоугольников */
-  nav > div:not(:has(button)):not(:has(img)):not(:has(a)),
-  nav > div:not(:has(svg)) {
-    display: none !important;
-  }
+  /* Скролл-бар скрыт */
+  .no-scrollbar::-webkit-scrollbar { display: none !important; }
+  .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }
 }
 
 /* ==========================================================
-   📱 КОМПАКТНОЕ ВЫПАДАЮЩЕЕ МЕНЮ
-   ========================================================== */
-@media (max-width: 768px) {
-  .dropdown-menu,
-  .mobile-menu,
-  [class*="dropdown"],
-  [class*="menu"] {
-    width: 280px !important;
-    max-width: 88vw !important;
-    position: absolute !important;
-    top: 60px !important;
-    left: 8px !important;
-    right: auto !important;
-    border-radius: 16px !important;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.14) !important;
-    background: white !important;
-    padding: 8px !important;
-    z-index: 9999 !important;
-    max-height: 70vh !important;
-    overflow-y: auto !important;
-    border: 1px solid rgba(0,0,0,0.05) !important;
-  }
-  
-  /* Элементы меню: 44px высота (стандарт) */
-  .dropdown-menu button,
-  .mobile-menu button,
-  [class*="dropdown"] button,
-  [class*="menu"] button {
-    height: 44px !important;
-    padding: 0 14px !important;
-    font-size: 14px !important;
-    border-radius: 10px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 10px !important;
-    margin-bottom: 2px !important;
-    font-weight: 500 !important;
-  }
-}
-
-/* ==========================================================
-   📱 МОБИЛЬНЫЕ МОДАЛКИ (Выезжают снизу)
+   📱 МОДАЛКИ
    ========================================================== */
 @media (max-width: 768px) {
   .fade-enter {
@@ -380,14 +320,12 @@ const GLOBAL_STYLES = `
 }
 
 /* ==========================================================
-   📱 СКРЫВАЕМ РЕКЛАМНЫЙ БЛОК "Гибкая оплата 990₽" НА МОБИЛЬНОМ
+   📱 СКРЫВАЕМ РЕКЛАМНЫЙ БЛОК "990₽"
    ========================================================== */
 @media (max-width: 768px) {
   .text-center.mb-4,
   .text-center.mt-8,
   .fixed.bottom-0,
-  nav > div.mt-8,
-  nav > div.mt-4,
   div.mb-4.flex.justify-center,
   div.mt-8.text-center {
     display: none !important;
@@ -395,7 +333,7 @@ const GLOBAL_STYLES = `
 }
 
 /* ==========================================================
-   📱 МОБИЛЬНЫЕ СТИЛИ ДЛЯ ЗАЯВОК (ApplicationList)
+   📱 СТИЛИ ДЛЯ ЗАЯВОК (ApplicationList)
    ========================================================== */
 @media (max-width: 640px) {
   .touch-target {
@@ -454,7 +392,7 @@ const GLOBAL_STYLES = `
 }
 
 /* ==========================================================
-   📱 ТАЧ-ЦЕЛИ И ОТКЛЮЧЕНИЕ ЗУМА
+   📱 ТАЧ-ЦЕЛИ
    ========================================================== */
 @media (max-width: 768px) {
   button, 
@@ -465,7 +403,27 @@ const GLOBAL_STYLES = `
   }
   
   input, select, textarea {
-    font-size: 16px !important; /* Предотвращает автоматический зум на iOS */
+    font-size: 16px !important;
+  }
+}
+
+/* ==========================================================
+   📱 TASKBOARD
+   ========================================================== */
+@media (max-width: 640px) {
+  .task-card {
+    margin-bottom: 12px;
+  }
+  .task-title {
+    font-size: 14px;
+  }
+  .filter-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filter-bar::-webkit-scrollbar {
+    display: none;
   }
 }
 
@@ -495,27 +453,7 @@ const GLOBAL_STYLES = `
 }
 
 /* ==========================================================
-   📱 TaskBoard
-   ========================================================== */
-@media (max-width: 640px) {
-  .task-card {
-    margin-bottom: 12px;
-  }
-  .task-title {
-    font-size: 14px;
-  }
-  .filter-bar {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .filter-bar::-webkit-scrollbar {
-    display: none;
-  }
-}
-
-/* ==========================================================
-   📱 Планшеты
+   📱 ПЛАНШЕТЫ
    ========================================================== */
 @media (min-width: 641px) and (max-width: 1024px) {
   .kanban-grid {
