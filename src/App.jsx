@@ -290,10 +290,6 @@ const GLOBAL_STYLES = `
     margin: 0 !important;
   }
 
-  /* Прячем текстовые подписи (все Span) */
-  nav button span, nav a span {
-    display: none !important;
-  }
 
   /* Скрываем рекламный блок с тарифом */
   .text-center.mb-4, .text-center.mt-8, 
