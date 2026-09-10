@@ -29,6 +29,7 @@ import CRMSalesManager from './components/CRMSales/CRMSalesManager';
 import ObjectMaterialsMerger from './components/ObjectMaterialsMerger';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import { useInView } from 'react-intersection-observer';
+import RoleDashboard from './components/RoleDashboard';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -7220,25 +7221,22 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         onLogout={handleLogout}
         isMobile={isMobile}
         onNavigate={(path) => {
-    console.log('🔍 Навигация:', path);
-    if (path === '/' || path === '/home') {
-    // Перенаправляем на персональную главную страницу в зависимости от роли
+  console.log('🔍 Навигация:', path);
+  if (path === '/' || path === '/home' || path === '/dashboard') {
+    // 🆕 ТЕПЕРЬ ГЛАВНАЯ ДОСТУПНА ВСЕМ, НО ОТКРЫВАЕТ СВОЙ ДАШБОРД
     if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-        setCurrentView('dashboard');
+      setCurrentView('dashboard');
     } else if (userRole === 'accountant') {
-        setCurrentView('accountantDashboard');
+      setCurrentView('accountantDashboard');
     } else if (userRole === 'client') {
-        setCurrentView('clientDashboard');
-    } else if (userRole === 'supply_admin') {
-        setCurrentView('warehouse');
-    } else if (userRole === 'super_admin') {
-        setCurrentView('superAdmin');
+      setCurrentView('clientDashboard');
+    } else if (userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin') {
+      setCurrentView('dashboard'); // ← ИЗМЕНЕНИЕ: открываем Главную для мастера и снабженца
     } else {
-        // Для мастеров и прорабов главная - это их активные заявки
-        setCurrentView('inwork');
+      setCurrentView('dashboard');
     }
     return;
-}
+  }
           else if (path === '/estimates') setCurrentView('estimates');
           else if (path === '/reports') setCurrentView('reports');
           else if (path === '/integration') setCurrentView('integration');
@@ -7473,77 +7471,68 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 )}
 
         {/* Дашборд для руководителя */}
-        {(currentView === 'managerDashboard' || currentView === 'dashboard') && (
-    <UniversalDashboard
-        applications={applications}
-        companyUsers={companyUsers}
-        pendingApprovals={pendingApprovals}
-        user={user}
-        userRole={userRole}
-        userCompany={userCompany}
-        setCurrentView={setCurrentView}
-        isOnline={isOnline}
-        offlineDraftsCount={offlineDrafts.length}
-        currentPlan={currentPlan}
-        mergeableCount={mergeableCount}
-        cartItemsCount={formData.cart?.length || 0}
-        isCompanyOwner={isCompanyOwner}
-        onNavigate={(path) => {
-            // Используем существующую логику из onNavigate
-            if (path === '/applications/new') setCurrentView('create');
-            else if (path === '/employees') setCurrentView('employees');
-            else if (path === '/warehouse') setCurrentView('warehouse');
-            else if (path === '/analytics') setCurrentView('analytics');
-            else if (path === '/chat') setCurrentView('chat');
-            else if (path === '/approvals') setCurrentView('approvals');
-            else if (path === '/inwork') setCurrentView('inwork');
-            else if (path === '/merge') setCurrentView('merge');
-            else if (path === '/cart') setCurrentView('cart');
-            else if (path === '/profile') setCurrentView('profile');
-            else if (path === '/documents') setCurrentView('documents');
-            else if (path === '/calendar') setCurrentView('calendar');
-            else if (path === '/api') setCurrentView('api');
-            else if (path === '/audit') setCurrentView('audit');
-            else if (path === '/tasks') setCurrentView('tasks');
-            else if (path === '/help') setCurrentView('help');
-            else if (path === '/crm-sales') setCurrentView('crm-sales');
-            else if (path === '/estimates') setCurrentView('estimates');
-            else if (path === '/reports') setCurrentView('reports');
-            else if (path === '/integration') setCurrentView('integration');
-            else if (path === '/tariffs') setCurrentView('tariffs');
-            else if (path === '/companyProfile') setCurrentView('companyProfile');
-            else if (path === '/superAdmin') setCurrentView('superAdmin');
-        }}
-        t={t}
-    />
+{(currentView === 'managerDashboard' || 
+  (currentView === 'dashboard' && (userRole === 'manager' || userRole === 'director' || isCompanyOwner))) && (
+  <UniversalDashboard
+    applications={applications}
+    companyUsers={companyUsers}
+    pendingApprovals={pendingApprovals}
+    user={user}
+    userRole={userRole}
+    userCompany={userCompany}
+    setCurrentView={setCurrentView}
+    isOnline={isOnline}
+    offlineDraftsCount={offlineDrafts.length}
+    currentPlan={currentPlan}
+    mergeableCount={mergeableCount}
+    cartItemsCount={formData.cart?.length || 0}
+    isCompanyOwner={isCompanyOwner}
+    onNavigate={(path) => {
+      if (path === '/applications/new') setCurrentView('create');
+      else if (path === '/employees') setCurrentView('employees');
+      else if (path === '/warehouse') setCurrentView('warehouse');
+      else if (path === '/analytics') setCurrentView('analytics');
+      else if (path === '/chat') setCurrentView('chat');
+      else if (path === '/approvals') setCurrentView('approvals');
+      else if (path === '/inwork') setCurrentView('inwork');
+      else if (path === '/merge') setCurrentView('merge');
+      else if (path === '/cart') setCurrentView('cart');
+      else if (path === '/profile') setCurrentView('profile');
+      else if (path === '/documents') setCurrentView('documents');
+      else if (path === '/calendar') setCurrentView('calendar');
+      else if (path === '/api') setCurrentView('api');
+      else if (path === '/audit') setCurrentView('audit');
+      else if (path === '/tasks') setCurrentView('tasks');
+      else if (path === '/help') setCurrentView('help');
+      else if (path === '/crm-sales') setCurrentView('crm-sales');
+      else if (path === '/estimates') setCurrentView('estimates');
+      else if (path === '/reports') setCurrentView('reports');
+      else if (path === '/integration') setCurrentView('integration');
+      else if (path === '/tariffs') setCurrentView('tariffs');
+      else if (path === '/companyProfile') setCurrentView('companyProfile');
+      else if (path === '/superAdmin') setCurrentView('superAdmin');
+    }}
+    t={t}
+  />
 )}
 
-{/* ️ FALLBACK: Если dashboard открыт, но у пользователя нет прав на UniversalDashboard */}
-{currentView === 'dashboard' && !(userRole === 'manager' || userRole === 'director' || isCompanyOwner) && (
-    <div className="max-w-7xl mx-auto px-4">
-        <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                Добро пожаловать!
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Выберите раздел в меню навигации
-            </p>
-            <button
-                onClick={() => setCurrentView('inwork')}
-                className="px-6 py-3 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-xl hover:shadow-lg transition-all"
-            >
-                Перейти к заявкам
-            </button>
-        </div>
-    </div>
+{/* 🆕 Дашборд для Мастера, Прораба и Снабженца */}
+{currentView === 'dashboard' && (userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin') && (
+  <RoleDashboard
+    applications={applications}
+    companyUsers={companyUsers}
+    pendingApprovals={pendingApprovals}
+    user={user}
+    userRole={userRole}
+    userCompany={userCompany}
+    setCurrentView={setCurrentView}
+    isOnline={isOnline}
+    currentPlan={currentPlan}
+    mergeableCount={mergeableCount}
+    cartItemsCount={formData.cart?.length || 0}
+    isCompanyOwner={isCompanyOwner}
+  />
 )}
-        
-        {/* Дашборд для бухгалтера */}
-        {currentView === 'accountantDashboard' && (
-            <AccountantFinanceDashboard
-                applications={applications}
-            />
-        )}
         
         {currentView === 'received' && (
           <ApplicationList
