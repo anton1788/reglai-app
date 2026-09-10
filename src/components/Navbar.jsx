@@ -1210,88 +1210,96 @@ const Navbar = ({
                 </div>
               </div>
 
-              {/* Пункты меню */}
-              <nav className="space-y-0.5">
-                {filteredNavItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = currentPage === item.id ||
-                    (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
-                    (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
-                    (item.id === 'estimates' && currentPage === 'estimates') ||
-                    (item.id === 'reports' && currentPage === 'reports') ||
-                    (item.id === 'integration' && currentPage === 'integration') ||
-                    (item.id === 'api' && currentPage === 'api') ||
-                    (item.id === 'merge' && currentPage === 'merge') ||
-                    (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
-                  
-                  let badgeCount = 0;
-                  if (item.id === 'readyToIssue') {
-                    badgeCount = readyToIssueCount || 0;
-                  }
-                  
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        onNavigate?.(item.path);
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors ${
-                        isActive
-                          ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <Icon className="w-5 h-5 flex-shrink-0" />
-                      <span className="flex-1 text-left">{item.label}</span>
-                      
-                      {item.id === 'readyToIssue' && badgeCount > 0 && (
-                        <span className="ml-auto px-2 py-0.5 bg-amber-500 text-white text-xs rounded-full flex-shrink-0">
-                          {badgeCount}
-                        </span>
-                      )}
-                      {item.id === 'approvals' && pendingApprovalsCount > 0 && (
-                        <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
-                          {pendingApprovalsCount}
-                        </span>
-                      )}
-                      {item.id === 'chat' && chatUnreadCount > 0 && (
-                        <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
-                          {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </nav>
+             {/* Пункты меню */}
+<nav className="space-y-0.5">
+  {filteredNavItems.map((item) => {
+    const Icon = item.icon;
+    const isActive = currentPage === item.id ||
+      (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
+      (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
+      (item.id === 'estimates' && currentPage === 'estimates') ||
+      (item.id === 'reports' && currentPage === 'reports') ||
+      (item.id === 'integration' && currentPage === 'integration') ||
+      (item.id === 'api' && currentPage === 'api') ||
+      (item.id === 'merge' && currentPage === 'merge') ||
+      (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
+    
+    let badgeCount = 0;
+    if (item.id === 'readyToIssue') {
+      badgeCount = readyToIssueCount || 0;
+    }
+    
+    return (
+      <button
+        key={item.id}
+        onClick={() => {
+          onNavigate?.(item.path);
+          setIsMobileMenuOpen(false);
+        }}
+        className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors ${
+          isActive
+            ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
+            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+        }`}
+      >
+        <Icon className="w-5 h-5 flex-shrink-0" />
+        <span className="flex-1 text-left">{item.label}</span>
+        
+        {item.id === 'readyToIssue' && badgeCount > 0 && (
+          <span className="ml-auto px-2 py-0.5 bg-amber-500 text-white text-xs rounded-full flex-shrink-0">
+            {badgeCount}
+          </span>
+        )}
+        {item.id === 'approvals' && pendingApprovalsCount > 0 && (
+          <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
+            {pendingApprovalsCount}
+          </span>
+        )}
+        {item.id === 'chat' && chatUnreadCount > 0 && (
+          <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
+            {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+          </span>
+        )}
+      </button>
+    );
+  })}
+</nav>
 
-              {/* 🔥 ЯВНЫЙ РАЗДЕЛИТЕЛЬ + ОТСТУП — ЧТОБЫ НЕ БЫЛО НАЛОЖЕНИЙ */}
-              <div style={{ height: '24px' }} />
-              <div className="border-t-2 border-gray-300 dark:border-gray-700" />
-              <div style={{ height: '16px' }} />
+{/* 🔥 КОНЕЦ СПИСКА МЕНЮ — БОЛЬШОЙ ОТСТУП + ЖИРНАЯ ЛИНИЯ */}
+<div className="mt-6 mb-4 border-t-2 border-gray-300 dark:border-gray-700" />
 
-              {/* 🔥 НИЖНИЙ БЛОК — КНОПКИ ДЕЙСТВИЙ */}
-              <div className="space-y-1">
-                <button
-                  onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                >
-                  <Sparkles className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-                  <span className="flex-1 text-left">{currentPlan ? 'Сменить тариф' : 'Тарифы'}</span>
-                </button>
-                <button
-                  onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                >
-                  <Building className="w-5 h-5 flex-shrink-0" />
-                  <span className="flex-1 text-left">Реквизиты</span>
-                </button>
-              </div>
+{/* 🔥 БЛОК: НАСТРОЙКИ (Тариф, Реквизиты) */}
+<div className="space-y-1 mb-6">
+  <button
+    onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
+    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+  >
+    <Sparkles className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+    <span className="flex-1 text-left">{currentPlan ? 'Сменить тариф' : 'Тарифы'}</span>
+  </button>
+  <button
+    onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }}
+    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+  >
+    <Building className="w-5 h-5 flex-shrink-0" />
+    <span className="flex-1 text-left">Реквизиты</span>
+  </button>
+</div>
 
-              {/* 🔥 ВТОРОЙ РАЗДЕЛИТЕЛЬ ПЕРЕД ВЫХОДОМ */}
-              <div style={{ height: '16px' }} />
-              <div className="border-t-2 border-gray-300 dark:border-gray-700" />
-              <div style={{ height: '16px' }} />
+{/* 🔥 ЕЩЁ ОДНА ЛИНИЯ ПЕРЕД ВЫХОДОМ */}
+<div className="mb-4 border-t-2 border-gray-300 dark:border-gray-700" />
+
+{/* 🔥 КНОПКА ВЫХОДА */}
+<button
+  onClick={onLogout}
+  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+>
+  <LogOut className="w-5 h-5 flex-shrink-0" />
+  <span className="flex-1 text-left">Выйти</span>
+</button>
+
+{/* 🎯 Финальный отступ снизу */}
+<div className="h-6" />
 
               {/* 🔥 КНОПКА ВЫХОДА */}
               <button
