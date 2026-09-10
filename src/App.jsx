@@ -234,6 +234,10 @@ const GLOBAL_STYLES = `
   0%, 100% { box-shadow: 0 0 0 4px rgba(74, 101, 114, 0.5); }
   50% { box-shadow: 0 0 0 8px rgba(74, 101, 114, 0.3); }
 }
+@keyframes slideFromLeft {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
 .page-enter { animation: slideIn 200ms ease-out forwards; }
 .fade-enter { animation: fadeIn 200ms ease-out forwards; }
 .pulse { animation: pulse 2s ease-in-out infinite; }
@@ -256,15 +260,13 @@ const GLOBAL_STYLES = `
 
 /* ==========================================================
    📱 МОБИЛЬНЫЕ СТИЛИ
-   ВАЖНО: не трогаем <nav> — React управляет шапкой через Tailwind!
+   ВАЖНО: НЕ трогаем кнопки внутри <nav>!
    ========================================================== */
 @media (max-width: 768px) {
-  /* Отключаем зум на инпутах (iOS) */
   input, select, textarea {
     font-size: 16px !important;
   }
 
-  /* Скрываем рекламный блок с тарифом на мобильном */
   .text-center.mb-4,
   .text-center.mt-8,
   .fixed.bottom-0,
@@ -273,7 +275,6 @@ const GLOBAL_STYLES = `
     display: none !important;
   }
 
-  /* Модалки выезжают снизу */
   .fade-enter {
     animation: slideUp 0.3s ease-out forwards;
   }
