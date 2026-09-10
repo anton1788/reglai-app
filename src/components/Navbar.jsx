@@ -1300,18 +1300,6 @@ const Navbar = ({
 
 {/* 🎯 Финальный отступ снизу */}
 <div className="h-6" />
-
-              {/* 🔥 КНОПКА ВЫХОДА */}
-              <button
-                onClick={onLogout}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-              >
-                <LogOut className="w-5 h-5 flex-shrink-0" />
-                <span className="flex-1 text-left">Выйти</span>
-              </button>
-
-              {/* 🎯 Дополнительный отступ снизу для мобильных (safe area) */}
-              <div style={{ height: '32px' }} />
             </div>
           </div>
         </>
