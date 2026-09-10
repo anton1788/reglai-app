@@ -112,6 +112,29 @@ const Navbar = ({
     loadCompanyPlan();
   }, [loadCompanyPlan]);
 
+  // 🔥 Блокировка скролла body при открытом мобильном меню
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { 
+      document.body.style.overflow = ''; 
+    };
+  }, [isMobileMenuOpen]);
+
+  // 🔥 Закрытие мобильного меню по Escape
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && isMobileMenuOpen) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isMobileMenuOpen]);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
@@ -388,6 +411,14 @@ const Navbar = ({
       @keyframes fadeIn {
         from { opacity: 0; transform: scale(0.9); }
         to { opacity: 1; transform: scale(1); }
+      }
+      @keyframes slideFromLeft {
+        from { transform: translateX(-100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideInFromLeft {
+        from { transform: translateX(-100%); }
+        to { transform: translateX(0); }
       }
     `;
     document.head.appendChild(style);
@@ -1000,19 +1031,37 @@ const Navbar = ({
         )}
       </nav>
 
-      {/* Мобильное меню — выезжает слева */}
+      {/* 🔥 МОБИЛЬНОЕ МЕНЮ — ИСПРАВЛЕНО! */}
       {isMobileMenuOpen && (
         <>
-          {/* Затемненный фон, клик по нему закрывает меню */}
+          {/* Затемненный фон */}
           <div
-            className="lg:hidden fixed inset-0 bg-black/50 z-[998]"
             onClick={() => setIsMobileMenuOpen(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              zIndex: 99998
+            }}
           />
           
           {/* Сама панель меню — выезжает слева */}
           <div 
-            className="lg:hidden fixed top-0 left-0 bottom-0 w-[85vw] max-w-[320px] bg-white dark:bg-gray-900 z-[999] overflow-y-auto shadow-2xl"
-            style={{ animation: 'slideFromLeft 0.25s ease-out forwards' }}
+            className="bg-white dark:bg-gray-900 overflow-y-auto shadow-2xl"
+            style={{ 
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: '85vw',
+              maxWidth: '320px',
+              zIndex: 99999,
+              animation: 'slideFromLeft 0.25s ease-out forwards',
+              transform: 'translateX(0)'
+            }}
           >
             {/* Кнопка закрытия + заголовок */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
