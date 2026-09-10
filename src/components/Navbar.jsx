@@ -1265,31 +1265,34 @@ const Navbar = ({
                 })}
               </nav>
               
-              <hr className="my-3 border-gray-100 dark:border-gray-800" />
-              
-              <button
-                onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
-                className="w-full flex items-center gap-3 px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
-              >
-                <Sparkles className="w-5 h-5 text-yellow-500" />
-                {currentPlan ? 'Сменить тариф' : 'Тарифы'}
-              </button>
-              <button
-                onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }}
-                className="w-full flex items-center gap-3 px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
-              >
-                <Building className="w-5 h-5" />
-                Реквизиты
-              </button>
+              {/* 🔥 НИЖНИЙ БЛОК — С БОЛЬШИМИ ОТСТУПАМИ, ЧТОБЫ НЕ БЫЛО НАЛОЖЕНИЙ */}
+              <div className="mt-5 pt-5 border-t border-gray-200 dark:border-gray-800">
+                <button
+                  onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
+                >
+                  <Sparkles className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                  <span className="flex-1 text-left">{currentPlan ? 'Сменить тариф' : 'Тарифы'}</span>
+                </button>
+                <button
+                  onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
+                >
+                  <Building className="w-5 h-5 flex-shrink-0" />
+                  <span className="flex-1 text-left">Реквизиты</span>
+                </button>
+              </div>
 
-              <hr className="my-3 border-gray-100 dark:border-gray-800" />
-              <button
-                onClick={onLogout}
-                className="w-full flex items-center gap-3 px-3 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
-              >
-                <LogOut className="w-5 h-5" />
-                Выйти
-              </button>
+              {/* 🔥 ОТДЕЛЬНЫЙ БЛОК ДЛЯ ВЫХОДА — С БОЛЬШИМ ОТСТУПОМ */}
+              <div className="mt-5 pt-5 border-t border-gray-200 dark:border-gray-800">
+                <button
+                  onClick={onLogout}
+                  className="w-full flex items-center gap-3 px-3 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+                >
+                  <LogOut className="w-5 h-5 flex-shrink-0" />
+                  <span className="flex-1 text-left">Выйти</span>
+                </button>
+              </div>
 
               {/* 🎯 Дополнительный отступ снизу для мобильных (safe area) */}
               <div style={{ height: 'env(safe-area-inset-bottom, 16px)' }} />
@@ -1298,7 +1301,8 @@ const Navbar = ({
         </>
       )}
 
-      <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-4 px-4">
+      {/* 🖥️ ФУТЕР — ТОЛЬКО ДЛЯ ДЕСКТОПА (на мобильных он рендерится в App.jsx внизу) */}
+      <footer className="hidden lg:block bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-4 px-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="text-sm text-gray-500 dark:text-gray-400">
             © {new Date().getFullYear()} Реглай. Все права защищены.

@@ -177,7 +177,8 @@ import {
   Copy, CheckCircleIcon, Globe, Mail, Users, TrendingUp,
   Moon, Sun, CheckCircle, Briefcase, Home, Clock, Archive, MessageCircle, Ban, Menu,
   HelpCircle, ArrowRight, Info, Loader2, WifiOff, Wifi, Trash2, ShoppingCart,
-  Undo2, Sparkles, RefreshCw,Code,DollarSign,UserPlus,Image,Camera, ScanLine, Warehouse 
+  Undo2, Sparkles, RefreshCw, Code, DollarSign, UserPlus, Image, Camera, ScanLine, Warehouse,
+  Scale, FileCheck
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -8343,7 +8344,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         engagementMetrics={engagementMetrics}
       />
       
-      {privacyPolicyOpen && <PrivacyPolicyModal />}
       {renderSignupModal()}
       {renderInviteModal()}
       
@@ -8671,10 +8671,51 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     t={t}
   />
 )}
-      
-      {/* ⬇️ ДОБАВИТЬ ЭТОТ БЛОК ПОСЛЕ </main> ⬇️ */}
+           {/* 🦶 МОБИЛЬНЫЙ ФУТЕР — ПОКАЗЫВАЕТСЯ ТОЛЬКО НА МОБИЛЬНЫХ */}
+      {user && isMobile && (
+        <footer 
+          className="lg:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-5 px-4"
+          style={{ 
+            marginBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))'
+          }}
+        >
+          <div className="max-w-7xl mx-auto flex flex-col items-center gap-3">
+            <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+              © {new Date().getFullYear()} Реглай. Все права защищены.
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+              <button 
+                onClick={() => setShowPublicOffer(true)} 
+                className="hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors flex items-center gap-1.5"
+              >
+                <Scale className="w-3.5 h-3.5" />
+                Публичная оферта
+              </button>
+              <button 
+                onClick={() => setShowLegalOffer(true)} 
+                className="hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors flex items-center gap-1.5"
+              >
+                <FileCheck className="w-3.5 h-3.5" />
+                Договор для юрлиц
+              </button>
+              <button 
+                onClick={() => setShowPrivacyPolicyModal(true)} 
+                className="hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors flex items-center gap-1.5"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                Политика конфиденциальности
+              </button>
+            </div>
+          </div>
+        </footer>
+      )}
+
+      {/* 📱 МОБИЛЬНАЯ НИЖНЯЯ НАВИГАЦИЯ — ФИКСИРОВАННАЯ ВНИЗУ */}
       {isMobile && user && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div 
+          className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50" 
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
           <div className="grid grid-cols-5 h-16">
             {/* Вкладка 1: Заявки */}
             <button onClick={() => setCurrentView('inwork')} className={`flex flex-col items-center justify-center ${currentView === 'inwork' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
@@ -8686,7 +8727,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
                 <Warehouse className="w-6 h-6" />
                 <span className="text-[10px] font-medium">Склад</span>
             </button>
-            {/* Вкладка 3: Создать (Центральная, выделенная) */}
+            {/* Вкладка 3: Создать */}
             <button onClick={() => setCurrentView('create')} className={`flex flex-col items-center justify-center ${currentView === 'create' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
                 <Plus className="w-8 h-8 p-1 bg-[#4A6572] text-white rounded-full shadow-lg -mt-4" />
                 <span className="text-[10px] font-medium mt-1">Создать</span>
