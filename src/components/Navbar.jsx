@@ -17,16 +17,14 @@ import {
   Star,
   FileCheck,
   Scale,
-  PackageCheck  // ← ДОБАВЛЕНО ДЛЯ ИКОНКИ "ГОТОВЫ К ВЫДАЧЕ"
+  PackageCheck
 } from 'lucide-react';
 import { getCompanyPlan } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
-// Импортируем модальные окна для документов
 import PublicOfferModal from './PublicOfferModal';
 import LegalOfferModal from './LegalOfferModal';
 import PrivacyPolicyModal from './PrivacyPolicyModal';
 
-// В начале Navbar.jsx, после импортов
 const getCleanCompanyId = (companyId) => {
   if (!companyId) return null;
   if (typeof companyId === 'string') return companyId;
@@ -37,6 +35,7 @@ const getCleanCompanyId = (companyId) => {
 
 const Navbar = ({ 
   user, 
+  isMobile = false,
   companyName, 
   userRole, 
   onLogout, 
@@ -68,7 +67,7 @@ const Navbar = ({
   selectedNotification,
   showNotificationModal,
   onCloseNotificationModal,
-  readyToIssueCount = 0  // ← НОВЫЙ ПРОПС
+  readyToIssueCount = 0
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -82,7 +81,6 @@ const Navbar = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   
-  // Состояния для модальных окон юридических документов
   const [showPublicOffer, setShowPublicOffer] = useState(false);
   const [showLegalOffer, setShowLegalOffer] = useState(false);
   const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
@@ -93,7 +91,6 @@ const Navbar = ({
   const navScrollRef = useRef(null);
   const tabletNavScrollRef = useRef(null);
 
-  // Загрузка текущего тарифа
   const loadCompanyPlan = useCallback(async () => {
     const cleanId = getCleanCompanyId(companyId);
     if (!cleanId || !supabase) {
@@ -115,7 +112,6 @@ const Navbar = ({
     loadCompanyPlan();
   }, [loadCompanyPlan]);
 
-  // Закрытие меню при клике вне
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
@@ -129,7 +125,6 @@ const Navbar = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Глобальный поиск по Ctrl+K или /
   useEffect(() => {
     const handleGlobalSearch = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -145,7 +140,6 @@ const Navbar = ({
     return () => document.removeEventListener('keydown', handleGlobalSearch);
   }, []);
 
-  // Горячие клавиши для навигации
   useEffect(() => {
     const handleKeyboardNav = (e) => {
       if (e.ctrlKey || e.metaKey) {
@@ -158,7 +152,7 @@ const Navbar = ({
           '6': '/tasks',
           '7': '/chat',
           '8': '/calendar',
-          '9': '/ready-to-issue',  // ← ДОБАВЛЕНО
+          '9': '/ready-to-issue',
         };
         const path = shortcuts[e.key];
         if (path && !e.target.closest('input') && !e.target.closest('textarea')) {
@@ -173,7 +167,6 @@ const Navbar = ({
     return () => document.removeEventListener('keydown', handleKeyboardNav);
   }, [onNavigate]);
 
-  // Проверка скролла для кнопок навигации с debounce
   useEffect(() => {
     let timeoutId = null;
     let scrollTimeoutId = null;
@@ -270,20 +263,17 @@ const Navbar = ({
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  // Все пункты навигации в зависимости от роли и тарифа
   const getNavItems = () => {
     const items = [];
 
-    // Базовые пункты для всех
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
 
-    // 🔹 ГОТОВЫ К ВЫДАЧЕ - для снабженца, руководителя и владельца
     if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
       items.push({ 
         id: 'readyToIssue', 
         label: 'Готовы к выдаче', 
-        icon: PackageCheck,  // ← ИСПОЛЬЗУЕМ PackageCheck ВМЕСТО Package
+        icon: PackageCheck,
         path: '/ready-to-issue' 
       });
     }
@@ -297,12 +287,10 @@ const Navbar = ({
       });
     }
 
-    // CRM Sales - Лиды (для manager и supply_admin)
     if (userRole === 'manager' || userRole === 'supply_admin') {
       items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
     }
 
-    // Объединение заявок — для manager, supply_admin, director, владельца
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
       items.push({ 
         id: 'merge', 
@@ -312,57 +300,46 @@ const Navbar = ({
       });
     }
 
-    // Для мастера и прораба - только заявки (свои), история
     if (userRole === 'master' || userRole === 'foreman') {
       items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
       items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
     }
 
-    // Склад (для manager, supply_admin, foreman, accountant)
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || userRole === 'accountant') {
       items.push({ id: 'warehouse', label: 'Склад', icon: Package, path: '/warehouse' });
     }
 
-    // Клиенты (для manager и client_manager)
     if (userRole === 'manager' || userRole === 'client_manager') {
       items.push({ id: 'clients', label: 'Клиенты', icon: Users, path: '/clients' });
     }
 
-    // Аналитика - для manager, supply_admin, director, accountant, владельца компании
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
       items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
     }
 
-    // API - для бухгалтера, руководителя, администратора снабжения
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
     }
 
-    // Сметы - для бухгалтера, руководителя, администратора снабжения
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'estimates', label: 'Сметы', icon: Calculator, path: '/estimates' });
     }
 
-    // Отчёты - для бухгалтера, руководителя, администратора снабжения
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'reports', label: 'Отчёты', icon: FileText, path: '/reports' });
     }
 
-    // Интеграция - для руководителя и администратора снабжения
     if (userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
       items.push({ id: 'integration', label: 'Интеграция', icon: Settings, path: '/integration' });
     }
 
-    // Документы - для всех, кроме client
     if (userRole !== 'client') {
       items.push({ id: 'documents', label: 'Документы', icon: FileText, path: '/documents' });
     }
 
-    // Чат - для всех
     items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
     items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
 
-    // Согласование (только для manager и director)
     if (userRole === 'manager' || userRole === 'director') {
       items.push({ 
         id: 'approvals', 
@@ -372,27 +349,22 @@ const Navbar = ({
       });
     }
 
-    // Сотрудники (только для manager)
     if (userRole === 'manager') {
       items.push({ id: 'employees', label: 'Сотрудники', icon: Users, path: '/employees' });
     }
 
-    // Корзина
     if (cartItemsCount > 0) {
       items.push({ id: 'cart', label: `Корзина (${cartItemsCount})`, icon: ShoppingCart, path: '/cart' });
     }
 
-    // Аудит - для manager, director, accountant, владельца
     if (userRole === 'manager' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
       items.push({ id: 'audit', label: 'Аудит', icon: Eye, path: '/audit' });
     }
 
-    // Задачи
     if (userRole !== 'client') {
       items.push({ id: 'tasks', label: 'Задачи', icon: Target, path: '/tasks' });
     }
 
-    // Для заказчика - отдельные пункты
     if (userRole === 'client') {
       items.push({ id: 'clientDashboard', label: 'Мой объект', icon: Home, path: '/client' });
       items.push({ id: 'clientDocuments', label: 'Мои документы', icon: FileText, path: '/client/documents' });
@@ -407,20 +379,12 @@ const Navbar = ({
     item.label.toLowerCase().includes(mobileSearch.toLowerCase())
   );
 
-  // CSS для скрытия скроллбара
   useEffect(() => {
     const style = document.createElement('style');
     style.textContent = `
-      .no-scrollbar::-webkit-scrollbar {
-        display: none;
-      }
-      .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-      }
-      .fade-enter {
-        animation: fadeIn 0.2s ease-in-out;
-      }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .fade-enter { animation: fadeIn 0.2s ease-in-out; }
       @keyframes fadeIn {
         from { opacity: 0; transform: scale(0.9); }
         to { opacity: 1; transform: scale(1); }
@@ -430,7 +394,6 @@ const Navbar = ({
     return () => document.head.removeChild(style);
   }, []);
 
-  // Безопасный рендеринг индикатора тарифа
   const renderTariffIndicator = () => {
     if (planLoading) {
       return (
@@ -531,139 +494,172 @@ const Navbar = ({
 
             {/* Правая часть */}
             <div className="flex items-center gap-1 flex-shrink-0">
-              {/* Индикатор тарифа с состоянием загрузки */}
-              <div className="hidden lg:flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg min-w-[60px]">
-                {renderTariffIndicator()}
-              </div>
-
-              {/* Индикатор офлайн режима с синхронизацией */}
-              {!isOnline && offlineDraftsCount > 0 && (
-                <div className="hidden sm:flex items-center gap-2 px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                  <div className="relative">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+              
+              {/* Скрываемые на мобильном элементы */}
+              {!isMobile && (
+                <>
+                  <div className="hidden lg:flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg min-w-[60px]">
+                    {renderTariffIndicator()}
                   </div>
-                  <span className="text-xs font-medium text-yellow-700 dark:text-yellow-300 whitespace-nowrap">
-                    {offlineDraftsCount} черновик{offlineDraftsCount > 1 ? 'а' : ''}
-                  </span>
-                  {onSyncOffline && (
-                    <button 
-                      onClick={handleSyncOffline}
-                      disabled={isSyncing}
-                      className="text-xs text-yellow-600 dark:text-yellow-400 hover:underline disabled:opacity-50"
-                    >
-                      {isSyncing ? '...' : 'Синхр.'}
-                    </button>
-                  )}
-                </div>
-              )}
 
-              {!isOnline && offlineDraftsCount === 0 && (
-                <div className="hidden sm:flex items-center px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                  <WifiOff className="w-3 h-3 text-yellow-500" />
-                  <span className="ml-1 text-xs text-yellow-700 dark:text-yellow-300">Офлайн</span>
-                </div>
-              )}
-
-              {isAdminMode && (
-                <div className="flex items-center px-1.5 sm:px-2 py-1 sm:py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 rounded-lg text-xs font-medium">
-                  <Shield className="w-3 h-3 mr-1" />
-                  <span className="hidden sm:inline">Админ режим</span>
-                  {onToggleAdminMode && (
-                    <button onClick={onToggleAdminMode} className="ml-1 text-xs underline">
-                      Выйти
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Быстрые действия */}
-              {(userRole === 'accountant' || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'master' || userRole === 'foreman' || isCompanyOwner) && (
-                <div className="relative group">
-                  <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                    <Plus className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                  </button>
-                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                    <div className="p-2">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-gray-100 dark:border-gray-700">Быстрые действия</p>
-                      <button 
-                        onClick={() => { onNavigate?.('/applications/new'); setIsMobileMenuOpen(false); }}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                      >
-                        <Plus className="w-4 h-4 text-blue-500" />
-                        Создать заявку
-                      </button>
-                      {(userRole === 'manager' || userRole === 'supply_admin') && (
+                  {!isOnline && offlineDraftsCount > 0 && (
+                    <div className="hidden sm:flex items-center gap-2 px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                      <div className="relative">
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                      </div>
+                      <span className="text-xs font-medium text-yellow-700 dark:text-yellow-300 whitespace-nowrap">
+                        {offlineDraftsCount} черновик{offlineDraftsCount > 1 ? 'а' : ''}
+                      </span>
+                      {onSyncOffline && (
                         <button 
-                          onClick={() => { onInvite?.(); setIsMobileMenuOpen(false); }}
-                          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                          onClick={handleSyncOffline}
+                          disabled={isSyncing}
+                          className="text-xs text-yellow-600 dark:text-yellow-400 hover:underline disabled:opacity-50"
                         >
-                          <UserPlus className="w-4 h-4 text-green-500" />
-                          Пригласить сотрудника
+                          {isSyncing ? '...' : 'Синхр.'}
                         </button>
                       )}
-                      <button 
-                        onClick={() => { onNavigate?.('/warehouse'); setIsMobileMenuOpen(false); }}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                      >
-                        <Package className="w-4 h-4 text-orange-500" />
-                        Управление складом
-                      </button>
-                      <button 
-                        onClick={() => { onNavigate?.('/documents'); setIsMobileMenuOpen(false); }}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                      >
-                        <FileText className="w-4 h-4 text-purple-500" />
-                        Создать документ
-                      </button>
-                      {(userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) && (
-                        <>
-                          <button 
-                            onClick={() => { onNavigate?.('/estimates'); setIsMobileMenuOpen(false); }}
-                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                          >
-                            <Calculator className="w-4 h-4 text-[#4A6572]" />
-                            Сметный калькулятор
-                          </button>
-                          <button 
-                            onClick={() => { onNavigate?.('/reports'); setIsMobileMenuOpen(false); }}
-                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                          >
-                            <BarChart3 className="w-4 h-4 text-blue-500" />
-                            Конструктор отчётов
-                          </button>
-                        </>
+                    </div>
+                  )}
+
+                  {!isOnline && offlineDraftsCount === 0 && (
+                    <div className="hidden sm:flex items-center px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                      <WifiOff className="w-3 h-3 text-yellow-500" />
+                      <span className="ml-1 text-xs text-yellow-700 dark:text-yellow-300">Офлайн</span>
+                    </div>
+                  )}
+
+                  {isAdminMode && (
+                    <div className="flex items-center px-1.5 sm:px-2 py-1 sm:py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 rounded-lg text-xs font-medium">
+                      <Shield className="w-3 h-3 mr-1" />
+                      <span className="hidden sm:inline">Админ режим</span>
+                      {onToggleAdminMode && (
+                        <button onClick={onToggleAdminMode} className="ml-1 text-xs underline">
+                          Выйти
+                        </button>
                       )}
                     </div>
-                  </div>
-                </div>
+                  )}
+
+                  {(userRole === 'accountant' || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'master' || userRole === 'foreman' || isCompanyOwner) && (
+                    <div className="relative group">
+                      <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                        <Plus className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                      </button>
+                      <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                        <div className="p-2">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-gray-100 dark:border-gray-700">Быстрые действия</p>
+                          <button 
+                            onClick={() => { onNavigate?.('/applications/new'); setIsMobileMenuOpen(false); }}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                          >
+                            <Plus className="w-4 h-4 text-blue-500" />
+                            Создать заявку
+                          </button>
+                          {(userRole === 'manager' || userRole === 'supply_admin') && (
+                            <button 
+                              onClick={() => { onInvite?.(); setIsMobileMenuOpen(false); }}
+                              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                            >
+                              <UserPlus className="w-4 h-4 text-green-500" />
+                              Пригласить сотрудника
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => { onNavigate?.('/warehouse'); setIsMobileMenuOpen(false); }}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                          >
+                            <Package className="w-4 h-4 text-orange-500" />
+                            Управление складом
+                          </button>
+                          <button 
+                            onClick={() => { onNavigate?.('/documents'); setIsMobileMenuOpen(false); }}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                          >
+                            <FileText className="w-4 h-4 text-purple-500" />
+                            Создать документ
+                          </button>
+                          {(userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) && (
+                            <>
+                              <button 
+                                onClick={() => { onNavigate?.('/estimates'); setIsMobileMenuOpen(false); }}
+                                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                              >
+                                <Calculator className="w-4 h-4 text-[#4A6572]" />
+                                Сметный калькулятор
+                              </button>
+                              <button 
+                                onClick={() => { onNavigate?.('/reports'); setIsMobileMenuOpen(false); }}
+                                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                              >
+                                <BarChart3 className="w-4 h-4 text-blue-500" />
+                                Конструктор отчётов
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setShowSupportModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-200 
+                      bg-gradient-to-r from-[#4A6572]/5 to-[#344955]/5 
+                      hover:bg-gradient-to-r hover:from-[#4A6572]/15 hover:to-[#344955]/15
+                      border border-transparent hover:border-[#4A6572]/20
+                      group"
+                    aria-label="Поддержка"
+                    title="Служба поддержки"
+                  >
+                    <HelpCircle className="w-5 h-5 text-[#4A6572] dark:text-[#F9AA33] group-hover:scale-110 transition-transform" />
+                    <span className="hidden sm:inline text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-[#4A6572] dark:group-hover:text-[#F9AA33] transition-colors">
+                      Поддержка
+                    </span>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={onToggleTheme}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    aria-label="Сменить тему"
+                  >
+                    {theme === 'dark' ? <Sun className="w-5 h-5 text-gray-600 dark:text-gray-400" /> : <Moon className="w-5 h-5 text-gray-600 dark:text-gray-400" />}
+                  </button>
+
+                  <button
+                    onClick={onToggleLanguage}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    aria-label="Сменить язык"
+                  >
+                    <Globe className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                  </button>
+                </>
               )}
 
-              {/* Кнопка поддержки */}
-              <button
-                onClick={() => setShowSupportModal(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-200 
-                  bg-gradient-to-r from-[#4A6572]/5 to-[#344955]/5 
-                  hover:bg-gradient-to-r hover:from-[#4A6572]/15 hover:to-[#344955]/15
-                  border border-transparent hover:border-[#4A6572]/20
-                  group"
-                aria-label="Поддержка"
-                title="Служба поддержки"
-              >
-                <HelpCircle className="w-5 h-5 text-[#4A6572] dark:text-[#F9AA33] group-hover:scale-110 transition-transform" />
-                <span className="hidden sm:inline text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-[#4A6572] dark:group-hover:text-[#F9AA33] transition-colors">
-                  Поддержка
-                </span>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                </span>
-              </button>
+              {/* Кнопка для супер-админа (отзывы) — ОСТАВЛЯЕМ ВСЕГДА */}
+              {newFeedbackCount > 0 && userRole === 'super_admin' && (
+                <button
+                  onClick={() => { onNavigate?.('/superAdmin'); setIsMobileMenuOpen(false); }}
+                  className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  aria-label="Новые отзывы"
+                >
+                  <Star className="w-5 h-5 text-yellow-500" />
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                    {newFeedbackCount > 99 ? '99+' : newFeedbackCount}
+                  </span>
+                </button>
+              )}
 
-              {/* Уведомления */}
+              {/* Уведомления — ОСТАВЛЯЕМ ВСЕГДА */}
               <div className="relative" ref={notificationsRef}>
                 <button
                   onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
                   className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  aria-label="Уведомления"
                 >
                   <Bell className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                   {unreadCount > 0 && (
@@ -684,19 +680,6 @@ const Navbar = ({
                         </button>
                       )}
                     </div>
-                    {/* Кнопка для супер-админа */}
-                    {newFeedbackCount > 0 && userRole === 'super_admin' && (
-                      <button
-                        onClick={() => { onNavigate?.('/superAdmin'); setIsMobileMenuOpen(false); }}
-                        className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                        aria-label="Новые отзывы"
-                      >
-                        <Star className="w-5 h-5 text-yellow-500" />
-                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
-                          {newFeedbackCount > 99 ? '99+' : newFeedbackCount}
-                        </span>
-                      </button>
-                    )}
                     <div className="max-h-96 overflow-y-auto">
                       {notifications.length === 0 ? (
                         <div className="p-6 text-center text-gray-500 dark:text-gray-400">
@@ -727,25 +710,7 @@ const Navbar = ({
                 )}
               </div>
 
-              {/* Переключение темы */}
-              <button
-                onClick={onToggleTheme}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                aria-label="Сменить тему"
-              >
-                {theme === 'dark' ? <Sun className="w-5 h-5 text-gray-600 dark:text-gray-400" /> : <Moon className="w-5 h-5 text-gray-600 dark:text-gray-400" />}
-              </button>
-
-              {/* Переключение языка */}
-              <button
-                onClick={onToggleLanguage}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                aria-label="Сменить язык"
-              >
-                <Globe className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              </button>
-
-              {/* Профиль */}
+              {/* Профиль — ОСТАВЛЯЕМ ВСЕГДА */}
               <div className="relative" ref={profileRef}>
                 <button
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
@@ -843,10 +808,9 @@ const Navbar = ({
           </div>
         </div>
 
-        {/* Планшетная навигация - иконки с подписями и прокруткой */}
+        {/* Планшетная навигация */}
         {navItems.length > 0 && (
           <div className="hidden sm:flex lg:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 relative">
-            {/* Левая градиентная маска */}
             <div className="absolute left-0 top-0 bottom-0 w-8 z-5 bg-gradient-to-r from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
             
             <div 
@@ -859,7 +823,6 @@ const Navbar = ({
                 const isActive = currentPage === item.id || 
                   (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history'));
                 
-                // Бейдж для "Готовы к выдаче"
                 let badgeCount = 0;
                 let badgeColor = 'bg-amber-500';
                 if (item.id === 'readyToIssue') {
@@ -880,7 +843,6 @@ const Navbar = ({
                     <Icon className="w-5 h-5" />
                     <span className="text-xs font-medium">{item.label}</span>
                     
-                    {/* Бейдж для "Готовы к выдаче" */}
                     {item.id === 'readyToIssue' && badgeCount > 0 && (
                       <span className={`absolute -top-1 -right-1 w-4 h-4 ${badgeColor} text-white text-[10px] rounded-full flex items-center justify-center`}>
                         {badgeCount}
@@ -912,21 +874,18 @@ const Navbar = ({
               })}
             </div>
             
-            {/* Правая градиентная маска */}
             <div className="absolute right-0 top-0 bottom-0 w-8 z-5 bg-gradient-to-l from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
           </div>
         )}
 
-        {/* Десктопная навигация - горизонтальное меню с прокруткой */}
+        {/* Десктопная навигация */}
         {navItems.length > 0 && (
           <div className="hidden lg:block border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
             <div className="w-full px-4 relative">
-              {/* Левая градиентная маска */}
               {showLeftScroll && (
                 <div className="absolute left-0 top-0 bottom-0 w-12 z-5 bg-gradient-to-r from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
               )}
               
-              {/* Кнопка прокрутки влево */}
               {showLeftScroll && (
                 <button
                   onClick={() => scrollNav('left')}
@@ -944,7 +903,6 @@ const Navbar = ({
                 </button>
               )}
               
-              {/* Прокручиваемое меню */}
               <div 
                 ref={navScrollRef}
                 className="flex overflow-x-auto no-scrollbar gap-1 py-2 scroll-smooth px-8"
@@ -963,7 +921,6 @@ const Navbar = ({
                     (item.id === 'merge' && currentPage === 'merge') ||
                     (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
                   
-                  // Бейдж для "Готовы к выдаче"
                   let badgeCount = 0;
                   let badgeColor = 'bg-amber-500';
                   if (item.id === 'readyToIssue') {
@@ -987,7 +944,6 @@ const Navbar = ({
                       <Icon className="w-4 h-4" />
                       <span className="text-sm font-medium">{item.label}</span>
                       
-                      {/* Бейдж для "Готовы к выдаче" */}
                       {item.id === 'readyToIssue' && badgeCount > 0 && (
                         <span className={`absolute -top-1 -right-1 w-4 h-4 ${badgeColor} text-white text-[10px] rounded-full flex items-center justify-center`}>
                           {badgeCount}
@@ -1019,7 +975,6 @@ const Navbar = ({
                 })}
               </div>
               
-              {/* Кнопка прокрутки вправо */}
               {showRightScroll && (
                 <button
                   onClick={() => scrollNav('right')}
@@ -1037,7 +992,6 @@ const Navbar = ({
                 </button>
               )}
               
-              {/* Правая градиентная маска */}
               {showRightScroll && (
                 <div className="absolute right-0 top-0 bottom-0 w-12 z-5 bg-gradient-to-l from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
               )}
@@ -1045,7 +999,7 @@ const Navbar = ({
           </div>
         )}
 
-        {/* Мобильное меню (бургер) с поиском и группировкой */}
+        {/* Мобильное меню */}
         {isMobileMenuOpen && (
           <div className="lg:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 fade-enter max-h-[calc(100vh-56px)] overflow-y-auto">
             <form onSubmit={handleSearch} className="p-4 border-b border-gray-100 dark:border-gray-800">
@@ -1062,7 +1016,6 @@ const Navbar = ({
             </form>
             
             <div className="p-2">
-              {/* Информация о тарифе в мобильном меню */}
               {currentPlan && (
                 <div className="mx-3 mb-2 p-2 bg-gradient-to-r from-[#F9AA33]/10 to-[#F57C00]/10 rounded-lg border border-[#F9AA33]/20">
                   <div className="flex items-center justify-between">
@@ -1083,7 +1036,6 @@ const Navbar = ({
                 </div>
               )}
 
-              {/* Поиск по меню */}
               <div className="relative px-3 mb-2">
                 <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
@@ -1095,7 +1047,6 @@ const Navbar = ({
                 />
               </div>
 
-              {/* Быстрые действия в мобильном меню */}
               <div className="mx-3 mb-2 p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                 <p className="text-xs text-gray-500 dark:text-gray-400 px-1 py-1">Быстрые действия</p>
                 <div className="flex flex-wrap gap-1 mt-1">
@@ -1144,7 +1095,6 @@ const Navbar = ({
                   (item.id === 'merge' && currentPage === 'merge') ||
                   (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
                 
-                // Бейдж для "Готовы к выдаче"
                 let badgeCount = 0;
                 if (item.id === 'readyToIssue') {
                   badgeCount = readyToIssueCount || 0;
@@ -1212,7 +1162,6 @@ const Navbar = ({
                 Реквизиты
               </button>
 
-              {/* 🆕 Юридические документы в мобильном меню */}
               <div className="mt-2 px-2 space-y-1">
                 <p className="text-xs text-gray-400 dark:text-gray-500 px-2 py-1">Юридическая информация</p>
                 <button
@@ -1251,7 +1200,6 @@ const Navbar = ({
         )}
       </nav>
 
-      {/* 🆕 Футер с юридическими документами - добавляем внизу страницы */}
       <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-4 px-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -1283,7 +1231,6 @@ const Navbar = ({
         </div>
       </footer>
 
-      {/* Модальное окно поддержки */}
       <SupportModal
         isOpen={showSupportModal}
         onClose={() => setShowSupportModal(false)}
@@ -1292,7 +1239,6 @@ const Navbar = ({
         userRole={userRole}
       />
 
-      {/* 🆕 Модальные окна для юридических документов */}
       <PublicOfferModal
         isOpen={showPublicOffer}
         onClose={() => setShowPublicOffer(false)}
@@ -1306,7 +1252,6 @@ const Navbar = ({
         onClose={() => setShowPrivacyPolicyModal(false)}
       />
 
-      {/* Модальное окно просмотра уведомления */}
       {showNotificationModal && selectedNotification && (
         <div 
           className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] fade-enter"

@@ -257,9 +257,7 @@ const GLOBAL_STYLES = `
   transform: translateZ(0);
 }
 
-/* ==========================================================
-   📱 БАЗОВЫЕ МОБИЛЬНЫЕ СТИЛИ (ВСЁ РАБОТАЕТ)
-   ========================================================== */
+/* ===== БЕЗОПАСНЫЕ МОБИЛЬНЫЕ СТИЛИ (Ничего не ломают) ===== */
 @media (max-width: 768px) {
   /* Шапка */
   nav {
@@ -267,49 +265,43 @@ const GLOBAL_STYLES = `
     min-height: 56px !important;
     max-height: 56px !important;
     padding: 0 10px !important;
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 50 !important;
     background: white !important;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
   }
 
-  /* Кнопки внутри шапки: компактные, без текста */
+  /* Кнопки в шапке - без текста, но видимые */
   nav button, nav a {
-    width: 40px !important;
-    height: 40px !important;
-    min-width: 40px !important;
-    min-height: 40px !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
     padding: 0 !important;
     margin: 0 !important;
     background: transparent !important;
-    border-radius: 10px !important;
+    border-radius: 8px !important;
   }
 
-  /* Иконки внутри шапки */
+  /* Иконки внутри кнопок */
   nav button svg, nav a svg {
-    width: 24px !important;
-    height: 24px !important;
+    width: 20px !important;
+    height: 20px !important;
     margin: 0 !important;
   }
 
-  /* Прячем только подписи к кнопкам */
+  /* Прячем текстовые подписи (все Span) */
   nav button span, nav a span {
     display: none !important;
   }
 
-  /* Скролл-бар скрыт */
-  .no-scrollbar::-webkit-scrollbar { display: none !important; }
-  .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }
-}
+  /* Скрываем рекламный блок с тарифом */
+  .text-center.mb-4, .text-center.mt-8, 
+  .fixed.bottom-0, div.mb-4.flex.justify-center, div.mt-8.text-center {
+    display: none !important;
+  }
 
-/* ==========================================================
-   📱 МОДАЛКИ
-   ========================================================== */
-@media (max-width: 768px) {
+  /* Модалки выезжают снизу */
   .fade-enter {
     animation: slideUp 0.3s ease-out forwards;
   }
@@ -319,156 +311,15 @@ const GLOBAL_STYLES = `
   }
 }
 
-/* ==========================================================
-   📱 СКРЫВАЕМ РЕКЛАМНЫЙ БЛОК "990₽"
-   ========================================================== */
+/* ===== БЕЗОПАСНЫЕ ТАЧ-ЦЕЛИ ===== */
 @media (max-width: 768px) {
-  .text-center.mb-4,
-  .text-center.mt-8,
-  .fixed.bottom-0,
-  div.mb-4.flex.justify-center,
-  div.mt-8.text-center {
-    display: none !important;
-  }
-}
-
-/* ==========================================================
-   📱 СТИЛИ ДЛЯ ЗАЯВОК (ApplicationList)
-   ========================================================== */
-@media (max-width: 640px) {
-  .touch-target {
-    min-height: 44px !important;
-    min-width: 44px !important;
-  }
-  
-  .scrollable-content {
-    -webkit-overflow-scrolling: touch;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-  
-  .application-card {
-    padding: 12px !important;
-    margin-bottom: 8px !important;
-    border-radius: 12px !important;
-  }
-  
-  .action-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  
-  .action-grid button {
-    font-size: 12px;
-    padding: 10px 8px;
-    min-height: 44px;
-  }
-  
-  .mobile-status-tabs {
-    display: flex;
-    overflow-x: auto;
-    gap: 6px;
-    padding: 4px 0;
-    -webkit-overflow-scrolling: touch;
-  }
-  
-  .mobile-status-tabs::-webkit-scrollbar {
-    display: none;
-  }
-  
-  .mobile-status-tab {
-    flex-shrink: 0;
-    padding: 8px 14px;
-    font-size: 12px;
-    border-radius: 20px;
-    white-space: nowrap;
-    min-height: 36px;
-  }
-  
-  .mobile-material-item {
-    padding: 10px 12px;
-  }
-}
-
-/* ==========================================================
-   📱 ТАЧ-ЦЕЛИ
-   ========================================================== */
-@media (max-width: 768px) {
-  button, 
-  [role="button"],
-  .touch-target {
+  button, [role="button"], .touch-target {
     min-height: 44px;
     min-width: 44px;
   }
-  
   input, select, textarea {
     font-size: 16px !important;
   }
-}
-
-/* ==========================================================
-   📱 TASKBOARD
-   ========================================================== */
-@media (max-width: 640px) {
-  .task-card {
-    margin-bottom: 12px;
-  }
-  .task-title {
-    font-size: 14px;
-  }
-  .filter-bar {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .filter-bar::-webkit-scrollbar {
-    display: none;
-  }
-}
-
-/* ==========================================================
-   🍎 iOS / SAFARI ФИКСЫ
-   ========================================================== */
-@supports (-webkit-touch-callout: none) {
-  .fixed.inset-0 {
-    height: -webkit-fill-available;
-  }
-  
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 100vh;
-    height: -webkit-fill-available;
-    min-height: -webkit-fill-available;
-  }
-  
-  .modal-content {
-    max-height: calc(100vh - 2rem);
-    max-height: calc(-webkit-fill-available - 2rem);
-  }
-}
-
-/* ==========================================================
-   📱 ПЛАНШЕТЫ
-   ========================================================== */
-@media (min-width: 641px) and (max-width: 1024px) {
-  .kanban-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .application-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-}
-
-/* Плавная прокрутка для модальных окон */
-.modal-content {
-  -webkit-overflow-scrolling: touch;
 }
 `;
 
@@ -7307,6 +7158,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         companyName={userCompany}
         userRole={userRole}
         onLogout={handleLogout}
+        isMobile={isMobile}
         onNavigate={(path) => {
     console.log('🔍 Навигация:', path);
     if (path === '/' || path === '/home') {
