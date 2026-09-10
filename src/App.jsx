@@ -6148,92 +6148,96 @@ useEffect(() => {
 }, [currentView, currentPlan, userCompanyId, supabase, showNotification]);
 
 
-  const renderLandingPage = () => (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#F5F7FA] via-white to-[#E4EDF5] page-enter">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-gradient-to-br from-[#F9AA33]/10 to-[#F57C00]/5 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-gradient-to-tr from-[#4A6572]/10 to-[#344955]/5 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/3 left-1/4 w-64 h-64 bg-gradient-to-r from-[#F9AA33]/5 to-transparent rounded-full blur-2xl"></div>
-      </div>
-      <div className="absolute inset-0 opacity-5" style={{
-        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%234A6572' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        backgroundSize: '30px 30px'
-      }}></div>
-      <div className="relative min-h-screen flex items-center justify-center p-4 z-10">
-        <div className="max-w-4xl w-full">
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center p-4 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg mb-6">
-              <div className="bg-gradient-to-br from-[#4A6572] to-[#344955] p-4 rounded-xl shadow-lg">
-                <img
-                  src="/icon-512.png"
-                  alt="Reglai logo"
-                  className="w-10 h-10"
-                  style={{ objectFit: 'contain' }}
-                />
-              </div>
-              <span className="ml-4 text-2xl font-bold bg-gradient-to-r from-[#4A6572] to-[#344955] bg-clip-text text-transparent">
-                Реглай PRO
-              </span>
+ const renderLandingPage = () => (
+  <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#F5F7FA] via-white to-[#E4EDF5] page-enter">
+    {/* Упрощенный фон для мобильных */}
+    <div className="absolute inset-0 overflow-hidden">
+      {/* Показываем декорации только на десктопе */}
+      <div className="hidden sm:block absolute -top-24 -right-24 w-96 h-96 bg-gradient-to-br from-[#F9AA33]/10 to-[#F57C00]/5 rounded-full blur-3xl"></div>
+      <div className="hidden sm:block absolute -bottom-32 -left-32 w-80 h-80 bg-gradient-to-tr from-[#4A6572]/10 to-[#344955]/5 rounded-full blur-3xl"></div>
+    </div>
+    
+    <div className="relative min-h-screen flex items-center justify-center p-3 sm:p-4 z-10">
+      <div className="max-w-4xl w-full">
+        {/* Логотип и заголовок - компактнее на мобильных */}
+        <div className="text-center mb-6 sm:mb-8 md:mb-12">
+          <div className="inline-flex items-center justify-center p-3 sm:p-4 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg mb-4 sm:mb-6">
+            <div className="bg-gradient-to-br from-[#4A6572] to-[#344955] p-3 sm:p-4 rounded-xl shadow-lg">
+              <img
+                src="/icon-512.png"
+                alt="Reglai logo"
+                className="w-8 h-8 sm:w-10 sm:h-10"
+                style={{ objectFit: 'contain' }}
+              />
             </div>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-4">
-              <span className="block text-gray-900">Управление материалами</span>
-              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#F9AA33] to-[#F57C00] mt-2">
-                для ваших объектов
-              </span>
-            </h1>
-            <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto mb-8">
-              Профессиональная система для контроля заявок, отслеживания поставок
-              и аналитики расходов на строительных объектах
-            </p>
+            <span className="ml-3 sm:ml-4 text-lg sm:text-2xl font-bold bg-gradient-to-r from-[#4A6572] to-[#344955] bg-clip-text text-transparent">
+              Реглай PRO
+            </span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            {[
-              { icon: '📋', title: 'Мгновенные заявки', desc: 'Создавайте и отправляйте заявки на материалы за минуты' },
-              { icon: '📊', title: 'Понятная аналитика', desc: 'Отслеживайте расходы и поставки в реальном времени' },
-              { icon: '🤝', title: 'Слаженная работа', desc: 'Все сотрудники работают в единой системе' }
-            ].map((feature, index) => (
-              <div
-                key={index}
-                className="bg-white/90 backdrop-blur-sm p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-[#F9AA33]/30 group"
-              >
-                <div className="text-3xl mb-4">{feature.icon}</div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-[#344955] transition-colors">
-                  {feature.title}
-                </h3>
-                <p className="text-gray-600">{feature.desc}</p>
-              </div>
-            ))}
-          </div>
-          <div className="text-center">
-            <div className="inline-flex flex-col sm:flex-row gap-4">
-              <button
-                onClick={() => setCurrentView('login')}
-                className="px-8 py-3 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
-              >
-                Войти в систему
-              </button>
-              <button
-  onClick={() => {
-    handleABTestClick('cta_button', 'signup_click');
-    setShowSignupModal(true);
-  }}
-  className={`px-8 py-3 font-semibold rounded-xl shadow-lg transition-all duration-300 ${
-    abTestVariants.cta_button === 'variant_b'
-      ? 'bg-gradient-to-r from-[#F9AA33] to-[#F57C00] hover:shadow-xl hover:scale-110'
-      : 'bg-gradient-to-r from-[#4A6572] to-[#344955] hover:shadow-lg hover:scale-105'
-  }`}
->
-  {abTestVariants.cta_button === 'variant_b' ? 'Попробовать сейчас' : 'Начать бесплатно'}
-</button>
+          
+          {/* Заголовок - меньше на мобильных */}
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold mb-3 sm:mb-4">
+            <span className="block text-gray-900">Управление материалами</span>
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#F9AA33] to-[#F57C00] mt-1 sm:mt-2">
+              для ваших объектов
+            </span>
+          </h1>
+          
+          {/* Описание - короче на мобильных */}
+          <p className="text-sm sm:text-lg md:text-xl text-gray-600 max-w-2xl mx-auto mb-6 sm:mb-8 px-2">
+            Профессиональная система для контроля заявок и аналитики
+          </p>
+        </div>
+        
+        {/* Карточки функций - компактнее */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8 md:mb-12">
+          {[
+            { icon: '', title: 'Мгновенные заявки', desc: 'Создавайте заявки за минуты' },
+            { icon: '', title: 'Аналитика', desc: 'Отслеживайте расходы' },
+            { icon: '🤝', title: 'Командная работа', desc: 'Все в одной системе' }
+          ].map((feature, index) => (
+            <div
+              key={index}
+              className="bg-white/90 backdrop-blur-sm p-3 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl shadow-lg border border-gray-100"
+            >
+              <div className="text-2xl sm:text-3xl mb-2 sm:mb-3 md:mb-4">{feature.icon}</div>
+              <h3 className="text-sm sm:text-lg md:text-xl font-bold text-gray-900 mb-1 sm:mb-2">
+                {feature.title}
+              </h3>
+              <p className="text-xs sm:text-sm md:text-base text-gray-600">
+                {feature.desc}
+              </p>
             </div>
-            <p className="text-sm text-gray-500 mt-4">
-              Без скрытых платежей • 14 дней бесплатно • Поддержка 24/7
-            </p>
+          ))}
+        </div>
+        
+        {/* Кнопки - компактнее */}
+        <div className="text-center">
+          <div className="inline-flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <button
+              onClick={() => setCurrentView('login')}
+              className="px-6 sm:px-8 py-2.5 sm:py-3 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-sm sm:text-base"
+            >
+              Войти в систему
+            </button>
+            <button
+              onClick={() => {
+                handleABTestClick('cta_button', 'signup_click');
+                setShowSignupModal(true);
+              }}
+              className="px-6 sm:px-8 py-2.5 sm:py-3 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-sm sm:text-base"
+            >
+              Начать бесплатно
+            </button>
           </div>
+          <p className="text-xs text-gray-500 mt-3 sm:mt-4">
+            14 дней бесплатно • Без скрытых платежей
+          </p>
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 
   const renderLoginForm = () => (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#F5F7FA] via-white to-[#E4EDF5] dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4 page-enter">
@@ -8638,7 +8642,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     />
   </div>
 )}
-// Модальные окна юридических документов
+
 {showPublicOffer && (
   <PublicOfferModal
     isOpen={showPublicOffer}
