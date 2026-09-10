@@ -163,7 +163,6 @@ const Navbar = ({
     const diffX = touchStartX.current - touchEndX.current;
     const diffY = Math.abs(touchStartY.current - touchEndY.current);
     
-    // Свайп влево больше 80px и горизонтальное движение преобладает
     if (diffX > 80 && diffX > diffY) {
       setIsMobileMenuOpen(false);
     }
@@ -1210,88 +1209,98 @@ const Navbar = ({
                 </div>
               </div>
 
-             {/* Пункты меню */}
-<nav className="space-y-0.5">
-  {filteredNavItems.map((item) => {
-    const Icon = item.icon;
-    const isActive = currentPage === item.id ||
-      (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
-      (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
-      (item.id === 'estimates' && currentPage === 'estimates') ||
-      (item.id === 'reports' && currentPage === 'reports') ||
-      (item.id === 'integration' && currentPage === 'integration') ||
-      (item.id === 'api' && currentPage === 'api') ||
-      (item.id === 'merge' && currentPage === 'merge') ||
-      (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
-    
-    let badgeCount = 0;
-    if (item.id === 'readyToIssue') {
-      badgeCount = readyToIssueCount || 0;
-    }
-    
-    return (
-      <button
-        key={item.id}
-        onClick={() => {
-          onNavigate?.(item.path);
-          setIsMobileMenuOpen(false);
-        }}
-        className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors ${
-          isActive
-            ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
-            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-        }`}
-      >
-        <Icon className="w-5 h-5 flex-shrink-0" />
-        <span className="flex-1 text-left">{item.label}</span>
-        
-        {item.id === 'readyToIssue' && badgeCount > 0 && (
-          <span className="ml-auto px-2 py-0.5 bg-amber-500 text-white text-xs rounded-full flex-shrink-0">
-            {badgeCount}
-          </span>
-        )}
-        {item.id === 'approvals' && pendingApprovalsCount > 0 && (
-          <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
-            {pendingApprovalsCount}
-          </span>
-        )}
-        {item.id === 'chat' && chatUnreadCount > 0 && (
-          <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
-            {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-          </span>
-        )}
-      </button>
-    );
-  })}
-</nav>
+              {/* 🔥 ЕДИНЫЙ КОНТЕЙНЕР ДЛЯ ВСЕГО СПИСКА МЕНЮ + КНОПОК НАСТРОЕК */}
+              <div className="flex flex-col">
+                
+                {/* Пункты меню */}
+                {filteredNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentPage === item.id ||
+                    (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
+                    (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
+                    (item.id === 'estimates' && currentPage === 'estimates') ||
+                    (item.id === 'reports' && currentPage === 'reports') ||
+                    (item.id === 'integration' && currentPage === 'integration') ||
+                    (item.id === 'api' && currentPage === 'api') ||
+                    (item.id === 'merge' && currentPage === 'merge') ||
+                    (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
+                  
+                  let badgeCount = 0;
+                  if (item.id === 'readyToIssue') {
+                    badgeCount = readyToIssueCount || 0;
+                  }
+                  
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        onNavigate?.(item.path);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 my-0.5 text-sm rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#344955] dark:text-[#F9AA33]'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      <span className="flex-1 text-left">{item.label}</span>
+                      
+                      {item.id === 'readyToIssue' && badgeCount > 0 && (
+                        <span className="ml-auto px-2 py-0.5 bg-amber-500 text-white text-xs rounded-full flex-shrink-0">
+                          {badgeCount}
+                        </span>
+                      )}
+                      {item.id === 'approvals' && pendingApprovalsCount > 0 && (
+                        <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
+                          {pendingApprovalsCount}
+                        </span>
+                      )}
+                      {item.id === 'chat' && chatUnreadCount > 0 && (
+                        <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
+                          {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
 
-{/* 🔥 НИЖНИЙ БЛОК: НАСТРОЙКИ + ВЫХОД — БЕЗ РАЗДЕЛИТЕЛЕЙ, ЕДИНЫЙ ПОТОК */}
-<div className="mt-4 space-y-0.5">
-  <button
-    onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
-    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-  >
-    <Sparkles className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-    <span className="flex-1 text-left">{currentPlan ? 'Сменить тариф' : 'Тарифы'}</span>
-  </button>
-  <button
-    onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }}
-    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-  >
-    <Building className="w-5 h-5 flex-shrink-0" />
-    <span className="flex-1 text-left">Реквизиты</span>
-  </button>
-  <button
-    onClick={onLogout}
-    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-  >
-    <LogOut className="w-5 h-5 flex-shrink-0" />
-    <span className="flex-1 text-left">Выйти</span>
-  </button>
-</div>
+                {/* 🔥 РАЗДЕЛИТЕЛЬ — отделяет пункты от кнопок настроек */}
+                <div className="my-3 border-t-2 border-gray-300 dark:border-gray-700" />
 
-{/* 🎯 Финальный отступ снизу */}
-<div className="h-6" />
+                {/* 🔥 КНОПКА: Сменить тариф */}
+                <button
+                  onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 my-0.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <Sparkles className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                  <span className="flex-1 text-left">{currentPlan ? 'Сменить тариф' : 'Тарифы'}</span>
+                </button>
+
+                {/* 🔥 КНОПКА: Реквизиты */}
+                <button
+                  onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 my-0.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <Building className="w-5 h-5 flex-shrink-0" />
+                  <span className="flex-1 text-left">Реквизиты</span>
+                </button>
+
+                {/* 🔥 РАЗДЕЛИТЕЛЬ ПЕРЕД ВЫХОДОМ */}
+                <div className="my-3 border-t-2 border-gray-300 dark:border-gray-700" />
+
+                {/* 🔥 КНОПКА: Выйти */}
+                <button
+                  onClick={onLogout}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 my-0.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                >
+                  <LogOut className="w-5 h-5 flex-shrink-0" />
+                  <span className="flex-1 text-left">Выйти</span>
+                </button>
+
+                {/* Финальный отступ */}
+                <div className="h-6" />
+              </div>
             </div>
           </div>
         </>
