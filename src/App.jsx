@@ -213,9 +213,6 @@ const NOTIFICATIONS_ENABLED = false;
 const unitOptions = ['шт', 'м', 'кг', 'л', 'упак', 'комплект', 'партия'];
 const COMPANY_LOGO_TEXT = 'Реглай';
 const ITEMS_PER_PAGE = 20;
-// ─────────────────────────────────────────────────────────────
-// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (Pattern #1) - НОРМАЛЬНЫЙ РАБОЧИЙ ВИД
-// ─────────────────────────────────────────────────────────────
 const GLOBAL_STYLES = `
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(20px) scale(0.98); }
@@ -257,43 +254,22 @@ const GLOBAL_STYLES = `
   transform: translateZ(0);
 }
 
-/* ===== БЕЗОПАСНЫЕ МОБИЛЬНЫЕ СТИЛИ (Ничего не ломают) ===== */
+/* ==========================================================
+   📱 МОБИЛЬНЫЕ СТИЛИ
+   ВАЖНО: не трогаем <nav> — React управляет шапкой через Tailwind!
+   ========================================================== */
 @media (max-width: 768px) {
-  /* Шапка */
-  nav {
-    height: 56px !important;
-    min-height: 56px !important;
-    max-height: 56px !important;
-    padding: 0 10px !important;
-    background: white !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
+  /* Отключаем зум на инпутах (iOS) */
+  input, select, textarea {
+    font-size: 16px !important;
   }
 
-  /* Кнопки в шапке - без текста, но видимые */
-  nav button, nav a {
-    width: 36px !important;
-    height: 36px !important;
-    min-width: 36px !important;
-    min-height: 36px !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    border-radius: 8px !important;
-  }
-
-  /* Иконки внутри кнопок */
-  nav button svg, nav a svg {
-    width: 20px !important;
-    height: 20px !important;
-    margin: 0 !important;
-  }
-
-
-  /* Скрываем рекламный блок с тарифом */
-  .text-center.mb-4, .text-center.mt-8, 
-  .fixed.bottom-0, div.mb-4.flex.justify-center, div.mt-8.text-center {
+  /* Скрываем рекламный блок с тарифом на мобильном */
+  .text-center.mb-4,
+  .text-center.mt-8,
+  .fixed.bottom-0,
+  div.mb-4.flex.justify-center,
+  div.mt-8.text-center {
     display: none !important;
   }
 
@@ -307,18 +283,100 @@ const GLOBAL_STYLES = `
   }
 }
 
-/* ===== БЕЗОПАСНЫЕ ТАЧ-ЦЕЛИ ===== */
-@media (max-width: 768px) {
-  button, [role="button"], .touch-target {
-    min-height: 44px;
-    min-width: 44px;
+/* ==========================================================
+   📱 СТИЛИ ДЛЯ СПИСКА ЗАЯВОК
+   ========================================================== */
+@media (max-width: 640px) {
+  .touch-target {
+    min-height: 44px !important;
+    min-width: 44px !important;
   }
-  input, select, textarea {
-    font-size: 16px !important;
+  
+  .scrollable-content {
+    -webkit-overflow-scrolling: touch;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  .application-card {
+    padding: 12px !important;
+    margin-bottom: 8px !important;
+    border-radius: 12px !important;
+  }
+  
+  .action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  
+  .action-grid button {
+    font-size: 12px;
+    padding: 10px 8px;
+    min-height: 44px;
+  }
+  
+  .mobile-status-tabs {
+    display: flex;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 4px 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .mobile-status-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .mobile-status-tab {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    font-size: 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+    min-height: 36px;
+  }
+}
+
+/* ==========================================================
+   🍎 iOS / SAFARI ФИКСЫ
+   ========================================================== */
+@supports (-webkit-touch-callout: none) {
+  .fixed.inset-0 {
+    height: -webkit-fill-available;
+  }
+  
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100vh;
+    height: -webkit-fill-available;
+    min-height: -webkit-fill-available;
+  }
+  
+  .modal-content {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(-webkit-fill-available - 2rem);
+  }
+}
+
+/* ==========================================================
+   📱 Планшеты
+   ========================================================== */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .kanban-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .application-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
 }
 `;
-
 
 // ─────────────────────────────────────────────────────────────
 // 🔧 ХЕЛПЕРЫ
