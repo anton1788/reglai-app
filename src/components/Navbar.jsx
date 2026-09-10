@@ -91,6 +91,12 @@ const Navbar = ({
   const navScrollRef = useRef(null);
   const tabletNavScrollRef = useRef(null);
 
+  // 🎁 Свайп для закрытия мобильного меню
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
+  const touchEndX = useRef(null);
+  const touchEndY = useRef(null);
+
   const loadCompanyPlan = useCallback(async () => {
     const cleanId = getCleanCompanyId(companyId);
     if (!cleanId || !supabase) {
@@ -134,6 +140,39 @@ const Navbar = ({
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isMobileMenuOpen]);
+
+  // 🎁 Обработчики свайпа для закрытия меню
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchMove = (e) => {
+    if (touchStartX.current === null) return;
+    touchEndX.current = e.touches[0].clientX;
+    touchEndY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX.current === null || touchEndX.current === null) {
+      touchStartX.current = null;
+      touchEndX.current = null;
+      return;
+    }
+    
+    const diffX = touchStartX.current - touchEndX.current;
+    const diffY = Math.abs(touchStartY.current - touchEndY.current);
+    
+    // Свайп влево больше 80px и горизонтальное движение преобладает
+    if (diffX > 80 && diffX > diffY) {
+      setIsMobileMenuOpen(false);
+    }
+    
+    touchStartX.current = null;
+    touchEndX.current = null;
+    touchStartY.current = null;
+    touchEndY.current = null;
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1031,7 +1070,7 @@ const Navbar = ({
         )}
       </nav>
 
-      {/* 🔥 МОБИЛЬНОЕ МЕНЮ — ИСПРАВЛЕНО! */}
+      {/* 🔥 МОБИЛЬНОЕ МЕНЮ — ИСПРАВЛЕНО + СВАЙП */}
       {isMobileMenuOpen && (
         <>
           {/* Затемненный фон */}
@@ -1048,23 +1087,30 @@ const Navbar = ({
             }}
           />
           
-          {/* Сама панель меню — выезжает слева */}
+          {/* Сама панель меню — выезжает слева + свайп для закрытия */}
           <div 
-            className="bg-white dark:bg-gray-900 overflow-y-auto shadow-2xl"
+            className="bg-white dark:bg-gray-900 shadow-2xl"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             style={{ 
               position: 'fixed',
               top: 0,
               left: 0,
-              bottom: 0,
               width: '85vw',
               maxWidth: '320px',
+              height: '100dvh',
+              maxHeight: '100dvh',
               zIndex: 99999,
               animation: 'slideFromLeft 0.25s ease-out forwards',
-              transform: 'translateX(0)'
+              transform: 'translateX(0)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
             }}
           >
-            {/* Кнопка закрытия + заголовок */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
+            {/* Кнопка закрытия + заголовок — фиксированный сверху */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-xl flex items-center justify-center">
                   <img 
@@ -1085,7 +1131,15 @@ const Navbar = ({
               </button>
             </div>
 
-            <div className="p-3">
+            {/* 🎯 Скроллируемая область с содержимым */}
+            <div 
+              className="flex-1 overflow-y-auto p-3"
+              style={{ 
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehavior: 'contain',
+                paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))'
+              }}
+            >
               {/* Тариф */}
               {currentPlan && (
                 <div className="mb-3 p-3 bg-gradient-to-r from-[#F9AA33]/10 to-[#F57C00]/10 rounded-xl border border-[#F9AA33]/20">
@@ -1236,6 +1290,9 @@ const Navbar = ({
                 <LogOut className="w-5 h-5" />
                 Выйти
               </button>
+
+              {/* 🎯 Дополнительный отступ снизу для мобильных (safe area) */}
+              <div style={{ height: 'env(safe-area-inset-bottom, 16px)' }} />
             </div>
           </div>
         </>
