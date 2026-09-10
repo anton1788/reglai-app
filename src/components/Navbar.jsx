@@ -1266,40 +1266,45 @@ const Navbar = ({
                 })}
 
                 {/* 🔥 РАЗДЕЛИТЕЛЬ — отделяет пункты от кнопок настроек */}
-                <div className="my-3 border-t-2 border-gray-300 dark:border-gray-700" />
+                <div className="mt-4 mb-2 border-t border-gray-200 dark:border-gray-700 flex-shrink-0" />
 
-                {/* 🔥 КНОПКА: Сменить тариф */}
-                <button
-                  onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 my-0.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                >
-                  <Sparkles className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-                  <span className="flex-1 text-left">{currentPlan ? 'Сменить тариф' : 'Тарифы'}</span>
-                </button>
+                {/* 🔥 КОНТЕЙНЕР ДЛЯ КНОПОК НАСТРОЕК - ИСПРАВЛЕНО */}
+                <div className="flex-shrink-0 space-y-1 mb-4">
+                  {/* 🔥 КНОПКА: Сменить тариф */}
+                  <button
+                    onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors active:bg-gray-200 dark:active:bg-gray-700 flex-shrink-0"
+                  >
+                    <Sparkles className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                    <span className="flex-1 text-left font-medium">{currentPlan ? 'Сменить тариф' : 'Тарифы'}</span>
+                  </button>
 
-                {/* 🔥 КНОПКА: Реквизиты */}
-                <button
-                  onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 my-0.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                >
-                  <Building className="w-5 h-5 flex-shrink-0" />
-                  <span className="flex-1 text-left">Реквизиты</span>
-                </button>
+                  {/* 🔥 КНОПКА: Реквизиты */}
+                  <button
+                    onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors active:bg-gray-200 dark:active:bg-gray-700 flex-shrink-0"
+                  >
+                    <Building className="w-5 h-5 flex-shrink-0" />
+                    <span className="flex-1 text-left font-medium">Реквизиты компании</span>
+                  </button>
+                </div>
 
                 {/* 🔥 РАЗДЕЛИТЕЛЬ ПЕРЕД ВЫХОДОМ */}
-                <div className="my-3 border-t-2 border-gray-300 dark:border-gray-700" />
+                <div className="flex-shrink-0 mt-2 mb-3 border-t-2 border-gray-300 dark:border-gray-600" />
 
-                {/* 🔥 КНОПКА: Выйти */}
-                <button
-                  onClick={onLogout}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 my-0.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                >
-                  <LogOut className="w-5 h-5 flex-shrink-0" />
-                  <span className="flex-1 text-left">Выйти</span>
-                </button>
+                {/* 🔥 КНОПКА: Выйти — ФИКСИРОВАННАЯ */}
+                <div className="flex-shrink-0 mb-4">
+                  <button
+                    onClick={onLogout}
+                    className="w-full flex items-center gap-3 px-3 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors font-medium active:bg-red-100 dark:active:bg-red-900/30 flex-shrink-0"
+                  >
+                    <LogOut className="w-5 h-5 flex-shrink-0" />
+                    <span className="flex-1 text-left">Выйти</span>
+                  </button>
+                </div>
 
-                {/* Финальный отступ */}
-                <div className="h-6" />
+                {/* Финальный отступ для safe area */}
+                <div className="flex-shrink-0 h-8" />
               </div>
             </div>
           </div>
