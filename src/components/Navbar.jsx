@@ -1265,11 +1265,8 @@ const Navbar = ({
   })}
 </nav>
 
-{/* 🔥 КОНЕЦ СПИСКА МЕНЮ — БОЛЬШОЙ ОТСТУП + ЖИРНАЯ ЛИНИЯ */}
-<div className="mt-6 mb-4 border-t-2 border-gray-300 dark:border-gray-700" />
-
-{/* 🔥 БЛОК: НАСТРОЙКИ (Тариф, Реквизиты) */}
-<div className="space-y-1 mb-6">
+{/* 🔥 НИЖНИЙ БЛОК: НАСТРОЙКИ + ВЫХОД — БЕЗ РАЗДЕЛИТЕЛЕЙ, ЕДИНЫЙ ПОТОК */}
+<div className="mt-4 space-y-0.5">
   <button
     onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
@@ -1284,19 +1281,14 @@ const Navbar = ({
     <Building className="w-5 h-5 flex-shrink-0" />
     <span className="flex-1 text-left">Реквизиты</span>
   </button>
+  <button
+    onClick={onLogout}
+    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+  >
+    <LogOut className="w-5 h-5 flex-shrink-0" />
+    <span className="flex-1 text-left">Выйти</span>
+  </button>
 </div>
-
-{/* 🔥 ЕЩЁ ОДНА ЛИНИЯ ПЕРЕД ВЫХОДОМ */}
-<div className="mb-4 border-t-2 border-gray-300 dark:border-gray-700" />
-
-{/* 🔥 КНОПКА ВЫХОДА */}
-<button
-  onClick={onLogout}
-  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
->
-  <LogOut className="w-5 h-5 flex-shrink-0" />
-  <span className="flex-1 text-left">Выйти</span>
-</button>
 
 {/* 🎯 Финальный отступ снизу */}
 <div className="h-6" />
