@@ -30,6 +30,8 @@ import ObjectMaterialsMerger from './components/ObjectMaterialsMerger';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import { useInView } from 'react-intersection-observer';
 import RoleDashboard from './components/RoleDashboard';
+// После других импортов компонентов
+import AIAssistant from './components/AIAssistant/AIAssistant';
 import {
   TARIFF_PLANS,
   getCompanyPlan,
@@ -8420,6 +8422,33 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         reasonOptions={REASON_OPTIONS}
         t={t}
       />
+
+      {/* 🤖 AI-Ассистент */}
+{user && userCompanyId && (
+  <AIAssistant
+    user={user}
+    userRole={userRole}
+    userCompanyId={userCompanyId}
+    applications={applications}
+    companyUsers={companyUsers}
+    supabase={supabase}
+    showNotification={showNotification}
+    onNavigate={(view) => {
+      setCurrentView(view);
+      // На мобильных закрываем меню
+      if (isMobile) window.scrollTo({ top: 0, behavior: 'smooth' });
+    }}
+    onCreateDraft={(data) => {
+      setFormData(prev => ({ ...prev, ...data }));
+      setCurrentView('create');
+    }}
+    onOpenApplication={(app) => {
+      setSelectedApplication(app);
+      setShowReceiveModal(true);
+    }}
+    t={t}
+  />
+)}
       
       {!isSuperAdmin(userRole, user?.user_metadata) && showOnboarding && (
         <OnboardingTour
