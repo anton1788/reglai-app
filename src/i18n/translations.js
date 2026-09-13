@@ -217,6 +217,14 @@ export const translations = {
     insufficientStock: 'Недостаточно на складе',
     noApplications: 'Нет активных заявок',
     noHistory: 'История заявок пуста',
+        // ─── История / действия ───────────────────────────────────────
+    history: 'История',
+    created_from_draft: 'Создано из черновика',
+
+    // ─── Действия снабженца в модалке приёмки ─────────────────────
+    supplyDecision: 'Как обработать заявку?',
+    takeToWork: '📦 Взять в работу',
+    sendForApproval: '📋 На согласование',
     noReceived: 'Нет полученных заявок',
     receivedTab: 'Получено',
     receivedMaterials: 'Полученные материалы',
@@ -1333,6 +1341,14 @@ export const translations = {
     insufficientStock: 'Insufficient stock',
     noApplications: 'No active requests',
     noHistory: 'Request history is empty',
+        // ─── History / actions ─────────────────────────────────────────
+    history: 'History',
+    created_from_draft: 'Created from draft',
+
+    // ─── Supplier actions in receive modal ─────────────────────────
+    supplyDecision: 'How to process request?',
+    takeToWork: '📦 Take to work',
+    sendForApproval: '📋 Send for approval',
         // ─── Table headers ─────────────────────────────────────────────
     objectAndForeman: 'Object / Foreman',
     materialsCount: 'Materials count',
