@@ -1417,6 +1417,31 @@ const readyToIssueCount = useMemo(() => {
   }).length;
 }, [applications]);
 
+// 🆕 СЧЁТЧИКИ СТАТУСОВ ДЛЯ ТАБОВ (по всем заявкам, не только страница)
+const statusCounts = useMemo(() => {
+  const counts = {
+    all: applications.length,
+    pending: 0,
+    admin_processing: 0,
+    partial_on_warehouse: 0,
+    supplier_received: 0,
+    pending_master_confirmation: 0,
+    partial_received: 0,
+    ready_for_issue: 0,
+    received: 0,
+    canceled: 0,
+  };
+  
+  applications.forEach(app => {
+    const status = normalizeStatus(app.status);
+    if (counts[status] !== undefined) {
+      counts[status]++;
+    }
+  });
+  
+  return counts;
+}, [applications]);
+
 
   // ─────────────────────────────────────────────────────────
   // 🔔 ENHANCED NOTIFICATIONS (Pattern #4: Toast with undo)
@@ -3738,66 +3763,12 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 🔍 FILTERING
   // ─────────────────────────────────────────────────────────
-   const filteredApplications = useMemo(() => {
+      const filteredApplications = useMemo(() => {
+  // Фильтрация УЖЕ произошла на сервере в loadApplications.
+  // Здесь оставляем только client-side фильтры для отображения.
   const apps = isAdminMode ? allApplications : applications;
-  
-  let smartSearchTerm = searchTerm;
-  let customFilters = {};
-  
-  if (searchTerm.includes(':')) {
-    const parts = searchTerm.split(' ');
-    parts.forEach(part => {
-      if (part.includes(':')) {
-        const [key, value] = part.split(':');
-        customFilters[key] = value;
-      } else {
-        smartSearchTerm = part;
-      }
-    });
-  }
-  
-  return apps.filter(app => {
-    let matchesSearch = true;
-    if (smartSearchTerm && !customFilters.object) {
-      matchesSearch = app.object_name.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
-        app.foreman_name.toLowerCase().includes(smartSearchTerm.toLowerCase()) ||
-        (app.foreman_phone && app.foreman_phone.includes(smartSearchTerm));
-    }
-    
-    if (customFilters.object) {
-      matchesSearch = app.object_name.toLowerCase().includes(customFilters.object.toLowerCase());
-    }
-    
-    // 🔥 ФИЛЬТР ПО СТАТУСУ — ДЛЯ СНАБЖЕНЦА И МЕНЕДЖЕРА ОТКЛЮЧАЕМ
-    let matchesStatus = true;
-    if (userRole !== 'supply_admin' && userRole !== 'manager' && userRole !== 'director') {
-      matchesStatus = statusFilter === 'all' ||
-        app.status === statusFilter ||
-        (statusFilter === 'pending' && [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ADMIN_PROCESSING].includes(app.status));
-      
-      if (customFilters.status) {
-        if (customFilters.status === 'pending') {
-          matchesStatus = [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ADMIN_PROCESSING].includes(app.status);
-        } else if (customFilters.status === 'active') {
-          matchesStatus = ['pending', 'admin_processing', 'partial_received'].includes(app.status);
-        } else if (customFilters.status === 'received') {
-          matchesStatus = app.status === 'received';
-        }
-      }
-    }
-    
-    let matchesOverdue = true;
-    if (customFilters.overdue === 'true') {
-      matchesOverdue = app.status === 'pending' && getDaysSince(app.created_at) > 2;
-    }
-    
-    const matchesDate = !dateFilter || app.created_at.startsWith(dateFilter);
-    const matchesViewed = viewedFilter === 'all' ||
-      (viewedFilter === 'new' && !app.viewed_by_supply_admin);
-    
-    return matchesSearch && matchesStatus && matchesDate && matchesViewed && matchesOverdue;
-  });
-}, [applications, allApplications, isAdminMode, searchTerm, statusFilter, dateFilter, viewedFilter, userRole]); // ← Добавлен userRole
+  return apps;
+}, [applications, allApplications, isAdminMode]);
 
   const uniqueDates = useMemo(() => {
     const apps = isAdminMode ? allApplications : applications;
@@ -4642,13 +4613,6 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
   }
 }, [user, supabase, showNotification, setApplications]);
 
-  const clearFilters = () => {
-    setSearchTerm('');
-    setStatusFilter('all');
-    setDateFilter('');
-    setViewedFilter('all');
-  };
-
   // ─────────────────────────────────────────────────────────
   // 🔐 ADMIN FUNCTIONS
   // ─────────────────────────────────────────────────────────
@@ -4930,41 +4894,75 @@ await logEmployeeBlocked(supabase, employeeId, newStatus, userContextWithCleanId
 
   setIsLoading(true);
   try {
-    // ✅ 1. Сначала получаем ТОЛЬКО количество
-    const { count, error: countError } = await supabase
+        // ✅ 1. БАЗОВЫЙ ЗАПРОС с count
+    let baseQuery = supabase
       .from('applications')
-      .select('*', { count: 'exact', head: true })
-      .eq('company_id', safeCompanyId); // Теперь здесь ТОЧНО строка
+      .select('*', { count: 'exact' })
+      .eq('company_id', safeCompanyId);
+
+    // ✅ 2. Применяем ВСЕ фильтры ДО пагинации
+    if (userRole === 'master' || userRole === 'foreman') {
+      baseQuery = baseQuery.eq('user_id', user?.id);
+    }
+    if (userRole === 'accountant') {
+      baseQuery = baseQuery.eq('status', 'received');
+    }
+
+    // 🔍 Поиск по объекту / прорабу / телефону
+    if (searchTerm && searchTerm.trim()) {
+      const term = searchTerm.trim();
+      baseQuery = baseQuery.or(
+        `object_name.ilike.%${term}%,foreman_name.ilike.%${term}%,foreman_phone.ilike.%${term}%`
+      );
+    }
+
+    // 📊 Фильтр по статусу (с учётом группы "pending")
+    if (statusFilter && statusFilter !== 'all') {
+      if (statusFilter === 'pending') {
+        baseQuery = baseQuery.in('status', [
+          APPLICATION_STATUS.PENDING,
+          APPLICATION_STATUS.ADMIN_PROCESSING
+        ]);
+      } else {
+        baseQuery = baseQuery.eq('status', statusFilter);
+      }
+    }
+
+    // 📅 Фильтр по дате
+    if (dateFilter) {
+      baseQuery = baseQuery
+        .gte('created_at', `${dateFilter}T00:00:00`)
+        .lt('created_at', `${dateFilter}T23:59:59.999`);
+    }
+
+    // 👁 Фильтр "новые / просмотренные"
+    if (viewedFilter === 'new') {
+      baseQuery = baseQuery.eq('viewed_by_supply_admin', false);
+    }
+
+    // 🔥 Сортировка
+    baseQuery = baseQuery.order('created_at', { ascending: false });
+
+    // ✅ 3. Сначала считаем общее количество (с учётом фильтров)
+    const { count, error: countError } = await baseQuery;
 
     if (countError) throw countError;
 
-    // ✅ 2. Вычисляем totalPages
-    const calculatedTotalPages = Math.max(1, Math.ceil(count / ITEMS_PER_PAGE));
+    const calculatedTotalPages = Math.max(1, Math.ceil((count || 0) / ITEMS_PER_PAGE));
     setTotalPages(calculatedTotalPages);
 
-    // ✅ 3. Корректируем pageNumber если нужно
+    // ✅ 4. Корректируем страницу если нужно
     let safePage = pageNumber;
     if (safePage > calculatedTotalPages) {
       safePage = 1;
       setPage(1);
     }
 
-    // ✅ 4. Вычисляем правильный range
+    // ✅ 5. Пагинация
     const from = (safePage - 1) * ITEMS_PER_PAGE;
-    const to = Math.min(safePage * ITEMS_PER_PAGE - 1, count - 1);
+    const to = from + ITEMS_PER_PAGE - 1;
 
-    // ✅ 5. Запрос с правильным range
-    let query = supabase
-      .from('applications')
-      .select('*')
-      .eq('company_id', safeCompanyId) // И здесь ТОЧНО строка
-      .order('created_at', { ascending: false })
-      .range(from, to > 0 ? to : 0);
-
-    if (userRole === 'master') query = query.eq('user_id', user?.id);
-    if (userRole === 'accountant') query = query.eq('status', 'received');
-
-    const { data: userApps = [], error: userError } = await query;
+    const { data: userApps = [], error: userError } = await baseQuery.range(from, to);
     if (userError) throw userError;
 
     // ✅ Фильтруем временные заявки (pending_*, draft_*)
@@ -5034,7 +5032,29 @@ setApplications(uniqueApps);
   } finally {
     setIsLoading(false);
   }
-}, [user, userCompanyId, userRole, isAdminMode, showNotification, safeSetUserCompanyId]);
+}, [user, userCompanyId, userRole, isAdminMode, showNotification, safeSetUserCompanyId, searchTerm, statusFilter, dateFilter, viewedFilter]);
+
+  // 🔄 ПЕРЕЗАГРУЗКА ПРИ СМЕНЕ ФИЛЬТРОВ
+  useEffect(() => {
+    if (!user || !userCompanyId) return;
+    
+    // Пропускаем самый первый рендер (когда фильтры пустые и загрузка уже идёт)
+    if (
+      searchTerm === '' &&
+      statusFilter === 'all' &&
+      dateFilter === '' &&
+      viewedFilter === 'all' &&
+      page === 1
+    ) {
+      return;
+    }
+    
+    const timer = setTimeout(() => {
+      loadApplications(1);
+    }, 300); // debounce для поиска
+    
+    return () => clearTimeout(timer);
+  }, [searchTerm, statusFilter, dateFilter, viewedFilter, user, userCompanyId]);
 
   // 📩 ЗАГРУЗКА УВЕДОМЛЕНИЙ (ВСТАВИТЬ ПОСЛЕ loadApplications)
   const loadNotifications = useCallback(async () => {
@@ -7596,6 +7616,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             viewMode="inwork"
             isAdminMode={isAdminMode}
             permissions={currentUserPermissions}
+            statusCounts={statusCounts}
             t={t}
             language={language}
             uniqueDates={uniqueDates}
@@ -7617,11 +7638,11 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             statusFilter={statusFilter}
             dateFilter={dateFilter}
             viewedFilter={viewedFilter}
-            onSearchChange={setSearchTerm}
-            onStatusFilterChange={setStatusFilter}
-            onDateFilterChange={setDateFilter}
-            onViewedFilterChange={setViewedFilter}
-            onClearFilters={clearFilters}
+            onSearchChange={handleSearchChange}
+            onStatusFilterChange={handleStatusFilterChange}
+            onDateFilterChange={handleDateFilterChange}
+            onViewedFilterChange={handleViewedFilterChange}
+            onClearFilters={handleClearFilters}
             expandedMaterials={expandedMaterials}
             onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
               ...prev,
@@ -7725,6 +7746,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       userRole={userRole}
       isAdminMode={isAdminMode}
       permissions={currentUserPermissions}
+      statusCounts={statusCounts}
       t={t}
       language={language}
       uniqueDates={uniqueDates}
@@ -7746,11 +7768,11 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       statusFilter={statusFilter}
       dateFilter={dateFilter}
       viewedFilter={viewedFilter}
-      onSearchChange={setSearchTerm}
-      onStatusFilterChange={setStatusFilter}
-      onDateFilterChange={setDateFilter}
-      onViewedFilterChange={setViewedFilter}
-      onClearFilters={clearFilters}
+      onSearchChange={handleSearchChange}
+onStatusFilterChange={handleStatusFilterChange}
+onDateFilterChange={handleDateFilterChange}
+onViewedFilterChange={handleViewedFilterChange}
+onClearFilters={handleClearFilters}
       expandedMaterials={expandedMaterials}
       onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
         ...prev,
@@ -7783,6 +7805,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             userRole={userRole}
             isAdminMode={isAdminMode}
             permissions={currentUserPermissions}
+            statusCounts={statusCounts}
             t={t}
             language={language}
             uniqueDates={uniqueDates}
@@ -7804,11 +7827,11 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             statusFilter={statusFilter}
             dateFilter={dateFilter}
             viewedFilter={viewedFilter}
-            onSearchChange={setSearchTerm}
-            onStatusFilterChange={setStatusFilter}
-            onDateFilterChange={setDateFilter}
-            onViewedFilterChange={setViewedFilter}
-            onClearFilters={clearFilters}
+            onSearchChange={handleSearchChange}
+onStatusFilterChange={handleStatusFilterChange}
+onDateFilterChange={handleDateFilterChange}
+onViewedFilterChange={handleViewedFilterChange}
+onClearFilters={handleClearFilters}
             expandedMaterials={expandedMaterials}
             onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
               ...prev,
@@ -7833,6 +7856,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             userRole={userRole}
             isAdminMode={isAdminMode}
             permissions={currentUserPermissions}
+            statusCounts={statusCounts}
             t={t}
             language={language}
             uniqueDates={uniqueDates}
@@ -7854,11 +7878,11 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             statusFilter={statusFilter}
             dateFilter={dateFilter}
             viewedFilter={viewedFilter}
-            onSearchChange={setSearchTerm}
-            onStatusFilterChange={setStatusFilter}
-            onDateFilterChange={setDateFilter}
-            onViewedFilterChange={setViewedFilter}
-            onClearFilters={clearFilters}
+            onSearchChange={handleSearchChange}
+onStatusFilterChange={handleStatusFilterChange}
+onDateFilterChange={handleDateFilterChange}
+onViewedFilterChange={handleViewedFilterChange}
+onClearFilters={handleClearFilters}
             expandedMaterials={expandedMaterials}
             onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
               ...prev,
@@ -7891,6 +7915,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     userRole={userRole}
     isAdminMode={isAdminMode}
     permissions={currentUserPermissions}
+    statusCounts={statusCounts}
     t={t}
     language={language}
     uniqueDates={uniqueDates}
@@ -7912,11 +7937,11 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     statusFilter={statusFilter}
     dateFilter={dateFilter}
     viewedFilter={viewedFilter}
-    onSearchChange={setSearchTerm}
-    onStatusFilterChange={setStatusFilter}
-    onDateFilterChange={setDateFilter}
-    onViewedFilterChange={setViewedFilter}
-    onClearFilters={clearFilters}
+    onSearchChange={handleSearchChange}
+onStatusFilterChange={handleStatusFilterChange}
+onDateFilterChange={handleDateFilterChange}
+onViewedFilterChange={handleViewedFilterChange}
+onClearFilters={handleClearFilters}
     expandedMaterials={expandedMaterials}
     onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
       ...prev,
@@ -8269,6 +8294,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             userRole={userRole}
             isAdminMode={isAdminMode}
             permissions={currentUserPermissions}
+            statusCounts={statusCounts}
             t={t}
             language={language}
             uniqueDates={uniqueDates}
@@ -8290,11 +8316,11 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             statusFilter={statusFilter}
             dateFilter={dateFilter}
             viewedFilter={viewedFilter}
-            onSearchChange={setSearchTerm}
-            onStatusFilterChange={setStatusFilter}
-            onDateFilterChange={setDateFilter}
-            onViewedFilterChange={setViewedFilter}
-            onClearFilters={clearFilters}
+            onSearchChange={handleSearchChange}
+onStatusFilterChange={handleStatusFilterChange}
+onDateFilterChange={handleDateFilterChange}
+onViewedFilterChange={handleViewedFilterChange}
+onClearFilters={handleClearFilters}
             expandedMaterials={expandedMaterials}
             onToggleMaterial={(appId, idx) => setExpandedMaterials(prev => ({
                 ...prev,

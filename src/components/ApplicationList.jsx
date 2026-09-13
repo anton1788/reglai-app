@@ -967,6 +967,7 @@ const ApplicationList = memo(({
   comments = {},
   showComments = {},
   isLoading = false,
+  statusCounts: statusCountsProp
 }) => {
   const { ref: loadMoreRef, inView } = useInView({
     threshold: 0.1,
@@ -1041,22 +1042,33 @@ const ApplicationList = memo(({
   }, [t]);
 
   const statusCounts = useMemo(() => {
-    const counts = { 
-      pending: 0, 
-      admin_processing: 0, 
-      supplier_received: 0,
-      received: 0, 
-      canceled: 0 
-    };
-    applications.forEach(app => {
-      if (app.status === APPLICATION_STATUS.PENDING) counts.pending++;
-      else if (app.status === APPLICATION_STATUS.ADMIN_PROCESSING) counts.admin_processing++;
-      else if (app.status === APPLICATION_STATUS.SUPPLIER_RECEIVED) counts.supplier_received++;
-      else if (app.status === APPLICATION_STATUS.RECEIVED) counts.received++;
-      else if (app.status === APPLICATION_STATUS.CANCELED) counts.canceled++;
-    });
-    return counts;
-  }, [applications]);
+  // ✅ Если счётчики пришли из App.jsx — используем их
+  if (statusCountsProp) {
+    return statusCountsProp;
+  }
+  
+  // Fallback: считаем локально (по текущей странице)
+  const counts = { 
+    pending: 0, 
+    admin_processing: 0, 
+    partial_on_warehouse: 0,
+    supplier_received: 0,
+    pending_master_confirmation: 0,
+    partial_received: 0,
+    ready_for_issue: 0,
+    received: 0, 
+    canceled: 0 
+  };
+  
+  applications.forEach(app => {
+    const status = app.status;
+    if (counts[status] !== undefined) {
+      counts[status]++;
+    }
+  });
+  
+  return counts;
+}, [applications, statusCountsProp]);
 
   const handleTabChange = useCallback((tabKey) => {
     onStatusFilterChange(tabKey);

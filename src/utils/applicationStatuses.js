@@ -3,25 +3,27 @@
 // ============ КОНСТАНТЫ СТАТУСОВ ============
 
 export const APPLICATION_STATUS = {
-  PENDING: 'pending', // Ожидает обработки
-  ADMIN_PROCESSING: 'admin_processing', // В обработке у снабженца
-  PENDING_APPROVAL: 'pending_approval', // На согласовании у руководителя
-  APPROVED: 'approved', // Согласовано руководителем
-  PARTIAL_RECEIVED: 'partial_received', // Частично принято на склад
-  READY_FOR_ISSUE: 'ready_for_issue', // Готово к выдаче мастеру (ВСЁ НА СКЛАДЕ)
-  PENDING_MASTER_CONFIRMATION: 'pending_master_confirmation', // Ожидает подтверждения мастера
-  RECEIVED: 'received', // Полностью получено мастером
-  REJECTED: 'rejected', // Отклонено руководителем
-  CANCELED: 'canceled' // Отменено
+  PENDING: 'pending',                                       // Ожидает обработки
+  ADMIN_PROCESSING: 'admin_processing',                     // В обработке у снабженца
+  PENDING_APPROVAL: 'pending_approval',                     // На согласовании у руководителя
+  APPROVED: 'approved',                                     // Согласовано руководителем
+  PARTIAL_ON_WAREHOUSE: 'partial_on_warehouse',             // 🆕 Частично принято на склад (лежит на складе)
+  SUPPLIER_RECEIVED: 'supplier_received',                   // 🆕 Принято от поставщика (всё на складе)
+  PARTIAL_RECEIVED: 'partial_received',                     // Частично получено мастером
+  READY_FOR_ISSUE: 'ready_for_issue',                       // Готово к выдаче мастеру (всё на складе)
+  PENDING_MASTER_CONFIRMATION: 'pending_master_confirmation',// Ожидает подтверждения мастера
+  RECEIVED: 'received',                                     // Полностью получено мастером
+  REJECTED: 'rejected',                                     // Отклонено руководителем
+  CANCELED: 'canceled'                                      // Отменено
 };
 
 export const ITEM_STATUS = {
-  PENDING: 'pending', // Ожидает поставки
-  ON_WAREHOUSE: 'on_warehouse', // На складе (принято от поставщика)
-  SENT_TO_MASTER: 'sent_to_master', // Отправлено мастеру
+  PENDING: 'pending',                  // Ожидает поставки
+  ON_WAREHOUSE: 'on_warehouse',        // На складе (принято от поставщика)
+  SENT_TO_MASTER: 'sent_to_master',    // Отправлено мастеру
   PARTIAL_CONFIRMED: 'partial_confirmed',
-  CONFIRMED: 'confirmed', // Подтверждено мастером
-  REJECTED: 'rejected' // Отклонено мастером
+  CONFIRMED: 'confirmed',              // Подтверждено мастером
+  REJECTED: 'rejected'                 // Отклонено мастером
 };
 
 // ============ I18N КЛЮЧИ ============
@@ -31,6 +33,8 @@ export const STATUS_I18N = {
   [APPLICATION_STATUS.ADMIN_PROCESSING]: 'statusProcessing',
   [APPLICATION_STATUS.PENDING_APPROVAL]: 'statusPendingApproval',
   [APPLICATION_STATUS.APPROVED]: 'statusApproved',
+  [APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: 'statusPartialOnWarehouse',   // 🆕
+  [APPLICATION_STATUS.SUPPLIER_RECEIVED]: 'statusSupplierReceived',        // 🆕
   [APPLICATION_STATUS.PARTIAL_RECEIVED]: 'statusPartial',
   [APPLICATION_STATUS.READY_FOR_ISSUE]: 'statusReadyForIssue',
   [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 'statusAwaitingConfirmation',
@@ -53,6 +57,8 @@ export const STATUS_COLORS = {
   [APPLICATION_STATUS.ADMIN_PROCESSING]: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200',
   [APPLICATION_STATUS.PENDING_APPROVAL]: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200',
   [APPLICATION_STATUS.APPROVED]: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200',
+  [APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200',  // 🆕
+  [APPLICATION_STATUS.SUPPLIER_RECEIVED]: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200',              // 🆕
   [APPLICATION_STATUS.PARTIAL_RECEIVED]: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200',
   [APPLICATION_STATUS.READY_FOR_ISSUE]: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200',
   [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200',
@@ -73,6 +79,8 @@ export const STATUS_ICONS = {
   [APPLICATION_STATUS.ADMIN_PROCESSING]: 'Loader2',
   [APPLICATION_STATUS.PENDING_APPROVAL]: 'FileSearch',
   [APPLICATION_STATUS.APPROVED]: 'ShieldCheck',
+  [APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: 'Boxes',            // 🆕
+  [APPLICATION_STATUS.SUPPLIER_RECEIVED]: 'Warehouse',           // 🆕
   [APPLICATION_STATUS.PARTIAL_RECEIVED]: 'Package',
   [APPLICATION_STATUS.READY_FOR_ISSUE]: 'PackageCheck',
   [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 'UserCheck',
@@ -93,12 +101,14 @@ export const STATUS_PRIORITY = {
   [APPLICATION_STATUS.PENDING_APPROVAL]: 2,
   [APPLICATION_STATUS.ADMIN_PROCESSING]: 3,
   [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 4,
-  [APPLICATION_STATUS.PARTIAL_RECEIVED]: 5,
-  [APPLICATION_STATUS.READY_FOR_ISSUE]: 6,
-  [APPLICATION_STATUS.APPROVED]: 7,
-  [APPLICATION_STATUS.RECEIVED]: 8,
-  [APPLICATION_STATUS.REJECTED]: 9,
-  [APPLICATION_STATUS.CANCELED]: 10
+  [APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: 5,      // 🆕
+  [APPLICATION_STATUS.PARTIAL_RECEIVED]: 6,
+  [APPLICATION_STATUS.SUPPLIER_RECEIVED]: 7,         // 🆕
+  [APPLICATION_STATUS.READY_FOR_ISSUE]: 8,
+  [APPLICATION_STATUS.APPROVED]: 9,
+  [APPLICATION_STATUS.RECEIVED]: 10,
+  [APPLICATION_STATUS.REJECTED]: 11,
+  [APPLICATION_STATUS.CANCELED]: 12
 };
 
 // Проверка, активна ли заявка (требует действий)
@@ -108,10 +118,12 @@ export const isApplicationActive = (status) => {
     APPLICATION_STATUS.ADMIN_PROCESSING,
     APPLICATION_STATUS.PENDING_APPROVAL,
     APPLICATION_STATUS.APPROVED,
+    APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE,           // 🆕
+    APPLICATION_STATUS.SUPPLIER_RECEIVED,              // 🆕
     APPLICATION_STATUS.PARTIAL_RECEIVED,
     APPLICATION_STATUS.READY_FOR_ISSUE,
     APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
-    'sent_to_master'  // ← добавить для совместимости
+    'sent_to_master' // ← для совместимости
   ];
   return activeStatuses.includes(status);
 };
@@ -130,12 +142,13 @@ export const isApplicationCompleted = (status) => {
 export const requiresMasterConfirmation = (status) => {
   return status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION ||
          status === 'pending_master_confirmation' ||
-         status === 'sent_to_master';  // ← для обратной совместимости
+         status === 'sent_to_master'; // ← для обратной совместимости
 };
 
 // Проверка, готова ли заявка к выдаче
 export const isReadyForIssue = (status) => {
-  return status === APPLICATION_STATUS.READY_FOR_ISSUE;
+  return status === APPLICATION_STATUS.READY_FOR_ISSUE ||
+         status === APPLICATION_STATUS.SUPPLIER_RECEIVED; // 🆕
 };
 
 // Проверка, требует ли заявка согласования руководителя
@@ -161,10 +174,24 @@ export const canTransitionTo = (fromStatus, toStatus) => {
       APPLICATION_STATUS.CANCELED
     ],
     [APPLICATION_STATUS.ADMIN_PROCESSING]: [
+      APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE,               // 🆕
+      APPLICATION_STATUS.SUPPLIER_RECEIVED,                  // 🆕
       APPLICATION_STATUS.PARTIAL_RECEIVED,
-      APPLICATION_STATUS.RECEIVED,
-      APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
       APPLICATION_STATUS.READY_FOR_ISSUE,
+      APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+      APPLICATION_STATUS.RECEIVED,
+      APPLICATION_STATUS.CANCELED
+    ],
+    [APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: [             // 🆕
+      APPLICATION_STATUS.SUPPLIER_RECEIVED,
+      APPLICATION_STATUS.READY_FOR_ISSUE,
+      APPLICATION_STATUS.PARTIAL_RECEIVED,
+      APPLICATION_STATUS.CANCELED
+    ],
+    [APPLICATION_STATUS.SUPPLIER_RECEIVED]: [                // 🆕
+      APPLICATION_STATUS.READY_FOR_ISSUE,
+      APPLICATION_STATUS.PARTIAL_RECEIVED,
+      APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
       APPLICATION_STATUS.CANCELED
     ],
     [APPLICATION_STATUS.PENDING_APPROVAL]: [
@@ -207,8 +234,18 @@ export const getNextAvailableStatuses = (currentStatus) => {
       { status: APPLICATION_STATUS.CANCELED, label: 'Отменить' }
     ],
     [APPLICATION_STATUS.ADMIN_PROCESSING]: [
-      { status: APPLICATION_STATUS.PARTIAL_RECEIVED, label: 'Частичная приёмка' },
-      { status: APPLICATION_STATUS.RECEIVED, label: 'Полная приёмка' },
+      { status: APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE, label: 'Частичная приёмка' },
+      { status: APPLICATION_STATUS.SUPPLIER_RECEIVED, label: 'Полная приёмка' },
+      { status: APPLICATION_STATUS.READY_FOR_ISSUE, label: 'Готово к выдаче' },
+      { status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION, label: 'Отправить мастеру' },
+      { status: APPLICATION_STATUS.CANCELED, label: 'Отменить' }
+    ],
+    [APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE]: [
+      { status: APPLICATION_STATUS.SUPPLIER_RECEIVED, label: 'Завершить приёмку' },
+      { status: APPLICATION_STATUS.READY_FOR_ISSUE, label: 'Готово к выдаче' },
+      { status: APPLICATION_STATUS.CANCELED, label: 'Отменить' }
+    ],
+    [APPLICATION_STATUS.SUPPLIER_RECEIVED]: [
       { status: APPLICATION_STATUS.READY_FOR_ISSUE, label: 'Готово к выдаче' },
       { status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION, label: 'Отправить мастеру' },
       { status: APPLICATION_STATUS.CANCELED, label: 'Отменить' }
@@ -252,6 +289,8 @@ export const getStatusText = (status, language = 'ru') => {
       statusProcessing: 'В обработке у снабженца',
       statusPendingApproval: 'На согласовании',
       statusApproved: 'Согласовано',
+      statusPartialOnWarehouse: 'Частично на складе',           // 🆕
+      statusSupplierReceived: 'На складе',                       // 🆕
       statusPartial: 'Частично принято',
       statusReadyForIssue: 'Готово к выдаче',
       statusAwaitingConfirmation: 'Ожидает подтверждения мастера',
@@ -271,6 +310,8 @@ export const getStatusText = (status, language = 'ru') => {
       statusProcessing: 'Processing',
       statusPendingApproval: 'Pending Approval',
       statusApproved: 'Approved',
+      statusPartialOnWarehouse: 'Partially On Warehouse',        // 🆕
+      statusSupplierReceived: 'On Warehouse',                     // 🆕
       statusPartial: 'Partially Received',
       statusReadyForIssue: 'Ready for Issue',
       statusAwaitingConfirmation: 'Awaiting Master Confirmation',
@@ -306,6 +347,7 @@ export const getStatusIcon = (status) => {
 export const getStatusPriority = (status) => {
   return STATUS_PRIORITY[status] || 999;
 };
+
 // ============================================================
 // 🆕 НОВЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С ВЫДАЧЕЙ МАТЕРИАЛОВ
 // ============================================================
@@ -317,13 +359,13 @@ export const getStatusPriority = (status) => {
  */
 export const hasMaterialsReadyToIssue = (application) => {
   if (!application?.materials) return false;
-  
+
   return application.materials.some(m => {
     const onWarehouse = Number(m.supplier_received_quantity) || 0;
     const alreadySent = Number(m.sent_to_master_quantity) || 0;
     const received = Number(m.received) || 0;
     const quantity = Number(m.quantity) || 0;
-    
+
     // Материал доступен для выдачи если:
     // 1. Есть на складе > 0
     // 2. Ещё НЕ отправлен полностью (alreadySent < onWarehouse)
@@ -339,14 +381,14 @@ export const hasMaterialsReadyToIssue = (application) => {
  */
 export const getTotalAvailableForIssue = (application) => {
   if (!application?.materials) return 0;
-  
+
   return application.materials.reduce((total, m) => {
     const onWarehouse = Number(m.supplier_received_quantity) || 0;
     const alreadySent = Number(m.sent_to_master_quantity) || 0;
     const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
-    
+
     if (isFullyConfirmed) return total;
-    
+
     return total + Math.max(0, onWarehouse - alreadySent);
   }, 0);
 };
@@ -358,19 +400,19 @@ export const getTotalAvailableForIssue = (application) => {
  */
 export const getMaterialsReadyToIssue = (application) => {
   if (!application?.materials) return [];
-  
+
   return application.materials
     .filter(m => {
       const onWarehouse = Number(m.supplier_received_quantity) || 0;
       const alreadySent = Number(m.sent_to_master_quantity) || 0;
       const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
-      
+
       return onWarehouse > 0 && alreadySent < onWarehouse && !isFullyConfirmed;
     })
     .map(m => ({
       ...m,
-      availableToIssue: Math.max(0, 
-        (Number(m.supplier_received_quantity) || 0) - 
+      availableToIssue: Math.max(0,
+        (Number(m.supplier_received_quantity) || 0) -
         (Number(m.sent_to_master_quantity) || 0)
       )
     }));
@@ -383,7 +425,7 @@ export const getMaterialsReadyToIssue = (application) => {
  */
 export const isFullyConfirmed = (application) => {
   if (!application?.materials) return false;
-  
+
   return application.materials.every(m => {
     return (Number(m.received) || 0) >= (Number(m.quantity) || 0);
   });
@@ -396,7 +438,7 @@ export const isFullyConfirmed = (application) => {
  */
 export const hasPartialConfirmation = (application) => {
   if (!application?.materials) return false;
-  
+
   return application.materials.some(m => {
     const received = Number(m.received) || 0;
     const quantity = Number(m.quantity) || 0;
@@ -443,11 +485,11 @@ export const getNextStatusForApplication = (application) => {
   }
 
   if (allOnWarehouse && anyOnWarehouse) {
-    return APPLICATION_STATUS.READY_FOR_ISSUE;
+    return APPLICATION_STATUS.SUPPLIER_RECEIVED;              // 🆕 (всё на складе)
   }
 
   if (anyOnWarehouse) {
-    return APPLICATION_STATUS.PARTIAL_RECEIVED;
+    return APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE;           // 🆕 (часть на складе)
   }
 
   return application.status;
@@ -457,12 +499,17 @@ export const getNextStatusForApplication = (application) => {
 // 🆕 ДОПОЛНИТЕЛЬНЫЕ СТАТУСЫ ДЛЯ СОВМЕСТИМОСТИ
 // ============================================================
 
-// Добавляем псевдонимы для обратной совместимости
+// Псевдонимы для обратной совместимости
+// ВАЖНО: 'supplier_received' и 'ready_for_issue' — РАЗНЫЕ статусы!
+// 'supplier_received' = всё принято от поставщика, ещё не выдано мастеру
+// 'ready_for_issue'   = всё на складе, готово к выдаче мастеру
+// Технически они почти совпадают, но 'ready_for_issue' — более явный
 export const STATUS_ALIASES = {
   'ready_to_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
   'ready_for_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
-  'supplier_received': APPLICATION_STATUS.READY_FOR_ISSUE,
-  'on_warehouse': APPLICATION_STATUS.READY_FOR_ISSUE,
+  'supplier_received': APPLICATION_STATUS.SUPPLIER_RECEIVED,   // ✅ теперь отдельный
+  'partial_on_warehouse': APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE,
+  'on_warehouse': APPLICATION_STATUS.SUPPLIER_RECEIVED,        // алиас
   'sent': APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
   'confirmed': APPLICATION_STATUS.RECEIVED,
 };
