@@ -266,6 +266,18 @@ export const translations = {
     statusChanged: 'Статус изменён:',
     processingTime: 'Время обработки',
     processingTimeChart: 'Время обработки заявок (дни)',
+        // ─── Заголовки колонок таблицы заявок ─────────────────────────
+    objectAndForeman: 'Объект / Прораб',
+    materialsCount: 'Кол-во материалов',
+    description: 'Описание',
+    collapse: 'Свернуть',
+    expand: 'Развернуть',
+
+    // ─── Действия ──────────────────────────────────────────────────
+    receive: 'Принять',
+    prices: 'Цены',
+    adjust: 'Корректировка',
+    readyToIssue: 'Готовы к выдаче',
 
     // ──────────────────────────────────────────────────────────────────────
     // 🔍 ПОИСК / ФИЛЬТРЫ
@@ -1321,6 +1333,18 @@ export const translations = {
     insufficientStock: 'Insufficient stock',
     noApplications: 'No active requests',
     noHistory: 'Request history is empty',
+        // ─── Table headers ─────────────────────────────────────────────
+    objectAndForeman: 'Object / Foreman',
+    materialsCount: 'Materials count',
+    description: 'Description',
+    collapse: 'Collapse',
+    expand: 'Expand',
+
+    // ─── Actions ───────────────────────────────────────────────────
+    receive: 'Receive',
+    prices: 'Prices',
+    adjust: 'Adjust',
+    readyToIssue: 'Ready for Issue',
     noReceived: 'No received requests',
     receivedTab: 'Received',
     receivedMaterials: 'Received Materials',
