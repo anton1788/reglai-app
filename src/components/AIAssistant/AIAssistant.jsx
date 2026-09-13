@@ -1,11 +1,12 @@
 // src/components/AIAssistant/AIAssistant.jsx
-import React, { 
-  useState, 
-  useCallback, 
-  useEffect, 
-  useRef, 
-  forwardRef, 
-  useImperativeHandle 
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+  useMemo,
 } from 'react';
 import {
   Bot, X, Send, Sparkles, Package, Warehouse, BarChart3,
@@ -13,9 +14,56 @@ import {
   ArrowRight, User, TrendingUp, Loader2, ChevronRight, Mic,
   Home, ArrowLeft, Users, MessageCircle, Calendar, ClipboardList,
   DollarSign, Code, FileCheck, Plug, Building, Target, Layers,
-  History, Truck, UserPlus, Briefcase, Settings, Bell
+  History, Truck, UserPlus, Briefcase, Settings, Bell, Star,
+  Download, Volume2, Lightbulb, Pin, PinOff
 } from 'lucide-react';
 import SmartVoiceSearch from '../SmartVoiceSearch';
+
+// ─────────────────────────────────────────────────────────────
+// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (инжектятся 1 раз)
+// ─────────────────────────────────────────────────────────────
+const AI_ASSISTANT_STYLES = `
+@keyframes aiBounceIn {
+  0% { transform: scale(0.3) translateY(-10px); opacity: 0; }
+  50% { transform: scale(1.05) translateY(0); }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes aiSlideUpFade {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes aiSlideInRight {
+  from { transform: translateX(30px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes aiPulseRing {
+  0% { box-shadow: 0 0 0 0 rgba(249, 170, 51, 0.7); }
+  70% { box-shadow: 0 0 0 12px rgba(249, 170, 51, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(249, 170, 51, 0); }
+}
+
+@keyframes aiWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+}
+
+@keyframes aiFadeOut {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(30px); }
+}
+
+.ai-bounce-in { animation: aiBounceIn 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
+.ai-slide-up { animation: aiSlideUpFade 0.3s ease-out; }
+.ai-slide-right { animation: aiSlideInRight 0.3s ease-out; }
+.ai-pulse-ring { animation: aiPulseRing 2s infinite; }
+.ai-wiggle { animation: aiWiggle 0.6s ease-in-out; }
+.ai-fade-out { animation: aiFadeOut 0.3s ease-in forwards; }
+`;
 
 // ─────────────────────────────────────────────────────────────
 // 🗺️ КАРТА ВСЕХ РАЗДЕЛОВ ПРИЛОЖЕНИЯ
@@ -156,6 +204,40 @@ const QUICK_ACTIONS = {
 };
 
 // ─────────────────────────────────────────────────────────────
+// 🧠 КОНТЕКСТНЫЕ ДЕЙСТВИЯ (в зависимости от текущего экрана)
+// ─────────────────────────────────────────────────────────────
+const CONTEXTUAL_ACTIONS = {
+  inwork: [
+    { id: 'problem_apps', label: '⚠️ Показать проблемные', icon: AlertTriangle, isContextual: true },
+    { id: 'create_app', label: '➕ Создать заявку', icon: Plus, isContextual: true },
+  ],
+  warehouse: [
+    { id: 'pending_receipt', label: '📥 Ожидают приёмки', icon: Package, isContextual: true },
+    { id: 'ready_to_issue', label: '📤 К выдаче', icon: CheckCircle, isContextual: true },
+  ],
+  readyToIssue: [
+    { id: 'ready_to_issue', label: '📤 Показать топ-5', icon: CheckCircle, isContextual: true },
+  ],
+  received: [
+    { id: 'pending_receipt', label: '📥 В работе', icon: Package, isContextual: true },
+  ],
+  analytics: [
+    { id: 'analytics_summary', label: '📊 Сводка', icon: BarChart3, isContextual: true },
+    { id: 'top_objects', label: '🏗️ Топ объектов', icon: TrendingUp, isContextual: true },
+    { id: 'problem_apps', label: '⚠️ Проблемные', icon: AlertTriangle, isContextual: true },
+  ],
+  history: [
+    { id: 'completed_apps', label: '✅ Завершённые', icon: CheckCircle, isContextual: true },
+  ],
+  documents: [
+    { id: 'open_documents', label: '📄 Документы', icon: FileText, isContextual: true },
+  ],
+  clients: [
+    { id: 'team_activity', label: '👥 Активность', icon: User, isContextual: true },
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────
 // 🔧 Хелперы
 // ─────────────────────────────────────────────────────────────
 const formatDate = (dateString) => {
@@ -192,9 +274,6 @@ const getStatusLabel = (status) => {
   return map[status] || status;
 };
 
-// ─────────────────────────────────────────────────────────────
-// 🔧 Группировка разделов по категориям
-// ─────────────────────────────────────────────────────────────
 function getViewGroup(viewId) {
   const groups = {
     'Основные': ['dashboard', 'inwork', 'create', 'received', 'history', 'readyToIssue'],
@@ -205,7 +284,7 @@ function getViewGroup(viewId) {
     'Управление': ['employees', 'approvals', 'audit', 'api', 'integration',
                    'documents', 'settings', 'companyProfile', 'profile', 'help'],
   };
-  
+
   for (const [group, ids] of Object.entries(groups)) {
     if (ids.includes(viewId)) return group;
   }
@@ -213,7 +292,7 @@ function getViewGroup(viewId) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 🤖 Компонент AI Assistant (с forwardRef для внешнего управления)
+// 🤖 Компонент AI Assistant
 // ─────────────────────────────────────────────────────────────
 const AIAssistant = forwardRef(({
   user,
@@ -232,6 +311,7 @@ const AIAssistant = forwardRef(({
   mergeableCount = 0,
   cartItemsCount = 0,
   chatUnreadCount = 0,
+  currentView: currentViewProp = '',
   t = (k) => k,
 }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -245,18 +325,263 @@ const AIAssistant = forwardRef(({
   const inputRef = useRef(null);
   const [hasInitialized, setHasInitialized] = useState(false);
 
-  // ✅ ЭКСПОРТИРУЕМ МЕТОДЫ ДЛЯ ВНЕШНЕГО УПРАВЛЕНИЯ
+  // ✅ НОВОЕ: подсказка при первом входе
+  const [showHint, setShowHint] = useState(false);
+  const [hintHiding, setHintHiding] = useState(false);
+
+  // ✅ НОВОЕ: закреплённые разделы
+  const [pinnedViews, setPinnedViews] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`pinned_views_${userRole}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // ✅ НОВОЕ: уведомления от ассистента
+  const [notifications, setNotifications] = useState([]);
+
+  // ✅ НОВОЕ: персональные рекомендации (по просмотрам)
+  const [recommendation, setRecommendation] = useState(null);
+
+  // ─────────────────────────────────────────────────────────
+  // 🎨 Инжект стилей анимаций (1 раз)
+  // ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'ai-assistant-styles';
+    styleEl.textContent = AI_ASSISTANT_STYLES;
+    if (!document.getElementById('ai-assistant-styles')) {
+      document.head.appendChild(styleEl);
+    }
+    return () => {
+      const existing = document.getElementById('ai-assistant-styles');
+      if (existing) existing.remove();
+    };
+  }, []);
+
+  // ─────────────────────────────────────────────────────────
+  // 📊 Отслеживание статистики просмотров (для рекомендаций)
+  // ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!currentViewProp || !user?.id) return;
+
+    try {
+      const key = `view_stats_${user.id}`;
+      const stats = JSON.parse(localStorage.getItem(key) || '{}');
+      stats[currentViewProp] = (stats[currentViewProp] || 0) + 1;
+      localStorage.setItem(key, JSON.stringify(stats));
+    } catch (err) {
+      console.debug('View stats error:', err);
+    }
+  }, [currentViewProp, user?.id]);
+
+  // ─────────────────────────────────────────────────────────
+  // 🎯 Экспорт методов для внешнего управления
+  // ─────────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
     open: () => setIsOpen(true),
     close: () => setIsOpen(false),
     toggle: () => setIsOpen(prev => !prev),
     isOpen: () => isOpen,
+
+    // ✅ НОВОЕ: метод для проактивных уведомлений
+    notify: (notification) => {
+      const id = Date.now();
+      setNotifications(prev => [...prev, { id, ...notification }]);
+
+      // Автоудаление через 15 секунд
+      setTimeout(() => {
+        setNotifications(prev => prev.filter(n => n.id !== id));
+      }, 15000);
+    },
   }), [isOpen]);
 
-  // ✅ Получаем список доступных разделов для роли
+  // ─────────────────────────────────────────────────────────
+  // ✅ НОВОЕ: Показ подсказки при первом входе
+  // ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user?.id || isOpen) return;
+
+    const hasSeenHint = localStorage.getItem(`ai_hint_${user.id}`);
+    if (hasSeenHint) return;
+
+    // Показываем через 5 секунд после входа
+    const timer = setTimeout(() => {
+      setShowHint(true);
+    }, 5000);
+
+    // Скрываем через 20 секунд, если не закрыли
+    const hideTimer = setTimeout(() => {
+      setHintHiding(true);
+      setTimeout(() => {
+        setShowHint(false);
+        setHintHiding(false);
+        localStorage.setItem(`ai_hint_${user.id}`, 'seen');
+      }, 300);
+    }, 25000);
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(hideTimer);
+    };
+  }, [user?.id, isOpen]);
+
+  const dismissHint = useCallback(() => {
+    setHintHiding(true);
+    setTimeout(() => {
+      setShowHint(false);
+      setHintHiding(false);
+      if (user?.id) {
+        localStorage.setItem(`ai_hint_${user.id}`, 'seen');
+      }
+    }, 300);
+  }, [user?.id]);
+
+  // ─────────────────────────────────────────────────────────
+  // ✅ НОВОЕ: Персональные рекомендации
+  // ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user?.id || !isOpen || !showMainMenu) return;
+
+    try {
+      const stats = JSON.parse(localStorage.getItem(`view_stats_${user.id}`) || '{}');
+
+      // Проверяем паттерны
+      const totalViews = Object.values(stats).reduce((a, b) => a + b, 0);
+      if (totalViews < 10) return; // мало данных
+
+      // Правило 1: Много смотрит аналитику, но не создаёт заявки
+      if ((stats.analytics || 0) > 8 && (stats.create || 0) < 2) {
+        setRecommendation({
+          emoji: '💡',
+          text: 'Вы часто смотрите аналитику! Хотите увидеть топ-3 объекта?',
+          action: { id: 'top_objects', label: '🏗️ Показать топ' },
+        });
+        return;
+      }
+
+      // Правило 2: Много времени в складе
+      if ((stats.warehouse || 0) > 15) {
+        setRecommendation({
+          emoji: '📦',
+          text: 'Много работаете со складом! Проверьте остатки?',
+          action: { id: 'warehouse_stock', label: '🏭 Проверить' },
+        });
+        return;
+      }
+
+      // Правило 3: Есть проблема - просроченные заявки, но не заходит на inwork
+      const overdue = applications.filter(a =>
+        a.status === 'pending' &&
+        (Date.now() - new Date(a.created_at)) > 2 * 86400000
+      );
+      if (overdue.length > 3) {
+        setRecommendation({
+          emoji: '⚠️',
+          text: `Обнаружено ${overdue.length} просроченных заявок. Показать?`,
+          action: { id: 'problem_apps', label: '👁 Показать' },
+        });
+        return;
+      }
+
+      setRecommendation(null);
+    } catch (err) {
+      console.debug('Recommendation error:', err);
+    }
+  }, [user?.id, isOpen, showMainMenu, applications]);
+
+  // ─────────────────────────────────────────────────────────
+  // ✅ НОВОЕ: Проактивные уведомления о проблемах
+  // ─────────────────────────────────────────────────────────
+  const lastNotifiedRef = useRef({});
+
+  useEffect(() => {
+    if (!user?.id || applications.length === 0) return;
+
+    // Проверяем просроченные (раз в 5 минут)
+    const checkProblems = () => {
+      const now = Date.now();
+      const lastCheck = lastNotifiedRef.current.lastCheck || 0;
+      if (now - lastCheck < 5 * 60 * 1000) return;
+      lastNotifiedRef.current.lastCheck = now;
+
+      // Просроченные заявки (более 2 дней)
+      const overdue = applications.filter(a =>
+        a.status === 'pending' &&
+        (now - new Date(a.created_at)) > 2 * 86400000
+      );
+
+      const overdueKey = `overdue_${overdue.length}_${Math.floor(now / 86400000)}`;
+      if (overdue.length > 0 && !lastNotifiedRef.current[overdueKey]) {
+        lastNotifiedRef.current[overdueKey] = true;
+        setNotifications(prev => [...prev, {
+          id: `overdue_${now}`,
+          type: 'warning',
+          message: `⚠️ ${overdue.length} просроченных заявок`,
+          action: { id: 'problem_apps', label: '👁 Показать' },
+          timestamp: now,
+        }]);
+      }
+
+      // Готовы к выдаче (много накопилось)
+      const ready = applications.filter(a =>
+        a.status === 'ready_for_issue'
+      );
+
+      const readyKey = `ready_${ready.length}_${Math.floor(now / 86400000)}`;
+      if (ready.length >= 5 && !lastNotifiedRef.current[readyKey]) {
+        lastNotifiedRef.current[readyKey] = true;
+        setNotifications(prev => [...prev, {
+          id: `ready_${now}`,
+          type: 'info',
+          message: `📤 ${ready.length} заявок ждут выдачи`,
+          action: { id: 'ready_to_issue', label: '👁 Показать' },
+          timestamp: now,
+        }]);
+      }
+    };
+
+    checkProblems();
+    const interval = setInterval(checkProblems, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user?.id, applications]);
+
+  // Авто-скрытие уведомлений через 15 сек
+  useEffect(() => {
+    if (notifications.length === 0) return;
+
+    const timers = notifications.map(n => {
+      const elapsed = Date.now() - (n.timestamp || Date.now());
+      const remaining = Math.max(0, 15000 - elapsed);
+      return setTimeout(() => {
+        setNotifications(prev => prev.filter(x => x.id !== n.id));
+      }, remaining);
+    });
+
+    return () => timers.forEach(clearTimeout);
+  }, [notifications]);
+
+  // ─────────────────────────────────────────────────────────
+  // 📌 Закреплённые разделы
+  // ─────────────────────────────────────────────────────────
+  const togglePin = useCallback((viewId) => {
+    setPinnedViews(prev => {
+      const isPinned = prev.includes(viewId);
+      const updated = isPinned
+        ? prev.filter(id => id !== viewId)
+        : [...prev, viewId].slice(0, 4);
+
+      localStorage.setItem(`pinned_views_${userRole}`, JSON.stringify(updated));
+      return updated;
+    });
+  }, [userRole]);
+
+  // Доступные разделы
   const availableViews = ROLE_VIEWS[userRole] || ROLE_VIEWS.master;
 
-  // ✅ Счётчики для бейджей
+  // Счётчики для бейджей
   const getBadgeCount = useCallback((viewId) => {
     switch (viewId) {
       case 'readyToIssue': return readyToIssueCount;
@@ -269,7 +594,7 @@ const AIAssistant = forwardRef(({
   }, [readyToIssueCount, pendingApprovalsCount, mergeableCount, chatUnreadCount, cartItemsCount]);
 
   // ─────────────────────────────────────────────────────────
-  // 🎯 Логика каждого действия
+  // 🎯 Логика действий
   // ─────────────────────────────────────────────────────────
   const executeAction = useCallback(async (actionId, payload) => {
     switch (actionId) {
@@ -288,7 +613,7 @@ const AIAssistant = forwardRef(({
 
         const list = myApps.slice(0, 5).map(a => {
           const total = a.materials?.length || 0;
-          const received = a.materials?.filter(m => 
+          const received = a.materials?.filter(m =>
             (Number(m.received) || 0) >= (Number(m.quantity) || 0)
           ).length || 0;
 
@@ -317,7 +642,7 @@ const AIAssistant = forwardRef(({
       }
 
       case 'not_received': {
-        const myApps = applications.filter(a => 
+        const myApps = applications.filter(a =>
           a.user_id === user?.id &&
           ['partial_received', 'pending_master_confirmation', 'ready_for_issue'].includes(a.status)
         );
@@ -435,7 +760,7 @@ const AIAssistant = forwardRef(({
         const list = pending.slice(0, 6).map(a => {
           const days = Math.floor((Date.now() - new Date(a.created_at)) / 86400000);
           const total = a.materials?.length || 0;
-          const received = a.materials?.filter(m => 
+          const received = a.materials?.filter(m =>
             (Number(m.supplier_received_quantity) || 0) > 0
           ).length || 0;
           return {
@@ -459,7 +784,7 @@ const AIAssistant = forwardRef(({
       }
 
       case 'ready_to_issue': {
-        const ready = applications.filter(a => 
+        const ready = applications.filter(a =>
           a.status === 'ready_for_issue' || a.status === 'partial_received'
         );
 
@@ -488,11 +813,11 @@ const AIAssistant = forwardRef(({
 
       case 'analytics_summary': {
         const total = applications.length;
-        const active = applications.filter(a => 
+        const active = applications.filter(a =>
           ['pending', 'admin_processing', 'partial_received', 'ready_for_issue'].includes(a.status)
         ).length;
         const received = applications.filter(a => a.status === 'received').length;
-        const totalMaterials = applications.reduce((sum, a) => 
+        const totalMaterials = applications.reduce((sum, a) =>
           sum + (a.materials?.reduce((s, m) => s + (Number(m.quantity) || 0), 0) || 0), 0
         );
 
@@ -503,17 +828,17 @@ const AIAssistant = forwardRef(({
       }
 
       case 'problem_apps': {
-        const overdue = applications.filter(a => 
-          a.status === 'pending' && 
+        const overdue = applications.filter(a =>
+          a.status === 'pending' &&
           (Date.now() - new Date(a.created_at)) > 2 * 86400000
         );
-        const partial = applications.filter(a => 
+        const partial = applications.filter(a =>
           a.status === 'partial_received' &&
           (Date.now() - new Date(a.updated_at || a.created_at)) > 3 * 86400000
         );
 
         const problems = [...overdue, ...partial];
-        
+
         if (problems.length === 0) return { content: '✅ Проблемных заявок нет.' };
 
         const list = problems.slice(0, 6).map(a => {
@@ -561,7 +886,7 @@ const AIAssistant = forwardRef(({
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5);
 
-        const list = top.map(([name, count], i) => 
+        const list = top.map(([name, count], i) =>
           `${i + 1}. **${name}** — ${count} заявок`
         ).join('\n');
 
@@ -570,7 +895,7 @@ const AIAssistant = forwardRef(({
 
       case 'completed_apps': {
         const monthAgo = Date.now() - 30 * 86400000;
-        const completed = applications.filter(a => 
+        const completed = applications.filter(a =>
           a.status === 'received' &&
           new Date(a.updated_at || a.created_at).getTime() > monthAgo
         );
@@ -599,10 +924,10 @@ const AIAssistant = forwardRef(({
         const appId = payload?.appId;
         const mode = payload?.mode || 'admin_receive';
         const app = applications.find(a => a.id === appId);
-        
+
         if (app && onOpenReceiveModal) {
           onOpenReceiveModal(app, mode);
-          const modeLabel = mode === 'admin_receive' ? 'приёмки' : 
+          const modeLabel = mode === 'admin_receive' ? 'приёмки' :
                            mode === 'admin_ready_to_issue' ? 'выдачи' : 'подтверждения';
           return { content: `➡️ Открываю заявку для ${modeLabel}...` };
         }
@@ -612,13 +937,13 @@ const AIAssistant = forwardRef(({
       case 'navigate_to': {
         const viewId = payload?.viewId;
         const viewInfo = ALL_VIEWS[viewId];
-        
+
         if (!viewInfo) return { content: '❌ Раздел не найден' };
-        
+
         if (!availableViews.includes(viewId)) {
           return { content: `❌ У вас нет доступа к разделу "${viewInfo.label}"` };
         }
-        
+
         onNavigate?.(viewId);
         return { content: `➡️ Открываю **${viewInfo.label}**...` };
       }
@@ -627,7 +952,7 @@ const AIAssistant = forwardRef(({
         const roleActions = (QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default)
           .map(a => `• ${a.label}`)
           .join('\n');
-        
+
         return {
           content: `🤖 **Что я умею:**\n\n**Быстрые действия:**\n${roleActions}\n\n**Навигация:**\nВкладка "Разделы" — переход в любой раздел приложения.\n\n💡 **Совет:** Используйте кнопку 🎤 для голосового поиска!`,
         };
@@ -636,9 +961,9 @@ const AIAssistant = forwardRef(({
       case 'free_text': {
         const text = payload?.text?.trim();
         if (!text) return { content: '🤔 Введите запрос или используйте кнопки выше.' };
-        
+
         const lowerText = text.toLowerCase();
-        
+
         if (lowerText.includes('заявк') && (lowerText.includes('мои') || lowerText.includes('актив'))) {
           return executeAction('my_applications');
         }
@@ -660,15 +985,15 @@ const AIAssistant = forwardRef(({
         if (lowerText.includes('созда') && lowerText.includes('заяв')) {
           return executeAction('create_app');
         }
-        
+
         const viewMatches = [];
         Object.entries(ALL_VIEWS).forEach(([viewId, viewInfo]) => {
           if (!availableViews.includes(viewId)) return;
-          
+
           const labelLower = viewInfo.label.toLowerCase();
           const descLower = viewInfo.description.toLowerCase();
-          
-          if (lowerText.includes(labelLower) || 
+
+          if (lowerText.includes(labelLower) ||
               labelLower.includes(lowerText) ||
               lowerText.includes(descLower) ||
               descLower.includes(lowerText)) {
@@ -687,14 +1012,14 @@ const AIAssistant = forwardRef(({
             }
           }
         });
-        
+
         if (viewMatches.length > 0) {
           viewMatches.sort((a, b) => b.score - a.score);
-          
+
           if (viewMatches.length === 1) {
             return executeAction('navigate_to', { viewId: viewMatches[0].viewId });
           }
-          
+
           const list = viewMatches.slice(0, 5).map(m => ({
             id: m.viewId,
             emoji: '📍',
@@ -706,13 +1031,13 @@ const AIAssistant = forwardRef(({
               payload: { viewId: m.viewId },
             },
           }));
-          
+
           return {
             content: `🔍 **Найдено ${viewMatches.length} разделов по запросу "${text}":**`,
             data: list,
           };
         }
-        
+
         return {
           content: `🔍 По запросу "${text}" ничего не найдено.\n\nПопробуйте:\n• "склад"\n• "аналитика"\n• "мои заявки"\n• "документы"`,
           actions: [
@@ -731,17 +1056,16 @@ const AIAssistant = forwardRef(({
     onCreateDraft, onOpenApplication, onOpenReceiveModal, showNotification
   ]);
 
-  // ─────────────────────────────────────────────────────────
-  // 🧠 Обработчик клика по кнопке
-  // ─────────────────────────────────────────────────────────
   const handleAction = useCallback(async (actionId, payload = null, customLabel = null) => {
     const action = (QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default)
       .find(a => a.id === actionId);
-    
+
     const viewInfo = ALL_VIEWS[payload?.viewId];
-    
+
+    // ✅ НОВОЕ: при действии сбрасываем рекомендацию
+    setRecommendation(null);
     setShowMainMenu(false);
-    
+
     setMessages(prev => [...prev, {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -753,7 +1077,7 @@ const AIAssistant = forwardRef(({
 
     try {
       const result = await executeAction(actionId, payload);
-      
+
       setMessages(prev => [...prev, {
         id: `bot-${Date.now()}`,
         role: 'assistant',
@@ -805,6 +1129,62 @@ const AIAssistant = forwardRef(({
     }
   }, [handleSendMessage]);
 
+  // ✅ НОВОЕ: Экспорт сообщения
+  const exportMessage = useCallback((msg) => {
+    const content = `
+AI-Ассистент Реглай
+Дата: ${new Date(msg.timestamp).toLocaleString('ru-RU')}
+Пользователь: ${user?.email || '—'}
+
+────────────────────────────
+${msg.content}
+────────────────────────────
+  `.trim();
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reglay_assistant_${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    showNotification?.('✅ Ответ сохранён', 'success');
+  }, [user?.email, showNotification]);
+
+    // ✅ НОВОЕ: Озвучка (TTS)
+  const speakText = useCallback((text) => {
+    if (!('speechSynthesis' in window)) {
+      showNotification?.('Озвучка не поддерживается браузером', 'warning');
+      return;
+    }
+
+    // Отменяем предыдущую озвучку
+    window.speechSynthesis.cancel();
+
+    // ✅ Безопасная очистка БЕЗ регулярки — используем массив эмодзи
+    const EMOJIS_TO_REMOVE = [
+      '📋', '📦', '📥', '📤', '✅', '⏳', '🔴', '🟡', '🏭', '📊',
+      '⚠️', '👥', '🏗️', '🎤', '💡', '🔍', '📍', '➡️', '❌', '🤔',
+      '📭', '📄', '🆕', '🎯', '📌', '⭐', '🔊', '👁', '🕐',
+    ];
+
+    let cleanText = text.replace(/\*\*/g, '');
+    
+    // Убираем каждое эмодзи через replaceAll
+    EMOJIS_TO_REMOVE.forEach((emoji) => {
+      cleanText = cleanText.split(emoji).join('');
+    });
+    
+    cleanText = cleanText.trim();
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'ru-RU';
+    utterance.rate = 1.1;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  }, [showNotification]);
+
   // Приветствие
   useEffect(() => {
     if (isOpen && !hasInitialized) {
@@ -848,7 +1228,12 @@ const AIAssistant = forwardRef(({
   // ─────────────────────────────────────────────────────────
   const quickActions = QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default;
 
-  const groupedViews = React.useMemo(() => {
+  // ✅ НОВОЕ: контекстные действия
+  const contextualActions = useMemo(() => {
+    return CONTEXTUAL_ACTIONS[currentViewProp] || [];
+  }, [currentViewProp]);
+
+  const groupedViews = useMemo(() => {
     const groups = {
       'Основные': [],
       'Работа с материалами': [],
@@ -861,7 +1246,7 @@ const AIAssistant = forwardRef(({
     availableViews.forEach(viewId => {
       const viewInfo = ALL_VIEWS[viewId];
       if (!viewInfo) return;
-      
+
       const group = viewInfo.group || getViewGroup(viewId);
       if (groups[group]) {
         groups[group].push({ id: viewId, ...viewInfo });
@@ -901,7 +1286,7 @@ const AIAssistant = forwardRef(({
               </div>
             );
           })}
-          
+
           <div className="mt-2 space-y-1.5">
             {msg.data.map((item, index) => (
               <div
@@ -950,12 +1335,85 @@ const AIAssistant = forwardRef(({
     });
   };
 
-  // ✅ Рендерим окно чата только когда открыто. Плавающей кнопки НЕТ — она в Navbar.
   return (
     <>
+      {/* ✅ ПЛАВАЮЩАЯ ПОДСКАЗКА ПРИ ПЕРВОМ ВХОДЕ */}
+      {showHint && !isOpen && (
+        <div
+          className={`fixed top-20 right-4 lg:top-24 lg:right-24 z-[9997] ${
+            hintHiding ? 'ai-fade-out' : 'ai-bounce-in'
+          }`}
+        >
+          <div className="relative bg-gradient-to-r from-[#4A6572] to-[#344955] text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 max-w-xs ai-pulse-ring">
+            {/* Стрелка к кнопке */}
+            <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-[#344955] rotate-45" />
+
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 ai-wiggle">
+              <Sparkles className="w-5 h-5 text-[#F9AA33]" />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-bold mb-0.5">Я тут! 👋</div>
+              <div className="text-xs text-white/90">
+                Нажми <kbd className="px-1 py-0.5 bg-white/20 rounded text-[10px]">Ctrl+/</kbd> или иконку 🤖
+              </div>
+            </div>
+            <button
+              onClick={dismissHint}
+              className="p-1 rounded-lg hover:bg-white/20 transition-colors flex-shrink-0"
+              aria-label="Закрыть"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ ПРОАКТИВНЫЕ УВЕДОМЛЕНИЯ */}
+      {notifications.length > 0 && !isOpen && (
+        <div className="fixed top-20 right-4 lg:top-24 lg:right-24 z-[9996] space-y-2 max-w-xs">
+          {notifications.map((notif) => (
+            <div
+              key={notif.id}
+              className={`ai-slide-right bg-white dark:bg-gray-800 rounded-xl shadow-2xl border-l-4 p-3 flex items-start gap-2 ${
+                notif.type === 'warning'
+                  ? 'border-l-yellow-500'
+                  : notif.type === 'error'
+                  ? 'border-l-red-500'
+                  : 'border-l-[#4A6572]'
+              }`}
+            >
+              <div className="flex-1">
+                <div className="text-xs font-medium text-gray-900 dark:text-white">
+                  {notif.message}
+                </div>
+                {notif.action && (
+                  <button
+                    onClick={() => {
+                      handleAction(notif.action.id);
+                      setNotifications(prev => prev.filter(n => n.id !== notif.id));
+                    }}
+                    className="mt-1.5 text-[10px] px-2 py-1 rounded bg-[#4A6572] text-white hover:bg-[#344955] transition-colors"
+                  >
+                    {notif.action.label}
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setNotifications(prev => prev.filter(n => n.id !== notif.id))}
+                className="p-0.5 text-gray-400 hover:text-gray-600 rounded flex-shrink-0"
+                aria-label="Закрыть"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Окно чата */}
       {isOpen && (
         <div
-          className="fixed top-20 right-4 lg:top-24 lg:right-8 w-[380px] max-w-[calc(100vw-2rem)] h-[600px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col z-[9999] border border-gray-200 dark:border-gray-700 fade-enter"
+          className="fixed top-20 right-4 lg:top-24 lg:right-8 w-[380px] max-w-[calc(100vw-2rem)] h-[600px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col z-[9999] border border-gray-200 dark:border-gray-700 ai-bounce-in"
           role="dialog"
           aria-label="AI-ассистент"
         >
@@ -971,7 +1429,7 @@ const AIAssistant = forwardRef(({
                   <ArrowLeft className="w-4 h-4" />
                 </button>
               )}
-              
+
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
@@ -980,7 +1438,7 @@ const AIAssistant = forwardRef(({
                   {t('aiAssistant') || 'Ассистент Реглай'}
                 </div>
                 <div className="text-[10px] text-green-600 dark:text-green-400 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                   {t('online') || 'онлайн'}
                 </div>
               </div>
@@ -1004,7 +1462,7 @@ const AIAssistant = forwardRef(({
             </div>
           </div>
 
-          {/* Вкладки — только в главном меню */}
+          {/* Вкладки */}
           {showMainMenu && (
             <div className="flex border-b border-gray-200 dark:border-gray-700">
               <button
@@ -1035,16 +1493,71 @@ const AIAssistant = forwardRef(({
           {/* Главное меню */}
           {showMainMenu ? (
             <div className="flex-1 overflow-y-auto p-3">
+              {/* Приветствие */}
               {messages.length > 0 && messages[0].id === 'welcome' && (
-                <div className="mb-4 p-3 bg-gradient-to-br from-[#4A6572]/5 to-[#344955]/5 rounded-xl">
+                <div className="mb-4 p-3 bg-gradient-to-br from-[#4A6572]/5 to-[#344955]/5 rounded-xl ai-slide-up">
                   <div className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
                     {renderMessageContent(messages[0])}
                   </div>
                 </div>
               )}
 
+              {/* ✅ ПЕРСОНАЛЬНАЯ РЕКОМЕНДАЦИЯ */}
+              {recommendation && activeTab === 'actions' && (
+                <div className="mb-3 p-3 bg-gradient-to-br from-[#F9AA33]/20 to-[#F57C00]/10 rounded-xl border border-[#F9AA33]/30 ai-bounce-in">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xl flex-shrink-0">{recommendation.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-bold text-[#F57C00] dark:text-[#F9AA33] uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Lightbulb className="w-3 h-3" />
+                        Рекомендация
+                      </div>
+                      <p className="text-xs text-gray-700 dark:text-gray-200 mb-2">
+                        {recommendation.text}
+                      </p>
+                      <button
+                        onClick={() => handleAction(recommendation.action.id)}
+                        className="text-[10px] px-2 py-1 rounded bg-[#4A6572] text-white hover:bg-[#344955] transition-colors"
+                      >
+                        {recommendation.action.label}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Вкладка "Действия" */}
               {activeTab === 'actions' && (
                 <>
+                  {/* ✅ КОНТЕКСТНЫЕ ДЕЙСТВИЯ */}
+                  {contextualActions.length > 0 && (
+                    <div className="mb-3">
+                      <div className="text-[10px] font-medium text-[#F9AA33] uppercase tracking-wide px-1 mb-2 flex items-center gap-1">
+                        <Target className="w-3 h-3" />
+                        Рекомендую для этого экрана
+                      </div>
+                      <div className="space-y-1.5">
+                        {contextualActions.map((action) => {
+                          const Icon = action.icon;
+                          return (
+                            <button
+                              key={`ctx-${action.id}`}
+                              onClick={() => handleAction(action.id)}
+                              disabled={isLoading}
+                              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-xl bg-gradient-to-r from-[#F9AA33]/10 to-[#F57C00]/5 hover:from-[#F9AA33]/20 hover:to-[#F57C00]/10 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 border border-[#F9AA33]/30"
+                            >
+                              <div className="w-7 h-7 rounded-lg bg-[#F9AA33]/20 flex items-center justify-center flex-shrink-0">
+                                <Icon className="w-3.5 h-3.5 text-[#F57C00] dark:text-[#F9AA33]" />
+                              </div>
+                              <span className="flex-1 font-medium text-xs">{action.label}</span>
+                              <ArrowRight className="w-3 h-3 text-[#F9AA33]" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-2">
                     Быстрые действия
                   </div>
@@ -1076,12 +1589,54 @@ const AIAssistant = forwardRef(({
                 </>
               )}
 
+              {/* Вкладка "Разделы" */}
               {activeTab === 'navigation' && (
                 <>
+                  {/* ✅ ЗАКРЕПЛЁННЫЕ */}
+                  {pinnedViews.length > 0 && (
+                    <div className="mb-3 p-2 bg-gradient-to-br from-[#F9AA33]/10 to-[#F57C00]/10 rounded-xl border border-[#F9AA33]/20">
+                      <div className="text-[10px] font-semibold text-[#F57C00] dark:text-[#F9AA33] uppercase tracking-wider px-1 mb-1.5 flex items-center gap-1">
+                        <Pin className="w-3 h-3" />
+                        Закреплённые ({pinnedViews.length})
+                      </div>
+                      <div className="grid grid-cols-2 gap-1">
+                        {pinnedViews.map(viewId => {
+                          const view = ALL_VIEWS[viewId];
+                          if (!view) return null;
+                          const Icon = view.icon;
+                          const badge = getBadgeCount(viewId);
+                          return (
+                            <div key={`pin-${viewId}`} className="relative group">
+                              <button
+                                onClick={() => handleAction('navigate_to', { viewId }, view.label)}
+                                className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-800 hover:bg-[#4A6572]/10 text-gray-700 dark:text-gray-200 transition-all pr-6"
+                              >
+                                <Icon className="w-3.5 h-3.5 text-[#4A6572] dark:text-[#F9AA33] flex-shrink-0" />
+                                <span className="flex-1 truncate text-left font-medium">{view.label}</span>
+                                {badge > 0 && (
+                                  <span className="px-1 text-[9px] font-bold rounded-full bg-[#F9AA33] text-white">
+                                    {badge}
+                                  </span>
+                                )}
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); togglePin(viewId); }}
+                                className="absolute right-0.5 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
+                                title="Открепить"
+                              >
+                                <PinOff className="w-3 h-3 text-red-500" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-2">
                     Доступные разделы ({availableViews.length})
                   </div>
-                  
+
                   {groupedViews.map(({ groupName, items, count }) => (
                     <div key={groupName} className="mb-3">
                       <div className="flex items-center justify-between px-1 mb-1.5">
@@ -1096,26 +1651,47 @@ const AIAssistant = forwardRef(({
                         {items.map((view) => {
                           const Icon = view.icon;
                           const badge = getBadgeCount(view.id);
-                          
+                          const isPinned = pinnedViews.includes(view.id);
+
                           return (
-                            <button
-                              key={view.id}
-                              onClick={() => handleAction('navigate_to', { viewId: view.id }, view.label)}
-                              disabled={isLoading}
-                              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 border border-transparent hover:border-[#4A6572]/20 dark:hover:border-[#F9AA33]/20"
-                            >
-                              <Icon className="w-4 h-4 text-[#4A6572] dark:text-[#F9AA33] flex-shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-xs">{view.label}</div>
-                                <div className="text-[10px] text-gray-400 truncate">{view.description}</div>
-                              </div>
-                              {badge > 0 && (
-                                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#F9AA33] text-white min-w-[20px] text-center">
-                                  {badge}
-                                </span>
-                              )}
-                              <ChevronRight className="w-3 h-3 text-gray-400" />
-                            </button>
+                            <div key={view.id} className="relative group">
+                              <button
+                                onClick={() => handleAction('navigate_to', { viewId: view.id }, view.label)}
+                                disabled={isLoading}
+                                className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-lg transition-all disabled:opacity-50 border ${
+                                  isPinned
+                                    ? 'bg-[#F9AA33]/10 border-[#F9AA33]/30 hover:bg-[#F9AA33]/20'
+                                    : 'bg-gray-50 dark:bg-gray-700/50 hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 text-gray-700 dark:text-gray-200 border-transparent hover:border-[#4A6572]/20 dark:hover:border-[#F9AA33]/20'
+                                }`}
+                              >
+                                <Icon className="w-4 h-4 text-[#4A6572] dark:text-[#F9AA33] flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-xs">{view.label}</div>
+                                  <div className="text-[10px] text-gray-400 truncate">{view.description}</div>
+                                </div>
+                                {badge > 0 && (
+                                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#F9AA33] text-white min-w-[20px] text-center">
+                                    {badge}
+                                  </span>
+                                )}
+                                <ChevronRight className="w-3 h-3 text-gray-400" />
+                              </button>
+
+                              {/* Кнопка "закрепить" */}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); togglePin(view.id); }}
+                                className={`absolute right-8 top-1/2 -translate-y-1/2 p-1 rounded transition-all ${
+                                  isPinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                } hover:bg-gray-200 dark:hover:bg-gray-600`}
+                                title={isPinned ? 'Открепить' : 'Закрепить'}
+                              >
+                                {isPinned ? (
+                                  <PinOff className="w-3 h-3 text-red-500" />
+                                ) : (
+                                  <Pin className="w-3 h-3 text-gray-400" />
+                                )}
+                              </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -1130,7 +1706,7 @@ const AIAssistant = forwardRef(({
               {messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ai-slide-up`}
                 >
                   <div
                     className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${
@@ -1157,12 +1733,32 @@ const AIAssistant = forwardRef(({
                         ))}
                       </div>
                     )}
+
+                    {/* ✅ Кнопки экспорта и озвучки для ответов бота */}
+                    {msg.role === 'assistant' && !msg.isError && msg.id !== 'welcome' && (
+                      <div className="mt-1.5 pt-1.5 border-t border-gray-300/30 dark:border-gray-600/30 flex items-center gap-1">
+                        <button
+                          onClick={() => speakText(msg.content)}
+                          className="p-1 rounded hover:bg-white/40 dark:hover:bg-gray-600/40 transition-colors"
+                          title="Озвучить"
+                        >
+                          <Volume2 className="w-3 h-3 text-gray-500 dark:text-gray-400" />
+                        </button>
+                        <button
+                          onClick={() => exportMessage(msg)}
+                          className="p-1 rounded hover:bg-white/40 dark:hover:bg-gray-600/40 transition-colors"
+                          title="Скачать"
+                        >
+                          <Download className="w-3 h-3 text-gray-500 dark:text-gray-400" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
 
               {isLoading && (
-                <div className="flex justify-start">
+                <div className="flex justify-start ai-slide-up">
                   <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-bl-sm px-3 py-2">
                     <Loader2 className="w-4 h-4 animate-spin text-[#4A6572]" />
                   </div>
@@ -1185,7 +1781,7 @@ const AIAssistant = forwardRef(({
                 placeholder="Напишите запрос..."
                 className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#4A6572] focus:border-transparent"
               />
-              
+
               <button
                 onClick={() => setShowVoiceSearch(true)}
                 className="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
@@ -1193,7 +1789,7 @@ const AIAssistant = forwardRef(({
               >
                 <Mic className="w-4 h-4" />
               </button>
-              
+
               <button
                 onClick={handleSendMessage}
                 disabled={!inputValue.trim() || isLoading}
@@ -1209,7 +1805,7 @@ const AIAssistant = forwardRef(({
       {/* Модальное окно голосового поиска */}
       {showVoiceSearch && (
         <div className="fixed inset-0 bg-black/50 z-[10001] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-4 ai-bounce-in">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-gray-900 dark:text-white">
                 🎤 Голосовой ввод

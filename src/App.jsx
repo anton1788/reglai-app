@@ -5128,6 +5128,34 @@ useEffect(() => {
     };
   }, [user?.id, showNotification]);
 
+  // ✅ ПРОАКТИВНЫЕ УВЕДОМЛЕНИЯ ОТ AI-АССИСТЕНТА
+  useEffect(() => {
+    if (!user?.id || !aiAssistantRef.current) return;
+
+    // Проверка просроченных заявок раз в 10 минут
+    const checkOverdue = () => {
+      const overdue = applications.filter(a =>
+        a.status === 'pending' &&
+        (Date.now() - new Date(a.created_at)) > 2 * 86400000
+      );
+
+      if (overdue.length >= 3) {
+        aiAssistantRef.current?.notify?.({
+          type: 'warning',
+          message: `⚠️ ${overdue.length} просроченных заявок`,
+          action: {
+            id: 'problem_apps',
+            label: '👁 Показать',
+          },
+        });
+      }
+    };
+
+    checkOverdue();
+    const interval = setInterval(checkOverdue, 10 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user?.id, applications]);
+
 // 💰 Load company plan & quota (ОБНОВЛЁННАЯ ВЕРСИЯ)
 useEffect(() => {
   const loadPlan = async () => {
@@ -8462,6 +8490,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     mergeableCount={mergeableCount}
     cartItemsCount={formData.cart?.length || 0}
     chatUnreadCount={chatUnreadCount}
+    currentView={currentView} 
     t={t}
   />
 )}
