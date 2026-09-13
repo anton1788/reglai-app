@@ -3,7 +3,8 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Bot, X, Send, Sparkles, Package, Warehouse, BarChart3,
   AlertTriangle, Plus, Search, FileText, CheckCircle, Clock,
-  ArrowRight, User, TrendingUp, Loader2, ChevronRight, Mic
+  ArrowRight, User, TrendingUp, Loader2, ChevronRight, Mic,
+  Home, ArrowLeft
 } from 'lucide-react';
 import SmartVoiceSearch from '../SmartVoiceSearch';
 
@@ -107,6 +108,7 @@ const AIAssistant = ({
   const [isLoading, setIsLoading] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [showVoiceSearch, setShowVoiceSearch] = useState(false);
+  const [showMainMenu, setShowMainMenu] = useState(true); // ✅ НОВОЕ: показывать ли главное меню
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -130,7 +132,6 @@ const AIAssistant = ({
           };
         }
 
-        // ✅ Формируем структурированные данные для интерактивного списка
         const list = myApps.slice(0, 5).map(a => {
           const total = a.materials?.length || 0;
           const received = a.materials?.filter(m => 
@@ -192,7 +193,6 @@ const AIAssistant = ({
           };
         }
 
-        // ✅ Группируем по заявкам для удобства
         const groupedItems = {};
         pendingItems.forEach(item => {
           if (!groupedItems[item.appId]) {
@@ -527,14 +527,13 @@ const AIAssistant = ({
         onNavigate?.('documents');
         return { content: '➡️ Открываю документы...' };
 
-      // ─── СВОБОДНЫЙ ВВОД (пока просто перенаправляем в поиск) ───
+      // ─── СВОБОДНЫЙ ВВОД ───
       case 'free_text': {
         const text = payload?.text?.trim();
         if (!text) {
           return { content: '🤔 Введите запрос или используйте кнопки выше.' };
         }
         
-        // Простой анализ текста для определения намерения
         const lowerText = text.toLowerCase();
         
         if (lowerText.includes('заявк') || lowerText.includes('мои')) {
@@ -559,7 +558,6 @@ const AIAssistant = ({
           return executeAction('create_app');
         }
         
-        // Если не распознали — предлагаем поиск
         return {
           content: `🔍 Понимаю ваш запрос: "${text}"\n\nПопробуйте использовать кнопки быстрых действий или уточните запрос.`,
           actions: [
@@ -584,6 +582,9 @@ const AIAssistant = ({
   const handleAction = useCallback(async (actionId, payload = null, customLabel = null) => {
     const action = (QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default)
       .find(a => a.id === actionId);
+    
+    // ✅ Скрываем главное меню при выполнении действия
+    setShowMainMenu(false);
     
     setMessages(prev => [...prev, {
       id: `user-${Date.now()}`,
@@ -620,6 +621,15 @@ const AIAssistant = ({
   }, [userRole, executeAction]);
 
   // ─────────────────────────────────────────────────────────
+  // 🏠 Возврат в главное меню
+  // ─────────────────────────────────────────────────────────
+  const handleBackToMenu = useCallback(() => {
+    setShowMainMenu(true);
+    // Опционально: можно очищать сообщения или оставлять историю
+    // setMessages([]); 
+  }, []);
+
+  // ─────────────────────────────────────────────────────────
   // 📤 Отправка свободного текста
   // ─────────────────────────────────────────────────────────
   const handleSendMessage = useCallback(async () => {
@@ -637,7 +647,6 @@ const AIAssistant = ({
     setShowVoiceSearch(false);
     if (query) {
       setInputValue(query);
-      // Автоматически отправляем
       setTimeout(() => {
         handleAction('free_text', { text: query }, query);
         setInputValue('');
@@ -696,13 +705,10 @@ const AIAssistant = ({
   // ─────────────────────────────────────────────────────────
   const quickActions = QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default;
 
-  // Рендер сообщения с интерактивными данными
   const renderMessageContent = (msg) => {
-    // Если есть структурированные данные — рендерим их
     if (msg.data && Array.isArray(msg.data) && msg.data.length > 0) {
       return (
         <>
-          {/* Текст сообщения */}
           {msg.content.split('\n').map((line, i) => {
             const parts = line.split(/(\*\*[^*]+\*\*)/g);
             return (
@@ -718,7 +724,6 @@ const AIAssistant = ({
             );
           })}
           
-          {/* Интерактивный список */}
           <div className="mt-2 space-y-1.5">
             {msg.data.map((item, index) => (
               <div
@@ -751,7 +756,6 @@ const AIAssistant = ({
       );
     }
 
-    // Обычный текстовый рендер
     return msg.content.split('\n').map((line, i) => {
       const parts = line.split(/(\*\*[^*]+\*\*)/g);
       return (
@@ -796,6 +800,17 @@ const AIAssistant = ({
           {/* Header */}
           <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-[#4A6572]/5 to-[#344955]/5 rounded-t-2xl">
             <div className="flex items-center gap-2">
+              {/* ✅ НОВОЕ: Кнопка "Назад" когда мы не в главном меню */}
+              {!showMainMenu && (
+                <button
+                  onClick={handleBackToMenu}
+                  className="p-1.5 text-[#4A6572] dark:text-[#F9AA33] hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 rounded-lg transition-colors"
+                  title="Вернуться в главное меню"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              )}
+              
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
@@ -809,83 +824,115 @@ const AIAssistant = ({
                 </div>
               </div>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${
-                    msg.role === 'user'
-                      ? 'bg-[#4A6572] text-white rounded-br-sm'
-                      : msg.isError
-                      ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 rounded-bl-sm'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-bl-sm'
-                  }`}
+            <div className="flex items-center gap-1">
+              {/* ✅ НОВОЕ: Кнопка "Домой" когда мы не в главном меню */}
+              {!showMainMenu && (
+                <button
+                  onClick={handleBackToMenu}
+                  className="p-1.5 text-gray-400 hover:text-[#4A6572] dark:hover:text-[#F9AA33] rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  title="Главное меню"
                 >
-                  {renderMessageContent(msg)}
-
-                  {/* Кнопки действий */}
-                  {msg.actions && msg.actions.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-gray-300/50 dark:border-gray-600/50 space-y-1">
-                      {msg.actions.map((action) => (
-                        <button
-                          key={action.id}
-                          onClick={() => handleAction(action.id, action.payload, action.label)}
-                          className="w-full text-left text-xs px-2 py-1.5 rounded-lg bg-white/60 dark:bg-gray-800/60 hover:bg-white dark:hover:bg-gray-800 text-[#4A6572] dark:text-[#F9AA33] font-medium flex items-center justify-between transition-colors"
-                        >
-                          <span>{action.label}</span>
-                          <ChevronRight className="w-3 h-3" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-bl-sm px-3 py-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-[#4A6572]" />
-                </div>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
+                  <Home className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
-          {/* Quick Actions — показываем только в начале */}
-          {messages.length <= 1 && (
-            <div className="px-3 pb-2 space-y-1.5">
-              <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
+          {/* ✅ НОВОЕ: Главное меню (когда showMainMenu = true) */}
+          {showMainMenu ? (
+            <div className="flex-1 overflow-y-auto p-3">
+              {/* Последнее приветствие */}
+              {messages.length > 0 && messages[0].id === 'welcome' && (
+                <div className="mb-4 p-3 bg-gradient-to-br from-[#4A6572]/5 to-[#344955]/5 rounded-xl">
+                  <div className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
+                    {renderMessageContent(messages[0])}
+                  </div>
+                </div>
+              )}
+              
+              <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-2">
                 {t('quickActions') || 'Быстрые действия'}
               </div>
-              {quickActions.map((action) => {
-                const Icon = action.icon;
-                return (
-                  <button
-                    key={action.id}
-                    onClick={() => handleAction(action.id)}
-                    disabled={isLoading}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 text-gray-700 dark:text-gray-200 transition-colors disabled:opacity-50"
+              
+              <div className="space-y-2">
+                {quickActions.map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <button
+                      key={action.id}
+                      onClick={() => handleAction(action.id)}
+                      disabled={isLoading}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 border border-transparent hover:border-[#4A6572]/20 dark:hover:border-[#F9AA33]/20"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[#4A6572]/10 dark:bg-[#F9AA33]/10 flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-4 h-4 text-[#4A6572] dark:text-[#F9AA33]" />
+                      </div>
+                      <span className="flex-1 font-medium">{action.label}</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Подсказка */}
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  💡 <strong>Совет:</strong> Используйте кнопку 🎤 для голосового ввода или напишите свой запрос ниже.
+                </p>
+              </div>
+            </div>
+          ) : (
+            /* ✅ Обычный чат с сообщениями */
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${
+                      msg.role === 'user'
+                        ? 'bg-[#4A6572] text-white rounded-br-sm'
+                        : msg.isError
+                        ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 rounded-bl-sm'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-bl-sm'
+                    }`}
                   >
-                    <Icon className="w-4 h-4 text-[#4A6572] dark:text-[#F9AA33] flex-shrink-0" />
-                    <span className="flex-1">{action.label}</span>
-                    <ArrowRight className="w-3 h-3 text-gray-400" />
-                  </button>
-                );
-              })}
+                    {renderMessageContent(msg)}
+
+                    {msg.actions && msg.actions.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-gray-300/50 dark:border-gray-600/50 space-y-1">
+                        {msg.actions.map((action) => (
+                          <button
+                            key={action.id}
+                            onClick={() => handleAction(action.id, action.payload, action.label)}
+                            className="w-full text-left text-xs px-2 py-1.5 rounded-lg bg-white/60 dark:bg-gray-800/60 hover:bg-white dark:hover:bg-gray-800 text-[#4A6572] dark:text-[#F9AA33] font-medium flex items-center justify-between transition-colors"
+                          >
+                            <span>{action.label}</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-bl-sm px-3 py-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#4A6572]" />
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
             </div>
           )}
 
@@ -902,7 +949,6 @@ const AIAssistant = ({
                 className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#4A6572] focus:border-transparent"
               />
               
-              {/* Кнопка голосового ввода */}
               <button
                 onClick={() => setShowVoiceSearch(true)}
                 className="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
@@ -911,7 +957,6 @@ const AIAssistant = ({
                 <Mic className="w-4 h-4" />
               </button>
               
-              {/* Кнопка отправки */}
               <button
                 onClick={handleSendMessage}
                 disabled={!inputValue.trim() || isLoading}
@@ -920,9 +965,6 @@ const AIAssistant = ({
                 <Send className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 text-center">
-              💡 Используйте кнопку 🎤 для голосового ввода
-            </p>
           </div>
         </div>
       )}
