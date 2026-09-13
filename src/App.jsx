@@ -8445,8 +8445,13 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       setSelectedApplication(app);
       setShowReceiveModal(true);
     }}
-    // ✅ НОВОЕ: Передаём функцию открытия модального окна приёмки/выдачи
     onOpenReceiveModal={openReceiveModal}
+    // ✅ НОВЫЕ ПРОПСЫ: счётчики для бейджей
+    pendingApprovalsCount={pendingApprovals?.length || 0}
+    readyToIssueCount={readyToIssueCount}
+    mergeableCount={mergeableCount}
+    cartItemsCount={formData.cart?.length || 0}
+    chatUnreadCount={chatUnreadCount}
     t={t}
   />
 )}

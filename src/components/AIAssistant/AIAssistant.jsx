@@ -4,48 +4,164 @@ import {
   Bot, X, Send, Sparkles, Package, Warehouse, BarChart3,
   AlertTriangle, Plus, Search, FileText, CheckCircle, Clock,
   ArrowRight, User, TrendingUp, Loader2, ChevronRight, Mic,
-  Home, ArrowLeft
+  Home, ArrowLeft, Users, MessageCircle, Calendar, ClipboardList,
+  DollarSign, Code, FileCheck, Plug, Building, Target, Layers,
+  History, Truck, UserPlus, Briefcase, Settings, Bell
 } from 'lucide-react';
 import SmartVoiceSearch from '../SmartVoiceSearch';
 
 // ─────────────────────────────────────────────────────────────
-// 🤖 Быстрые действия по ролям (без LLM!)
+// 🗺️ КАРТА ВСЕХ РАЗДЕЛОВ ПРИЛОЖЕНИЯ
+// ─────────────────────────────────────────────────────────────
+const ALL_VIEWS = {
+  // Основные
+  inwork: { view: 'inwork', label: 'Заявки', icon: Package, path: '/applications', description: 'Все заявки' },
+  create: { view: 'create', label: 'Создать заявку', icon: Plus, path: '/applications/new', description: 'Новая заявка' },
+  readyToIssue: { view: 'readyToIssue', label: 'Готовы к выдаче', icon: CheckCircle, path: '/ready-to-issue', description: 'Ожидают выдачи' },
+  received: { view: 'received', label: 'Приёмка', icon: Truck, path: '/received', description: 'Приёмка материалов' },
+  history: { view: 'history', label: 'История', icon: History, path: '/history', description: 'Завершённые заявки' },
+  
+  // Проекты и объекты
+  projects: { view: 'projects', label: 'Проекты', icon: Briefcase, path: '/projects', description: 'Управление проектами' },
+  merge: { view: 'merge', label: 'Объединение', icon: Layers, path: '/merge', description: 'Объединить заявки' },
+  
+  // CRM и клиенты
+  clients: { view: 'clients', label: 'Клиенты', icon: Users, path: '/clients', description: 'Управление клиентами' },
+  'crm-sales': { view: 'crm-sales', label: 'CRM Лиды', icon: Target, path: '/crm-sales', description: 'Управление лидами' },
+  
+  // Склад и материалы
+  warehouse: { view: 'warehouse', label: 'Склад', icon: Warehouse, path: '/warehouse', description: 'Остатки на складе' },
+  
+  // Аналитика и отчёты
+  analytics: { view: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics', description: 'Аналитика компании' },
+  reports: { view: 'reports', label: 'Отчёты', icon: FileText, path: '/reports', description: 'Построение отчётов' },
+  estimates: { view: 'estimates', label: 'Сметы', icon: DollarSign, path: '/estimates', description: 'Калькулятор смет' },
+  
+  // Документы и интеграции
+  documents: { view: 'documents', label: 'Документы', icon: FileCheck, path: '/documents', description: 'Генерация документов' },
+  integration: { view: 'integration', label: 'Интеграция', icon: Plug, path: '/integration', description: 'Интеграция с 1С' },
+  api: { view: 'api', label: 'API', icon: Code, path: '/api', description: 'API документация' },
+  
+  // Коммуникации
+  chat: { view: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat', description: 'Чат компании' },
+  calendar: { view: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar', description: 'Календарь событий' },
+  tasks: { view: 'tasks', label: 'Задачи', icon: ClipboardList, path: '/tasks', description: 'Канбан задач' },
+  
+  // Управление
+  employees: { view: 'employees', label: 'Сотрудники', icon: UserPlus, path: '/employees', description: 'Управление сотрудниками' },
+  approvals: { view: 'approvals', label: 'Согласования', icon: CheckCircle, path: '/approvals', description: 'Очередь согласования' },
+  audit: { view: 'audit', label: 'Аудит', icon: FileText, path: '/audit', description: 'Журнал действий' },
+  settings: { view: 'settings', label: 'Настройки', icon: Settings, path: '/settings', description: 'Настройки приложения' },
+  companyProfile: { view: 'companyProfile', label: 'Реквизиты компании', icon: Building, path: '/companyProfile', description: 'Реквизиты' },
+  tariffs: { view: 'tariffs', label: 'Тарифы', icon: DollarSign, path: '/tariffs', description: 'Управление тарифом' },
+  profile: { view: 'profile', label: 'Профиль', icon: User, path: '/profile', description: 'Мой профиль' },
+  help: { view: 'help', label: 'Помощь', icon: Sparkles, path: '/help', description: 'Справка' },
+  dashboard: { view: 'dashboard', label: 'Главная', icon: Home, path: '/', description: 'Главный экран' },
+  
+  // Клиентские (для роли client)
+  clientDashboard: { view: 'clientDashboard', label: 'Мой объект', icon: Home, path: '/client', description: 'Сводка по объекту' },
+  clientChat: { view: 'clientChat', label: 'Чат', icon: MessageCircle, path: '/client/chat', description: 'Чат с прорабом' },
+  clientDocuments: { view: 'clientDocuments', label: 'Документы', icon: FileCheck, path: '/client/documents', description: 'Мои документы' },
+  clientApplications: { view: 'clientApplications', label: 'Заявки', icon: Package, path: '/client/applications', description: 'Мои заявки' },
+  clientCalendar: { view: 'clientCalendar', label: 'Календарь', icon: Calendar, path: '/client/calendar', description: 'Календарь' },
+  clientConfirmation: { view: 'clientConfirmation', label: 'Согласования', icon: CheckCircle, path: '/client/confirmation', description: 'Согласования' },
+  clientPhotos: { view: 'clientPhotos', label: 'Фотоотчёты', icon: FileText, path: '/client/photos', description: 'Фотоотчёты' },
+  clientWorkAct: { view: 'clientWorkAct', label: 'Акты работ', icon: FileCheck, path: '/client/work-act', description: 'Акты работ' },
+};
+
+// ─────────────────────────────────────────────────────────────
+// 🗺️ КАРТА ДОСТУПНЫХ РАЗДЕЛОВ ПО РОЛЯМ
+// ─────────────────────────────────────────────────────────────
+const ROLE_VIEWS = {
+  master: [
+    'dashboard', 'create', 'inwork', 'projects', 'history',
+    'warehouse', 'documents', 'chat', 'calendar', 'tasks', 'profile', 'help'
+  ],
+  foreman: [
+    'dashboard', 'create', 'inwork', 'projects', 'history',
+    'warehouse', 'documents', 'chat', 'calendar', 'tasks', 'profile', 'help'
+  ],
+  supply_admin: [
+    'dashboard', 'create', 'inwork', 'readyToIssue', 'received', 'projects',
+    'crm-sales', 'merge', 'warehouse', 'analytics', 'api', 'estimates',
+    'reports', 'integration', 'documents', 'chat', 'calendar', 'tasks',
+    'profile', 'help'
+  ],
+  manager: [
+    'dashboard', 'create', 'inwork', 'readyToIssue', 'received', 'projects',
+    'merge', 'clients', 'crm-sales', 'warehouse', 'analytics', 'api',
+    'estimates', 'reports', 'integration', 'documents', 'chat', 'calendar',
+    'tasks', 'employees', 'approvals', 'audit', 'companyProfile',
+    'tariffs', 'profile', 'help'
+  ],
+  director: [
+    'dashboard', 'inwork', 'readyToIssue', 'received', 'projects',
+    'clients', 'crm-sales', 'warehouse', 'analytics', 'api', 'estimates',
+    'reports', 'integration', 'documents', 'chat', 'calendar', 'tasks',
+    'employees', 'approvals', 'audit', 'companyProfile', 'tariffs',
+    'profile', 'help'
+  ],
+  accountant: [
+    'dashboard', 'inwork', 'received', 'history', 'warehouse',
+    'analytics', 'reports', 'estimates', 'documents', 'chat',
+    'calendar', 'tasks', 'profile', 'help'
+  ],
+  client_manager: [
+    'dashboard', 'create', 'inwork', 'projects', 'clients',
+    'crm-sales', 'warehouse', 'analytics', 'documents', 'chat',
+    'calendar', 'tasks', 'profile', 'help'
+  ],
+  client: [
+    'clientDashboard', 'clientChat', 'clientDocuments', 'clientApplications',
+    'clientCalendar', 'clientConfirmation', 'clientPhotos', 'clientWorkAct',
+    'profile', 'help'
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────
+// 🎯 Быстрые действия по ролям (сгруппированные)
 // ─────────────────────────────────────────────────────────────
 const QUICK_ACTIONS = {
   master: [
-    { id: 'my_applications', label: '📋 Мои активные заявки', icon: Package },
-    { id: 'not_received', label: '⏳ Что ещё не получено', icon: Clock },
-    { id: 'create_app', label: '➕ Создать заявку', icon: Plus },
+    { id: 'create_app', label: '➕ Создать заявку', icon: Plus, group: 'quick' },
+    { id: 'my_applications', label: '📋 Мои активные заявки', icon: Package, group: 'quick' },
+    { id: 'not_received', label: '⏳ Что ещё не получено', icon: Clock, group: 'quick' },
   ],
   foreman: [
-    { id: 'my_applications', label: '📋 Мои активные заявки', icon: Package },
-    { id: 'not_received', label: '⏳ Что ещё не получено', icon: Clock },
-    { id: 'create_app', label: '➕ Создать заявку', icon: Plus },
+    { id: 'create_app', label: '➕ Создать заявку', icon: Plus, group: 'quick' },
+    { id: 'my_applications', label: '📋 Мои активные заявки', icon: Package, group: 'quick' },
+    { id: 'not_received', label: '⏳ Что ещё не получено', icon: Clock, group: 'quick' },
   ],
   supply_admin: [
-    { id: 'warehouse_stock', label: '🏭 Остатки на складе', icon: Warehouse },
-    { id: 'pending_receipt', label: '📥 Ожидают приёмки', icon: Package },
-    { id: 'ready_to_issue', label: '📤 Готовы к выдаче', icon: CheckCircle },
-    { id: 'search_app', label: '🔍 Найти заявку', icon: Search },
+    { id: 'pending_receipt', label: '📥 Ожидают приёмки', icon: Package, group: 'quick' },
+    { id: 'ready_to_issue', label: '📤 Готовы к выдаче', icon: CheckCircle, group: 'quick' },
+    { id: 'warehouse_stock', label: '🏭 Остатки на складе', icon: Warehouse, group: 'quick' },
   ],
   manager: [
-    { id: 'analytics_summary', label: '📊 Аналитика компании', icon: BarChart3 },
-    { id: 'problem_apps', label: '⚠️ Проблемные заявки', icon: AlertTriangle },
-    { id: 'team_activity', label: '👥 Активность команды', icon: User },
-    { id: 'top_objects', label: '🏗️ Топ объектов', icon: TrendingUp },
+    { id: 'analytics_summary', label: '📊 Аналитика компании', icon: BarChart3, group: 'quick' },
+    { id: 'problem_apps', label: '⚠️ Проблемные заявки', icon: AlertTriangle, group: 'quick' },
+    { id: 'team_activity', label: '👥 Активность команды', icon: User, group: 'quick' },
+    { id: 'top_objects', label: '🏗️ Топ объектов', icon: TrendingUp, group: 'quick' },
   ],
   director: [
-    { id: 'analytics_summary', label: '📊 Аналитика компании', icon: BarChart3 },
-    { id: 'problem_apps', label: '⚠️ Проблемные заявки', icon: AlertTriangle },
-    { id: 'team_activity', label: '👥 Активность команды', icon: User },
+    { id: 'analytics_summary', label: '📊 Аналитика компании', icon: BarChart3, group: 'quick' },
+    { id: 'problem_apps', label: '⚠️ Проблемные заявки', icon: AlertTriangle, group: 'quick' },
+    { id: 'team_activity', label: '👥 Активность команды', icon: User, group: 'quick' },
   ],
   accountant: [
-    { id: 'completed_apps', label: '✅ Завершённые заявки', icon: CheckCircle },
-    { id: 'monthly_report', label: '📄 Отчёт за месяц', icon: FileText },
+    { id: 'completed_apps', label: '✅ Завершённые заявки', icon: CheckCircle, group: 'quick' },
+    { id: 'monthly_report', label: '📄 Отчёт за месяц', icon: FileText, group: 'quick' },
+  ],
+  client_manager: [
+    { id: 'my_applications', label: '📋 Заявки', icon: Package, group: 'quick' },
+    { id: 'create_app', label: '➕ Создать заявку', icon: Plus, group: 'quick' },
+  ],
+  client: [
+    { id: 'client_applications', label: '📋 Мои заявки', icon: Package, group: 'quick' },
   ],
   default: [
-    { id: 'my_applications', label: '📋 Мои заявки', icon: Package },
-    { id: 'help', label: '❓ Что умеет бот', icon: Sparkles },
+    { id: 'my_applications', label: '📋 Мои заявки', icon: Package, group: 'quick' },
+    { id: 'help', label: '❓ Что умеет бот', icon: Sparkles, group: 'quick' },
   ],
 };
 
@@ -101,6 +217,12 @@ const AIAssistant = ({
   onCreateDraft,
   onOpenApplication,
   onOpenReceiveModal,
+  // ✅ НОВЫЕ пропсы для динамических счётчиков
+  pendingApprovalsCount = 0,
+  readyToIssueCount = 0,
+  mergeableCount = 0,
+  cartItemsCount = 0,
+  chatUnreadCount = 0,
   t = (k) => k,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -108,10 +230,26 @@ const AIAssistant = ({
   const [isLoading, setIsLoading] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [showVoiceSearch, setShowVoiceSearch] = useState(false);
-  const [showMainMenu, setShowMainMenu] = useState(true); // ✅ НОВОЕ: показывать ли главное меню
+  const [activeTab, setActiveTab] = useState('actions'); // 'actions' | 'navigation'
+  const [showMainMenu, setShowMainMenu] = useState(true);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const [hasInitialized, setHasInitialized] = useState(false);
+
+  // ✅ Получаем список доступных разделов для роли
+  const availableViews = ROLE_VIEWS[userRole] || ROLE_VIEWS.master;
+
+  // ✅ Счётчики для бейджей
+  const getBadgeCount = useCallback((viewId) => {
+    switch (viewId) {
+      case 'readyToIssue': return readyToIssueCount;
+      case 'approvals': return pendingApprovalsCount;
+      case 'merge': return mergeableCount;
+      case 'chat': return chatUnreadCount;
+      case 'cart': return cartItemsCount;
+      default: return 0;
+    }
+  }, [readyToIssueCount, pendingApprovalsCount, mergeableCount, chatUnreadCount, cartItemsCount]);
 
   // ─────────────────────────────────────────────────────────
   // 🎯 Логика каждого действия
@@ -188,9 +326,7 @@ const AIAssistant = ({
         });
 
         if (pendingItems.length === 0) {
-          return {
-            content: '✅ Всё получено! Незавершённых позиций нет.',
-          };
+          return { content: '✅ Всё получено! Незавершённых позиций нет.' };
         }
 
         const groupedItems = {};
@@ -226,20 +362,14 @@ const AIAssistant = ({
 
       // ─── СОЗДАТЬ ЗАЯВКУ ───
       case 'create_app': {
-        if (onCreateDraft) {
-          onCreateDraft({});
-        }
+        if (onCreateDraft) onCreateDraft({});
         onNavigate?.('create');
-        return {
-          content: '✨ Открываю форму создания заявки...',
-        };
+        return { content: '✨ Открываю форму создания заявки...' };
       }
 
       // ─── ОСТАТКИ НА СКЛАДЕ ───
       case 'warehouse_stock': {
-        if (!userCompanyId) {
-          return { content: '❌ Компания не найдена' };
-        }
+        if (!userCompanyId) return { content: '❌ Компания не найдена' };
 
         const { data, error } = await supabase
           .from('warehouse_balance')
@@ -345,14 +475,6 @@ const AIAssistant = ({
         };
       }
 
-      // ─── ПОИСК ЗАЯВКИ ───
-      case 'search_app': {
-        return {
-          content: '🔍 Введите название объекта или ФИО прораба в поисковой строке — я покажу результаты.',
-          actions: [{ id: 'open_all', label: '📋 Все заявки' }],
-        };
-      }
-
       // ─── АНАЛИТИКА ───
       case 'analytics_summary': {
         const total = applications.length;
@@ -383,9 +505,7 @@ const AIAssistant = ({
 
         const problems = [...overdue, ...partial];
         
-        if (problems.length === 0) {
-          return { content: '✅ Проблемных заявок нет.' };
-        }
+        if (problems.length === 0) return { content: '✅ Проблемных заявок нет.' };
 
         const list = problems.slice(0, 6).map(a => {
           const days = Math.floor((Date.now() - new Date(a.created_at)) / 86400000);
@@ -438,9 +558,7 @@ const AIAssistant = ({
           `${i + 1}. **${name}** — ${count} заявок`
         ).join('\n');
 
-        return {
-          content: `🏗️ **Топ объектов:**\n\n${list}`,
-        };
+        return { content: `🏗️ **Топ объектов:**\n\n${list}` };
       }
 
       // ─── ЗАВЕРШЁННЫЕ ───
@@ -472,7 +590,7 @@ const AIAssistant = ({
         return { content: '❌ Заявка не найдена' };
       }
 
-      // ─── ОТКРЫТЬ МОДАЛЬНОЕ ОКНО ПРИЁМКИ/ВЫДАЧИ ───
+      // ─── ОТКРЫТЬ МОДАЛЬНОЕ ОКНО ───
       case 'open_receive_modal': {
         const appId = payload?.appId;
         const mode = payload?.mode || 'admin_receive';
@@ -487,6 +605,22 @@ const AIAssistant = ({
         return { content: '❌ Заявка не найдена' };
       }
 
+      // ─── НАВИГАЦИЯ ПО РАЗДЕЛАМ ───
+      case 'navigate_to': {
+        const viewId = payload?.viewId;
+        const viewInfo = ALL_VIEWS[viewId];
+        
+        if (!viewInfo) return { content: '❌ Раздел не найден' };
+        
+        // Проверяем права доступа
+        if (!availableViews.includes(viewId)) {
+          return { content: `❌ У вас нет доступа к разделу "${viewInfo.label}"` };
+        }
+        
+        onNavigate?.(viewId);
+        return { content: `➡️ Открываю **${viewInfo.label}**...` };
+      }
+
       // ─── ПОМОЩЬ ───
       case 'help': {
         const roleActions = (QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default)
@@ -494,72 +628,102 @@ const AIAssistant = ({
           .join('\n');
         
         return {
-          content: `🤖 **Что я умею:**\n\n${roleActions}\n\n💡 **Совет:** Используйте кнопку 🎤 для голосового поиска!`,
+          content: `🤖 **Что я умею:**\n\n**Быстрые действия:**\n${roleActions}\n\n**Навигация:**\nВкладка "Разделы" — переход в любой раздел приложения.\n\n💡 **Совет:** Используйте кнопку 🎤 для голосового поиска!`,
         };
       }
-
-      // ─── НАВИГАЦИОННЫЕ ───
-      case 'open_my_apps':
-        onNavigate?.('inwork');
-        return { content: '➡️ Открываю заявки...' };
-      
-      case 'open_warehouse':
-        onNavigate?.('warehouse');
-        return { content: '➡️ Открываю склад...' };
-      
-      case 'open_received':
-        onNavigate?.('received');
-        return { content: '➡️ Открываю приёмку...' };
-      
-      case 'open_ready':
-        onNavigate?.('readyToIssue');
-        return { content: '➡️ Открываю выдачу...' };
-      
-      case 'open_analytics':
-        onNavigate?.('analytics');
-        return { content: '➡️ Открываю аналитику...' };
-      
-      case 'open_all':
-        onNavigate?.('inwork');
-        return { content: '➡️ Открываю список заявок...' };
-      
-      case 'open_documents':
-        onNavigate?.('documents');
-        return { content: '➡️ Открываю документы...' };
 
       // ─── СВОБОДНЫЙ ВВОД ───
       case 'free_text': {
         const text = payload?.text?.trim();
-        if (!text) {
-          return { content: '🤔 Введите запрос или используйте кнопки выше.' };
-        }
+        if (!text) return { content: '🤔 Введите запрос или используйте кнопки выше.' };
         
         const lowerText = text.toLowerCase();
         
-        if (lowerText.includes('заявк') || lowerText.includes('мои')) {
+        // ✅ Умный поиск по ВСЕМ разделам приложения
+        // 1. Поиск по ключевым словам быстрых действий
+        if (lowerText.includes('заявк') && (lowerText.includes('мои') || lowerText.includes('актив'))) {
           return executeAction('my_applications');
         }
-        if (lowerText.includes('склад') || lowerText.includes('остат')) {
+        if (lowerText.includes('склад') && (lowerText.includes('остат') || lowerText.includes('товар'))) {
           return executeAction('warehouse_stock');
         }
         if (lowerText.includes('приёмк') || lowerText.includes('приемк')) {
           return executeAction('pending_receipt');
         }
-        if (lowerText.includes('выдач') || lowerText.includes('готов')) {
+        if (lowerText.includes('выдач') || (lowerText.includes('готов') && lowerText.includes('заяв'))) {
           return executeAction('ready_to_issue');
         }
-        if (lowerText.includes('аналитик') || lowerText.includes('статистик')) {
+        if (lowerText.includes('аналитик') || lowerText.includes('статистик') || lowerText.includes('отчёт')) {
           return executeAction('analytics_summary');
         }
         if (lowerText.includes('проблем') || lowerText.includes('просроч')) {
           return executeAction('problem_apps');
         }
-        if (lowerText.includes('созда') || lowerText.includes('нов')) {
+        if (lowerText.includes('созда') && lowerText.includes('заяв')) {
           return executeAction('create_app');
         }
         
+        // 2. ✅ Умный поиск по разделам приложения
+        const viewMatches = [];
+        Object.entries(ALL_VIEWS).forEach(([viewId, viewInfo]) => {
+          if (!availableViews.includes(viewId)) return;
+          
+          const labelLower = viewInfo.label.toLowerCase();
+          const descLower = viewInfo.description.toLowerCase();
+          
+          // Прямое совпадение или частичное
+          if (lowerText.includes(labelLower) || 
+              labelLower.includes(lowerText) ||
+              lowerText.includes(descLower) ||
+              descLower.includes(lowerText)) {
+            viewMatches.push({ viewId, viewInfo, score: 10 });
+          } else {
+            // Поиск по отдельным словам
+            const words = lowerText.split(/\s+/);
+            const viewWords = `${labelLower} ${descLower}`.split(/\s+/);
+            let matches = 0;
+            words.forEach(w => {
+              if (w.length > 2 && viewWords.some(vw => vw.includes(w) || w.includes(vw))) {
+                matches++;
+              }
+            });
+            if (matches > 0) {
+              viewMatches.push({ viewId, viewInfo, score: matches });
+            }
+          }
+        });
+        
+        if (viewMatches.length > 0) {
+          // Сортируем по релевантности
+          viewMatches.sort((a, b) => b.score - a.score);
+          
+          if (viewMatches.length === 1) {
+            // Одно совпадение — сразу переходим
+            return executeAction('navigate_to', { viewId: viewMatches[0].viewId });
+          }
+          
+          // Несколько совпадений — показываем список
+          const list = viewMatches.slice(0, 5).map(m => ({
+            id: m.viewId,
+            emoji: '📍',
+            title: m.viewInfo.label,
+            subtitle: m.viewInfo.description,
+            action: {
+              id: 'navigate_to',
+              label: '➡️ Перейти',
+              payload: { viewId: m.viewId },
+            },
+          }));
+          
+          return {
+            content: `🔍 **Найдено ${viewMatches.length} разделов по запросу "${text}":**`,
+            data: list,
+          };
+        }
+        
+        // 3. Ничего не найдено
         return {
-          content: `🔍 Понимаю ваш запрос: "${text}"\n\nПопробуйте использовать кнопки быстрых действий или уточните запрос.`,
+          content: `🔍 По запросу "${text}" ничего не найдено.\n\nПопробуйте:\n• "склад"\n• "аналитика"\n• "мои заявки"\n• "документы"`,
           actions: [
             { id: 'my_applications', label: '📋 Мои заявки' },
             { id: 'help', label: '❓ Что я умею' },
@@ -572,7 +736,7 @@ const AIAssistant = ({
     }
   }, [
     applications, companyUsers, supabase, user,
-    userCompanyId, userRole, onNavigate,
+    userCompanyId, userRole, onNavigate, availableViews,
     onCreateDraft, onOpenApplication, onOpenReceiveModal, showNotification
   ]);
 
@@ -583,13 +747,15 @@ const AIAssistant = ({
     const action = (QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default)
       .find(a => a.id === actionId);
     
-    // ✅ Скрываем главное меню при выполнении действия
+    // Для навигации по разделам
+    const viewInfo = ALL_VIEWS[payload?.viewId];
+    
     setShowMainMenu(false);
     
     setMessages(prev => [...prev, {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: customLabel || action?.label || actionId,
+      content: customLabel || action?.label || viewInfo?.label || actionId,
       timestamp: Date.now(),
     }]);
 
@@ -625,8 +791,6 @@ const AIAssistant = ({
   // ─────────────────────────────────────────────────────────
   const handleBackToMenu = useCallback(() => {
     setShowMainMenu(true);
-    // Опционально: можно очищать сообщения или оставлять историю
-    // setMessages([]); 
   }, []);
 
   // ─────────────────────────────────────────────────────────
@@ -635,13 +799,12 @@ const AIAssistant = ({
   const handleSendMessage = useCallback(async () => {
     const text = inputValue.trim();
     if (!text) return;
-
     setInputValue('');
     await handleAction('free_text', { text }, text);
   }, [inputValue, handleAction]);
 
   // ─────────────────────────────────────────────────────────
-  // 🎤 Обработка голосового ввода
+  // 🎤 Голосовой ввод
   // ─────────────────────────────────────────────────────────
   const handleVoiceSearch = useCallback((query) => {
     setShowVoiceSearch(false);
@@ -655,7 +818,7 @@ const AIAssistant = ({
   }, [handleAction]);
 
   // ─────────────────────────────────────────────────────────
-  // ⌨️ Обработка Enter
+  // ⌨️ Enter
   // ─────────────────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -664,7 +827,7 @@ const AIAssistant = ({
     }
   }, [handleSendMessage]);
 
-  // Приветствие при первом открытии
+  // Приветствие
   useEffect(() => {
     if (isOpen && !hasInitialized) {
       const roleLabel = {
@@ -674,12 +837,14 @@ const AIAssistant = ({
         manager: 'руководитель',
         director: 'директор',
         accountant: 'бухгалтер',
+        client_manager: 'менеджер клиентов',
+        client: 'заказчик',
       }[userRole] || 'пользователь';
 
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: `Привет! Я ассистент Реглай.\n\nЯ вижу вас как **${roleLabel}**. Чем помочь?\n\n💡 Используйте кнопки ниже или напишите запрос.`,
+        content: `Привет! Я ассистент Реглай.\n\nЯ вижу вас как **${roleLabel}**. Чем помочь?\n\n💡 Выбирайте действия на вкладке "Действия" или переходите в разделы на вкладке "Разделы".`,
         timestamp: Date.now(),
       }]);
       setHasInitialized(true);
@@ -693,17 +858,56 @@ const AIAssistant = ({
     }
   }, [messages]);
 
-  // Фокус на инпут при открытии
+  // Фокус
   useEffect(() => {
-    if (isOpen && inputRef.current) {
+    if (isOpen && inputRef.current && !showMainMenu) {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
-  }, [isOpen]);
+  }, [isOpen, showMainMenu]);
 
   // ─────────────────────────────────────────────────────────
   // 🎨 Рендер
   // ─────────────────────────────────────────────────────────
   const quickActions = QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default;
+
+    // Группировка разделов по категориям
+  const groupedViews = React.useMemo(() => {
+    const groups = {
+      'Основные': [],
+      'Работа с материалами': [],
+      'Клиенты и проекты': [],
+      'Аналитика и финансы': [],
+      'Коммуникации': [],
+      'Управление': [],
+    };
+
+    availableViews.forEach(viewId => {
+      const viewInfo = ALL_VIEWS[viewId];
+      if (!viewInfo) return;
+      
+      const group = viewInfo.group || getViewGroup(viewId);
+      if (groups[group]) {
+        groups[group].push({ id: viewId, ...viewInfo });
+      }
+    });
+
+    // ✅ Используем и groupName, и items — показываем количество разделов в группе
+    return Object.entries(groups)
+      .filter(([groupName, items]) => {
+        // Оставляем только непустые группы
+        // groupName используется для логирования/отладки
+        if (items.length === 0) {
+          console.debug(`[AIAssistant] Группа "${groupName}" пуста, скрываем`);
+          return false;
+        }
+        return true;
+      })
+      .map(([groupName, items]) => ({
+        groupName,
+        items,
+        count: items.length, // ✅ Используем count для отображения
+      }));
+  }, [availableViews]);
 
   const renderMessageContent = (msg) => {
     if (msg.data && Array.isArray(msg.data) && msg.data.length > 0) {
@@ -793,14 +997,13 @@ const AIAssistant = ({
       {/* Чат-окно */}
       {isOpen && (
         <div
-          className="fixed bottom-40 right-4 lg:bottom-24 lg:right-8 w-[380px] max-w-[calc(100vw-2rem)] h-[560px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col z-[9998] border border-gray-200 dark:border-gray-700 fade-enter"
+          className="fixed bottom-40 right-4 lg:bottom-24 lg:right-8 w-[380px] max-w-[calc(100vw-2rem)] h-[600px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col z-[9998] border border-gray-200 dark:border-gray-700 fade-enter"
           role="dialog"
           aria-label="AI-ассистент"
         >
           {/* Header */}
           <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-[#4A6572]/5 to-[#344955]/5 rounded-t-2xl">
             <div className="flex items-center gap-2">
-              {/* ✅ НОВОЕ: Кнопка "Назад" когда мы не в главном меню */}
               {!showMainMenu && (
                 <button
                   onClick={handleBackToMenu}
@@ -825,7 +1028,6 @@ const AIAssistant = ({
               </div>
             </div>
             <div className="flex items-center gap-1">
-              {/* ✅ НОВОЕ: Кнопка "Домой" когда мы не в главном меню */}
               {!showMainMenu && (
                 <button
                   onClick={handleBackToMenu}
@@ -844,10 +1046,38 @@ const AIAssistant = ({
             </div>
           </div>
 
-          {/* ✅ НОВОЕ: Главное меню (когда showMainMenu = true) */}
+          {/* ✅ Вкладки — показываем только в главном меню */}
+          {showMainMenu && (
+            <div className="flex border-b border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setActiveTab('actions')}
+                className={`flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  activeTab === 'actions'
+                    ? 'text-[#4A6572] dark:text-[#F9AA33] border-b-2 border-[#4A6572] dark:border-[#F9AA33]'
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Действия
+              </button>
+              <button
+                onClick={() => setActiveTab('navigation')}
+                className={`flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  activeTab === 'navigation'
+                    ? 'text-[#4A6572] dark:text-[#F9AA33] border-b-2 border-[#4A6572] dark:border-[#F9AA33]'
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Разделы ({availableViews.length})
+              </button>
+            </div>
+          )}
+
+          {/* ✅ Главное меню */}
           {showMainMenu ? (
             <div className="flex-1 overflow-y-auto p-3">
-              {/* Последнее приветствие */}
+              {/* Приветствие */}
               {messages.length > 0 && messages[0].id === 'welcome' && (
                 <div className="mb-4 p-3 bg-gradient-to-br from-[#4A6572]/5 to-[#344955]/5 rounded-xl">
                   <div className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
@@ -855,40 +1085,93 @@ const AIAssistant = ({
                   </div>
                 </div>
               )}
-              
-              <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-2">
-                {t('quickActions') || 'Быстрые действия'}
-              </div>
-              
-              <div className="space-y-2">
-                {quickActions.map((action) => {
-                  const Icon = action.icon;
-                  return (
-                    <button
-                      key={action.id}
-                      onClick={() => handleAction(action.id)}
-                      disabled={isLoading}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 border border-transparent hover:border-[#4A6572]/20 dark:hover:border-[#F9AA33]/20"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-[#4A6572]/10 dark:bg-[#F9AA33]/10 flex items-center justify-center flex-shrink-0">
-                        <Icon className="w-4 h-4 text-[#4A6572] dark:text-[#F9AA33]" />
-                      </div>
-                      <span className="flex-1 font-medium">{action.label}</span>
-                      <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
-                    </button>
-                  );
-                })}
-              </div>
 
-              {/* Подсказка */}
-              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-                <p className="text-xs text-blue-700 dark:text-blue-300">
-                  💡 <strong>Совет:</strong> Используйте кнопку 🎤 для голосового ввода или напишите свой запрос ниже.
-                </p>
-              </div>
+              {/* Вкладка "Действия" */}
+              {activeTab === 'actions' && (
+                <>
+                  <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-2">
+                    Быстрые действия
+                  </div>
+                  <div className="space-y-2">
+                    {quickActions.map((action) => {
+                      const Icon = action.icon;
+                      return (
+                        <button
+                          key={action.id}
+                          onClick={() => handleAction(action.id)}
+                          disabled={isLoading}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 border border-transparent hover:border-[#4A6572]/20 dark:hover:border-[#F9AA33]/20"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-[#4A6572]/10 dark:bg-[#F9AA33]/10 flex items-center justify-center flex-shrink-0">
+                            <Icon className="w-4 h-4 text-[#4A6572] dark:text-[#F9AA33]" />
+                          </div>
+                          <span className="flex-1 font-medium">{action.label}</span>
+                          <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      💡 <strong>Совет:</strong> Переключитесь на вкладку <strong>"Разделы"</strong>, чтобы перейти в любой раздел приложения.
+                    </p>
+                  </div>
+                </>
+              )}
+
+                            {/* ✅ Вкладка "Разделы" */}
+              {activeTab === 'navigation' && (
+                <>
+                  <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-2">
+                    Доступные разделы ({availableViews.length})
+                  </div>
+                  
+                  {groupedViews.map(({ groupName, items, count }) => (
+                    <div key={groupName} className="mb-3">
+                      {/* ✅ Показываем название группы и количество разделов в ней */}
+                      <div className="flex items-center justify-between px-1 mb-1.5">
+                        <div className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                          {groupName}
+                        </div>
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 rounded-full px-1.5 py-0.5">
+                          {count}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {items.map((view) => {
+                          const Icon = view.icon;
+                          const badge = getBadgeCount(view.id);
+                          
+                          return (
+                            <button
+                              key={view.id}
+                              onClick={() => handleAction('navigate_to', { viewId: view.id }, view.label)}
+                              disabled={isLoading}
+                              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 border border-transparent hover:border-[#4A6572]/20 dark:hover:border-[#F9AA33]/20"
+                            >
+                              <Icon className="w-4 h-4 text-[#4A6572] dark:text-[#F9AA33] flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-xs">{view.label}</div>
+                                <div className="text-[10px] text-gray-400 truncate">{view.description}</div>
+                              </div>
+                              {badge > 0 && (
+                                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#F9AA33] text-white min-w-[20px] text-center">
+                                  {badge}
+                                </span>
+                              )}
+                              <ChevronRight className="w-3 h-3 text-gray-400" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           ) : (
-            /* ✅ Обычный чат с сообщениями */
+            /* ✅ Чат с результатами */
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {messages.map((msg) => (
                 <div
@@ -997,5 +1280,25 @@ const AIAssistant = ({
     </>
   );
 };
+
+// ─────────────────────────────────────────────────────────────
+// 🔧 Группировка разделов по категориям
+// ─────────────────────────────────────────────────────────────
+function getViewGroup(viewId) {
+  const groups = {
+    'Основные': ['dashboard', 'inwork', 'create', 'received', 'history', 'readyToIssue'],
+    'Работа с материалами': ['warehouse', 'merge'],
+    'Клиенты и проекты': ['clients', 'crm-sales', 'projects'],
+    'Аналитика и финансы': ['analytics', 'reports', 'estimates', 'tariffs'],
+    'Коммуникации': ['chat', 'calendar', 'tasks'],
+    'Управление': ['employees', 'approvals', 'audit', 'api', 'integration', 
+                   'documents', 'settings', 'companyProfile', 'profile', 'help'],
+  };
+  
+  for (const [group, ids] of Object.entries(groups)) {
+    if (ids.includes(viewId)) return group;
+  }
+  return 'Основные';
+}
 
 export default AIAssistant;
