@@ -189,7 +189,6 @@ export const syncPromoCodesToDB = async (supabaseClient) => {
         discount_percent: config.discountPercent || 0,
         description: config.description,
         is_active: config.isActive,
-        created_by: config.createdBy,
         created_at: config.createdAt || new Date().toISOString()
       };
 
@@ -676,7 +675,7 @@ export const createPromoCode = async (supabaseClient, promoData) => {
       expires_at: expiresAt,
       description: description || '',
       is_active: true,
-      created_by: createdBy,
+      created_by: createdBy || null,
       created_at: new Date().toISOString()
     }])
     .select()
