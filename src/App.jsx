@@ -1292,6 +1292,7 @@ const [showConsentUpdate, setShowConsentUpdate] = useState(false);
   const saveTimerRef = useRef(null);
   const notifiedOverdueAppIdsRef = useRef(new Set());
   const lastLoggedRef = useRef({});  // ← ДЛЯ ДЕБАУНСА ФИЧЕР-ЛОГОВ
+  const aiAssistantRef = useRef(null);
 
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK
@@ -1433,7 +1434,7 @@ const readyToIssueCount = useMemo(() => {
   // ─────────────────────────────────────────────────────────
   // ⌨️ GLOBAL KEYBOARD SHORTCUTS (Pattern #5)
   // ─────────────────────────────────────────────────────────
-  useEffect(() => {
+    useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         setShowReceiveModal(false);
@@ -1444,6 +1445,13 @@ const readyToIssueCount = useMemo(() => {
         setPrivacyPolicyOpen(false);
         setProfileMenuOpen(false);
       }
+      
+      // ✅ ДОБАВИТЬ ЭТОТ БЛОК: Ctrl+/ или Cmd+/ для AI-ассистента
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        aiAssistantRef.current?.toggle();
+      }
+      
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         if (currentView === 'create') {
           document.querySelector('form')?.requestSubmit?.();
@@ -7300,6 +7308,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         chatUnreadCount={chatUnreadCount}
         newFeedbackCount={newFeedbackCount}
         readyToIssueCount={readyToIssueCount}
+        onOpenAIAssistant={() => aiAssistantRef.current?.toggle()}
                onMarkNotificationRead={async (id) => {
           if (!id) {
             console.error('❌ [Notifications] ID уведомления не передан!');
@@ -8426,6 +8435,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       {/* 🤖 AI-Ассистент */}
 {user && userCompanyId && (
   <AIAssistant
+    ref={aiAssistantRef}
     user={user}
     userRole={userRole}
     userCompanyId={userCompanyId}

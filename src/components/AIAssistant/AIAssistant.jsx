@@ -1,5 +1,12 @@
 // src/components/AIAssistant/AIAssistant.jsx
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { 
+  useState, 
+  useCallback, 
+  useEffect, 
+  useRef, 
+  forwardRef, 
+  useImperativeHandle 
+} from 'react';
 import {
   Bot, X, Send, Sparkles, Package, Warehouse, BarChart3,
   AlertTriangle, Plus, Search, FileText, CheckCircle, Clock,
@@ -14,40 +21,25 @@ import SmartVoiceSearch from '../SmartVoiceSearch';
 // 🗺️ КАРТА ВСЕХ РАЗДЕЛОВ ПРИЛОЖЕНИЯ
 // ─────────────────────────────────────────────────────────────
 const ALL_VIEWS = {
-  // Основные
   inwork: { view: 'inwork', label: 'Заявки', icon: Package, path: '/applications', description: 'Все заявки' },
   create: { view: 'create', label: 'Создать заявку', icon: Plus, path: '/applications/new', description: 'Новая заявка' },
   readyToIssue: { view: 'readyToIssue', label: 'Готовы к выдаче', icon: CheckCircle, path: '/ready-to-issue', description: 'Ожидают выдачи' },
   received: { view: 'received', label: 'Приёмка', icon: Truck, path: '/received', description: 'Приёмка материалов' },
   history: { view: 'history', label: 'История', icon: History, path: '/history', description: 'Завершённые заявки' },
-  
-  // Проекты и объекты
   projects: { view: 'projects', label: 'Проекты', icon: Briefcase, path: '/projects', description: 'Управление проектами' },
   merge: { view: 'merge', label: 'Объединение', icon: Layers, path: '/merge', description: 'Объединить заявки' },
-  
-  // CRM и клиенты
   clients: { view: 'clients', label: 'Клиенты', icon: Users, path: '/clients', description: 'Управление клиентами' },
   'crm-sales': { view: 'crm-sales', label: 'CRM Лиды', icon: Target, path: '/crm-sales', description: 'Управление лидами' },
-  
-  // Склад и материалы
   warehouse: { view: 'warehouse', label: 'Склад', icon: Warehouse, path: '/warehouse', description: 'Остатки на складе' },
-  
-  // Аналитика и отчёты
   analytics: { view: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics', description: 'Аналитика компании' },
   reports: { view: 'reports', label: 'Отчёты', icon: FileText, path: '/reports', description: 'Построение отчётов' },
   estimates: { view: 'estimates', label: 'Сметы', icon: DollarSign, path: '/estimates', description: 'Калькулятор смет' },
-  
-  // Документы и интеграции
   documents: { view: 'documents', label: 'Документы', icon: FileCheck, path: '/documents', description: 'Генерация документов' },
   integration: { view: 'integration', label: 'Интеграция', icon: Plug, path: '/integration', description: 'Интеграция с 1С' },
   api: { view: 'api', label: 'API', icon: Code, path: '/api', description: 'API документация' },
-  
-  // Коммуникации
   chat: { view: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat', description: 'Чат компании' },
   calendar: { view: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar', description: 'Календарь событий' },
   tasks: { view: 'tasks', label: 'Задачи', icon: ClipboardList, path: '/tasks', description: 'Канбан задач' },
-  
-  // Управление
   employees: { view: 'employees', label: 'Сотрудники', icon: UserPlus, path: '/employees', description: 'Управление сотрудниками' },
   approvals: { view: 'approvals', label: 'Согласования', icon: CheckCircle, path: '/approvals', description: 'Очередь согласования' },
   audit: { view: 'audit', label: 'Аудит', icon: FileText, path: '/audit', description: 'Журнал действий' },
@@ -57,8 +49,6 @@ const ALL_VIEWS = {
   profile: { view: 'profile', label: 'Профиль', icon: User, path: '/profile', description: 'Мой профиль' },
   help: { view: 'help', label: 'Помощь', icon: Sparkles, path: '/help', description: 'Справка' },
   dashboard: { view: 'dashboard', label: 'Главная', icon: Home, path: '/', description: 'Главный экран' },
-  
-  // Клиентские (для роли client)
   clientDashboard: { view: 'clientDashboard', label: 'Мой объект', icon: Home, path: '/client', description: 'Сводка по объекту' },
   clientChat: { view: 'clientChat', label: 'Чат', icon: MessageCircle, path: '/client/chat', description: 'Чат с прорабом' },
   clientDocuments: { view: 'clientDocuments', label: 'Документы', icon: FileCheck, path: '/client/documents', description: 'Мои документы' },
@@ -119,7 +109,7 @@ const ROLE_VIEWS = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🎯 Быстрые действия по ролям (сгруппированные)
+// 🎯 Быстрые действия по ролям
 // ─────────────────────────────────────────────────────────────
 const QUICK_ACTIONS = {
   master: [
@@ -166,7 +156,7 @@ const QUICK_ACTIONS = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🔧 Хелперы для форматирования
+// 🔧 Хелперы
 // ─────────────────────────────────────────────────────────────
 const formatDate = (dateString) => {
   if (!dateString) return '—';
@@ -203,9 +193,29 @@ const getStatusLabel = (status) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🤖 Компонент AI Assistant
+// 🔧 Группировка разделов по категориям
 // ─────────────────────────────────────────────────────────────
-const AIAssistant = ({
+function getViewGroup(viewId) {
+  const groups = {
+    'Основные': ['dashboard', 'inwork', 'create', 'received', 'history', 'readyToIssue'],
+    'Работа с материалами': ['warehouse', 'merge'],
+    'Клиенты и проекты': ['clients', 'crm-sales', 'projects'],
+    'Аналитика и финансы': ['analytics', 'reports', 'estimates', 'tariffs'],
+    'Коммуникации': ['chat', 'calendar', 'tasks'],
+    'Управление': ['employees', 'approvals', 'audit', 'api', 'integration',
+                   'documents', 'settings', 'companyProfile', 'profile', 'help'],
+  };
+  
+  for (const [group, ids] of Object.entries(groups)) {
+    if (ids.includes(viewId)) return group;
+  }
+  return 'Основные';
+}
+
+// ─────────────────────────────────────────────────────────────
+// 🤖 Компонент AI Assistant (с forwardRef для внешнего управления)
+// ─────────────────────────────────────────────────────────────
+const AIAssistant = forwardRef(({
   user,
   userRole,
   userCompanyId,
@@ -217,24 +227,31 @@ const AIAssistant = ({
   onCreateDraft,
   onOpenApplication,
   onOpenReceiveModal,
-  // ✅ НОВЫЕ пропсы для динамических счётчиков
   pendingApprovalsCount = 0,
   readyToIssueCount = 0,
   mergeableCount = 0,
   cartItemsCount = 0,
   chatUnreadCount = 0,
   t = (k) => k,
-}) => {
+}, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [showVoiceSearch, setShowVoiceSearch] = useState(false);
-  const [activeTab, setActiveTab] = useState('actions'); // 'actions' | 'navigation'
+  const [activeTab, setActiveTab] = useState('actions');
   const [showMainMenu, setShowMainMenu] = useState(true);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const [hasInitialized, setHasInitialized] = useState(false);
+
+  // ✅ ЭКСПОРТИРУЕМ МЕТОДЫ ДЛЯ ВНЕШНЕГО УПРАВЛЕНИЯ
+  useImperativeHandle(ref, () => ({
+    open: () => setIsOpen(true),
+    close: () => setIsOpen(false),
+    toggle: () => setIsOpen(prev => !prev),
+    isOpen: () => isOpen,
+  }), [isOpen]);
 
   // ✅ Получаем список доступных разделов для роли
   const availableViews = ROLE_VIEWS[userRole] || ROLE_VIEWS.master;
@@ -256,7 +273,6 @@ const AIAssistant = ({
   // ─────────────────────────────────────────────────────────
   const executeAction = useCallback(async (actionId, payload) => {
     switch (actionId) {
-      // ─── МОИ ЗАЯВКИ ───
       case 'my_applications': {
         const myApps = applications.filter(
           a => a.user_id === user?.id &&
@@ -300,7 +316,6 @@ const AIAssistant = ({
         };
       }
 
-      // ─── ЧТО НЕ ПОЛУЧЕНО ───
       case 'not_received': {
         const myApps = applications.filter(a => 
           a.user_id === user?.id &&
@@ -360,14 +375,12 @@ const AIAssistant = ({
         };
       }
 
-      // ─── СОЗДАТЬ ЗАЯВКУ ───
       case 'create_app': {
         if (onCreateDraft) onCreateDraft({});
         onNavigate?.('create');
         return { content: '✨ Открываю форму создания заявки...' };
       }
 
-      // ─── ОСТАТКИ НА СКЛАДЕ ───
       case 'warehouse_stock': {
         if (!userCompanyId) return { content: '❌ Компания не найдена' };
 
@@ -405,7 +418,6 @@ const AIAssistant = ({
         };
       }
 
-      // ─── ОЖИДАЮТ ПРИЁМКИ ───
       case 'pending_receipt': {
         const pending = applications.filter(a => {
           if (!['pending', 'admin_processing', 'partial_received'].includes(a.status)) return false;
@@ -446,7 +458,6 @@ const AIAssistant = ({
         };
       }
 
-      // ─── ГОТОВЫ К ВЫДАЧЕ ───
       case 'ready_to_issue': {
         const ready = applications.filter(a => 
           a.status === 'ready_for_issue' || a.status === 'partial_received'
@@ -475,7 +486,6 @@ const AIAssistant = ({
         };
       }
 
-      // ─── АНАЛИТИКА ───
       case 'analytics_summary': {
         const total = applications.length;
         const active = applications.filter(a => 
@@ -492,7 +502,6 @@ const AIAssistant = ({
         };
       }
 
-      // ─── ПРОБЛЕМНЫЕ ───
       case 'problem_apps': {
         const overdue = applications.filter(a => 
           a.status === 'pending' && 
@@ -529,7 +538,6 @@ const AIAssistant = ({
         };
       }
 
-      // ─── КОМАНДА ───
       case 'team_activity': {
         const active7d = new Set();
         const now = Date.now();
@@ -544,7 +552,6 @@ const AIAssistant = ({
         };
       }
 
-      // ─── ТОП ОБЪЕКТОВ ───
       case 'top_objects': {
         const byObject = {};
         applications.forEach(a => {
@@ -561,7 +568,6 @@ const AIAssistant = ({
         return { content: `🏗️ **Топ объектов:**\n\n${list}` };
       }
 
-      // ─── ЗАВЕРШЁННЫЕ ───
       case 'completed_apps': {
         const monthAgo = Date.now() - 30 * 86400000;
         const completed = applications.filter(a => 
@@ -579,7 +585,6 @@ const AIAssistant = ({
         };
       }
 
-      // ─── ОТКРЫТЬ КОНКРЕТНУЮ ЗАЯВКУ ───
       case 'open_application': {
         const appId = payload?.appId;
         const app = applications.find(a => a.id === appId);
@@ -590,7 +595,6 @@ const AIAssistant = ({
         return { content: '❌ Заявка не найдена' };
       }
 
-      // ─── ОТКРЫТЬ МОДАЛЬНОЕ ОКНО ───
       case 'open_receive_modal': {
         const appId = payload?.appId;
         const mode = payload?.mode || 'admin_receive';
@@ -605,14 +609,12 @@ const AIAssistant = ({
         return { content: '❌ Заявка не найдена' };
       }
 
-      // ─── НАВИГАЦИЯ ПО РАЗДЕЛАМ ───
       case 'navigate_to': {
         const viewId = payload?.viewId;
         const viewInfo = ALL_VIEWS[viewId];
         
         if (!viewInfo) return { content: '❌ Раздел не найден' };
         
-        // Проверяем права доступа
         if (!availableViews.includes(viewId)) {
           return { content: `❌ У вас нет доступа к разделу "${viewInfo.label}"` };
         }
@@ -621,7 +623,6 @@ const AIAssistant = ({
         return { content: `➡️ Открываю **${viewInfo.label}**...` };
       }
 
-      // ─── ПОМОЩЬ ───
       case 'help': {
         const roleActions = (QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default)
           .map(a => `• ${a.label}`)
@@ -632,15 +633,12 @@ const AIAssistant = ({
         };
       }
 
-      // ─── СВОБОДНЫЙ ВВОД ───
       case 'free_text': {
         const text = payload?.text?.trim();
         if (!text) return { content: '🤔 Введите запрос или используйте кнопки выше.' };
         
         const lowerText = text.toLowerCase();
         
-        // ✅ Умный поиск по ВСЕМ разделам приложения
-        // 1. Поиск по ключевым словам быстрых действий
         if (lowerText.includes('заявк') && (lowerText.includes('мои') || lowerText.includes('актив'))) {
           return executeAction('my_applications');
         }
@@ -663,7 +661,6 @@ const AIAssistant = ({
           return executeAction('create_app');
         }
         
-        // 2. ✅ Умный поиск по разделам приложения
         const viewMatches = [];
         Object.entries(ALL_VIEWS).forEach(([viewId, viewInfo]) => {
           if (!availableViews.includes(viewId)) return;
@@ -671,14 +668,12 @@ const AIAssistant = ({
           const labelLower = viewInfo.label.toLowerCase();
           const descLower = viewInfo.description.toLowerCase();
           
-          // Прямое совпадение или частичное
           if (lowerText.includes(labelLower) || 
               labelLower.includes(lowerText) ||
               lowerText.includes(descLower) ||
               descLower.includes(lowerText)) {
             viewMatches.push({ viewId, viewInfo, score: 10 });
           } else {
-            // Поиск по отдельным словам
             const words = lowerText.split(/\s+/);
             const viewWords = `${labelLower} ${descLower}`.split(/\s+/);
             let matches = 0;
@@ -694,15 +689,12 @@ const AIAssistant = ({
         });
         
         if (viewMatches.length > 0) {
-          // Сортируем по релевантности
           viewMatches.sort((a, b) => b.score - a.score);
           
           if (viewMatches.length === 1) {
-            // Одно совпадение — сразу переходим
             return executeAction('navigate_to', { viewId: viewMatches[0].viewId });
           }
           
-          // Несколько совпадений — показываем список
           const list = viewMatches.slice(0, 5).map(m => ({
             id: m.viewId,
             emoji: '📍',
@@ -721,7 +713,6 @@ const AIAssistant = ({
           };
         }
         
-        // 3. Ничего не найдено
         return {
           content: `🔍 По запросу "${text}" ничего не найдено.\n\nПопробуйте:\n• "склад"\n• "аналитика"\n• "мои заявки"\n• "документы"`,
           actions: [
@@ -747,7 +738,6 @@ const AIAssistant = ({
     const action = (QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default)
       .find(a => a.id === actionId);
     
-    // Для навигации по разделам
     const viewInfo = ALL_VIEWS[payload?.viewId];
     
     setShowMainMenu(false);
@@ -786,16 +776,10 @@ const AIAssistant = ({
     }
   }, [userRole, executeAction]);
 
-  // ─────────────────────────────────────────────────────────
-  // 🏠 Возврат в главное меню
-  // ─────────────────────────────────────────────────────────
   const handleBackToMenu = useCallback(() => {
     setShowMainMenu(true);
   }, []);
 
-  // ─────────────────────────────────────────────────────────
-  // 📤 Отправка свободного текста
-  // ─────────────────────────────────────────────────────────
   const handleSendMessage = useCallback(async () => {
     const text = inputValue.trim();
     if (!text) return;
@@ -803,9 +787,6 @@ const AIAssistant = ({
     await handleAction('free_text', { text }, text);
   }, [inputValue, handleAction]);
 
-  // ─────────────────────────────────────────────────────────
-  // 🎤 Голосовой ввод
-  // ─────────────────────────────────────────────────────────
   const handleVoiceSearch = useCallback((query) => {
     setShowVoiceSearch(false);
     if (query) {
@@ -817,9 +798,6 @@ const AIAssistant = ({
     }
   }, [handleAction]);
 
-  // ─────────────────────────────────────────────────────────
-  // ⌨️ Enter
-  // ─────────────────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -870,7 +848,6 @@ const AIAssistant = ({
   // ─────────────────────────────────────────────────────────
   const quickActions = QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default;
 
-    // Группировка разделов по категориям
   const groupedViews = React.useMemo(() => {
     const groups = {
       'Основные': [],
@@ -891,11 +868,8 @@ const AIAssistant = ({
       }
     });
 
-    // ✅ Используем и groupName, и items — показываем количество разделов в группе
     return Object.entries(groups)
       .filter(([groupName, items]) => {
-        // Оставляем только непустые группы
-        // groupName используется для логирования/отладки
         if (items.length === 0) {
           console.debug(`[AIAssistant] Группа "${groupName}" пуста, скрываем`);
           return false;
@@ -905,7 +879,7 @@ const AIAssistant = ({
       .map(([groupName, items]) => ({
         groupName,
         items,
-        count: items.length, // ✅ Используем count для отображения
+        count: items.length,
       }));
   }, [availableViews]);
 
@@ -976,28 +950,12 @@ const AIAssistant = ({
     });
   };
 
+  // ✅ Рендерим окно чата только когда открыто. Плавающей кнопки НЕТ — она в Navbar.
   return (
     <>
-      {/* Плавающая кнопка */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-24 right-4 lg:bottom-8 lg:right-8 w-14 h-14 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] text-white shadow-2xl hover:scale-110 active:scale-95 transition-all z-[9998] flex items-center justify-center"
-        aria-label={t('aiAssistant') || 'AI-ассистент'}
-      >
-        {isOpen ? (
-          <X className="w-6 h-6" />
-        ) : (
-          <>
-            <Bot className="w-6 h-6" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#F9AA33] rounded-full animate-pulse" />
-          </>
-        )}
-      </button>
-
-      {/* Чат-окно */}
       {isOpen && (
         <div
-          className="fixed bottom-40 right-4 lg:bottom-24 lg:right-8 w-[380px] max-w-[calc(100vw-2rem)] h-[600px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col z-[9998] border border-gray-200 dark:border-gray-700 fade-enter"
+          className="fixed top-20 right-4 lg:top-24 lg:right-8 w-[380px] max-w-[calc(100vw-2rem)] h-[600px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col z-[9999] border border-gray-200 dark:border-gray-700 fade-enter"
           role="dialog"
           aria-label="AI-ассистент"
         >
@@ -1046,7 +1004,7 @@ const AIAssistant = ({
             </div>
           </div>
 
-          {/* ✅ Вкладки — показываем только в главном меню */}
+          {/* Вкладки — только в главном меню */}
           {showMainMenu && (
             <div className="flex border-b border-gray-200 dark:border-gray-700">
               <button
@@ -1074,10 +1032,9 @@ const AIAssistant = ({
             </div>
           )}
 
-          {/* ✅ Главное меню */}
+          {/* Главное меню */}
           {showMainMenu ? (
             <div className="flex-1 overflow-y-auto p-3">
-              {/* Приветствие */}
               {messages.length > 0 && messages[0].id === 'welcome' && (
                 <div className="mb-4 p-3 bg-gradient-to-br from-[#4A6572]/5 to-[#344955]/5 rounded-xl">
                   <div className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
@@ -1086,7 +1043,6 @@ const AIAssistant = ({
                 </div>
               )}
 
-              {/* Вкладка "Действия" */}
               {activeTab === 'actions' && (
                 <>
                   <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-2">
@@ -1120,7 +1076,6 @@ const AIAssistant = ({
                 </>
               )}
 
-                            {/* ✅ Вкладка "Разделы" */}
               {activeTab === 'navigation' && (
                 <>
                   <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-2">
@@ -1129,7 +1084,6 @@ const AIAssistant = ({
                   
                   {groupedViews.map(({ groupName, items, count }) => (
                     <div key={groupName} className="mb-3">
-                      {/* ✅ Показываем название группы и количество разделов в ней */}
                       <div className="flex items-center justify-between px-1 mb-1.5">
                         <div className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                           {groupName}
@@ -1171,7 +1125,7 @@ const AIAssistant = ({
               )}
             </div>
           ) : (
-            /* ✅ Чат с результатами */
+            /* Чат с результатами */
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {messages.map((msg) => (
                 <div
@@ -1254,7 +1208,7 @@ const AIAssistant = ({
 
       {/* Модальное окно голосового поиска */}
       {showVoiceSearch && (
-        <div className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-[10001] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-gray-900 dark:text-white">
@@ -1279,26 +1233,8 @@ const AIAssistant = ({
       )}
     </>
   );
-};
+});
 
-// ─────────────────────────────────────────────────────────────
-// 🔧 Группировка разделов по категориям
-// ─────────────────────────────────────────────────────────────
-function getViewGroup(viewId) {
-  const groups = {
-    'Основные': ['dashboard', 'inwork', 'create', 'received', 'history', 'readyToIssue'],
-    'Работа с материалами': ['warehouse', 'merge'],
-    'Клиенты и проекты': ['clients', 'crm-sales', 'projects'],
-    'Аналитика и финансы': ['analytics', 'reports', 'estimates', 'tariffs'],
-    'Коммуникации': ['chat', 'calendar', 'tasks'],
-    'Управление': ['employees', 'approvals', 'audit', 'api', 'integration', 
-                   'documents', 'settings', 'companyProfile', 'profile', 'help'],
-  };
-  
-  for (const [group, ids] of Object.entries(groups)) {
-    if (ids.includes(viewId)) return group;
-  }
-  return 'Основные';
-}
+AIAssistant.displayName = 'AIAssistant';
 
 export default AIAssistant;

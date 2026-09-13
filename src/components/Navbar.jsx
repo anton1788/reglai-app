@@ -1,8 +1,8 @@
 // src/components/Navbar.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Menu, X, Search, User, LogOut, HelpCircle, 
-  Bell, ChevronDown, Home, Package, ClipboardList, 
+import {
+  Menu, X, Search, User, LogOut, HelpCircle,
+  Bell, ChevronDown, Home, Package, ClipboardList,
   Users, BarChart3, Moon, Sun,
   Building, Calendar, MessageCircle,
   Plus, UserPlus, Briefcase,
@@ -17,7 +17,8 @@ import {
   Star,
   FileCheck,
   Scale,
-  PackageCheck
+  PackageCheck,
+  Bot
 } from 'lucide-react';
 import { getCompanyPlan } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
@@ -33,13 +34,13 @@ const getCleanCompanyId = (companyId) => {
   return null;
 };
 
-const Navbar = ({ 
-  user, 
+const Navbar = ({
+  user,
   isMobile = false,
-  companyName, 
-  userRole, 
-  onLogout, 
-  onNavigate, 
+  companyName,
+  userRole,
+  onLogout,
+  onNavigate,
   currentPage,
   onInvite,
   onOpenTariffs,
@@ -67,7 +68,9 @@ const Navbar = ({
   selectedNotification,
   showNotificationModal,
   onCloseNotificationModal,
-  readyToIssueCount = 0
+  readyToIssueCount = 0,
+  // ✅ НОВЫЙ ПРОП: открытие AI-ассистента
+  onOpenAIAssistant = null
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -709,7 +712,24 @@ const Navbar = ({
                 </>
               )}
 
-              {/* Кнопка для супер-админа (отзывы) — ОСТАВЛЯЕМ ВСЕГДА */}
+              {/* ✅ НОВАЯ КНОПКА: AI-Ассистент (всегда видима) */}
+              {onOpenAIAssistant && (
+                <button
+                  onClick={onOpenAIAssistant}
+                  className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+                  aria-label="AI-ассистент"
+                  title="AI-ассистент (Ctrl+/)"
+                >
+                  <Bot className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-[#4A6572] dark:group-hover:text-[#F9AA33] transition-colors" />
+                  {/* Индикатор активности */}
+                  <span className="absolute top-1 right-1 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#F9AA33] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#F9AA33]"></span>
+                  </span>
+                </button>
+              )}
+
+              {/* Кнопка для супер-админа (отзывы) */}
               {newFeedbackCount > 0 && userRole === 'super_admin' && (
                 <button
                   onClick={() => { onNavigate?.('/superAdmin'); setIsMobileMenuOpen(false); }}
@@ -723,7 +743,7 @@ const Navbar = ({
                 </button>
               )}
 
-              {/* Уведомления — ОСТАВЛЯЕМ ВСЕГДА */}
+              {/* Уведомления */}
               <div className="relative" ref={notificationsRef}>
                 <button
                   onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
@@ -779,7 +799,7 @@ const Navbar = ({
                 )}
               </div>
 
-              {/* Профиль — ОСТАВЛЯЕМ ВСЕГДА */}
+              {/* Профиль */}
               <div className="relative" ref={profileRef}>
                 <button
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
@@ -1069,10 +1089,9 @@ const Navbar = ({
         )}
       </nav>
 
-      {/* 🔥 МОБИЛЬНОЕ МЕНЮ — ИСПРАВЛЕНО + СВАЙП */}
+      {/* 🔥 МОБИЛЬНОЕ МЕНЮ */}
       {isMobileMenuOpen && (
         <>
-          {/* Затемненный фон */}
           <div
             onClick={() => setIsMobileMenuOpen(false)}
             style={{
@@ -1086,7 +1105,6 @@ const Navbar = ({
             }}
           />
           
-          {/* Сама панель меню — выезжает слева + свайп для закрытия */}
           <div 
             className="bg-white dark:bg-gray-900 shadow-2xl"
             onTouchStart={handleTouchStart}
@@ -1108,7 +1126,6 @@ const Navbar = ({
               overflow: 'hidden'
             }}
           >
-            {/* Кнопка закрытия + заголовок — фиксированный сверху */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-xl flex items-center justify-center">
@@ -1130,7 +1147,6 @@ const Navbar = ({
               </button>
             </div>
 
-            {/* 🎯 Скроллируемая область с содержимым */}
             <div 
               className="flex-1 overflow-y-auto px-3 pt-3"
               style={{ 
@@ -1139,7 +1155,6 @@ const Navbar = ({
                 paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))'
               }}
             >
-              {/* Тариф */}
               {currentPlan && (
                 <div className="mb-3 p-3 bg-gradient-to-r from-[#F9AA33]/10 to-[#F57C00]/10 rounded-xl border border-[#F9AA33]/20">
                   <div className="flex items-center justify-between">
@@ -1160,7 +1175,6 @@ const Navbar = ({
                 </div>
               )}
 
-              {/* Поиск по меню */}
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
@@ -1172,10 +1186,20 @@ const Navbar = ({
                 />
               </div>
 
-              {/* Быстрые действия */}
+              {/* Быстрые действия + AI-Ассистент */}
               <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">Быстрые действия</p>
                 <div className="grid grid-cols-2 gap-2">
+                  {/* ✅ AI-Ассистент */}
+                  {onOpenAIAssistant && (
+                    <button
+                      onClick={() => { onOpenAIAssistant(); setIsMobileMenuOpen(false); }}
+                      className="flex items-center gap-2 px-3 py-2 text-xs bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 text-[#4A6572] dark:text-[#F9AA33] rounded-lg hover:from-[#4A6572]/20 hover:to-[#344955]/20 transition-colors font-medium border border-[#4A6572]/20"
+                    >
+                      <Bot className="w-3.5 h-3.5" />
+                      Ассистент
+                    </button>
+                  )}
                   <button
                     onClick={() => { onNavigate?.('/applications/new'); setIsMobileMenuOpen(false); }}
                     className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 transition-colors"
@@ -1209,10 +1233,7 @@ const Navbar = ({
                 </div>
               </div>
 
-              {/* 🔥 ЕДИНЫЙ КОНТЕЙНЕР ДЛЯ ВСЕГО СПИСКА МЕНЮ + КНОПОК НАСТРОЕК */}
               <div className="flex flex-col">
-                
-                {/* Пункты меню */}
                 {filteredNavItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = currentPage === item.id ||
@@ -1265,12 +1286,9 @@ const Navbar = ({
                   );
                 })}
 
-                {/* 🔥 РАЗДЕЛИТЕЛЬ — отделяет пункты от кнопок настроек */}
                 <div className="mt-4 mb-2 border-t border-gray-200 dark:border-gray-700 flex-shrink-0" />
 
-                {/* 🔥 КОНТЕЙНЕР ДЛЯ КНОПОК НАСТРОЕК - ИСПРАВЛЕНО */}
                 <div className="flex-shrink-0 space-y-1 mb-4">
-                  {/* 🔥 КНОПКА: Сменить тариф */}
                   <button
                     onClick={() => { onOpenTariffs?.(); setIsMobileMenuOpen(false); }}
                     className="w-full flex items-center gap-3 px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors active:bg-gray-200 dark:active:bg-gray-700 flex-shrink-0"
@@ -1279,7 +1297,6 @@ const Navbar = ({
                     <span className="flex-1 text-left font-medium">{currentPlan ? 'Сменить тариф' : 'Тарифы'}</span>
                   </button>
 
-                  {/* 🔥 КНОПКА: Реквизиты */}
                   <button
                     onClick={() => { onOpenCompanyProfile?.(); setIsMobileMenuOpen(false); }}
                     className="w-full flex items-center gap-3 px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors active:bg-gray-200 dark:active:bg-gray-700 flex-shrink-0"
@@ -1289,10 +1306,8 @@ const Navbar = ({
                   </button>
                 </div>
 
-                {/* 🔥 РАЗДЕЛИТЕЛЬ ПЕРЕД ВЫХОДОМ */}
                 <div className="flex-shrink-0 mt-2 mb-3 border-t-2 border-gray-300 dark:border-gray-600" />
 
-                {/* 🔥 КНОПКА: Выйти — ФИКСИРОВАННАЯ */}
                 <div className="flex-shrink-0 mb-4">
                   <button
                     onClick={onLogout}
@@ -1303,7 +1318,6 @@ const Navbar = ({
                   </button>
                 </div>
 
-                {/* Финальный отступ для safe area */}
                 <div className="flex-shrink-0 h-8" />
               </div>
             </div>
