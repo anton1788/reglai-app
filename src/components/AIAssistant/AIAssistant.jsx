@@ -3,8 +3,9 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Bot, X, Send, Sparkles, Package, Warehouse, BarChart3,
   AlertTriangle, Plus, Search, FileText, CheckCircle, Clock,
-  ArrowRight, User, TrendingUp, Loader2, ChevronRight
+  ArrowRight, User, TrendingUp, Loader2, ChevronRight, Mic
 } from 'lucide-react';
+import SmartVoiceSearch from '../SmartVoiceSearch';
 
 // ─────────────────────────────────────────────────────────────
 // 🤖 Быстрые действия по ролям (без LLM!)
@@ -48,6 +49,43 @@ const QUICK_ACTIONS = {
 };
 
 // ─────────────────────────────────────────────────────────────
+// 🔧 Хелперы для форматирования
+// ─────────────────────────────────────────────────────────────
+const formatDate = (dateString) => {
+  if (!dateString) return '—';
+  return new Date(dateString).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+  });
+};
+
+const getStatusEmoji = (status) => {
+  const map = {
+    pending: '⏳',
+    admin_processing: '⚙️',
+    partial_received: '🟡',
+    pending_master_confirmation: '📦',
+    ready_for_issue: '📤',
+    received: '✅',
+    canceled: '❌',
+  };
+  return map[status] || '📋';
+};
+
+const getStatusLabel = (status) => {
+  const map = {
+    pending: 'Ожидает',
+    admin_processing: 'В обработке',
+    partial_received: 'Частично',
+    pending_master_confirmation: 'На подтверждении',
+    ready_for_issue: 'Готово к выдаче',
+    received: 'Получено',
+    canceled: 'Отменено',
+  };
+  return map[status] || status;
+};
+
+// ─────────────────────────────────────────────────────────────
 // 🤖 Компонент AI Assistant
 // ─────────────────────────────────────────────────────────────
 const AIAssistant = ({
@@ -61,16 +99,20 @@ const AIAssistant = ({
   onNavigate,
   onCreateDraft,
   onOpenApplication,
+  onOpenReceiveModal,
   t = (k) => k,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const [showVoiceSearch, setShowVoiceSearch] = useState(false);
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
   const [hasInitialized, setHasInitialized] = useState(false);
 
   // ─────────────────────────────────────────────────────────
-  // 🎯 Логика каждого действия (ОБЪЯВЛЯЕМ ПЕРВОЙ!)
+  // 🎯 Логика каждого действия
   // ─────────────────────────────────────────────────────────
   const executeAction = useCallback(async (actionId, payload) => {
     switch (actionId) {
@@ -88,26 +130,30 @@ const AIAssistant = ({
           };
         }
 
+        // ✅ Формируем структурированные данные для интерактивного списка
         const list = myApps.slice(0, 5).map(a => {
-          const statusEmoji = {
-            pending: '⏳',
-            admin_processing: '⚙️',
-            partial_received: '🟡',
-            pending_master_confirmation: '📦',
-            ready_for_issue: '📤',
-          }[a.status] || '📋';
-          
           const total = a.materials?.length || 0;
           const received = a.materials?.filter(m => 
             (Number(m.received) || 0) >= (Number(m.quantity) || 0)
           ).length || 0;
 
-          return `${statusEmoji} **${a.object_name}**\n   ${received}/${total} позиций · ${new Date(a.created_at).toLocaleDateString('ru-RU')}`;
-        }).join('\n\n');
+          return {
+            id: a.id,
+            emoji: getStatusEmoji(a.status),
+            title: a.object_name,
+            subtitle: `${received}/${total} позиций · ${formatDate(a.created_at)}`,
+            status: getStatusLabel(a.status),
+            action: {
+              id: 'open_application',
+              label: '👁 Открыть',
+              payload: { appId: a.id },
+            },
+          };
+        });
 
         return {
-          content: `📋 **Ваши активные заявки (${myApps.length}):**\n\n${list}${myApps.length > 5 ? `\n\n...и ещё ${myApps.length - 5}` : ''}`,
-          data: myApps,
+          content: `📋 **Ваши активные заявки (${myApps.length}):**`,
+          data: list,
           actions: [
             { id: 'open_my_apps', label: '👁 Открыть все' },
             { id: 'create_app', label: '➕ Создать заявку' },
@@ -146,13 +192,34 @@ const AIAssistant = ({
           };
         }
 
-        const list = pendingItems.slice(0, 8).map(item => 
-          `• **${item.name}** — ${item.received}/${item.quantity} ${item.unit}\n   📍 ${item.object}`
-        ).join('\n');
+        // ✅ Группируем по заявкам для удобства
+        const groupedItems = {};
+        pendingItems.forEach(item => {
+          if (!groupedItems[item.appId]) {
+            groupedItems[item.appId] = {
+              appId: item.appId,
+              object: item.object,
+              items: [],
+            };
+          }
+          groupedItems[item.appId].items.push(item);
+        });
+
+        const list = Object.values(groupedItems).slice(0, 5).map(group => ({
+          id: group.appId,
+          emoji: '⏳',
+          title: group.object,
+          subtitle: `${group.items.length} позиций ожидают получения`,
+          action: {
+            id: 'open_application',
+            label: '👁 Открыть',
+            payload: { appId: group.appId },
+          },
+        }));
 
         return {
-          content: `⏳ **Не получено (${pendingItems.length}):**\n\n${list}${pendingItems.length > 8 ? `\n\n...и ещё ${pendingItems.length - 8}` : ''}`,
-          data: pendingItems,
+          content: `⏳ **Не получено (${pendingItems.length} позиций в ${Object.keys(groupedItems).length} заявках):**`,
+          data: list,
           actions: [{ id: 'open_my_apps', label: '👁 Открыть заявки' }],
         };
       }
@@ -194,13 +261,16 @@ const AIAssistant = ({
           };
         }
 
-        const list = data.map(item => 
-          `• **${item.item_name}** — ${item.quantity} ${item.unit}`
-        ).join('\n');
+        const list = data.map(item => ({
+          id: item.item_name,
+          emoji: '📦',
+          title: item.item_name,
+          subtitle: `${item.quantity} ${item.unit}`,
+        }));
 
         return {
-          content: `🏭 **Остатки на складе (${data.length}):**\n\n${list}`,
-          data,
+          content: `🏭 **Остатки на складе (${data.length}):**`,
+          data: list,
           actions: [{ id: 'open_warehouse', label: '🏭 Открыть склад' }],
         };
       }
@@ -226,13 +296,23 @@ const AIAssistant = ({
           const received = a.materials?.filter(m => 
             (Number(m.supplier_received_quantity) || 0) > 0
           ).length || 0;
-          return `• **${a.object_name}** — ${received}/${total} · ${days} дн.`;
-        }).join('\n');
+          return {
+            id: a.id,
+            emoji: '📥',
+            title: a.object_name,
+            subtitle: `${received}/${total} позиций · ${days} дн.`,
+            action: {
+              id: 'open_receive_modal',
+              label: '📥 Принять',
+              payload: { appId: a.id, mode: 'admin_receive' },
+            },
+          };
+        });
 
         return {
-          content: `📥 **Ожидают приёмки (${pending.length}):**\n\n${list}`,
-          data: pending,
-          actions: [{ id: 'open_received', label: '📥 Открыть' }],
+          content: `📥 **Ожидают приёмки (${pending.length}):**`,
+          data: list,
+          actions: [{ id: 'open_received', label: '📥 Открыть все' }],
         };
       }
 
@@ -246,14 +326,22 @@ const AIAssistant = ({
           return { content: '📤 Нет заявок, готовых к выдаче.' };
         }
 
-        const list = ready.slice(0, 6).map(a => 
-          `• **${a.object_name}** — ${a.foreman_name || '—'}`
-        ).join('\n');
+        const list = ready.slice(0, 6).map(a => ({
+          id: a.id,
+          emoji: '📤',
+          title: a.object_name,
+          subtitle: `Прораб: ${a.foreman_name || '—'}`,
+          action: {
+            id: 'open_receive_modal',
+            label: '📤 Выдать',
+            payload: { appId: a.id, mode: 'admin_ready_to_issue' },
+          },
+        }));
 
         return {
-          content: `📤 **Готовы к выдаче (${ready.length}):**\n\n${list}`,
-          data: ready,
-          actions: [{ id: 'open_ready', label: '📤 Открыть' }],
+          content: `📤 **Готовы к выдаче (${ready.length}):**`,
+          data: list,
+          actions: [{ id: 'open_ready', label: '📤 Открыть все' }],
         };
       }
 
@@ -301,14 +389,23 @@ const AIAssistant = ({
 
         const list = problems.slice(0, 6).map(a => {
           const days = Math.floor((Date.now() - new Date(a.created_at)) / 86400000);
-          const emoji = overdue.includes(a) ? '🔴' : '🟡';
-          const reason = overdue.includes(a) ? 'Просрочено' : 'Частичная';
-          return `${emoji} **${a.object_name}** — ${reason}, ${days} дн.`;
-        }).join('\n');
+          const isOverdue = overdue.includes(a);
+          return {
+            id: a.id,
+            emoji: isOverdue ? '🔴' : '🟡',
+            title: a.object_name,
+            subtitle: `${isOverdue ? 'Просрочено' : 'Частичная'} · ${days} дн.`,
+            action: {
+              id: 'open_application',
+              label: '👁 Открыть',
+              payload: { appId: a.id },
+            },
+          };
+        });
 
         return {
-          content: `⚠️ **Проблемные заявки (${problems.length}):**\n\n${list}`,
-          data: problems,
+          content: `⚠️ **Проблемные заявки (${problems.length}):**`,
+          data: list,
         };
       }
 
@@ -366,12 +463,26 @@ const AIAssistant = ({
 
       // ─── ОТКРЫТЬ КОНКРЕТНУЮ ЗАЯВКУ ───
       case 'open_application': {
-        // ✅ Используем payload (никаких arguments!)
         const appId = payload?.appId;
         const app = applications.find(a => a.id === appId);
         if (app && onOpenApplication) {
           onOpenApplication(app);
           return { content: `➡️ Открываю заявку "${app.object_name}"...` };
+        }
+        return { content: '❌ Заявка не найдена' };
+      }
+
+      // ─── ОТКРЫТЬ МОДАЛЬНОЕ ОКНО ПРИЁМКИ/ВЫДАЧИ ───
+      case 'open_receive_modal': {
+        const appId = payload?.appId;
+        const mode = payload?.mode || 'admin_receive';
+        const app = applications.find(a => a.id === appId);
+        
+        if (app && onOpenReceiveModal) {
+          onOpenReceiveModal(app, mode);
+          const modeLabel = mode === 'admin_receive' ? 'приёмки' : 
+                           mode === 'admin_ready_to_issue' ? 'выдачи' : 'подтверждения';
+          return { content: `➡️ Открываю заявку для ${modeLabel}...` };
         }
         return { content: '❌ Заявка не найдена' };
       }
@@ -383,7 +494,7 @@ const AIAssistant = ({
           .join('\n');
         
         return {
-          content: `🤖 **Что я умею:**\n\n${roleActions}\n\nПросто нажмите на кнопку ниже — или создайте заявку с главного экрана.`,
+          content: `🤖 **Что я умею:**\n\n${roleActions}\n\n💡 **Совет:** Используйте кнопку 🎤 для голосового поиска!`,
         };
       }
 
@@ -416,33 +527,74 @@ const AIAssistant = ({
         onNavigate?.('documents');
         return { content: '➡️ Открываю документы...' };
 
+      // ─── СВОБОДНЫЙ ВВОД (пока просто перенаправляем в поиск) ───
+      case 'free_text': {
+        const text = payload?.text?.trim();
+        if (!text) {
+          return { content: '🤔 Введите запрос или используйте кнопки выше.' };
+        }
+        
+        // Простой анализ текста для определения намерения
+        const lowerText = text.toLowerCase();
+        
+        if (lowerText.includes('заявк') || lowerText.includes('мои')) {
+          return executeAction('my_applications');
+        }
+        if (lowerText.includes('склад') || lowerText.includes('остат')) {
+          return executeAction('warehouse_stock');
+        }
+        if (lowerText.includes('приёмк') || lowerText.includes('приемк')) {
+          return executeAction('pending_receipt');
+        }
+        if (lowerText.includes('выдач') || lowerText.includes('готов')) {
+          return executeAction('ready_to_issue');
+        }
+        if (lowerText.includes('аналитик') || lowerText.includes('статистик')) {
+          return executeAction('analytics_summary');
+        }
+        if (lowerText.includes('проблем') || lowerText.includes('просроч')) {
+          return executeAction('problem_apps');
+        }
+        if (lowerText.includes('созда') || lowerText.includes('нов')) {
+          return executeAction('create_app');
+        }
+        
+        // Если не распознали — предлагаем поиск
+        return {
+          content: `🔍 Понимаю ваш запрос: "${text}"\n\nПопробуйте использовать кнопки быстрых действий или уточните запрос.`,
+          actions: [
+            { id: 'my_applications', label: '📋 Мои заявки' },
+            { id: 'help', label: '❓ Что я умею' },
+          ],
+        };
+      }
+
       default:
         return { content: '🤔 Не понял команду. Попробуйте ещё раз.' };
     }
   }, [
     applications, companyUsers, supabase, user,
     userCompanyId, userRole, onNavigate,
-    onCreateDraft, onOpenApplication, showNotification
+    onCreateDraft, onOpenApplication, onOpenReceiveModal, showNotification
   ]);
 
   // ─────────────────────────────────────────────────────────
   // 🧠 Обработчик клика по кнопке
   // ─────────────────────────────────────────────────────────
-  const handleAction = useCallback(async (actionId, payload = null) => {
+  const handleAction = useCallback(async (actionId, payload = null, customLabel = null) => {
     const action = (QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default)
       .find(a => a.id === actionId);
     
     setMessages(prev => [...prev, {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: action?.label || actionId,
+      content: customLabel || action?.label || actionId,
       timestamp: Date.now(),
     }]);
 
     setIsLoading(true);
 
     try {
-      // ✅ Передаём payload во второй аргумент
       const result = await executeAction(actionId, payload);
       
       setMessages(prev => [...prev, {
@@ -467,6 +619,42 @@ const AIAssistant = ({
     }
   }, [userRole, executeAction]);
 
+  // ─────────────────────────────────────────────────────────
+  // 📤 Отправка свободного текста
+  // ─────────────────────────────────────────────────────────
+  const handleSendMessage = useCallback(async () => {
+    const text = inputValue.trim();
+    if (!text) return;
+
+    setInputValue('');
+    await handleAction('free_text', { text }, text);
+  }, [inputValue, handleAction]);
+
+  // ─────────────────────────────────────────────────────────
+  // 🎤 Обработка голосового ввода
+  // ─────────────────────────────────────────────────────────
+  const handleVoiceSearch = useCallback((query) => {
+    setShowVoiceSearch(false);
+    if (query) {
+      setInputValue(query);
+      // Автоматически отправляем
+      setTimeout(() => {
+        handleAction('free_text', { text: query }, query);
+        setInputValue('');
+      }, 100);
+    }
+  }, [handleAction]);
+
+  // ─────────────────────────────────────────────────────────
+  // ⌨️ Обработка Enter
+  // ─────────────────────────────────────────────────────────
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  }, [handleSendMessage]);
+
   // Приветствие при первом открытии
   useEffect(() => {
     if (isOpen && !hasInitialized) {
@@ -482,7 +670,7 @@ const AIAssistant = ({
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: `Привет! Я ассистент Реглай.\n\nЯ вижу вас как **${roleLabel}**. Чем помочь?`,
+        content: `Привет! Я ассистент Реглай.\n\nЯ вижу вас как **${roleLabel}**. Чем помочь?\n\n💡 Используйте кнопки ниже или напишите запрос.`,
         timestamp: Date.now(),
       }]);
       setHasInitialized(true);
@@ -496,10 +684,89 @@ const AIAssistant = ({
     }
   }, [messages]);
 
+  // Фокус на инпут при открытии
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 300);
+    }
+  }, [isOpen]);
+
   // ─────────────────────────────────────────────────────────
   // 🎨 Рендер
   // ─────────────────────────────────────────────────────────
   const quickActions = QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default;
+
+  // Рендер сообщения с интерактивными данными
+  const renderMessageContent = (msg) => {
+    // Если есть структурированные данные — рендерим их
+    if (msg.data && Array.isArray(msg.data) && msg.data.length > 0) {
+      return (
+        <>
+          {/* Текст сообщения */}
+          {msg.content.split('\n').map((line, i) => {
+            const parts = line.split(/(\*\*[^*]+\*\*)/g);
+            return (
+              <div key={i} className="mb-1">
+                {parts.map((part, j) =>
+                  part.startsWith('**') && part.endsWith('**') ? (
+                    <strong key={j}>{part.slice(2, -2)}</strong>
+                  ) : (
+                    <span key={j}>{part}</span>
+                  )
+                )}
+              </div>
+            );
+          })}
+          
+          {/* Интерактивный список */}
+          <div className="mt-2 space-y-1.5">
+            {msg.data.map((item, index) => (
+              <div
+                key={item.id || index}
+                className="bg-white/70 dark:bg-gray-800/70 rounded-lg p-2 border border-gray-200/50 dark:border-gray-600/50"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="text-base flex-shrink-0">{item.emoji || '📋'}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-xs truncate">{item.title}</div>
+                    {item.subtitle && (
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                        {item.subtitle}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {item.action && (
+                  <button
+                    onClick={() => handleAction(item.action.id, item.action.payload, item.action.label)}
+                    className="mt-1.5 w-full text-[10px] px-2 py-1 rounded bg-[#4A6572] text-white hover:bg-[#344955] transition-colors flex items-center justify-center gap-1"
+                  >
+                    {item.action.label}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      );
+    }
+
+    // Обычный текстовый рендер
+    return msg.content.split('\n').map((line, i) => {
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      return (
+        <div key={i}>
+          {parts.map((part, j) =>
+            part.startsWith('**') && part.endsWith('**') ? (
+              <strong key={j}>{part.slice(2, -2)}</strong>
+            ) : (
+              <span key={j}>{part}</span>
+            )
+          )}
+        </div>
+      );
+    });
+  };
 
   return (
     <>
@@ -522,7 +789,7 @@ const AIAssistant = ({
       {/* Чат-окно */}
       {isOpen && (
         <div
-          className="fixed bottom-40 right-4 lg:bottom-24 lg:right-8 w-[380px] max-w-[calc(100vw-2rem)] h-[520px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col z-[9998] border border-gray-200 dark:border-gray-700 fade-enter"
+          className="fixed bottom-40 right-4 lg:bottom-24 lg:right-8 w-[380px] max-w-[calc(100vw-2rem)] h-[560px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col z-[9998] border border-gray-200 dark:border-gray-700 fade-enter"
           role="dialog"
           aria-label="AI-ассистент"
         >
@@ -558,7 +825,7 @@ const AIAssistant = ({
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
+                  className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${
                     msg.role === 'user'
                       ? 'bg-[#4A6572] text-white rounded-br-sm'
                       : msg.isError
@@ -566,27 +833,15 @@ const AIAssistant = ({
                       : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-bl-sm'
                   }`}
                 >
-                  {msg.content.split('\n').map((line, i) => {
-                    const parts = line.split(/(\*\*[^*]+\*\*)/g);
-                    return (
-                      <div key={i}>
-                        {parts.map((part, j) =>
-                          part.startsWith('**') && part.endsWith('**') ? (
-                            <strong key={j}>{part.slice(2, -2)}</strong>
-                          ) : (
-                            <span key={j}>{part}</span>
-                          )
-                        )}
-                      </div>
-                    );
-                  })}
+                  {renderMessageContent(msg)}
 
+                  {/* Кнопки действий */}
                   {msg.actions && msg.actions.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-gray-300/50 dark:border-gray-600/50 space-y-1">
                       {msg.actions.map((action) => (
                         <button
                           key={action.id}
-                          onClick={() => handleAction(action.id, action.payload)}
+                          onClick={() => handleAction(action.id, action.payload, action.label)}
                           className="w-full text-left text-xs px-2 py-1.5 rounded-lg bg-white/60 dark:bg-gray-800/60 hover:bg-white dark:hover:bg-gray-800 text-[#4A6572] dark:text-[#F9AA33] font-medium flex items-center justify-between transition-colors"
                         >
                           <span>{action.label}</span>
@@ -610,7 +865,7 @@ const AIAssistant = ({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions — показываем только в начале */}
           {messages.length <= 1 && (
             <div className="px-3 pb-2 space-y-1.5">
               <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
@@ -638,21 +893,62 @@ const AIAssistant = ({
           <div className="p-3 border-t border-gray-200 dark:border-gray-700">
             <div className="flex gap-2">
               <input
+                ref={inputRef}
                 type="text"
-                placeholder={t('comingSoon') || 'Скоро появится...'}
-                disabled
-                className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700/50 text-gray-400 cursor-not-allowed"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Напишите запрос..."
+                className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#4A6572] focus:border-transparent"
               />
+              
+              {/* Кнопка голосового ввода */}
               <button
-                disabled
-                className="px-3 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+                onClick={() => setShowVoiceSearch(true)}
+                className="px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                title="Голосовой ввод"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+              
+              {/* Кнопка отправки */}
+              <button
+                onClick={handleSendMessage}
+                disabled={!inputValue.trim() || isLoading}
+                className="px-3 py-2 rounded-xl bg-[#4A6572] text-white hover:bg-[#344955] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-4 h-4" />
               </button>
             </div>
             <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 text-center">
-              {t('stage2Coming') || 'Этап 2 — подключим свободный ввод с AI'}
+              💡 Используйте кнопку 🎤 для голосового ввода
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно голосового поиска */}
+      {showVoiceSearch && (
+        <div className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                🎤 Голосовой ввод
+              </h3>
+              <button
+                onClick={() => setShowVoiceSearch(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <SmartVoiceSearch
+              onSearch={handleVoiceSearch}
+              onNavigate={(view) => {
+                setShowVoiceSearch(false);
+                onNavigate?.(view);
+              }}
+            />
           </div>
         </div>
       )}

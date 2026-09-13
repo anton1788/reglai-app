@@ -1,7 +1,8 @@
+// src/components/SmartVoiceSearch.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mic, MicOff, Search, X, Loader2, History, TrendingUp, Package, Users } from 'lucide-react';
+import { Mic, Search, X, Loader2, History } from 'lucide-react';
 
-const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => { // ← удалили t
+const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -9,13 +10,13 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => { // ← 
   const [searchHistory, setSearchHistory] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   // Проверка поддержки голосового ввода
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     setIsSupported(!!SpeechRecognition);
   }, []);
-  
+
   // Загрузка истории поиска из localStorage
   useEffect(() => {
     const saved = localStorage.getItem('voice_search_history');
@@ -27,122 +28,120 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => { // ← 
       }
     }
   }, []);
-  
+
   // Сохранение истории поиска
   const saveToHistory = useCallback((query) => {
     if (!query.trim()) return;
-    
+
     setSearchHistory(prev => {
       const newHistory = [query, ...prev.filter(h => h !== query)].slice(0, 10);
       localStorage.setItem('voice_search_history', JSON.stringify(newHistory));
       return newHistory;
     });
   }, []);
-  
+
   // Генерация умных подсказок на основе ввода
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSuggestions([]);
       return;
     }
-    
+
     const query = searchQuery.toLowerCase();
     const smartSuggestions = [];
-    
+
     // Категории поиска
     const categories = [
-      { keywords: ['просроч', 'overdue', 'просрочен'], action: 'filter_overdue', label: 'Показать просроченные заявки', icon: '⚠️' },
+      { keywords: ['просроч', 'overdue'], action: 'filter_overdue', label: 'Показать просроченные заявки', icon: '⚠️' },
       { keywords: ['активн', 'active', 'в работе'], action: 'filter_active', label: 'Показать активные заявки', icon: '🟢' },
-      { keywords: ['завершен', 'completed', 'выполнен', 'готов'], action: 'filter_completed', label: 'Показать выполненные заявки', icon: '✅' },
-      { keywords: ['сегодня', 'today', 'новые'], action: 'filter_today', label: 'Заявки за сегодня', icon: '📅' },
-      { keywords: ['сумма', 'total', 'деньги', 'финанс'], action: 'show_finance', label: 'Финансовая сводка', icon: '💰' },
-      { keywords: ['сотрудник', 'employee', 'пользователь', 'user'], action: 'show_employees', label: 'Управление сотрудниками', icon: '👥' },
+      { keywords: ['завершен', 'completed', 'выполнен'], action: 'filter_completed', label: 'Показать выполненные заявки', icon: '✅' },
+      { keywords: ['сегодня', 'today'], action: 'filter_today', label: 'Заявки за сегодня', icon: '📅' },
+      { keywords: ['сумма', 'деньги', 'финанс'], action: 'show_finance', label: 'Финансовая сводка', icon: '💰' },
+      { keywords: ['сотрудник', 'employee', 'команда'], action: 'show_employees', label: 'Управление сотрудниками', icon: '👥' },
       { keywords: ['склад', 'warehouse', 'остаток'], action: 'show_warehouse', label: 'Остатки на складе', icon: '📦' },
-      { keywords: ['объект', 'object', 'site'], action: 'search_object', label: `Поиск по объекту: ${searchQuery}`, icon: '🏗️' }
+      { keywords: ['объект', 'object'], action: 'search_object', label: `Поиск по объекту: ${searchQuery}`, icon: '🏗️' },
     ];
-    
+
     categories.forEach(cat => {
       if (cat.keywords.some(kw => query.includes(kw))) {
         smartSuggestions.push({
           ...cat,
-          relevance: 10 - Math.min(...cat.keywords.map(kw => Math.abs(query.length - kw.length)))
+          relevance: 10,
         });
       }
     });
-    
+
     // Добавляем поиск по тексту
     if (smartSuggestions.length === 0 && searchQuery.length > 2) {
       smartSuggestions.push({
         action: 'text_search',
         label: `Поиск: "${searchQuery}"`,
         icon: '🔍',
-        relevance: 5
+        relevance: 5,
       });
     }
-    
-    setSuggestions(smartSuggestions.sort((a, b) => b.relevance - a.relevance).slice(0, 5));
+
+    setSuggestions(smartSuggestions.slice(0, 5));
   }, [searchQuery]);
-  
-  // Обработка голосовой команды (вынесена вперёд, чтобы использовать в startListening)
+
+  // Обработка голосовой команды
   const handleVoiceCommand = useCallback((command) => {
     const lowerCommand = command.toLowerCase();
-    let response = '';
     
     // Анализ команд
     if (lowerCommand.includes('просроч') || lowerCommand.includes('overdue')) {
-      response = 'Показываю просроченные заявки';
-      if (onSearch) onSearch('status:pending overdue:true');
-      if (onNavigate) onNavigate('inwork');
+      setTranscript('Показываю просроченные заявки');
+      onSearch?.('status:pending overdue:true');
+      onNavigate?.('inwork');
     }
     else if (lowerCommand.includes('активн') || lowerCommand.includes('в работе')) {
-      response = 'Показываю активные заявки';
-      if (onSearch) onSearch('status:active');
-      if (onNavigate) onNavigate('inwork');
+      setTranscript('Показываю активные заявки');
+      onSearch?.('status:active');
+      onNavigate?.('inwork');
     }
     else if (lowerCommand.includes('завершен') || lowerCommand.includes('выполнен')) {
-      response = 'Показываю выполненные заявки';
-      if (onSearch) onSearch('status:received');
-      if (onNavigate) onNavigate('history');
+      setTranscript('Показываю выполненные заявки');
+      onSearch?.('status:received');
+      onNavigate?.('history');
     }
     else if (lowerCommand.includes('сегодня')) {
-      response = 'Заявки за сегодня';
-      if (onSearch) onSearch(`date:${new Date().toISOString().split('T')[0]}`);
-      if (onNavigate) onNavigate('inwork');
+      setTranscript('Заявки за сегодня');
+      onSearch?.(`date:${new Date().toISOString().split('T')[0]}`);
+      onNavigate?.('inwork');
     }
     else if (lowerCommand.includes('сотрудник') || lowerCommand.includes('команда')) {
-      response = 'Открываю управление сотрудниками';
-      if (onNavigate) onNavigate('employees');
+      setTranscript('Открываю управление сотрудниками');
+      onNavigate?.('employees');
     }
-    else if (lowerCommand.includes('финанс') || lowerCommand.includes('деньги') || lowerCommand.includes('бюджет')) {
-      response = 'Открываю финансовую аналитику';
-      if (onNavigate) onNavigate('analytics');
+    else if (lowerCommand.includes('финанс') || lowerCommand.includes('деньги')) {
+      setTranscript('Открываю финансовую аналитику');
+      onNavigate?.('analytics');
     }
     else if (lowerCommand.includes('склад') || lowerCommand.includes('остаток')) {
-      response = 'Показываю складские остатки';
-      if (onNavigate) onNavigate('warehouse');
+      setTranscript('Показываю складские остатки');
+      onNavigate?.('warehouse');
     }
     else if (lowerCommand.includes('создай') || lowerCommand.includes('новая заявка')) {
-      response = 'Перехожу к созданию заявки';
-      if (onNavigate) onNavigate('create');
+      setTranscript('Перехожу к созданию заявки');
+      onNavigate?.('create');
     }
     else if (lowerCommand.match(/объект\s+(.+)/i)) {
       const objectName = lowerCommand.match(/объект\s+(.+)/i)[1];
-      response = `Ищу объект: ${objectName}`;
-      if (onSearch) onSearch(`object:${objectName}`);
+      setTranscript(`Ищу объект: ${objectName}`);
+      onSearch?.(`object:${objectName}`);
     }
     else if (command.length > 3) {
-      response = `Поиск: "${command}"`;
+      setTranscript(`Поиск: "${command}"`);
       saveToHistory(command);
-      if (onSearch) onSearch(command);
+      onSearch?.(command);
     }
     else {
-      response = 'Не понял команду. Попробуйте сказать: "просроченные", "активные", "сотрудники"';
+      setTranscript('Не понял команду. Попробуйте: "просроченные", "активные", "склад"');
     }
-    
-    setTranscript(response);
+
     setTimeout(() => setTranscript(''), 3000);
   }, [onSearch, onNavigate, saveToHistory]);
-  
+
   // Голосовое распознавание
   const startListening = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -150,80 +149,80 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => { // ← 
       alert('Голосовой поиск не поддерживается вашим браузером');
       return;
     }
-    
+
     const recognition = new SpeechRecognition();
     recognition.lang = 'ru-RU';
     recognition.continuous = false;
     recognition.interimResults = true;
-    
+
     recognition.onstart = () => {
       setIsListening(true);
       setTranscript('🎙️ Слушаю...');
     };
-    
+
     recognition.onresult = (event) => {
       const result = event.results[0][0].transcript;
       setTranscript(result);
-      
+
       if (event.results[0].isFinal) {
         handleVoiceCommand(result);
         setIsListening(false);
       }
     };
-    
+
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       setTranscript(`❌ Ошибка: ${event.error}`);
       setTimeout(() => setTranscript(''), 2000);
       setIsListening(false);
     };
-    
+
     recognition.onend = () => {
       setTimeout(() => setIsListening(false), 500);
     };
-    
+
     recognition.start();
-  }, [handleVoiceCommand]); // ← добавили зависимость handleVoiceCommand
-  
+  }, [handleVoiceCommand]);
+
   // Обработка текстового поиска
   const handleSearch = useCallback(() => {
     if (!searchQuery.trim()) return;
     saveToHistory(searchQuery);
-    if (onSearch) onSearch(searchQuery);
+    onSearch?.(searchQuery);
     setIsExpanded(false);
   }, [searchQuery, onSearch, saveToHistory]);
-  
+
   // Выбор подсказки
   const handleSuggestionClick = useCallback((suggestion) => {
     if (suggestion.action === 'filter_overdue') {
-      if (onSearch) onSearch('status:pending overdue:true');
-      if (onNavigate) onNavigate('inwork');
+      onSearch?.('status:pending overdue:true');
+      onNavigate?.('inwork');
     } else if (suggestion.action === 'filter_active') {
-      if (onSearch) onSearch('status:active');
-      if (onNavigate) onNavigate('inwork');
+      onSearch?.('status:active');
+      onNavigate?.('inwork');
     } else if (suggestion.action === 'filter_completed') {
-      if (onSearch) onSearch('status:received');
-      if (onNavigate) onNavigate('history');
+      onSearch?.('status:received');
+      onNavigate?.('history');
     } else if (suggestion.action === 'filter_today') {
-      if (onSearch) onSearch(`date:${new Date().toISOString().split('T')[0]}`);
-      if (onNavigate) onNavigate('inwork');
+      onSearch?.(`date:${new Date().toISOString().split('T')[0]}`);
+      onNavigate?.('inwork');
     } else if (suggestion.action === 'show_finance') {
-      if (onNavigate) onNavigate('analytics');
+      onNavigate?.('analytics');
     } else if (suggestion.action === 'show_employees') {
-      if (onNavigate) onNavigate('employees');
+      onNavigate?.('employees');
     } else if (suggestion.action === 'show_warehouse') {
-      if (onNavigate) onNavigate('warehouse');
+      onNavigate?.('warehouse');
     } else if (suggestion.action === 'search_object') {
-      if (onSearch) onSearch(suggestion.label.replace('Поиск по объекту: ', ''));
+      onSearch?.(suggestion.label.replace('Поиск по объекту: ', ''));
     } else if (suggestion.action === 'text_search') {
-      if (onSearch) onSearch(searchQuery);
+      onSearch?.(searchQuery);
     }
-    
+
     setSearchQuery('');
     setSuggestions([]);
     setIsExpanded(false);
   }, [onSearch, onNavigate, searchQuery]);
-  
+
   return (
     <div className={`relative ${className}`}>
       {/* Поисковая строка */}
@@ -237,17 +236,17 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => { // ← 
             onFocus={() => setIsExpanded(true)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
             placeholder={isListening ? transcript : "Поиск заявок, объектов или сотрудников..."}
-            className="w-full pl-10 pr-24 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-800"
+            className="w-full pl-10 pr-24 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-[#4A6572] focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           />
-          
+
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
             {isSupported && (
               <button
                 onClick={startListening}
                 disabled={isListening}
                 className={`p-2 rounded-lg transition-all ${
-                  isListening 
-                    ? 'bg-red-500 text-white animate-pulse' 
+                  isListening
+                    ? 'bg-red-500 text-white animate-pulse'
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-600 hover:bg-gray-200'
                 }`}
                 title="Голосовой поиск"
@@ -255,27 +254,20 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => { // ← 
                 {isListening ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
               </button>
             )}
-            
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 hover:bg-gray-200"
-            >
-              <History className="w-4 h-4" />
-            </button>
           </div>
         </div>
-        
+
         {/* Транскрипт голоса */}
         {transcript && !isListening && (
-          <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-600 dark:text-blue-400 animate-fadeIn">
+          <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-600 dark:text-blue-400 z-10">
             {transcript}
           </div>
         )}
       </div>
-      
+
       {/* Выпадающая панель с подсказками и историей */}
       {isExpanded && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden animate-fadeIn">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
           {/* Подсказки */}
           {suggestions.length > 0 && (
             <div className="p-2 border-b border-gray-100 dark:border-gray-700">
@@ -292,7 +284,7 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => { // ← 
               ))}
             </div>
           )}
-          
+
           {/* История поиска */}
           {searchHistory.length > 0 && (
             <div className="p-2">
@@ -308,7 +300,7 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => { // ← 
                   Очистить
                 </button>
               </p>
-              {searchHistory.map((item, i) => (
+              {searchHistory.slice(0, 5).map((item, i) => (
                 <button
                   key={i}
                   onClick={() => {
@@ -323,46 +315,38 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => { // ← 
               ))}
             </div>
           )}
-          
+
           {/* Быстрые фильтры */}
           <div className="p-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30">
             <p className="text-xs text-gray-400 mb-2">⚡ Быстрые фильтры</p>
             <div className="flex flex-wrap gap-2">
               <FilterChip icon="⚠️" label="Просроченные" onClick={() => {
-                if (onSearch) onSearch('status:pending overdue:true');
-                if (onNavigate) onNavigate('inwork');
+                onSearch?.('status:pending overdue:true');
+                onNavigate?.('inwork');
                 setIsExpanded(false);
               }} />
               <FilterChip icon="🟢" label="Активные" onClick={() => {
-                if (onSearch) onSearch('status:active');
-                if (onNavigate) onNavigate('inwork');
+                onSearch?.('status:active');
+                onNavigate?.('inwork');
                 setIsExpanded(false);
               }} />
               <FilterChip icon="✅" label="Выполненные" onClick={() => {
-                if (onSearch) onSearch('status:received');
-                if (onNavigate) onNavigate('history');
+                onSearch?.('status:received');
+                onNavigate?.('history');
                 setIsExpanded(false);
               }} />
               <FilterChip icon="📅" label="Сегодня" onClick={() => {
-                if (onSearch) onSearch(`date:${new Date().toISOString().split('T')[0]}`);
-                if (onNavigate) onNavigate('inwork');
-                setIsExpanded(false);
-              }} />
-              <FilterChip icon="💰" label="Финансы" onClick={() => {
-                if (onNavigate) onNavigate('analytics');
-                setIsExpanded(false);
-              }} />
-              <FilterChip icon="👥" label="Сотрудники" onClick={() => {
-                if (onNavigate) onNavigate('employees');
+                onSearch?.(`date:${new Date().toISOString().split('T')[0]}`);
+                onNavigate?.('inwork');
                 setIsExpanded(false);
               }} />
               <FilterChip icon="📦" label="Склад" onClick={() => {
-                if (onNavigate) onNavigate('warehouse');
+                onNavigate?.('warehouse');
                 setIsExpanded(false);
               }} />
             </div>
           </div>
-          
+
           {/* Закрыть */}
           <button
             onClick={() => setIsExpanded(false)}

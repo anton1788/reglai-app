@@ -8435,7 +8435,6 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
     showNotification={showNotification}
     onNavigate={(view) => {
       setCurrentView(view);
-      // На мобильных закрываем меню
       if (isMobile) window.scrollTo({ top: 0, behavior: 'smooth' });
     }}
     onCreateDraft={(data) => {
@@ -8446,6 +8445,8 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       setSelectedApplication(app);
       setShowReceiveModal(true);
     }}
+    // ✅ НОВОЕ: Передаём функцию открытия модального окна приёмки/выдачи
+    onOpenReceiveModal={openReceiveModal}
     t={t}
   />
 )}
