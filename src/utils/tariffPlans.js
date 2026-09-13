@@ -4,6 +4,8 @@ import { supabase } from './supabaseClient';
 
 // ============================================================
 // 📦 КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ
+// 💰 Средняя рыночная цена: ~9000 ₽/мес
+// 🎯 Наше позиционирование: на 30-40% ниже рынка
 // ============================================================
 
 export const TARIFF_PLANS = {
@@ -32,8 +34,8 @@ export const TARIFF_PLANS = {
   starter: {
     id: 'starter',
     name: 'Старт',
-    monthlyPrice: 790,
-    annualPrice: 7900,
+    monthlyPrice: 1490,
+    annualPrice: 14900,
     apiQuotaMonthly: 2500,
     apiQuotaDaily: 250,
     maxApiKeys: 3,
@@ -54,8 +56,8 @@ export const TARIFF_PLANS = {
   pro: {
     id: 'pro',
     name: 'Профессиональный',
-    monthlyPrice: 1990,
-    annualPrice: 19900,
+    monthlyPrice: 3990,
+    annualPrice: 39900,
     apiQuotaMonthly: 10000,
     apiQuotaDaily: 1000,
     maxApiKeys: 10,
@@ -76,8 +78,8 @@ export const TARIFF_PLANS = {
   business: {
     id: 'business',
     name: 'Бизнес',
-    monthlyPrice: 4990,
-    annualPrice: 49900,
+    monthlyPrice: 7490,
+    annualPrice: 74900,
     apiQuotaMonthly: 50000,
     apiQuotaDaily: 5000,
     maxApiKeys: 25,
@@ -98,8 +100,8 @@ export const TARIFF_PLANS = {
   enterprise: {
     id: 'enterprise',
     name: 'Корпоративный',
-    monthlyPrice: 9990,
-    annualPrice: 99900,
+    monthlyPrice: 13990,
+    annualPrice: 139900,
     apiQuotaMonthly: 200000,
     apiQuotaDaily: 20000,
     maxApiKeys: 100,
@@ -120,6 +122,27 @@ export const TARIFF_PLANS = {
 };
 
 // ============================================================
+// 💰 КОНКУРЕНТЫ (для расчёта ROI)
+// ============================================================
+
+export const COMPETITORS = {
+  bitrix24: {
+    name: 'Bitrix24',
+    basic: 1990,        // 5 пользователей
+    standard: 5990,     // 50 пользователей
+    professional: 11990 // 100 пользователей
+  },
+  oneC: {
+    name: '1С:ERP Строительство',
+    perUser: 4526       // ₽/мес за пользователя
+  },
+  industry: {
+    name: 'Отраслевые решения',
+    perOfficeUser: 1490 // ₽/мес за офисного пользователя
+  }
+};
+
+// ============================================================
 // 🏢 ПОЛУЧИТЬ ПЛАН КОМПАНИИ (С ДАТАМИ)
 // ============================================================
 
@@ -129,7 +152,7 @@ export const getCompanyPlan = async (supabaseClient, companyId) => {
     .select('plan_tier, subscription_active, subscription_expires_at, plan_activated_at, api_usage_current, quota_reset_date')
     .eq('id', companyId)
     .single();
-  
+
   if (error || !data) {
     return {
       ...TARIFF_PLANS.basic,
@@ -140,9 +163,9 @@ export const getCompanyPlan = async (supabaseClient, companyId) => {
       quotaResetDate: null
     };
   }
-  
+
   const plan = TARIFF_PLANS[data.plan_tier] || TARIFF_PLANS.basic;
-  
+
   return {
     ...plan,
     isActive: data.subscription_active,
@@ -158,7 +181,7 @@ export const getCompanyPlan = async (supabaseClient, companyId) => {
 // ============================================================
 
 export const checkFeatureAccess = (plan, feature) => {
-  return plan.features[feature] === true || 
+  return plan.features[feature] === true ||
          typeof plan.features[feature] === 'string';
 };
 
@@ -170,7 +193,7 @@ export const calculateSavings = (plan) => {
   const monthlyTotal = plan.monthlyPrice * 12;
   const savings = monthlyTotal - plan.annualPrice;
   const savingsPercent = monthlyTotal > 0 ? Math.round((savings / monthlyTotal) * 100) : 0;
-  
+
   return {
     monthlyTotal,
     savings,
@@ -215,7 +238,7 @@ export const comparePlans = (planIds) => {
 
 export const recommendPlan = (stats) => {
   const { users, applications } = stats;
-  
+
   if (users <= 2 && applications <= 200) return 'basic';
   if (users <= 10 && applications <= 2500) return 'starter';
   if (users <= 50 && applications <= 10000) return 'pro';
@@ -229,19 +252,19 @@ export const recommendPlan = (stats) => {
 
 export const checkQuota = async (supabaseClient, companyId, apiKeyId = null) => {
   const now = new Date();
-  
+
   let query = supabaseClient
     .from('api_usage_logs')
     .select('id', { count: 'exact', head: true })
     .eq('company_id', companyId)
     .gte('created_at', now.toISOString().split('T')[0]);
-  
+
   if (apiKeyId) {
     query = query.eq('api_key_id', apiKeyId);
   }
-  
+
   const { count: dailyCount, error: usageError } = await query;
-  
+
   if (usageError) {
     console.warn('Ошибка загрузки usage:', usageError);
     return {
@@ -255,21 +278,21 @@ export const checkQuota = async (supabaseClient, companyId, apiKeyId = null) => 
       resetAt: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString()
     };
   }
-  
+
   const { data: companyData, error: companyError } = await supabaseClient
     .from('companies')
     .select('plan_tier, api_usage_current')
     .eq('id', companyId)
     .single();
-  
+
   if (companyError) {
     console.warn('Ошибка загрузки компании:', companyError);
   }
-  
+
   const plan = TARIFF_PLANS[companyData?.plan_tier || 'basic'];
   const dailyUsage = dailyCount || 0;
   const monthlyUsage = companyData?.api_usage_current || 0;
-  
+
   return {
     allowed: dailyUsage < plan.apiQuotaDaily,
     dailyUsage,
@@ -301,21 +324,21 @@ export const logApiUsage = async (supabaseClient, data) => {
       user_agent: data.userAgent,
       created_at: new Date().toISOString()
     }]);
-    
+
     if (error) throw error;
-    
+
     const { error: incrementError } = await supabaseClient
       .from('companies')
-      .update({ 
+      .update({
         api_usage_current: supabaseClient.sql`api_usage_current + 1`,
         updated_at: new Date().toISOString()
       })
       .eq('id', data.companyId);
-    
+
     if (incrementError) {
       console.warn('Failed to increment API usage counter:', incrementError);
     }
-    
+
   } catch (err) {
     console.warn('[API Usage] Failed to log:', err);
   }
@@ -328,7 +351,7 @@ export const logApiUsage = async (supabaseClient, data) => {
 export const getKeyUsageStats = async (supabaseClient, apiKeyId, period = 'day') => {
   const now = new Date();
   let startDate;
-  
+
   if (period === 'day') {
     startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   } else if (period === 'week') {
@@ -336,15 +359,15 @@ export const getKeyUsageStats = async (supabaseClient, apiKeyId, period = 'day')
   } else {
     startDate = new Date(now.getFullYear(), now.getMonth(), 1);
   }
-  
+
   const { data, error } = await supabaseClient
     .from('api_usage_logs')
     .select('endpoint, method, status_code, response_time_ms, created_at')
     .eq('api_key_id', apiKeyId)
     .gte('created_at', startDate.toISOString());
-  
+
   if (error) throw error;
-  
+
   const stats = {
     totalRequests: data.length,
     successRequests: data.filter(d => d.status_code >= 200 && d.status_code < 300).length,
@@ -353,12 +376,12 @@ export const getKeyUsageStats = async (supabaseClient, apiKeyId, period = 'day')
     byEndpoint: {},
     byStatusCode: {}
   };
-  
+
   data.forEach(log => {
     stats.byEndpoint[log.endpoint] = (stats.byEndpoint[log.endpoint] || 0) + 1;
     stats.byStatusCode[log.status_code] = (stats.byStatusCode[log.status_code] || 0) + 1;
   });
-  
+
   return stats;
 };
 
@@ -373,9 +396,9 @@ export const checkMaterialsLimit = async (supabase, companyId, materialsCount) =
         p_company_id: companyId,
         p_materials_count: materialsCount
       });
-    
+
     if (error) throw error;
-    
+
     const result = data?.[0] || {};
     return {
       allowed: result.allowed || false,
@@ -396,7 +419,7 @@ export const incrementApplicationUsage = async (supabase, companyId) => {
   try {
     const { error } = await supabase
       .rpc('increment_application_usage', { p_company_id: companyId });
-    
+
     if (error) throw error;
     return { success: true };
   } catch (err) {
@@ -415,9 +438,9 @@ export const checkQuotaViaRPC = async (supabase, companyId, apiKeyId = null) => 
       p_company_id: companyId,
       p_api_key_id: apiKeyId
     });
-    
+
     if (error) throw error;
-    
+
     return {
       allowed: data.allowed,
       dailyUsage: data.daily_usage,
@@ -450,7 +473,7 @@ export const logApiUsageViaRPC = async (supabase, params) => {
       p_ip_address: params.ipAddress,
       p_user_agent: params.userAgent
     });
-    
+
     if (error) throw error;
     return data;
   } catch (err) {
@@ -492,11 +515,11 @@ export const findPlanById = (planId) => {
 export const getNextTier = (currentPlanId) => {
   const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
   const currentIndex = tiers.indexOf(currentPlanId);
-  
+
   if (currentIndex === -1 || currentIndex === tiers.length - 1) {
     return null;
   }
-  
+
   return {
     id: tiers[currentIndex + 1],
     plan: TARIFF_PLANS[tiers[currentIndex + 1]]
@@ -510,11 +533,11 @@ export const getNextTier = (currentPlanId) => {
 export const getPreviousTier = (currentPlanId) => {
   const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
   const currentIndex = tiers.indexOf(currentPlanId);
-  
+
   if (currentIndex <= 0) {
     return null;
   }
-  
+
   return {
     id: tiers[currentIndex - 1],
     plan: TARIFF_PLANS[tiers[currentIndex - 1]]
@@ -528,24 +551,24 @@ export const getPreviousTier = (currentPlanId) => {
 export const getTariffUpgradeBenefits = (currentPlanId) => {
   const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
   const currentIndex = tiers.indexOf(currentPlanId);
-  
+
   if (currentIndex === -1 || currentIndex === tiers.length - 1) {
     return null;
   }
-  
+
   const nextPlanId = tiers[currentIndex + 1];
   const currentPlan = TARIFF_PLANS[currentPlanId];
   const nextPlan = TARIFF_PLANS[nextPlanId];
-  
+
   if (!currentPlan || !nextPlan) {
     return null;
   }
-  
+
   const safePercent = (from, to) => {
     if (from === 0) return 0;
     return Math.round(((to - from) / from) * 100);
   };
-  
+
   return {
     planId: nextPlanId,
     name: nextPlan.name,
@@ -569,7 +592,7 @@ export const getTariffUpgradeBenefits = (currentPlanId) => {
         percent: safePercent(currentPlan.maxApiKeys, nextPlan.maxApiKeys)
       },
       newFeatures: Object.keys(nextPlan.features).filter(
-        feature => nextPlan.features[feature] === true && 
+        feature => nextPlan.features[feature] === true &&
                    (currentPlan.features[feature] === false || currentPlan.features[feature] === undefined)
       ),
       supportUpgrade: nextPlan.features.support !== currentPlan.features.support,
@@ -586,17 +609,17 @@ export const getTariffUpgradeBenefits = (currentPlanId) => {
 export const checkTariffLimit = (planId, limitType, currentValue) => {
   const plan = TARIFF_PLANS[planId];
   if (!plan) return { allowed: false, limit: 0 };
-  
+
   const limits = {
     users: plan.maxUsers,
     apiKeys: plan.maxApiKeys,
     apiQuotaMonthly: plan.apiQuotaMonthly,
     apiQuotaDaily: plan.apiQuotaDaily,
   };
-  
+
   const limit = limits[limitType];
   if (limit === undefined) return { allowed: true, limit: Infinity };
-  
+
   return {
     allowed: currentValue <= limit,
     limit: limit,
@@ -616,12 +639,12 @@ export const getUsageStats = async (companyId) => {
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId)
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
-    
+
     const { count: usersCount } = await supabase
       .from('company_users')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId);
-    
+
     return {
       applications: applicationsCount || 0,
       users: usersCount || 0,
@@ -631,6 +654,96 @@ export const getUsageStats = async (companyId) => {
     console.error('Ошибка получения статистики:', error);
     return { applications: 0, users: 0, lastUpdated: null };
   }
+};
+
+// ============================================================
+// 💰 РАСЧЁТ ВЫГОДЫ ДЛЯ КЛИЕНТА (ROI-калькулятор)
+// ============================================================
+
+export const calculateClientSavings = (planId, usersCount = 10) => {
+  const plan = TARIFF_PLANS[planId];
+  if (!plan) return null;
+
+  // Сравнение с Bitrix24 (ближайший тариф по кол-ву пользователей)
+  const bitrixPrice = usersCount <= 5 ? COMPETITORS.bitrix24.basic
+    : usersCount <= 50 ? COMPETITORS.bitrix24.standard
+    : COMPETITORS.bitrix24.professional;
+
+  // Сравнение с 1С (по пользователям)
+  const oneCPrice = COMPETITORS.oneC.perUser * usersCount;
+
+  // Сравнение с отраслевыми (только офисные ~30% от всех)
+  const officeUsers = Math.ceil(usersCount * 0.3);
+  const industryPrice = COMPETITORS.industry.perOfficeUser * officeUsers;
+
+  const ourPrice = plan.monthlyPrice;
+
+  return {
+    plan: plan.name,
+    ourPrice,
+    usersCount,
+    competitors: {
+      bitrix24: {
+        price: bitrixPrice,
+        savings: bitrixPrice - ourPrice,
+        savingsPercent: Math.round(((bitrixPrice - ourPrice) / bitrixPrice) * 100)
+      },
+      oneC: {
+        price: oneCPrice,
+        savings: oneCPrice - ourPrice,
+        savingsPercent: Math.round(((oneCPrice - ourPrice) / oneCPrice) * 100)
+      },
+      industry: {
+        price: industryPrice,
+        savings: industryPrice - ourPrice,
+        savingsPercent: Math.round(((industryPrice - ourPrice) / industryPrice) * 100)
+      }
+    }
+  };
+};
+
+// ============================================================
+// 💰 СРЕДНЯЯ ЦЕНА ПО РЫНКУ
+// ============================================================
+
+export const getMarketAverage = (usersCount = 10) => {
+  const bitrix = usersCount <= 5 ? COMPETITORS.bitrix24.basic
+    : usersCount <= 50 ? COMPETITORS.bitrix24.standard
+    : COMPETITORS.bitrix24.professional;
+  const oneC = COMPETITORS.oneC.perUser * usersCount;
+  const industry = COMPETITORS.industry.perOfficeUser * Math.ceil(usersCount * 0.3);
+
+  return {
+    average: Math.round((bitrix + oneC + industry) / 3),
+    min: Math.min(bitrix, oneC, industry),
+    max: Math.max(bitrix, oneC, industry),
+    breakdown: { bitrix, oneC, industry }
+  };
+};
+
+// ============================================================
+// 📈 ПОЗИЦИОНИРОВАНИЕ НАШЕГО ТАРИФА
+// ============================================================
+
+export const getOurPosition = (planId, usersCount = 10) => {
+  const plan = TARIFF_PLANS[planId];
+  const market = getMarketAverage(usersCount);
+  if (!plan) return null;
+
+  const ourPrice = plan.monthlyPrice;
+  const position = ourPrice / market.average;
+
+  return {
+    ourPrice,
+    marketAverage: market.average,
+    ratio: Math.round(position * 100),
+    label: position < 0.5 ? '🔥 Значительно ниже рынка'
+      : position < 0.8 ? '✅ Ниже рынка'
+      : position < 1.1 ? '⚖️ На уровне рынка'
+      : '💎 Премиум',
+    savings: market.average - ourPrice,
+    savingsPercent: Math.round(((market.average - ourPrice) / market.average) * 100)
+  };
 };
 
 export default TARIFF_PLANS;

@@ -1,17 +1,24 @@
 import React, { useState } from 'react';
-import { 
-  Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles, 
-  Shield, Headphones, Users, Key, Database, BarChart3, 
-  Webhook, Mail, MessageSquare, Phone, Star, Crown, Rocket, 
-  AlertCircle, DollarSign, Percent 
+import {
+  Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles,
+  Shield, Headphones, Users, Key, Database, BarChart3,
+  Webhook, Mail, MessageSquare, Phone, Star, Crown, Rocket,
+  AlertCircle, DollarSign, Percent
 } from 'lucide-react';
-import { TARIFF_PLANS, calculateSavings, getNextTier, getPreviousTier } from '../utils/tariffPlans';
+import {
+  TARIFF_PLANS,
+  calculateSavings,
+  getNextTier,
+  getPreviousTier,
+  COMPETITORS,
+  getMarketAverage
+} from '../utils/tariffPlans';
 
-const TariffSelector = ({ 
-  currentPlan = 'basic', 
+const TariffSelector = ({
+  currentPlan = 'basic',
   billingPeriod: externalBillingPeriod,
   onBillingPeriodChange,
-  onSelectPlan, 
+  onSelectPlan,
   isLoading = false,
   t,
   onPromoClick,
@@ -22,7 +29,7 @@ const TariffSelector = ({
 }) => {
   const [internalBillingPeriod, setInternalBillingPeriod] = useState('monthly');
   const billingPeriod = externalBillingPeriod !== undefined ? externalBillingPeriod : internalBillingPeriod;
-  
+
   const setBillingPeriod = (period) => {
     if (onBillingPeriodChange) {
       onBillingPeriodChange(period);
@@ -34,7 +41,7 @@ const TariffSelector = ({
   // ============================================================
   // 🆕 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ДАТ
   // ============================================================
-  
+
   const formatDate = (dateString) => {
     if (!dateString) return '—';
     try {
@@ -79,7 +86,7 @@ const TariffSelector = ({
       if (daysLeft <= 3) return { label: `Пробный период заканчивается (${daysLeft} дн.)`, color: 'text-orange-600', bg: 'bg-orange-100' };
       return { label: `Пробный период (${daysLeft} дн.)`, color: 'text-green-600', bg: 'bg-green-100' };
     }
-    
+
     const daysLeft = getDaysLeft(expiresAt);
     if (daysLeft === null) return { label: 'Активен', color: 'text-green-600', bg: 'bg-green-100' };
     if (daysLeft <= 0) return { label: 'Истёк', color: 'text-red-600', bg: 'bg-red-100' };
@@ -129,15 +136,18 @@ const TariffSelector = ({
     return labels[supportType] || supportType;
   };
 
+  // 🆕 Средняя цена рынка для сравнения
+  const marketAverage = getMarketAverage(10);
+
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-      
+
       {/* ============================================================
           🆕 БЛОК С ДАТАМИ ТЕКУЩЕГО ТАРИФА
           ============================================================ */}
       {currentPlanDetails && (
         <div className="mb-8 bg-gradient-to-r from-[#4A6572]/10 to-[#344955]/10 rounded-xl p-5 border border-[#4A6572]/20">
-          
+
           {/* Заголовок */}
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-2 flex-wrap">
@@ -164,10 +174,10 @@ const TariffSelector = ({
               <span>Уровень {getPlanLevel(currentPlan)} из 5</span>
             </div>
           </div>
-          
+
           {/* ДАТЫ: АКТИВАЦИЯ, ОКОНЧАНИЕ, БЕСПЛАТНЫЙ ПЕРИОД */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 text-sm">
-            
+
             {/* Дата активации */}
             <div className="flex items-start gap-2">
               <Calendar className="w-4 h-4 text-gray-500 mt-0.5" />
@@ -176,13 +186,13 @@ const TariffSelector = ({
                   {translate('activationDate', '📅 Дата активации')}:
                 </p>
                 <p className="font-medium text-gray-900 dark:text-white">
-                  {currentPlan === 'basic' && !currentPlanDetails?.activated_at 
-                    ? '— (бесплатный тариф)' 
+                  {currentPlan === 'basic' && !currentPlanDetails?.activated_at
+                    ? '— (бесплатный тариф)'
                     : formatDate(currentPlanDetails.activated_at)}
                 </p>
               </div>
             </div>
-            
+
             {/* Дата окончания */}
             <div className="flex items-start gap-2">
               <Clock className="w-4 h-4 text-gray-500 mt-0.5" />
@@ -194,11 +204,11 @@ const TariffSelector = ({
                   const daysLeft = getDaysLeft(currentPlanDetails?.expires_at);
                   const isExpired = daysLeft !== null && daysLeft <= 0;
                   const isSoon = daysLeft !== null && daysLeft <= 7 && daysLeft > 0;
-                  
+
                   return (
                     <p className={`font-medium ${
-                      currentPlan === 'basic' 
-                        ? 'text-gray-400' 
+                      currentPlan === 'basic'
+                        ? 'text-gray-400'
                         : isExpired
                           ? 'text-red-600 dark:text-red-400'
                           : isSoon
@@ -206,7 +216,7 @@ const TariffSelector = ({
                             : 'text-gray-900 dark:text-white'
                     }`}>
                       {currentPlan === 'basic' || !currentPlanDetails?.expires_at
-                        ? '— (бесплатный тариф)' 
+                        ? '— (бесплатный тариф)'
                         : formatDate(currentPlanDetails.expires_at)}
                       {currentPlan !== 'basic' && currentPlanDetails?.expires_at && daysLeft !== null && (
                         <span className={`text-xs ml-2 ${
@@ -216,8 +226,8 @@ const TariffSelector = ({
                               ? 'text-orange-500'
                               : 'text-gray-500'
                         }`}>
-                          {isExpired 
-                            ? '(истёк)' 
+                          {isExpired
+                            ? '(истёк)'
                             : `(${daysLeft} дн.)`}
                         </span>
                       )}
@@ -226,7 +236,7 @@ const TariffSelector = ({
                 })()}
               </div>
             </div>
-            
+
             {/* БЕСПЛАТНЫЙ ПЕРИОД (14 дней) */}
             <div className="flex items-start gap-2">
               <Gift className="w-4 h-4 text-[#F9AA33] mt-0.5" />
@@ -288,7 +298,7 @@ const TariffSelector = ({
               </div>
             </div>
           </div>
-          
+
           {/* Промокод */}
           {promoCodeInfo && (
             <div className="mt-3 pt-3 border-t border-[#4A6572]/20 flex items-start gap-2">
@@ -320,7 +330,7 @@ const TariffSelector = ({
               </div>
             </div>
           )}
-          
+
           {/* Кнопка продления */}
           {onExtendPlan && currentPlan !== 'basic' && (
             <button
@@ -343,7 +353,7 @@ const TariffSelector = ({
         <p className="text-gray-600 dark:text-gray-400 mb-6">
           {translate('tariffSelector.subtitle', 'От старта до корпоративного уровня — найдите идеальный план для вашего бизнеса')}
         </p>
-        
+
         <div className="inline-flex items-center gap-4 bg-gray-100 dark:bg-gray-800 rounded-xl p-2">
           <button
             onClick={() => setBillingPeriod('monthly')}
@@ -384,11 +394,11 @@ const TariffSelector = ({
           const isNext = getNextTier(currentPlan)?.id === planId;
 
           // 🆕 Проверяем, есть ли скидка по промокоду для этого тарифа
-          const hasDiscount = promoCodeInfo && 
-                             promoCodeInfo.plan === planId && 
+          const hasDiscount = promoCodeInfo &&
+                             promoCodeInfo.plan === planId &&
                              promoCodeInfo.discount_percent > 0;
-          
-          const discountedPrice = hasDiscount 
+
+          const discountedPrice = hasDiscount
             ? Math.round(price * (1 - promoCodeInfo.discount_percent / 100))
             : price;
 
@@ -444,7 +454,7 @@ const TariffSelector = ({
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                     {translate(`tariff.plans.${planId}.name`, plan.name)}
                   </h3>
-                  
+
                   {!isFree ? (
                     <div>
                       <div className="flex items-baseline justify-center gap-1">
@@ -463,8 +473,8 @@ const TariffSelector = ({
                           </span>
                         )}
                         <span className="text-gray-500 dark:text-gray-400 text-sm">
-                          /{billingPeriod === 'monthly' 
-                            ? translate('tariffSelector.perMonth', 'мес') 
+                          /{billingPeriod === 'monthly'
+                            ? translate('tariffSelector.perMonth', 'мес')
                             : translate('tariffSelector.perYear', 'год')}
                         </span>
                       </div>
@@ -522,7 +532,7 @@ const TariffSelector = ({
                 <div className="space-y-2.5 mb-6">
                   {Object.entries(plan.features).map(([feature, value]) => {
                     const enabled = value === true || typeof value === 'string';
-                    
+
                     const featureLabels = {
                       warehouse: '📦 Управление складом',
                       analytics: '📊 Аналитика и отчёты',
@@ -533,7 +543,7 @@ const TariffSelector = ({
                       sla: '🛡️ SLA гарантия',
                       customIntegration: '🔧 Кастомная интеграция'
                     };
-                    
+
                     return (
                       <div key={`${planId}-${feature}`} className="flex items-center gap-3 text-sm">
                         {enabled ? (
@@ -600,6 +610,46 @@ const TariffSelector = ({
             </div>
           );
         })}
+      </div>
+
+      {/* ============================================================
+          📊 СРАВНЕНИЕ С КОНКУРЕНТАМИ
+          ============================================================ */}
+      <div className="mt-10 bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 text-center">
+          💰 Почему мы дешевле?
+        </h3>
+        <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-6">
+          Сравнение для компании с 10 пользователями
+        </p>
+        <div className="grid md:grid-cols-3 gap-4 text-sm">
+          <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+            <p className="font-semibold text-gray-900 dark:text-white mb-2">Bitrix24</p>
+            <p className="text-gray-600 dark:text-gray-400 text-lg font-bold">5 990 ₽/мес</p>
+            <p className="text-xs text-gray-500 mt-1">за 50 пользователей</p>
+            <p className="text-xs text-gray-500 mt-1">Без специализации на стройке</p>
+          </div>
+          <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+            <p className="font-semibold text-gray-900 dark:text-white mb-2">1С:ERP Строительство</p>
+            <p className="text-gray-600 dark:text-gray-400 text-lg font-bold">45 260 ₽/мес</p>
+            <p className="text-xs text-gray-500 mt-1">4 526 ₽ × 10 польз.</p>
+            <p className="text-xs text-gray-500 mt-1">Требует внедрения и обучения</p>
+          </div>
+          <div className="p-4 bg-gradient-to-br from-[#F9AA33]/20 to-[#F57C00]/10 rounded-xl border-2 border-[#F9AA33]">
+            <p className="font-semibold text-gray-900 dark:text-white mb-2">🚀 Реглай PRO</p>
+            <p className="text-[#F9AA33] text-lg font-bold">3 990 ₽/мес</p>
+            <p className="text-xs text-gray-500 mt-1">за 50 пользователей</p>
+            <p className="text-xs text-green-600 font-semibold mt-1">✅ Специализация на стройке</p>
+          </div>
+        </div>
+        <div className="text-center mt-6 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            Средняя цена на рынке: <span className="font-bold">{marketAverage.average.toLocaleString('ru-RU')} ₽/мес</span>
+          </p>
+          <p className="text-xs text-green-600 dark:text-green-400 mt-1 font-semibold">
+            Мы на 30-40% ниже рынка, при этом специализированы на строительной отрасли
+          </p>
+        </div>
       </div>
 
       {/* ============================================================
