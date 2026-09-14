@@ -1,7 +1,7 @@
 // src/components/TaskBoard.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  Plus, MoreVertical, Trash2, Edit3, Calendar, User, Clock, 
+import {
+  Plus, MoreVertical, Trash2, Edit3, Calendar, User, Clock,
   CheckCircle, XCircle, AlertCircle, Link as LinkIcon, MessageSquare,
   BarChart3, Search, TrendingUp, ArrowUpRight, Filter, X, Send,
   Flag, Paperclip, LayoutGrid, List, Eye, EyeOff, Settings,
@@ -20,31 +20,52 @@ const getCleanCompanyId = (companyId) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🎨 КОМПОНЕНТ КАРТОЧКИ ЗАДАЧИ (МОБИЛЬНАЯ ВЕРСИЯ)
+// 📋 СПИСОК СТАТУСОВ (вынесен для переиспользования)
 // ─────────────────────────────────────────────────────────────
-const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNotification, userRole }) => {
+const STATUS_LIST = [
+  { id: 'pending',     label: 'Новые',     icon: '📋', color: 'gray',  bg: 'bg-gray-50 dark:bg-gray-800/50' },
+  { id: 'in_progress', label: 'В работе',  icon: '⏳', color: 'blue',  bg: 'bg-blue-50 dark:bg-blue-900/20' },
+  { id: 'received',    label: 'Выполнены', icon: '✅', color: 'green', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
+  { id: 'canceled',    label: 'Отменены',  icon: '❌', color: 'red',   bg: 'bg-rose-50 dark:bg-rose-900/20' }
+];
+
+// ─────────────────────────────────────────────────────────────
+// 🎨 КОМПОНЕНТ КАРТОЧКИ ЗАДАЧИ (АДАПТИВНАЯ)
+// ─────────────────────────────────────────────────────────────
+const TaskCard = ({
+  task,
+  onEdit,
+  onDelete,
+  onOpenComments,
+  onStatusChange,
+  applications,
+  showNotification,
+  userRole,
+  isMobile = false
+}) => {
   const [showMenu, setShowMenu] = useState(false);
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  
+
   const canEdit = userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
   const canDelete = userRole === 'manager' || userRole === 'director';
-  
+
   const priorityConfig = {
-    low: { color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300', border: 'border-l-emerald-500', label: 'Низкий', icon: '🟢' },
-    medium: { color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', border: 'border-l-amber-500', label: 'Средний', icon: '🟡' },
-    high: { color: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300', border: 'border-l-rose-500', label: 'Высокий', icon: '🔴' }
+    low:    { color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300', border: 'border-l-emerald-500', label: 'Низкий',  icon: '🟢' },
+    medium: { color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',         border: 'border-l-amber-500',   label: 'Средний', icon: '🟡' },
+    high:   { color: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',             border: 'border-l-rose-500',    label: 'Высокий', icon: '🔴' }
   };
-  
+
   const statusConfig = {
-    pending: { bg: 'bg-gray-50 dark:bg-gray-800/50', border: 'border-l-4 border-gray-400', icon: '📋', label: 'Новая' },
-    in_progress: { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-l-4 border-blue-500', icon: '⏳', label: 'В работе' },
-    received: { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-l-4 border-emerald-500', icon: '✅', label: 'Выполнена' },
-    canceled: { bg: 'bg-rose-50 dark:bg-rose-900/20', border: 'border-l-4 border-rose-500', icon: '❌', label: 'Отменена' }
+    pending:     { bg: 'bg-gray-50 dark:bg-gray-800/50',      border: 'border-l-4 border-gray-400',    icon: '📋', label: 'Новая' },
+    in_progress: { bg: 'bg-blue-50 dark:bg-blue-900/20',      border: 'border-l-4 border-blue-500',    icon: '⏳', label: 'В работе' },
+    received:    { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-l-4 border-emerald-500', icon: '✅', label: 'Выполнена' },
+    canceled:    { bg: 'bg-rose-50 dark:bg-rose-900/20',      border: 'border-l-4 border-rose-500',    icon: '❌', label: 'Отменена' }
   };
-  
+
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'received' && task.status !== 'canceled';
   const daysUntilDue = task.due_date ? Math.ceil((new Date(task.due_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
-  
+
   const getDaysText = () => {
     if (!daysUntilDue && daysUntilDue !== 0) return null;
     if (daysUntilDue === 0) return 'Сегодня';
@@ -52,15 +73,20 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
     if (daysUntilDue > 0) return `Через ${daysUntilDue} дн.`;
     return `Просрочено ${Math.abs(daysUntilDue)} дн.`;
   };
-  
+
+  const closeAllMenus = () => {
+    setShowMenu(false);
+    setShowStatusMenu(false);
+  };
+
   return (
     <div
-      draggable={canEdit}
-      onDragStart={(e) => canEdit && e.dataTransfer.setData('taskId', task.id)}
+      draggable={canEdit && !isMobile}
+      onDragStart={(e) => canEdit && !isMobile && e.dataTransfer.setData('taskId', task.id)}
       onTouchStart={() => setIsHovered(true)}
       onTouchEnd={() => setTimeout(() => setIsHovered(false), 300)}
       className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm mb-3 transition-all duration-200 overflow-hidden touch-manipulation
-        ${canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
+        ${canEdit && !isMobile ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
         ${isHovered ? 'shadow-md' : 'shadow-sm'}
         ${statusConfig[task.status]?.border}
       `}
@@ -70,56 +96,68 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
           <h4 className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base leading-tight line-clamp-2 flex-1">
             {task.title}
           </h4>
-          
+
           {(canEdit || canDelete) && (
             <div className="relative flex-shrink-0">
               <button
-                onClick={() => setShowMenu(!showMenu)}
+                onClick={() => {
+                  setShowMenu(!showMenu);
+                  setShowStatusMenu(false);
+                }}
                 className="p-2 min-w-[44px] min-h-[44px] rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
+                aria-label="Действия с задачей"
               >
                 <MoreVertical className="w-5 h-5 text-gray-500" />
               </button>
+
               {showMenu && (
-                <div className="absolute right-0 mt-1 w-44 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-20 overflow-hidden">
-                  {canEdit && (
+                <>
+                  {/* Оверлей для закрытия меню по тапу вне */}
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={closeAllMenus}
+                  />
+                  <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 z-40 overflow-hidden">
+                    {canEdit && (
+                      <button
+                        onClick={() => { onEdit(task); closeAllMenus(); }}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                      >
+                        <Edit3 className="w-4 h-4" /> Редактировать
+                      </button>
+                    )}
                     <button
-                      onClick={() => { onEdit(task); setShowMenu(false); }}
+                      onClick={() => { onOpenComments(task); closeAllMenus(); }}
                       className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                     >
-                      <Edit3 className="w-4 h-4" /> Редактировать
+                      <MessageSquare className="w-4 h-4" /> Комментарии ({task.comments_count || 0})
                     </button>
-                  )}
-                  <button
-                    onClick={() => { onOpenComments(task); setShowMenu(false); }}
-                    className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                  >
-                    <MessageSquare className="w-4 h-4" /> Комментарии ({task.comments_count || 0})
-                  </button>
-                  {canDelete && (
-                    <button
-                      onClick={() => { onDelete(task.id); setShowMenu(false); }}
-                      className="w-full text-left px-4 py-3 text-sm hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 flex items-center gap-2"
-                    >
-                      <Trash2 className="w-4 h-4" /> Удалить
-                    </button>
-                  )}
-                </div>
+                    {canDelete && (
+                      <button
+                        onClick={() => { onDelete(task.id); closeAllMenus(); }}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 flex items-center gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" /> Удалить
+                      </button>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}
         </div>
-        
+
         {task.description && (
           <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{task.description}</p>
         )}
-        
+
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <span className={`text-xs px-2.5 py-1.5 rounded-full font-medium ${priorityConfig[task.priority]?.color}`}>
             {priorityConfig[task.priority]?.icon} {priorityConfig[task.priority]?.label}
           </span>
-          
+
           {task.application_id && (
-            <button 
+            <button
               className="text-xs px-2.5 py-1.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 flex items-center gap-1.5 min-h-[36px]"
               onClick={(e) => {
                 e.stopPropagation();
@@ -129,11 +167,11 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
                 }
               }}
             >
-              <LinkIcon className="w-3 h-3" /> 
+              <LinkIcon className="w-3 h-3" />
               Заявка
             </button>
           )}
-          
+
           {task.assigned_to && (
             <span className="text-xs px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 flex items-center gap-1.5">
               <User className="w-3 h-3" />
@@ -141,7 +179,7 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
             </span>
           )}
         </div>
-        
+
         <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
           {task.due_date && (
             <div className={`flex items-center gap-1.5 text-xs font-medium ${isOverdue ? 'text-rose-600' : daysUntilDue <= 2 && daysUntilDue > 0 ? 'text-amber-600' : 'text-gray-500'}`}>
@@ -149,7 +187,7 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
               <span>{getDaysText() || new Date(task.due_date).toLocaleDateString('ru-RU')}</span>
             </div>
           )}
-          
+
           {task.comments_count > 0 && (
             <div className="flex items-center gap-1 text-xs text-gray-500">
               <MessageSquare className="w-3.5 h-3.5" />
@@ -157,6 +195,51 @@ const TaskCard = ({ task, onEdit, onDelete, onOpenComments, applications, showNo
             </div>
           )}
         </div>
+
+        {/* 🆕 БЛОК БЫСТРОЙ СМЕНЫ СТАТУСА (только на мобильных) */}
+        {isMobile && canEdit && onStatusChange && (
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+            <button
+              onClick={() => {
+                setShowStatusMenu(!showStatusMenu);
+                setShowMenu(false);
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                {statusConfig[task.status]?.icon}
+                Переместить в...
+              </span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${showStatusMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showStatusMenu && (
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                {STATUS_LIST.map(status => {
+                  const isCurrent = task.status === status.id;
+                  return (
+                    <button
+                      key={status.id}
+                      disabled={isCurrent}
+                      onClick={() => {
+                        setShowStatusMenu(false);
+                        if (!isCurrent) onStatusChange(task.id, status.id);
+                      }}
+                      className={`flex items-center justify-center gap-1.5 px-2 py-2 text-xs rounded-lg font-medium transition-colors ${
+                        isCurrent
+                          ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                          : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 hover:bg-[#4A6572] hover:text-white text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      <span>{status.icon}</span>
+                      <span>{status.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -177,14 +260,14 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMobileModal, setIsMobileModal] = useState(false);
-  
+
   useEffect(() => {
     setIsMobileModal(window.innerWidth < 640);
     const handleResize = () => setIsMobileModal(window.innerWidth < 640);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  
+
   useEffect(() => {
     if (task) {
       setFormData({
@@ -208,16 +291,16 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
       });
     }
   }, [task]);
-  
+
   const handleSubmit = async () => {
     if (!formData.title.trim()) return;
     setIsSubmitting(true);
     await onSave(formData);
     setIsSubmitting(false);
   };
-  
+
   if (!isOpen) return null;
-  
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -232,7 +315,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
             </button>
           </div>
         </div>
-        
+
         <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -247,7 +330,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
               autoFocus
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Описание</label>
             <textarea
@@ -258,7 +341,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
               placeholder="Подробное описание задачи"
             />
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Приоритет</label>
@@ -272,7 +355,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
                 <option value="high">🔴 Высокий</option>
               </select>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Статус</label>
               <select
@@ -287,7 +370,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
               </select>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Срок выполнения</label>
@@ -298,7 +381,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
                 className="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Исполнитель</label>
               <select
@@ -313,7 +396,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
               </select>
             </div>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               <LinkIcon className="w-4 h-4 inline mr-1" />
@@ -333,7 +416,7 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
             </select>
           </div>
         </div>
-        
+
         <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4 rounded-b-2xl flex justify-end gap-3">
           <button
             onClick={onClose}
@@ -362,7 +445,7 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const loadComments = useCallback(async () => {
     if (!task?.id) return;
     setIsLoading(true);
@@ -372,7 +455,7 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
         .select('*')
         .eq('task_id', task.id)
         .order('created_at', { ascending: true });
-      
+
       if (error) throw error;
       setComments(data || []);
     } catch (err) {
@@ -381,14 +464,14 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
       setIsLoading(false);
     }
   }, [task?.id]);
-  
+
   useEffect(() => {
     if (isOpen) loadComments();
   }, [isOpen, loadComments]);
-  
+
   const addComment = async () => {
     if (!newComment.trim() || !task?.id) return;
-    
+
     try {
       const { data, error } = await supabase
         .from('task_comments')
@@ -401,7 +484,7 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
         }])
         .select()
         .single();
-      
+
       if (error) throw error;
       setComments([...comments, data]);
       setNewComment('');
@@ -411,9 +494,9 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
       showNotification('Ошибка добавления комментария', 'error');
     }
   };
-  
+
   if (!isOpen || !task) return null;
-  
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
@@ -429,7 +512,7 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
             <X className="w-5 h-5" />
           </button>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
           {isLoading ? (
             <div className="flex justify-center py-12">
@@ -464,7 +547,7 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
             ))
           )}
         </div>
-        
+
         <div className="p-4 sm:p-5 border-t border-gray-200 dark:border-gray-700">
           <div className="flex gap-2 sm:gap-3">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0">
@@ -501,14 +584,14 @@ const TaskCommentsModal = ({ isOpen, onClose, task, user, showNotification }) =>
 // ─────────────────────────────────────────────────────────────
 const TaskAnalytics = ({ tasks, onClose }) => {
   const [isMobileAnalytics, setIsMobileAnalytics] = useState(false);
-  
+
   useEffect(() => {
     setIsMobileAnalytics(window.innerWidth < 640);
     const handleResize = () => setIsMobileAnalytics(window.innerWidth < 640);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  
+
   const stats = useMemo(() => {
     const total = tasks.length;
     const byStatus = {
@@ -522,12 +605,12 @@ const TaskAnalytics = ({ tasks, onClose }) => {
       medium: tasks.filter(t => t.priority === 'medium').length,
       high: tasks.filter(t => t.priority === 'high').length
     };
-    const overdue = tasks.filter(t => 
+    const overdue = tasks.filter(t =>
       t.due_date && new Date(t.due_date) < new Date() && t.status !== 'received' && t.status !== 'canceled'
     ).length;
     const completionRate = total > 0 ? Math.round((byStatus.received / total) * 100) : 0;
     const withApplications = tasks.filter(t => t.application_id).length;
-    
+
     return { total, byStatus, byPriority, overdue, withApplications, completionRate };
   }, [tasks]);
 
@@ -537,7 +620,7 @@ const TaskAnalytics = ({ tasks, onClose }) => {
     received: { bg: 'bg-emerald-500', light: 'bg-emerald-100' },
     canceled: { bg: 'bg-rose-500', light: 'bg-rose-100' }
   };
-  
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
@@ -552,7 +635,7 @@ const TaskAnalytics = ({ tasks, onClose }) => {
             </button>
           </div>
         </div>
-        
+
         <div className="p-4 sm:p-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
             <div className="bg-gradient-to-br from-[#4A6572] to-[#344955] text-white p-3 sm:p-5 rounded-2xl shadow-lg">
@@ -572,7 +655,7 @@ const TaskAnalytics = ({ tasks, onClose }) => {
               <p className="text-2xl sm:text-4xl font-bold">{stats.completionRate}%</p>
             </div>
           </div>
-          
+
           <div className={`grid ${isMobileAnalytics ? 'grid-cols-1' : 'lg:grid-cols-2'} gap-4 sm:gap-6`}>
             <div className="bg-gray-50 dark:bg-gray-700/30 p-4 sm:p-5 rounded-2xl">
               <h4 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2 text-sm sm:text-base">
@@ -592,7 +675,7 @@ const TaskAnalytics = ({ tasks, onClose }) => {
                       <span className="font-semibold text-gray-900 dark:text-white">{count}</span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                      <div 
+                      <div
                         className={`h-2 rounded-full transition-all duration-500 ${statusColors[status]?.bg}`}
                         style={{ width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%` }}
                       ></div>
@@ -601,7 +684,7 @@ const TaskAnalytics = ({ tasks, onClose }) => {
                 ))}
               </div>
             </div>
-            
+
             <div className="bg-gray-50 dark:bg-gray-700/30 p-4 sm:p-5 rounded-2xl">
               <h4 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2 text-sm sm:text-base">
                 <Flag className="w-5 h-5 text-[#4A6572]" />
@@ -620,7 +703,7 @@ const TaskAnalytics = ({ tasks, onClose }) => {
                       <span className="font-semibold text-gray-900 dark:text-white">{count}</span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                      <div 
+                      <div
                         className={`h-2 rounded-full transition-all duration-500 ${priority === 'low' ? 'bg-emerald-500' : priority === 'medium' ? 'bg-amber-500' : 'bg-rose-500'}`}
                         style={{ width: `${stats.total > 0 ? (count / stats.total) * 100 : 0}%` }}
                       ></div>
@@ -630,7 +713,7 @@ const TaskAnalytics = ({ tasks, onClose }) => {
               </div>
             </div>
           </div>
-          
+
           <div className="mt-4 sm:mt-6 grid grid-cols-2 gap-3 sm:gap-4">
             <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 sm:p-4 rounded-xl">
               <p className="text-xs sm:text-sm text-indigo-700 dark:text-indigo-300 mb-1">📎 Привязано к заявкам</p>
@@ -648,7 +731,7 @@ const TaskAnalytics = ({ tasks, onClose }) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🎯 ОСНОВНОЙ КОМПОНЕНТ TASKBOARD (МОБИЛЬНАЯ ВЕРСИЯ)
+// 🎯 ОСНОВНОЙ КОМПОНЕНТ TASKBOARD
 // ─────────────────────────────────────────────────────────────
 const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRole }) => {
   const [tasks, setTasks] = useState([]);
@@ -665,25 +748,24 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
   const [companyUsers, setCompanyUsers] = useState([]);
   const [isMobileView, setIsMobileView] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  
+
   // Определяем мобильное устройство
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < 768;
       setIsMobileView(mobile);
-      if (mobile) {
-        setViewMode('list');
-      }
+      // ❌ УБРАНО: viewMode принудительно list на мобильных
+      // ✅ ТЕПЕРЬ: пользователь сам выбирает kanban/list на мобильных
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-  
+
   const canCreateTasks = userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
   const canEditTasks = userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
-  
-  // ✅ Загрузка пользователей компании - ИСПРАВЛЕНО
+
+  // ✅ Загрузка пользователей компании
   useEffect(() => {
     const loadUsers = async () => {
       const cleanId = getCleanCompanyId(userCompanyId);
@@ -697,15 +779,10 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
     };
     loadUsers();
   }, [userCompanyId]);
-  
-  const columns = [
-    { id: 'pending', title: 'Новые', color: 'gray', icon: '📋', bg: 'bg-gray-50 dark:bg-gray-800/50' },
-    { id: 'in_progress', title: 'В работе', color: 'blue', icon: '⏳', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-    { id: 'received', title: 'Выполнены', color: 'green', icon: '✅', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
-    { id: 'canceled', title: 'Отменены', color: 'red', icon: '❌', bg: 'bg-rose-50 dark:bg-rose-900/20' }
-  ];
-  
-  // ✅ Загрузка задач - ИСПРАВЛЕНО
+
+  const columns = STATUS_LIST.map(s => ({ ...s, title: s.label }));
+
+  // ✅ Загрузка задач
   const loadTasks = useCallback(async () => {
     const cleanId = getCleanCompanyId(userCompanyId);
     if (!cleanId) {
@@ -713,7 +790,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
       setIsLoading(false);
       return;
     }
-    
+
     setIsLoading(true);
     try {
       let query = supabase
@@ -721,27 +798,27 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
         .select('*')
         .eq('company_id', cleanId)
         .order('created_at', { ascending: false });
-      
+
       if (userRole === 'master' || userRole === 'foreman') {
         query = query.or(`assigned_to.eq.${user?.id},created_by.eq.${user?.id}`);
       }
-      
+
       const { data: tasksData, error: tasksError } = await query;
       if (tasksError) throw tasksError;
-      
+
       const tasksWithCounts = await Promise.all(
         (tasksData || []).map(async (task) => {
           const { count, error } = await supabase
             .from('task_comments')
             .select('*', { count: 'exact', head: true })
             .eq('task_id', task.id);
-          
+
           let assigned_name = null;
           if (task.assigned_to && companyUsers.length) {
             const assignedUser = companyUsers.find(u => u.user_id === task.assigned_to);
             assigned_name = assignedUser?.full_name;
           }
-          
+
           return {
             ...task,
             comments_count: error ? 0 : count,
@@ -749,7 +826,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
           };
         })
       );
-      
+
       setTasks(tasksWithCounts);
     } catch (err) {
       console.error('Ошибка загрузки задач:', err);
@@ -758,24 +835,24 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
       setIsLoading(false);
     }
   }, [userCompanyId, userRole, user?.id, companyUsers, showNotification]);
-  
+
   useEffect(() => {
     loadTasks();
   }, [loadTasks]);
-  
-  // ✅ Создание задачи - ИСПРАВЛЕНО
+
+  // ✅ Создание задачи
   const handleCreateTask = async (formData) => {
     if (!canCreateTasks) {
       if (showNotification) showNotification('У вас нет прав на создание задач', 'error');
       return;
     }
-    
+
     const cleanId = getCleanCompanyId(userCompanyId);
     if (!cleanId) {
       if (showNotification) showNotification('Ошибка: компания не идентифицирована', 'error');
       return;
     }
-    
+
     try {
       const taskData = {
         title: formData.title.trim(),
@@ -789,15 +866,15 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
         created_by: user?.id,
         created_at: new Date().toISOString()
       };
-      
+
       const { data, error } = await supabase
         .from('tasks')
         .insert([taskData])
         .select()
         .single();
-      
+
       if (error) throw error;
-      
+
       const newTask = { ...data, comments_count: 0, assigned_name: null };
       setTasks([newTask, ...tasks]);
       setShowModal(false);
@@ -807,13 +884,13 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
       if (showNotification) showNotification('❌ Ошибка создания задачи', 'error');
     }
   };
-  
+
   const handleUpdateTask = async (formData) => {
     if (!canEditTasks) {
       if (showNotification) showNotification('У вас нет прав на редактирование задач', 'error');
       return;
     }
-    
+
     try {
       const { error } = await supabase
         .from('tasks')
@@ -828,16 +905,16 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
           updated_at: new Date().toISOString()
         })
         .eq('id', editingTask.id);
-      
+
       if (error) throw error;
-      
+
       const assignedUser = companyUsers.find(u => u.user_id === formData.assigned_to);
-      setTasks(tasks.map(t => 
-        t.id === editingTask.id 
+      setTasks(tasks.map(t =>
+        t.id === editingTask.id
           ? { ...t, ...formData, assigned_name: assignedUser?.full_name || null }
           : t
       ));
-      
+
       setEditingTask(null);
       setShowModal(false);
       if (showNotification) showNotification('✅ Задача обновлена', 'success');
@@ -846,23 +923,23 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
       if (showNotification) showNotification('❌ Ошибка обновления задачи', 'error');
     }
   };
-  
+
   const handleDeleteTask = async (taskId) => {
     if (!canEditTasks) {
       if (showNotification) showNotification('У вас нет прав на удаление задач', 'error');
       return;
     }
-    
+
     if (!window.confirm('Вы уверены, что хотите удалить эту задачу?')) return;
-    
+
     try {
       const { error } = await supabase
         .from('tasks')
         .delete()
         .eq('id', taskId);
-      
+
       if (error) throw error;
-      
+
       setTasks(tasks.filter(t => t.id !== taskId));
       if (showNotification) showNotification('🗑️ Задача удалена', 'success');
     } catch (err) {
@@ -870,31 +947,49 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
       if (showNotification) showNotification('❌ Ошибка удаления задачи', 'error');
     }
   };
-  
+
   const handleDragOver = (e) => e.preventDefault();
-  
+
   const handleDrop = async (e, newStatus) => {
     if (!canEditTasks) return;
     e.preventDefault();
     const taskId = e.dataTransfer.getData('taskId');
     if (taskId) {
-      try {
-        const { error } = await supabase
-          .from('tasks')
-          .update({ status: newStatus, updated_at: new Date().toISOString() })
-          .eq('id', taskId);
-        
-        if (error) throw error;
-        
-        setTasks(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-        if (showNotification) showNotification('Статус обновлён', 'success');
-      } catch (err) {
-        console.error('Ошибка обновления статуса:', err);
-        if (showNotification) showNotification('❌ Ошибка обновления статуса', 'error');
-      }
+      await handleStatusChange(taskId, newStatus);
     }
   };
-  
+
+  // 🆕 УНИВЕРСАЛЬНАЯ ФУНКЦИЯ СМЕНЫ СТАТУСА (используется и в drag-drop, и в меню)
+  const handleStatusChange = async (taskId, newStatus) => {
+    if (!canEditTasks) {
+      if (showNotification) showNotification('У вас нет прав на изменение статуса', 'error');
+      return;
+    }
+
+    const oldTask = tasks.find(t => t.id === taskId);
+    if (!oldTask) return;
+
+    // Оптимистичное обновление
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      const statusLabel = STATUS_LIST.find(s => s.id === newStatus)?.label || newStatus;
+      if (showNotification) showNotification(`✅ Задача перемещена в "${statusLabel}"`, 'success');
+    } catch (err) {
+      console.error('Ошибка обновления статуса:', err);
+      // Откат
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: oldTask.status } : t));
+      if (showNotification) showNotification('❌ Ошибка обновления статуса', 'error');
+    }
+  };
+
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
       const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -904,14 +999,14 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
       return matchesSearch && matchesPriority && matchesStatus;
     });
   }, [tasks, searchTerm, priorityFilter, statusFilter]);
-  
+
   const stats = useMemo(() => ({
     total: tasks.length,
     completed: tasks.filter(t => t.status === 'received').length,
     inProgress: tasks.filter(t => t.status === 'in_progress').length,
     overdue: tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'received' && t.status !== 'canceled').length
   }), [tasks]);
-  
+
   // Очистка фильтров
   const clearFilters = () => {
     setSearchTerm('');
@@ -919,10 +1014,10 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
     setStatusFilter('all');
     setShowFilters(false);
   };
-  
+
   // Количество активных фильтров
   const activeFiltersCount = (searchTerm ? 1 : 0) + (priorityFilter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0);
-  
+
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 page-enter">
       {/* Шапка - адаптивная */}
@@ -940,7 +1035,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-1 sm:gap-2">
               {/* Статистика - компактная на мобильных */}
               <div className="hidden md:flex items-center gap-2 text-xs">
@@ -953,8 +1048,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
                   </div>
                 )}
               </div>
-              
-              {/* Кнопки действий */}
+
               <button
                 onClick={() => setShowAnalytics(true)}
                 className="p-2 bg-white dark:bg-gray-800 text-gray-700 rounded-xl border"
@@ -962,23 +1056,27 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
               >
                 <BarChart3 className="w-5 h-5" />
               </button>
-              
-              {!isMobileView && (
-                <button
-                  onClick={() => setViewMode(viewMode === 'kanban' ? 'list' : 'kanban')}
-                  className="p-2 bg-white dark:bg-gray-800 text-gray-700 rounded-xl border"
-                >
-                  {viewMode === 'kanban' ? <List className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
-                </button>
-              )}
-              
+
+              {/* ✅ КНОПКА ПЕРЕКЛЮЧЕНИЯ ВИДА — ТЕПЕРЬ ДОСТУПНА И НА МОБИЛЬНЫХ */}
+              <button
+                onClick={() => setViewMode(viewMode === 'kanban' ? 'list' : 'kanban')}
+                className={`p-2 rounded-xl border transition-colors ${
+                  viewMode === 'kanban'
+                    ? 'bg-[#4A6572] text-white border-[#4A6572]'
+                    : 'bg-white dark:bg-gray-800 text-gray-700'
+                }`}
+                title={viewMode === 'kanban' ? 'Показать списком' : 'Показать доской'}
+              >
+                {viewMode === 'kanban' ? <List className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
+              </button>
+
               <button
                 onClick={loadTasks}
                 className="p-2 bg-white dark:bg-gray-800 text-gray-700 rounded-xl border"
               >
                 <RefreshCw className="w-5 h-5" />
               </button>
-              
+
               {canCreateTasks && (
                 <button
                   onClick={() => { setEditingTask(null); setShowModal(true); }}
@@ -990,7 +1088,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
               )}
             </div>
           </div>
-          
+
           {/* Мобильная статистика */}
           {isMobileView && (
             <div className="flex gap-2 text-xs">
@@ -1010,7 +1108,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
               )}
             </div>
           )}
-          
+
           {/* Фильтры - кнопка показать/скрыть на мобильных */}
           <div className="flex items-center gap-2">
             <button
@@ -1025,7 +1123,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
                 </span>
               )}
             </button>
-            
+
             {activeFiltersCount > 0 && (
               <button
                 onClick={clearFilters}
@@ -1036,8 +1134,8 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
               </button>
             )}
           </div>
-          
-          {/* Панель фильтров - показывается при showFilters */}
+
+          {/* Панель фильтров */}
           {(showFilters || !isMobileView) && (
             <div className="flex flex-wrap items-center gap-2 mt-2">
               <div className="relative flex-1 min-w-[180px]">
@@ -1050,7 +1148,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
                   className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700"
                 />
               </div>
-              
+
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
@@ -1061,7 +1159,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
                 <option value="medium">🟡 Средний</option>
                 <option value="low">🟢 Низкий</option>
               </select>
-              
+
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -1077,7 +1175,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
           )}
         </div>
       </div>
-      
+
       {/* Контент */}
       {isLoading ? (
         <div className="flex justify-center py-20">
@@ -1097,47 +1195,95 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
             </button>
           )}
         </div>
-      ) : viewMode === 'kanban' && !isMobileView ? (
-        // Канбан-вид только на десктопе
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-          {columns.map(col => (
-            <div
-              key={col.id}
-              className={`rounded-xl p-3 sm:p-4 ${col.bg} min-h-[450px] transition-all`}
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, col.id)}
-            >
-              <div className="flex items-center justify-between mb-4 pb-2 border-b">
-                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 text-sm sm:text-base">
-                  <span>{col.icon}</span>
-                  {col.title}
-                </h3>
-                <span className="text-xs bg-white dark:bg-gray-700 px-2 py-1 rounded-full">
-                  {filteredTasks.filter(t => t.status === col.id).length}
-                </span>
+      ) : viewMode === 'kanban' ? (
+        // ✅ КАНБАН — ДОСТУПЕН И НА МОБИЛЬНЫХ
+        isMobileView ? (
+          // 📱 Мобильная версия — горизонтальный скролл колонок
+          <div className="-mx-3 px-3 flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory">
+            {columns.map(col => {
+              const colTasks = filteredTasks.filter(t => t.status === col.id);
+              return (
+                <div
+                  key={col.id}
+                  className={`flex-shrink-0 w-[85vw] max-w-[340px] snap-center rounded-xl p-3 ${col.bg} min-h-[400px]`}
+                >
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b">
+                    <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
+                      <span>{col.icon}</span>
+                      {col.title}
+                    </h3>
+                    <span className="text-xs bg-white dark:bg-gray-700 px-2 py-1 rounded-full">
+                      {colTasks.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {colTasks.length === 0 ? (
+                      <p className="text-xs text-gray-400 text-center py-8">Нет задач</p>
+                    ) : (
+                      colTasks.map(task => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          onEdit={(task) => { setEditingTask(task); setShowModal(true); }}
+                          onDelete={handleDeleteTask}
+                          onOpenComments={(task) => { setSelectedTaskForComments(task); setShowCommentsModal(true); }}
+                          onStatusChange={handleStatusChange}
+                          applications={applications}
+                          showNotification={showNotification}
+                          userRole={userRole}
+                          isMobile={true}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          // 💻 Десктоп — сетка 4 колонки
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+            {columns.map(col => (
+              <div
+                key={col.id}
+                className={`rounded-xl p-3 sm:p-4 ${col.bg} min-h-[450px] transition-all`}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, col.id)}
+              >
+                <div className="flex items-center justify-between mb-4 pb-2 border-b">
+                  <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 text-sm sm:text-base">
+                    <span>{col.icon}</span>
+                    {col.title}
+                  </h3>
+                  <span className="text-xs bg-white dark:bg-gray-700 px-2 py-1 rounded-full">
+                    {filteredTasks.filter(t => t.status === col.id).length}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {filteredTasks
+                    .filter(t => t.status === col.id)
+                    .map(task => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        onEdit={(task) => { setEditingTask(task); setShowModal(true); }}
+                        onDelete={handleDeleteTask}
+                        onOpenComments={(task) => { setSelectedTaskForComments(task); setShowCommentsModal(true); }}
+                        onStatusChange={handleStatusChange}
+                        applications={applications}
+                        showNotification={showNotification}
+                        userRole={userRole}
+                        isMobile={false}
+                      />
+                    ))}
+                </div>
               </div>
-              
-              <div className="space-y-2">
-                {filteredTasks
-                  .filter(t => t.status === col.id)
-                  .map(task => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      onEdit={(task) => { setEditingTask(task); setShowModal(true); }}
-                      onDelete={handleDeleteTask}
-                      onOpenComments={(task) => { setSelectedTaskForComments(task); setShowCommentsModal(true); }}
-                      applications={applications}
-                      showNotification={showNotification}
-                      userRole={userRole}
-                    />
-                  ))}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )
       ) : (
-        // Список (основной вид на мобильных)
+        // Список
         <div className="space-y-2">
           {filteredTasks.map(task => (
             <TaskCard
@@ -1146,14 +1292,16 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
               onEdit={(task) => { setEditingTask(task); setShowModal(true); }}
               onDelete={handleDeleteTask}
               onOpenComments={(task) => { setSelectedTaskForComments(task); setShowCommentsModal(true); }}
+              onStatusChange={handleStatusChange}
               applications={applications}
               showNotification={showNotification}
               userRole={userRole}
+              isMobile={isMobileView}
             />
           ))}
         </div>
       )}
-      
+
       <TaskModal
         isOpen={showModal}
         onClose={() => { setShowModal(false); setEditingTask(null); }}
@@ -1162,7 +1310,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
         applications={applications}
         companyUsers={companyUsers}
       />
-      
+
       <TaskCommentsModal
         isOpen={showCommentsModal}
         onClose={() => { setShowCommentsModal(false); setSelectedTaskForComments(null); loadTasks(); }}
@@ -1170,7 +1318,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
         user={user}
         showNotification={showNotification}
       />
-      
+
       {showAnalytics && <TaskAnalytics tasks={tasks} onClose={() => setShowAnalytics(false)} />}
     </div>
   );
