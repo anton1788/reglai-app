@@ -3,9 +3,13 @@
 import { supabase } from './supabaseClient';
 
 // ============================================================
-// 📦 КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ
-// 💰 Средняя рыночная цена: ~9000 ₽/мес
-// 🎯 Наше позиционирование: на 30-40% ниже рынка
+// 📦 КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ (ОПТИМИЗИРОВАННАЯ)
+// 💰 Новая сетка (2026):
+//    basic      - 0 ₽       (1 польз., 50 запросов/мес)
+//    micro      - 490 ₽     (5 польз., 1 000 запросов/мес)
+//    pro        - 3 990 ₽   (50 польз., 15 000 запросов/мес)
+//    business   - 7 490 ₽   (200 польз., 60 000 запросов/мес)
+//    enterprise - 13 990 ₽  (1000+ польз., 200 000+ запросов/мес)
 // ============================================================
 
 export const TARIFF_PLANS = {
@@ -14,14 +18,14 @@ export const TARIFF_PLANS = {
     name: 'Базовый',
     monthlyPrice: 0,
     annualPrice: 0,
-    apiQuotaMonthly: 200,
-    apiQuotaDaily: 20,
+    apiQuotaMonthly: 50,
+    apiQuotaDaily: 10,
     maxApiKeys: 1,
-    maxUsers: 2,
+    maxUsers: 1,
     features: {
-      warehouse: true,
+      warehouse: false,
       analytics: false,
-      api: true,
+      api: false,
       webhooks: false,
       support: 'email',
       priority: false,
@@ -31,15 +35,15 @@ export const TARIFF_PLANS = {
     popular: false,
     color: '#4A6572'
   },
-  starter: {
-    id: 'starter',
-    name: 'Старт',
-    monthlyPrice: 1490,
-    annualPrice: 14900,
-    apiQuotaMonthly: 2500,
-    apiQuotaDaily: 250,
-    maxApiKeys: 3,
-    maxUsers: 10,
+  micro: {
+    id: 'micro',
+    name: 'Микро',
+    monthlyPrice: 490,
+    annualPrice: 4900,
+    apiQuotaMonthly: 1000,
+    apiQuotaDaily: 100,
+    maxApiKeys: 2,
+    maxUsers: 5,
     features: {
       warehouse: true,
       analytics: true,
@@ -58,7 +62,7 @@ export const TARIFF_PLANS = {
     name: 'Профессиональный',
     monthlyPrice: 3990,
     annualPrice: 39900,
-    apiQuotaMonthly: 10000,
+    apiQuotaMonthly: 15000,
     apiQuotaDaily: 1000,
     maxApiKeys: 10,
     maxUsers: 50,
@@ -80,7 +84,7 @@ export const TARIFF_PLANS = {
     name: 'Бизнес',
     monthlyPrice: 7490,
     annualPrice: 74900,
-    apiQuotaMonthly: 50000,
+    apiQuotaMonthly: 60000,
     apiQuotaDaily: 5000,
     maxApiKeys: 25,
     maxUsers: 200,
@@ -128,17 +132,17 @@ export const TARIFF_PLANS = {
 export const COMPETITORS = {
   bitrix24: {
     name: 'Bitrix24',
-    basic: 1990,        // 5 пользователей
-    standard: 5990,     // 50 пользователей
-    professional: 11990 // 100 пользователей
+    basic: 1990,
+    standard: 5990,
+    professional: 11990
   },
   oneC: {
     name: '1С:ERP Строительство',
-    perUser: 4526       // ₽/мес за пользователя
+    perUser: 4526
   },
   industry: {
     name: 'Отраслевые решения',
-    perOfficeUser: 1490 // ₽/мес за офисного пользователя
+    perOfficeUser: 1490
   }
 };
 
@@ -239,10 +243,10 @@ export const comparePlans = (planIds) => {
 export const recommendPlan = (stats) => {
   const { users, applications } = stats;
 
-  if (users <= 2 && applications <= 200) return 'basic';
-  if (users <= 10 && applications <= 2500) return 'starter';
-  if (users <= 50 && applications <= 10000) return 'pro';
-  if (users <= 200 && applications <= 50000) return 'business';
+  if (users <= 1 && applications <= 50) return 'basic';
+  if (users <= 5 && applications <= 1000) return 'micro';
+  if (users <= 50 && applications <= 15000) return 'pro';
+  if (users <= 200 && applications <= 60000) return 'business';
   return 'enterprise';
 };
 
@@ -513,7 +517,7 @@ export const findPlanById = (planId) => {
 // ============================================================
 
 export const getNextTier = (currentPlanId) => {
-  const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
+  const tiers = ['basic', 'micro', 'pro', 'business', 'enterprise'];
   const currentIndex = tiers.indexOf(currentPlanId);
 
   if (currentIndex === -1 || currentIndex === tiers.length - 1) {
@@ -531,7 +535,7 @@ export const getNextTier = (currentPlanId) => {
 // ============================================================
 
 export const getPreviousTier = (currentPlanId) => {
-  const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
+  const tiers = ['basic', 'micro', 'pro', 'business', 'enterprise'];
   const currentIndex = tiers.indexOf(currentPlanId);
 
   if (currentIndex <= 0) {
@@ -549,7 +553,7 @@ export const getPreviousTier = (currentPlanId) => {
 // ============================================================
 
 export const getTariffUpgradeBenefits = (currentPlanId) => {
-  const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
+  const tiers = ['basic', 'micro', 'pro', 'business', 'enterprise'];
   const currentIndex = tiers.indexOf(currentPlanId);
 
   if (currentIndex === -1 || currentIndex === tiers.length - 1) {
@@ -664,15 +668,12 @@ export const calculateClientSavings = (planId, usersCount = 10) => {
   const plan = TARIFF_PLANS[planId];
   if (!plan) return null;
 
-  // Сравнение с Bitrix24 (ближайший тариф по кол-ву пользователей)
   const bitrixPrice = usersCount <= 5 ? COMPETITORS.bitrix24.basic
     : usersCount <= 50 ? COMPETITORS.bitrix24.standard
     : COMPETITORS.bitrix24.professional;
 
-  // Сравнение с 1С (по пользователям)
   const oneCPrice = COMPETITORS.oneC.perUser * usersCount;
 
-  // Сравнение с отраслевыми (только офисные ~30% от всех)
   const officeUsers = Math.ceil(usersCount * 0.3);
   const industryPrice = COMPETITORS.industry.perOfficeUser * officeUsers;
 
@@ -745,5 +746,53 @@ export const getOurPosition = (planId, usersCount = 10) => {
     savingsPercent: Math.round(((market.average - ourPrice) / market.average) * 100)
   };
 };
+
+// ============================================================
+// 🎁 АДДОНЫ (дополнительные опции к любому тарифу)
+// ============================================================
+
+export const ADDONS = {
+  extraUsers5: {
+    id: 'extraUsers5',
+    name: '+5 пользователей',
+    monthlyPrice: 990,
+    description: 'Дополнительные 5 пользователей к вашему тарифу'
+  },
+  extraUsers20: {
+    id: 'extraUsers20',
+    name: '+20 пользователей',
+    monthlyPrice: 2990,
+    description: 'Дополнительные 20 пользователей к вашему тарифу'
+  },
+  extraApi10k: {
+    id: 'extraApi10k',
+    name: '+10 000 API-запросов',
+    monthlyPrice: 490,
+    description: 'Дополнительные 10 000 запросов в месяц'
+  },
+  extraApi50k: {
+    id: 'extraApi50k',
+    name: '+50 000 API-запросов',
+    monthlyPrice: 1990,
+    description: 'Дополнительные 50 000 запросов в месяц'
+  },
+  customIntegration: {
+    id: 'customIntegration',
+    name: 'Кастомная интеграция',
+    monthlyPrice: 0,
+    oneTimePrice: 15000,
+    description: 'Разработка индивидуальной интеграции под ваши задачи'
+  },
+  prioritySupport: {
+    id: 'prioritySupport',
+    name: 'Приоритетная поддержка 24/7',
+    monthlyPrice: 2000,
+    description: 'SLA 1 час, персональный менеджер'
+  }
+};
+
+export const getAllAddons = () => Object.values(ADDONS);
+
+export const findAddonById = (addonId) => ADDONS[addonId] || null;
 
 export default TARIFF_PLANS;

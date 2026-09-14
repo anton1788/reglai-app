@@ -1,3 +1,5 @@
+// src/components/TariffSelector.jsx
+
 import React, { useState } from 'react';
 import {
   Calendar, Clock, Gift, Zap, CheckCircle, Check, X, Sparkles,
@@ -103,7 +105,7 @@ const TariffSelector = ({
   const getPlanDisplayName = (planId) => {
     const names = {
       basic: 'Базовый',
-      starter: 'Старт',
+      micro: 'Микро',
       pro: 'Профессиональный',
       business: 'Бизнес',
       enterprise: 'Корпоративный'
@@ -114,7 +116,7 @@ const TariffSelector = ({
   const getPlanIcon = (planId) => {
     const icons = {
       basic: '🆓',
-      starter: '🚀',
+      micro: '🚀',
       pro: '💼',
       business: '🏢',
       enterprise: '👑'
@@ -123,7 +125,7 @@ const TariffSelector = ({
   };
 
   const getPlanLevel = (planId) => {
-    const levels = ['basic', 'starter', 'pro', 'business', 'enterprise'];
+    const levels = ['basic', 'micro', 'pro', 'business', 'enterprise'];
     return levels.indexOf(planId) + 1;
   };
 
@@ -163,7 +165,6 @@ const TariffSelector = ({
                   </span>
                 );
               })()}
-              {/* 🆕 Показываем скидку от промокода */}
               {promoCodeInfo && promoCodeInfo.discount_percent > 0 && (
                 <span className="px-2 py-0.5 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white text-xs font-bold rounded-full">
                   🎁 -{promoCodeInfo.discount_percent}%
@@ -393,7 +394,6 @@ const TariffSelector = ({
           const isFree = plan.monthlyPrice === 0;
           const isNext = getNextTier(currentPlan)?.id === planId;
 
-          // 🆕 Проверяем, есть ли скидка по промокоду для этого тарифа
           const hasDiscount = promoCodeInfo &&
                              promoCodeInfo.plan === planId &&
                              promoCodeInfo.discount_percent > 0;
@@ -440,7 +440,7 @@ const TariffSelector = ({
                 </div>
               )}
 
-              {/* 🆕 Badge скидки от промокода */}
+              {/* Badge скидки от промокода */}
               {hasDiscount && !isCurrent && (
                 <div className="absolute -top-4 right-4 px-3 py-1 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white text-xs font-bold rounded-full shadow-lg">
                   🎁 -{promoCodeInfo.discount_percent}%
