@@ -6,7 +6,7 @@ import {
   BarChart3, Search, TrendingUp, ArrowUpRight, Filter, X, Send,
   Flag, Paperclip, LayoutGrid, List, Eye, EyeOff, Settings,
   RefreshCw, Zap, Award, Target, Briefcase, Users, Loader2, Activity,
-  Menu, Home, ChevronDown
+  Menu, Home, ChevronDown, Users2
 } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 
@@ -50,6 +50,9 @@ const TaskCard = ({
   const canEdit = userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
   const canDelete = userRole === 'manager' || userRole === 'director';
 
+  // 🆕 Может ли текущий пользователь сменить статус (для мастера — на своих задачах)
+  const canChangeStatus = canEdit || userRole === 'master' || userRole === 'foreman';
+
   const priorityConfig = {
     low:    { color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300', border: 'border-l-emerald-500', label: 'Низкий',  icon: '🟢' },
     medium: { color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',         border: 'border-l-amber-500',   label: 'Средний', icon: '🟡' },
@@ -57,14 +60,17 @@ const TaskCard = ({
   };
 
   const statusConfig = {
-    pending:     { bg: 'bg-gray-50 dark:bg-gray-800/50',      border: 'border-l-4 border-gray-400',    icon: '📋', label: 'Новая' },
-    in_progress: { bg: 'bg-blue-50 dark:bg-blue-900/20',      border: 'border-l-4 border-blue-500',    icon: '⏳', label: 'В работе' },
-    received:    { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-l-4 border-emerald-500', icon: '✅', label: 'Выполнена' },
-    canceled:    { bg: 'bg-rose-50 dark:bg-rose-900/20',      border: 'border-l-4 border-rose-500',    icon: '❌', label: 'Отменена' }
+    pending:     { bg: 'bg-gray-50 dark:bg-gray-800/50',       border: 'border-l-4 border-gray-400',     icon: '📋', label: 'Новая' },
+    in_progress: { bg: 'bg-blue-50 dark:bg-blue-900/20',       border: 'border-l-4 border-blue-500',     icon: '⏳', label: 'В работе' },
+    received:    { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-l-4 border-emerald-500',  icon: '✅', label: 'Выполнена' },
+    canceled:    { bg: 'bg-rose-50 dark:bg-rose-900/20',       border: 'border-l-4 border-rose-500',     icon: '❌', label: 'Отменена' }
   };
 
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'received' && task.status !== 'canceled';
   const daysUntilDue = task.due_date ? Math.ceil((new Date(task.due_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+
+  // 🆕 Задача без исполнителя — «общая»
+  const isUnassigned = !task.assigned_to;
 
   const getDaysText = () => {
     if (!daysUntilDue && daysUntilDue !== 0) return null;
@@ -112,7 +118,6 @@ const TaskCard = ({
 
               {showMenu && (
                 <>
-                  {/* Оверлей для закрытия меню по тапу вне */}
                   <div
                     className="fixed inset-0 z-30"
                     onClick={closeAllMenus}
@@ -172,6 +177,14 @@ const TaskCard = ({
             </button>
           )}
 
+          {/* 🆕 Индикатор "Общая задача" — если нет исполнителя */}
+          {isUnassigned && (
+            <span className="text-xs px-2.5 py-1.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 flex items-center gap-1.5">
+              <Users2 className="w-3 h-3" />
+              Общая
+            </span>
+          )}
+
           {task.assigned_to && (
             <span className="text-xs px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 flex items-center gap-1.5">
               <User className="w-3 h-3" />
@@ -196,8 +209,8 @@ const TaskCard = ({
           )}
         </div>
 
-        {/* 🆕 БЛОК БЫСТРОЙ СМЕНЫ СТАТУСА (только на мобильных) */}
-        {isMobile && canEdit && onStatusChange && (
+        {/* БЛОК БЫСТРОЙ СМЕНЫ СТАТУСА (только на мобильных) */}
+        {isMobile && canChangeStatus && onStatusChange && (
           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
             <button
               onClick={() => {
@@ -248,7 +261,7 @@ const TaskCard = ({
 // ─────────────────────────────────────────────────────────────
 // 🎨 МОДАЛЬНОЕ ОКНО (АДАПТИВНОЕ)
 // ─────────────────────────────────────────────────────────────
-const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }) => {
+const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers, showNotification }) => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -293,7 +306,24 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
   }, [task]);
 
   const handleSubmit = async () => {
-    if (!formData.title.trim()) return;
+    if (!formData.title.trim()) {
+      if (showNotification) showNotification('Введите название задачи', 'error');
+      return;
+    }
+
+    // 🆕 ВАЛИДАЦИЯ: без исполнителя задача будет видна только «общим» списком
+    // Разрешаем создавать, но предупреждаем
+    if (!formData.assigned_to) {
+      const confirmed = window.confirm(
+        '⚠️ Задача создаётся без исполнителя.\n\n' +
+        'Её увидят:\n' +
+        '• Руководители и снабженцы\n' +
+        '• Мастера в разделе «Общие задачи»\n\n' +
+        'Продолжить?'
+      );
+      if (!confirmed) return;
+    }
+
     setIsSubmitting(true);
     await onSave(formData);
     setIsSubmitting(false);
@@ -383,15 +413,23 @@ const TaskModal = ({ isOpen, onClose, onSave, task, applications, companyUsers }
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Исполнитель</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Исполнитель
+                {/* 🆕 Подсказка, что пустое поле = общая задача */}
+                <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
+                  (пусто = общая)
+                </span>
+              </label>
               <select
                 value={formData.assigned_to}
                 onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
                 className="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
-                <option value="">-- Не назначен --</option>
+                <option value="">-- Общая задача (видят все) --</option>
                 {companyUsers?.map(user => (
-                  <option key={user.user_id} value={user.user_id}>{user.full_name} ({user.role})</option>
+                  <option key={user.user_id} value={user.user_id}>
+                    {user.full_name} ({user.role})
+                  </option>
                 ))}
               </select>
             </div>
@@ -610,8 +648,10 @@ const TaskAnalytics = ({ tasks, onClose }) => {
     ).length;
     const completionRate = total > 0 ? Math.round((byStatus.received / total) * 100) : 0;
     const withApplications = tasks.filter(t => t.application_id).length;
+    // 🆕 Общие задачи
+    const unassigned = tasks.filter(t => !t.assigned_to).length;
 
-    return { total, byStatus, byPriority, overdue, withApplications, completionRate };
+    return { total, byStatus, byPriority, overdue, withApplications, completionRate, unassigned };
   }, [tasks]);
 
   const statusColors = {
@@ -714,14 +754,19 @@ const TaskAnalytics = ({ tasks, onClose }) => {
             </div>
           </div>
 
-          <div className="mt-4 sm:mt-6 grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="mt-4 sm:mt-6 grid grid-cols-3 gap-3 sm:gap-4">
             <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 sm:p-4 rounded-xl">
-              <p className="text-xs sm:text-sm text-indigo-700 dark:text-indigo-300 mb-1">📎 Привязано к заявкам</p>
+              <p className="text-xs sm:text-sm text-indigo-700 dark:text-indigo-300 mb-1">📎 К заявкам</p>
               <p className="text-xl sm:text-2xl font-bold text-indigo-800 dark:text-indigo-200">{stats.withApplications}</p>
             </div>
             <div className="bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 rounded-xl">
-              <p className="text-xs sm:text-sm text-blue-700 dark:text-blue-300 mb-1">👥 Активных задач</p>
+              <p className="text-xs sm:text-sm text-blue-700 dark:text-blue-300 mb-1">👥 Активных</p>
               <p className="text-xl sm:text-2xl font-bold text-blue-800 dark:text-blue-200">{stats.total - stats.byStatus.received - stats.byStatus.canceled}</p>
+            </div>
+            {/* 🆕 Общие задачи */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 p-3 sm:p-4 rounded-xl">
+              <p className="text-xs sm:text-sm text-amber-700 dark:text-amber-300 mb-1">🌐 Общих</p>
+              <p className="text-xl sm:text-2xl font-bold text-amber-800 dark:text-amber-200">{stats.unassigned}</p>
             </div>
           </div>
         </div>
@@ -754,8 +799,6 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
     const checkMobile = () => {
       const mobile = window.innerWidth < 768;
       setIsMobileView(mobile);
-      // ❌ УБРАНО: viewMode принудительно list на мобильных
-      // ✅ ТЕПЕРЬ: пользователь сам выбирает kanban/list на мобильных
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
@@ -783,6 +826,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
   const columns = STATUS_LIST.map(s => ({ ...s, title: s.label }));
 
   // ✅ Загрузка задач
+  // 🔥 ГЛАВНОЕ ИЗМЕНЕНИЕ: мастера видят свои + общие (без assigned_to)
   const loadTasks = useCallback(async () => {
     const cleanId = getCleanCompanyId(userCompanyId);
     if (!cleanId) {
@@ -799,8 +843,11 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
         .eq('company_id', cleanId)
         .order('created_at', { ascending: false });
 
+      // 🔥 Мастер и прораб видят: свои + общие (без исполнителя)
       if (userRole === 'master' || userRole === 'foreman') {
-        query = query.or(`assigned_to.eq.${user?.id},created_by.eq.${user?.id}`);
+        query = query.or(
+          `assigned_to.eq.${user?.id},created_by.eq.${user?.id},assigned_to.is.null`
+        );
       }
 
       const { data: tasksData, error: tasksError } = await query;
@@ -875,7 +922,12 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
 
       if (error) throw error;
 
-      const newTask = { ...data, comments_count: 0, assigned_name: null };
+      const assignedUser = companyUsers.find(u => u.user_id === formData.assigned_to);
+      const newTask = {
+        ...data,
+        comments_count: 0,
+        assigned_name: assignedUser?.full_name || null
+      };
       setTasks([newTask, ...tasks]);
       setShowModal(false);
       if (showNotification) showNotification('✅ Задача создана', 'success');
@@ -959,15 +1011,26 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
     }
   };
 
-  // 🆕 УНИВЕРСАЛЬНАЯ ФУНКЦИЯ СМЕНЫ СТАТУСА (используется и в drag-drop, и в меню)
+  // 🆕 Смена статуса — разрешена и мастерам (для своих задач)
   const handleStatusChange = async (taskId, newStatus) => {
-    if (!canEditTasks) {
+    const isMaster = userRole === 'master' || userRole === 'foreman';
+    if (!canEditTasks && !isMaster) {
       if (showNotification) showNotification('У вас нет прав на изменение статуса', 'error');
       return;
     }
 
     const oldTask = tasks.find(t => t.id === taskId);
     if (!oldTask) return;
+
+    // 🆕 Мастер может менять статус только своих или общих задач
+    if (isMaster) {
+      const isOwn = oldTask.assigned_to === user?.id || oldTask.created_by === user?.id;
+      const isShared = !oldTask.assigned_to;
+      if (!isOwn && !isShared) {
+        if (showNotification) showNotification('Вы можете менять только свои задачи', 'error');
+        return;
+      }
+    }
 
     // Оптимистичное обновление
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
@@ -1037,7 +1100,6 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
             </div>
 
             <div className="flex items-center gap-1 sm:gap-2">
-              {/* Статистика - компактная на мобильных */}
               <div className="hidden md:flex items-center gap-2 text-xs">
                 <div className="px-2 py-1 bg-gray-100 rounded-full">
                   Всего: {stats.total}
@@ -1057,7 +1119,6 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
                 <BarChart3 className="w-5 h-5" />
               </button>
 
-              {/* ✅ КНОПКА ПЕРЕКЛЮЧЕНИЯ ВИДА — ТЕПЕРЬ ДОСТУПНА И НА МОБИЛЬНЫХ */}
               <button
                 onClick={() => setViewMode(viewMode === 'kanban' ? 'list' : 'kanban')}
                 className={`p-2 rounded-xl border transition-colors ${
@@ -1109,7 +1170,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
             </div>
           )}
 
-          {/* Фильтры - кнопка показать/скрыть на мобильных */}
+          {/* Фильтры */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowFilters(!showFilters)}
@@ -1196,9 +1257,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
           )}
         </div>
       ) : viewMode === 'kanban' ? (
-        // ✅ КАНБАН — ДОСТУПЕН И НА МОБИЛЬНЫХ
         isMobileView ? (
-          // 📱 Мобильная версия — горизонтальный скролл колонок
           <div className="-mx-3 px-3 flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory">
             {columns.map(col => {
               const colTasks = filteredTasks.filter(t => t.status === col.id);
@@ -1241,7 +1300,6 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
             })}
           </div>
         ) : (
-          // 💻 Десктоп — сетка 4 колонки
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
             {columns.map(col => (
               <div
@@ -1283,7 +1341,6 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
           </div>
         )
       ) : (
-        // Список
         <div className="space-y-2">
           {filteredTasks.map(task => (
             <TaskCard
@@ -1309,6 +1366,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
         task={editingTask}
         applications={applications}
         companyUsers={companyUsers}
+        showNotification={showNotification}
       />
 
       <TaskCommentsModal
