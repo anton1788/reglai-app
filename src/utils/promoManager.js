@@ -3,29 +3,8 @@
 // ============================================================
 // 📦 КОНФИГУРАЦИЯ ПРОМОКОДОВ
 // ============================================================
-//
-// 💰 Новая сетка тарифов (2026):
-//    basic      - 0 ₽
-//    micro      - 490 ₽
-//    pro        - 3 990 ₽
-//    business   - 7 490 ₽
-//    enterprise - 13 990 ₽
-//
-// 📝 Поля промокода:
-//    planId           - какой тариф активируется
-//    discountPercent  - скидка 0-100 (100 = бесплатно)
-//    durationDays     - срок действия в днях (для платных)
-//    durationMonths   - срок действия в месяцах (приоритетнее durationDays)
-//    expiresAt        - до какой даты промокод можно АКТИВИРОВАТЬ
-//    maxUses          - макс. число активаций
-//    usedBy           - массив companyId, уже активировавших
-//    isActive         - вкл/выкл
-// ============================================================
 
 export const PROMO_CONFIG = {
-  // ============================================================
-  // 🎁 ОСНОВНЫЕ ПРОМОКОДЫ
-  // ============================================================
   'FREE3M': {
     planId: 'pro',
     discountPercent: 100,
@@ -110,10 +89,6 @@ export const PROMO_CONFIG = {
     createdBy: 'admin@reglai.ru',
     createdAt: '2026-06-28'
   },
-
-  // ============================================================
-  // 🆕 ПРОМОКОДЫ ПОД НОВУЮ СЕТКУ (включая "Микро")
-  // ============================================================
   'MICRO50': {
     planId: 'micro',
     discountPercent: 50,
@@ -145,7 +120,7 @@ export const PROMO_CONFIG = {
     expiresAt: '2027-06-28T23:59:59Z',
     maxUses: 50,
     usedBy: [],
-    description: 'Скидка 25% на 6 месяцев для растущих компаний (Бизнес)',
+    description: 'Скидка 25% на 6 месяцев (Бизнес)',
     isActive: true,
     createdBy: 'admin@reglai.ru',
     createdAt: '2026-09-13'
@@ -181,17 +156,19 @@ export const PROMO_CONFIG = {
 // ============================================================
 
 /**
- * Вычисляет дату окончания промокода на основе durationDays/durationMonths
+ * ✅ ИСПРАВЛЕНО: считаем expiresAt корректно
  */
 const calculateExpiresAt = (promo) => {
-  const expiresAt = new Date();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime());
 
-  if (promo.durationMonths) {
+  if (promo.durationMonths && promo.durationMonths > 0) {
     expiresAt.setMonth(expiresAt.getMonth() + promo.durationMonths);
-  } else if (promo.durationDays) {
+  } else if (promo.durationDays && promo.durationDays > 0) {
     expiresAt.setDate(expiresAt.getDate() + promo.durationDays);
   } else {
-    expiresAt.setMonth(expiresAt.getMonth() + 1);
+    // Fallback — 30 дней
+    expiresAt.setDate(expiresAt.getDate() + 30);
   }
 
   return expiresAt.toISOString();
@@ -365,21 +342,21 @@ export const validatePromoCode = async (supabaseClient, code, companyId, userId)
     return { valid: false, error: 'Лимит использований промокода исчерпан' };
   }
 
-  if (source === 'database') {
-    const { data: existingUsage } = await supabaseClient
-      .from('company_promo_usage')
-      .select('id')
-      .eq('company_id', companyId)
-      .eq('promo_code', code.toUpperCase())
-      .maybeSingle();
+  // ✅ ИСПРАВЛЕНО: ВСЕГДА проверяем company_promo_usage (и для config, и для database)
+  const { data: existingUsage } = await supabaseClient
+    .from('company_promo_usage')
+    .select('id')
+    .eq('company_id', companyId)
+    .eq('promo_code', code.toUpperCase())
+    .maybeSingle();
 
-    if (existingUsage) {
-      return { valid: false, error: 'Ваша компания уже использовала этот промокод' };
-    }
-  } else if (source === 'config') {
-    if (promo.usedBy?.includes(companyId)) {
-      return { valid: false, error: 'Ваша компания уже использовала этот промокод' };
-    }
+  if (existingUsage) {
+    return { valid: false, error: 'Ваша компания уже использовала этот промокод' };
+  }
+
+  // Дополнительная проверка через память конфига
+  if (source === 'config' && promo.usedBy?.includes(companyId)) {
+    return { valid: false, error: 'Ваша компания уже использовала этот промокод' };
   }
 
   const { data: companyData, error: companyError } = await supabaseClient
@@ -430,17 +407,21 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
       durationMonths: durationMonths || null
     });
 
+    // ✅ ИСПРАВЛЕНО: добавлена запись plan_activated_at
+    const nowISO = new Date().toISOString();
+
     const { error: updateError } = await supabaseClient
       .from('companies')
       .update({
         plan_tier: planId,
+        plan_activated_at: nowISO,      // ✅ ДОБАВЛЕНО
         plan_expires_at: expiresAtISO,
         promo_code_used: codeUpper,
-        promo_activated_at: new Date().toISOString(),
-        promo_applied_at: new Date().toISOString(),
+        promo_activated_at: nowISO,     // ✅ уже было
+        promo_applied_at: nowISO,       // ✅ уже было
         promo_activated_by: userId,
         promo_discount_percent: discountPercent,
-        updated_at: new Date().toISOString()
+        updated_at: nowISO
       })
       .eq('id', companyId);
 
@@ -460,10 +441,10 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
           company_id: companyId,
           promo_code: codeUpper,
           activated_by: userId,
-          activated_at: new Date().toISOString()
+          activated_at: nowISO
         }]);
     } catch (err) {
-      console.warn('⚠️ Не удалось записать usage (таблица может отсутствовать):', err.message);
+      console.warn('⚠️ Не удалось записать usage:', err.message);
     }
 
     try {
@@ -483,7 +464,7 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
             .from('promo_codes')
             .update({
               used_count: (currentPromo.used_count || 0) + 1,
-              updated_at: new Date().toISOString()
+              updated_at: nowISO
             })
             .eq('code', codeUpper);
         }
@@ -508,7 +489,7 @@ export const activatePromoPlan = async (supabaseClient, code, companyId, userId,
             discount_percent: discountPercent,
             expires_at: expiresAtISO
           }),
-          created_at: new Date().toISOString()
+          created_at: nowISO
         }]);
     } catch (err) {
       console.warn('⚠️ Не удалось записать аудит:', err.message);
@@ -596,10 +577,6 @@ export const getActivePromoCodes = () => {
       usedCount: config.usedBy?.length || 0
     }));
 };
-
-// ============================================================
-// 🆕 ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ (для PromoManager)
-// ============================================================
 
 export const getPromoStats = async (supabaseClient, code) => {
   const codeUpper = code.toUpperCase();
