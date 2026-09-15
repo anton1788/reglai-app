@@ -20,7 +20,7 @@ import {
   PackageCheck,
   Bot
 } from 'lucide-react';
-import { getCompanyPlan } from '../utils/tariffPlans';
+import { getCompanyPlan, checkFeatureAccess } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
 import PublicOfferModal from './PublicOfferModal';
 import LegalOfferModal from './LegalOfferModal';
@@ -69,7 +69,6 @@ const Navbar = ({
   showNotificationModal,
   onCloseNotificationModal,
   readyToIssueCount = 0,
-  // ✅ НОВЫЙ ПРОП: открытие AI-ассистента
   onOpenAIAssistant = null
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -83,23 +82,23 @@ const Navbar = ({
   const [mobileSearch, setMobileSearch] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
-  
+
   const [showPublicOffer, setShowPublicOffer] = useState(false);
   const [showLegalOffer, setShowLegalOffer] = useState(false);
   const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
-  
+
   const profileRef = useRef(null);
   const notificationsRef = useRef(null);
   const searchRef = useRef(null);
   const navScrollRef = useRef(null);
   const tabletNavScrollRef = useRef(null);
 
-  // 🎁 Свайп для закрытия мобильного меню
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
   const touchEndX = useRef(null);
   const touchEndY = useRef(null);
 
+  // 🆕 Загрузка плана компании для фильтрации меню
   const loadCompanyPlan = useCallback(async () => {
     const cleanId = getCleanCompanyId(companyId);
     if (!cleanId || !supabase) {
@@ -128,12 +127,11 @@ const Navbar = ({
     } else {
       document.body.style.overflow = '';
     }
-    return () => { 
-      document.body.style.overflow = ''; 
+    return () => {
+      document.body.style.overflow = '';
     };
   }, [isMobileMenuOpen]);
 
-  // 🔥 Закрытие мобильного меню по Escape
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape' && isMobileMenuOpen) {
@@ -144,7 +142,6 @@ const Navbar = ({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isMobileMenuOpen]);
 
-  // 🎁 Обработчики свайпа для закрытия меню
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
@@ -162,14 +159,14 @@ const Navbar = ({
       touchEndX.current = null;
       return;
     }
-    
+
     const diffX = touchStartX.current - touchEndX.current;
     const diffY = Math.abs(touchStartY.current - touchEndY.current);
-    
+
     if (diffX > 80 && diffX > diffY) {
       setIsMobileMenuOpen(false);
     }
-    
+
     touchStartX.current = null;
     touchEndX.current = null;
     touchStartY.current = null;
@@ -226,7 +223,7 @@ const Navbar = ({
         }
       }
     };
-    
+
     document.addEventListener('keydown', handleKeyboardNav);
     return () => document.removeEventListener('keydown', handleKeyboardNav);
   }, [onNavigate]);
@@ -242,25 +239,25 @@ const Navbar = ({
         setShowRightScroll(scrollLeft + clientWidth < scrollWidth - 10);
       }
     };
-    
+
     const debouncedCheck = () => {
       if (timeoutId) clearTimeout(timeoutId);
       timeoutId = setTimeout(checkScroll, 100);
     };
-    
+
     const handleScroll = () => {
       if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
       scrollTimeoutId = setTimeout(checkScroll, 50);
     };
-    
+
     checkScroll();
     window.addEventListener('resize', debouncedCheck);
-    
+
     const scrollContainer = navScrollRef.current;
     if (scrollContainer) {
       scrollContainer.addEventListener('scroll', handleScroll);
     }
-    
+
     return () => {
       window.removeEventListener('resize', debouncedCheck);
       if (scrollContainer) {
@@ -317,7 +314,7 @@ const Navbar = ({
   const getPlanIcon = (planId) => {
     const icons = {
       basic: '🆓',
-      starter: '🚀',
+      micro: '🚀',
       pro: '💼',
       business: '🏢',
       enterprise: '👑'
@@ -325,110 +322,153 @@ const Navbar = ({
     return icons[planId] || '📦';
   };
 
+  // 🆕 Утилита для проверки функции текущего тарифа
+  const can = useCallback((feature) => {
+    if (!currentPlan) return false;
+    return checkFeatureAccess(currentPlan, feature);
+  }, [currentPlan]);
+
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
+  // ============================================================
+  // 🆕 NAV ITEMS С ФИЛЬТРАЦИЕЙ ПО ТАРИФУ
+  // ============================================================
   const getNavItems = () => {
     const items = [];
 
-    items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/' });
-    items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications' });
+    // === ВСЕГДА ДОСТУПНЫЕ ===
+    items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/', always: true });
+    items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications', always: true });
 
+    // === ГОТОВЫ К ВЫДАЧЕ (для снабженцев) ===
     if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-      items.push({ 
-        id: 'readyToIssue', 
-        label: 'Готовы к выдаче', 
+      items.push({
+        id: 'readyToIssue',
+        label: 'Готовы к выдаче',
         icon: PackageCheck,
-        path: '/ready-to-issue' 
+        path: '/ready-to-issue'
       });
     }
 
+    // === ПРОЕКТЫ ===
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'master' || userRole === 'foreman') {
-      items.push({ 
-        id: 'projects', 
-        label: 'Проекты', 
-        icon: FolderOpen, 
-        path: '/projects' 
+      items.push({
+        id: 'projects',
+        label: 'Проекты',
+        icon: FolderOpen,
+        path: '/projects'
       });
     }
 
+    // === CRM ===
     if (userRole === 'manager' || userRole === 'supply_admin') {
       items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
     }
 
+    // === ОБЪЕДИНЕНИЕ ===
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
-      items.push({ 
-        id: 'merge', 
-        label: `Объединение${mergeableCount > 0 ? ` (${mergeableCount})` : ''}`, 
-        icon: Merge, 
-        path: '/merge' 
+      items.push({
+        id: 'merge',
+        label: `Объединение${mergeableCount > 0 ? ` (${mergeableCount})` : ''}`,
+        icon: Merge,
+        path: '/merge'
       });
     }
 
+    // === МАСТЕР/ПРОРАБ ===
     if (userRole === 'master' || userRole === 'foreman') {
       items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
       items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
     }
 
-    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || userRole === 'accountant') {
+    // === СКЛАД (только если тариф позволяет) ===
+    if ((userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || userRole === 'accountant') &&
+        (!currentPlan || can('warehouse_view'))) {
       items.push({ id: 'warehouse', label: 'Склад', icon: Package, path: '/warehouse' });
     }
 
-    if (userRole === 'manager' || userRole === 'client_manager') {
+    // === КЛИЕНТЫ (только если есть client_portal) ===
+    if ((userRole === 'manager' || userRole === 'client_manager') &&
+        (!currentPlan || can('client_portal'))) {
       items.push({ id: 'clients', label: 'Клиенты', icon: Users, path: '/clients' });
     }
 
-    if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
+    // === АНАЛИТИКА (только если есть basic_analytics) ===
+    if ((userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) &&
+        (!currentPlan || can('basic_analytics'))) {
       items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
     }
 
-    if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
+    // === API (только если есть api_access) ===
+    if ((userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) &&
+        (!currentPlan || can('api_access'))) {
       items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
     }
 
-    if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
+    // === СМЕТЫ (только если есть document_generator) ===
+    if ((userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) &&
+        (!currentPlan || can('document_generator'))) {
       items.push({ id: 'estimates', label: 'Сметы', icon: Calculator, path: '/estimates' });
     }
 
-    if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
+    // === ОТЧЁТЫ (только если есть advanced_analytics) ===
+    if ((userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) &&
+        (!currentPlan || can('advanced_analytics'))) {
       items.push({ id: 'reports', label: 'Отчёты', icon: FileText, path: '/reports' });
     }
 
-    if (userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) {
+    // === ИНТЕГРАЦИЯ (только если есть custom_integration) ===
+    if ((userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) &&
+        (!currentPlan || can('custom_integration'))) {
       items.push({ id: 'integration', label: 'Интеграция', icon: Settings, path: '/integration' });
     }
 
-    if (userRole !== 'client') {
+    // === ДОКУМЕНТЫ (только если есть document_generator) ===
+    if (userRole !== 'client' && (!currentPlan || can('document_generator'))) {
       items.push({ id: 'documents', label: 'Документы', icon: FileText, path: '/documents' });
     }
 
-    items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
-    items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
+    // === ЧАТ (только если есть internal_chat) ===
+    if (!currentPlan || can('internal_chat')) {
+      items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
+    }
 
+    // === КАЛЕНДАРЬ (только если есть calendar) ===
+    if (!currentPlan || can('calendar')) {
+      items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
+    }
+
+    // === СОГЛАСОВАНИЕ ===
     if (userRole === 'manager' || userRole === 'director') {
-      items.push({ 
-        id: 'approvals', 
-        label: `Согласование ${pendingApprovalsCount > 0 ? `(${pendingApprovalsCount})` : ''}`, 
-        icon: CheckCircle, 
-        path: '/approvals' 
+      items.push({
+        id: 'approvals',
+        label: `Согласование ${pendingApprovalsCount > 0 ? `(${pendingApprovalsCount})` : ''}`,
+        icon: CheckCircle,
+        path: '/approvals'
       });
     }
 
+    // === СОТРУДНИКИ ===
     if (userRole === 'manager') {
       items.push({ id: 'employees', label: 'Сотрудники', icon: Users, path: '/employees' });
     }
 
+    // === КОРЗИНА ===
     if (cartItemsCount > 0) {
       items.push({ id: 'cart', label: `Корзина (${cartItemsCount})`, icon: ShoppingCart, path: '/cart' });
     }
 
+    // === АУДИТ ===
     if (userRole === 'manager' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
       items.push({ id: 'audit', label: 'Аудит', icon: Eye, path: '/audit' });
     }
 
-    if (userRole !== 'client') {
+    // === ЗАДАЧИ (Kanban — только если есть kanban_board) ===
+    if (userRole !== 'client' && (!currentPlan || can('kanban_board'))) {
       items.push({ id: 'tasks', label: 'Задачи', icon: Target, path: '/tasks' });
     }
 
+    // === КЛИЕНТ ===
     if (userRole === 'client') {
       items.push({ id: 'clientDashboard', label: 'Мой объект', icon: Home, path: '/client' });
       items.push({ id: 'clientDocuments', label: 'Мои документы', icon: FileText, path: '/client/documents' });
@@ -439,7 +479,7 @@ const Navbar = ({
   };
 
   const navItems = getNavItems();
-  const filteredNavItems = navItems.filter(item => 
+  const filteredNavItems = navItems.filter(item =>
     item.label.toLowerCase().includes(mobileSearch.toLowerCase())
   );
 
@@ -475,7 +515,7 @@ const Navbar = ({
         </div>
       );
     }
-    
+
     if (currentPlan) {
       return (
         <>
@@ -494,7 +534,7 @@ const Navbar = ({
         </>
       );
     }
-    
+
     return (
       <button
         onClick={onOpenTariffs}
@@ -510,7 +550,7 @@ const Navbar = ({
       <nav className="bg-white dark:bg-gray-900 shadow-lg sticky top-0 z-50 w-full">
         <div className="w-full px-2 sm:px-4">
           <div className="flex justify-between items-center h-14 sm:h-16">
-            
+
             {/* Логотип и название */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
@@ -520,15 +560,15 @@ const Navbar = ({
               >
                 {isMobileMenuOpen ? <X className="w-5 h-5 sm:w-6 sm:h-6" /> : <Menu className="w-5 h-5 sm:w-6 sm:h-6" />}
               </button>
-              
-              <button 
+
+              <button
                 onClick={() => onNavigate?.('/')}
                 className="flex items-center gap-2 group cursor-pointer"
               >
                 <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-all">
-                  <img 
-                    src="/icon-512.png" 
-                    alt="Reglai logo" 
+                  <img
+                    src="/icon-512.png"
+                    alt="Reglai logo"
                     className="w-5 h-5 sm:w-6 sm:h-6"
                     style={{ objectFit: 'contain' }}
                   />
@@ -544,7 +584,7 @@ const Navbar = ({
               </button>
             </div>
 
-            {/* Поиск - центрированный */}
+            {/* Поиск */}
             <div className="hidden md:flex items-center flex-1 max-w-md mx-4">
               <form onSubmit={handleSearch} className="w-full">
                 <div className="relative">
@@ -566,8 +606,7 @@ const Navbar = ({
 
             {/* Правая часть */}
             <div className="flex items-center gap-1 flex-shrink-0">
-              
-              {/* Скрываемые на мобильном элементы */}
+
               {!isMobile && (
                 <>
                   <div className="hidden lg:flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg min-w-[60px]">
@@ -583,7 +622,7 @@ const Navbar = ({
                         {offlineDraftsCount} черновик{offlineDraftsCount > 1 ? 'а' : ''}
                       </span>
                       {onSyncOffline && (
-                        <button 
+                        <button
                           onClick={handleSyncOffline}
                           disabled={isSyncing}
                           className="text-xs text-yellow-600 dark:text-yellow-400 hover:underline disabled:opacity-50"
@@ -621,7 +660,7 @@ const Navbar = ({
                       <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                         <div className="p-2">
                           <p className="text-xs text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-gray-100 dark:border-gray-700">Быстрые действия</p>
-                          <button 
+                          <button
                             onClick={() => { onNavigate?.('/applications/new'); setIsMobileMenuOpen(false); }}
                             className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                           >
@@ -629,7 +668,7 @@ const Navbar = ({
                             Создать заявку
                           </button>
                           {(userRole === 'manager' || userRole === 'supply_admin') && (
-                            <button 
+                            <button
                               onClick={() => { onInvite?.(); setIsMobileMenuOpen(false); }}
                               className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                             >
@@ -637,37 +676,21 @@ const Navbar = ({
                               Пригласить сотрудника
                             </button>
                           )}
-                          <button 
+                          <button
                             onClick={() => { onNavigate?.('/warehouse'); setIsMobileMenuOpen(false); }}
                             className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                           >
                             <Package className="w-4 h-4 text-orange-500" />
                             Управление складом
                           </button>
-                          <button 
-                            onClick={() => { onNavigate?.('/documents'); setIsMobileMenuOpen(false); }}
-                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                          >
-                            <FileText className="w-4 h-4 text-purple-500" />
-                            Создать документ
-                          </button>
-                          {(userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) && (
-                            <>
-                              <button 
-                                onClick={() => { onNavigate?.('/estimates'); setIsMobileMenuOpen(false); }}
-                                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                              >
-                                <Calculator className="w-4 h-4 text-[#4A6572]" />
-                                Сметный калькулятор
-                              </button>
-                              <button 
-                                onClick={() => { onNavigate?.('/reports'); setIsMobileMenuOpen(false); }}
-                                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                              >
-                                <BarChart3 className="w-4 h-4 text-blue-500" />
-                                Конструктор отчётов
-                              </button>
-                            </>
+                          {can('document_generator') && (
+                            <button
+                              onClick={() => { onNavigate?.('/documents'); setIsMobileMenuOpen(false); }}
+                              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                            >
+                              <FileText className="w-4 h-4 text-purple-500" />
+                              Создать документ
+                            </button>
                           )}
                         </div>
                       </div>
@@ -676,8 +699,8 @@ const Navbar = ({
 
                   <button
                     onClick={() => setShowSupportModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-200 
-                      bg-gradient-to-r from-[#4A6572]/5 to-[#344955]/5 
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-200
+                      bg-gradient-to-r from-[#4A6572]/5 to-[#344955]/5
                       hover:bg-gradient-to-r hover:from-[#4A6572]/15 hover:to-[#344955]/15
                       border border-transparent hover:border-[#4A6572]/20
                       group"
@@ -712,7 +735,6 @@ const Navbar = ({
                 </>
               )}
 
-              {/* ✅ НОВАЯ КНОПКА: AI-Ассистент (всегда видима) */}
               {onOpenAIAssistant && (
                 <button
                   onClick={onOpenAIAssistant}
@@ -721,7 +743,6 @@ const Navbar = ({
                   title="AI-ассистент (Ctrl+/)"
                 >
                   <Bot className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-[#4A6572] dark:group-hover:text-[#F9AA33] transition-colors" />
-                  {/* Индикатор активности */}
                   <span className="absolute top-1 right-1 flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#F9AA33] opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-[#F9AA33]"></span>
@@ -729,7 +750,6 @@ const Navbar = ({
                 </button>
               )}
 
-              {/* Кнопка для супер-админа (отзывы) */}
               {newFeedbackCount > 0 && userRole === 'super_admin' && (
                 <button
                   onClick={() => { onNavigate?.('/superAdmin'); setIsMobileMenuOpen(false); }}
@@ -755,13 +775,13 @@ const Navbar = ({
                     <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                   )}
                 </button>
-                
+
                 {isNotificationsOpen && (
                   <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-50">
                     <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                       <h3 className="font-semibold text-gray-900 dark:text-white">Уведомления</h3>
                       {notifications.length > 0 && (
-                        <button 
+                        <button
                           onClick={onClearNotifications}
                           className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
                         >
@@ -777,8 +797,8 @@ const Navbar = ({
                         </div>
                       ) : (
                         notifications.map(notif => (
-                          <div 
-                            key={notif.id} 
+                          <div
+                            key={notif.id}
                             className={`p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${!notif.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                             onClick={() => {
                               if (onNotificationClick) {
@@ -838,21 +858,21 @@ const Navbar = ({
                       )}
                     </div>
                     <div className="p-2">
-                      <button 
+                      <button
                         onClick={() => { onNavigate?.('/profile'); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
                         className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                       >
                         <User className="w-4 h-4" />
                         Профиль
                       </button>
-                      <button 
+                      <button
                         onClick={() => { onOpenCompanyProfile?.(); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
                         className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                       >
                         <Building className="w-4 h-4" />
                         Реквизиты компании
                       </button>
-                      <button 
+                      <button
                         onClick={() => { onOpenTariffs?.(); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
                         className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                       >
@@ -865,7 +885,7 @@ const Navbar = ({
                         )}
                       </button>
                       {userRole === 'super_admin' && (
-                        <button 
+                        <button
                           onClick={() => { onNavigate?.('/superAdmin'); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
                           className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                         >
@@ -874,7 +894,7 @@ const Navbar = ({
                         </button>
                       )}
                       <hr className="my-2 border-gray-200 dark:border-gray-700" />
-                      <button 
+                      <button
                         onClick={() => { onNavigate?.('/settings'); setIsProfileOpen(false); setIsMobileMenuOpen(false); }}
                         className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                       >
@@ -901,24 +921,24 @@ const Navbar = ({
         {navItems.length > 0 && (
           <div className="hidden sm:flex lg:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 relative">
             <div className="absolute left-0 top-0 bottom-0 w-8 z-5 bg-gradient-to-r from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
-            
-            <div 
+
+            <div
               ref={tabletNavScrollRef}
               className="flex overflow-x-auto no-scrollbar gap-1 p-2 scroll-smooth px-8"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {navItems.slice(0, 8).map((item) => {
                 const Icon = item.icon;
-                const isActive = currentPage === item.id || 
+                const isActive = currentPage === item.id ||
                   (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history'));
-                
+
                 let badgeCount = 0;
                 let badgeColor = 'bg-amber-500';
                 if (item.id === 'readyToIssue') {
                   badgeCount = readyToIssueCount || 0;
                   badgeColor = 'bg-amber-500';
                 }
-                
+
                 return (
                   <button
                     key={item.id}
@@ -931,13 +951,13 @@ const Navbar = ({
                   >
                     <Icon className="w-5 h-5" />
                     <span className="text-xs font-medium">{item.label}</span>
-                    
+
                     {item.id === 'readyToIssue' && badgeCount > 0 && (
                       <span className={`absolute -top-1 -right-1 w-4 h-4 ${badgeColor} text-white text-[10px] rounded-full flex items-center justify-center`}>
                         {badgeCount}
                       </span>
                     )}
-                    
+
                     {item.id === 'approvals' && pendingApprovalsCount > 0 && (
                       <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
                         {pendingApprovalsCount}
@@ -962,7 +982,7 @@ const Navbar = ({
                 );
               })}
             </div>
-            
+
             <div className="absolute right-0 top-0 bottom-0 w-8 z-5 bg-gradient-to-l from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
           </div>
         )}
@@ -974,7 +994,7 @@ const Navbar = ({
               {showLeftScroll && (
                 <div className="absolute left-0 top-0 bottom-0 w-12 z-5 bg-gradient-to-r from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
               )}
-              
+
               {showLeftScroll && (
                 <button
                   onClick={() => scrollNav('left')}
@@ -991,15 +1011,15 @@ const Navbar = ({
                   <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                 </button>
               )}
-              
-              <div 
+
+              <div
                 ref={navScrollRef}
                 className="flex overflow-x-auto no-scrollbar gap-1 py-2 scroll-smooth px-8"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 {navItems.map((item) => {
                   const Icon = item.icon;
-                  const isActive = currentPage === item.id || 
+                  const isActive = currentPage === item.id ||
                     (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
                     (item.id === 'clients' && currentPage === 'clientDashboard') ||
                     (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
@@ -1009,14 +1029,14 @@ const Navbar = ({
                     (item.id === 'api' && currentPage === 'api') ||
                     (item.id === 'merge' && currentPage === 'merge') ||
                     (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
-                  
+
                   let badgeCount = 0;
                   let badgeColor = 'bg-amber-500';
                   if (item.id === 'readyToIssue') {
                     badgeCount = readyToIssueCount || 0;
                     badgeColor = 'bg-amber-500';
                   }
-                  
+
                   return (
                     <button
                       key={item.id}
@@ -1032,13 +1052,13 @@ const Navbar = ({
                     >
                       <Icon className="w-4 h-4" />
                       <span className="text-sm font-medium">{item.label}</span>
-                      
+
                       {item.id === 'readyToIssue' && badgeCount > 0 && (
                         <span className={`absolute -top-1 -right-1 w-4 h-4 ${badgeColor} text-white text-[10px] rounded-full flex items-center justify-center`}>
                           {badgeCount}
                         </span>
                       )}
-                      
+
                       {item.id === 'approvals' && pendingApprovalsCount > 0 && (
                         <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                           {pendingApprovalsCount}
@@ -1063,7 +1083,7 @@ const Navbar = ({
                   );
                 })}
               </div>
-              
+
               {showRightScroll && (
                 <button
                   onClick={() => scrollNav('right')}
@@ -1080,7 +1100,7 @@ const Navbar = ({
                   <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                 </button>
               )}
-              
+
               {showRightScroll && (
                 <div className="absolute right-0 top-0 bottom-0 w-12 z-5 bg-gradient-to-l from-gray-50/80 dark:from-gray-800/80 to-transparent pointer-events-none" />
               )}
@@ -1104,13 +1124,13 @@ const Navbar = ({
               zIndex: 99998
             }}
           />
-          
-          <div 
+
+          <div
             className="bg-white dark:bg-gray-900 shadow-2xl"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
-            style={{ 
+            style={{
               position: 'fixed',
               top: 0,
               left: 0,
@@ -1129,9 +1149,9 @@ const Navbar = ({
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-xl flex items-center justify-center">
-                  <img 
-                    src="/icon-512.png" 
-                    alt="Reglai logo" 
+                  <img
+                    src="/icon-512.png"
+                    alt="Reglai logo"
                     className="w-5 h-5"
                     style={{ objectFit: 'contain' }}
                   />
@@ -1147,9 +1167,9 @@ const Navbar = ({
               </button>
             </div>
 
-            <div 
+            <div
               className="flex-1 overflow-y-auto px-3 pt-3"
-              style={{ 
+              style={{
                 WebkitOverflowScrolling: 'touch',
                 overscrollBehavior: 'contain',
                 paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))'
@@ -1186,11 +1206,9 @@ const Navbar = ({
                 />
               </div>
 
-              {/* Быстрые действия + AI-Ассистент */}
               <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">Быстрые действия</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {/* ✅ AI-Ассистент */}
                   {onOpenAIAssistant && (
                     <button
                       onClick={() => { onOpenAIAssistant(); setIsMobileMenuOpen(false); }}
@@ -1245,12 +1263,12 @@ const Navbar = ({
                     (item.id === 'api' && currentPage === 'api') ||
                     (item.id === 'merge' && currentPage === 'merge') ||
                     (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
-                  
+
                   let badgeCount = 0;
                   if (item.id === 'readyToIssue') {
                     badgeCount = readyToIssueCount || 0;
                   }
-                  
+
                   return (
                     <button
                       key={item.id}
@@ -1266,7 +1284,7 @@ const Navbar = ({
                     >
                       <Icon className="w-5 h-5 flex-shrink-0" />
                       <span className="flex-1 text-left">{item.label}</span>
-                      
+
                       {item.id === 'readyToIssue' && badgeCount > 0 && (
                         <span className="ml-auto px-2 py-0.5 bg-amber-500 text-white text-xs rounded-full flex-shrink-0">
                           {badgeCount}
@@ -1332,22 +1350,22 @@ const Navbar = ({
             © {new Date().getFullYear()} Реглай. Все права защищены.
           </div>
           <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-            <button 
-              onClick={() => setShowPublicOffer(true)} 
+            <button
+              onClick={() => setShowPublicOffer(true)}
               className="hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors flex items-center gap-1.5"
             >
               <Scale className="w-4 h-4" />
               Публичная оферта
             </button>
-            <button 
-              onClick={() => setShowLegalOffer(true)} 
+            <button
+              onClick={() => setShowLegalOffer(true)}
               className="hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors flex items-center gap-1.5"
             >
               <FileCheck className="w-4 h-4" />
               Договор для юрлиц
             </button>
-            <button 
-              onClick={() => setShowPrivacyPolicyModal(true)} 
+            <button
+              onClick={() => setShowPrivacyPolicyModal(true)}
               className="hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors flex items-center gap-1.5"
             >
               <Shield className="w-4 h-4" />
@@ -1379,7 +1397,7 @@ const Navbar = ({
       />
 
       {showNotificationModal && selectedNotification && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] fade-enter"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -1399,13 +1417,13 @@ const Navbar = ({
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            
+
             <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl mb-4">
               <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                 {selectedNotification.message}
               </p>
             </div>
-            
+
             <p className="text-xs text-gray-400 dark:text-gray-500 text-right">
               {selectedNotification.time || new Date(selectedNotification.created_at).toLocaleString('ru-RU')}
             </p>

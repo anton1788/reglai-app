@@ -38,8 +38,10 @@ import {
   checkFeatureAccess,
   checkQuota,
   logApiUsage,
-  checkMaterialsLimit,        
+  checkMaterialsLimit,
   incrementApplicationUsage,
+  checkTariffLimit,          // 🆕 для лимита заявок и объектов
+  FEATURE_CATEGORIES,        // 🆕 для справки (если нужно в UI)
 } from './utils/tariffPlans';
 // Добавить импорты
 import { WarehouseBalance } from './components/WarehouseView';
@@ -944,6 +946,65 @@ ${companyUsers?.reduce((acc, u) => {
   );
 };
 
+// ============================================================
+// 🆕 ХУК: Проверка лимитов тарифа
+// ============================================================
+const usePlanLimits = (currentPlan, applications) => {
+  return useMemo(() => {
+    if (!currentPlan) {
+      return {
+        canCreateApplication: false,
+        canAddObject: false,
+        applicationsThisMonth: 0,
+        applicationsLimit: 0,
+        objectsCount: 0,
+        objectsLimit: 0,
+        nearLimit: false,
+        atLimit: false
+      };
+    }
+
+    // Считаем заявки за текущий месяц
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const applicationsThisMonth = applications.filter(app => {
+      if (!app.created_at) return false;
+      return new Date(app.created_at) >= monthStart;
+    }).length;
+
+    // Считаем уникальные объекты
+    const objectsCount = new Set(
+      applications.map(a => a.object_name).filter(Boolean)
+    ).size;
+
+    const applicationsLimit = currentPlan.maxApplicationsPerMonth ?? -1;
+    const objectsLimit = currentPlan.maxObjects ?? -1;
+
+    const isUnlimitedApps = applicationsLimit === -1;
+    const isUnlimitedObjects = objectsLimit === -1;
+
+    const canCreateApplication = isUnlimitedApps || applicationsThisMonth < applicationsLimit;
+    const canAddObject = isUnlimitedObjects || objectsCount < objectsLimit;
+
+    // Предупреждение, когда осталось < 20% лимита
+    const appsUsagePercent = isUnlimitedApps
+      ? 0
+      : Math.round((applicationsThisMonth / applicationsLimit) * 100);
+
+    return {
+      canCreateApplication,
+      canAddObject,
+      applicationsThisMonth,
+      applicationsLimit,
+      objectsCount,
+      objectsLimit,
+      nearLimit: appsUsagePercent >= 80 && !isUnlimitedApps,
+      atLimit: !canCreateApplication && !isUnlimitedApps,
+      appsUsagePercent
+    };
+  }, [currentPlan, applications]);
+};
+
 // ─────────────────────────────────────────────────────────────
 // 🧩 ОСНОВНОЙ КОМПОНЕНТ
 // ─────────────────────────────────────────────────────────────
@@ -1097,6 +1158,7 @@ const [promoCodeInfo, setPromoCodeInfo] = useState(null);
 const [planLoading, setPlanLoading] = useState(true);
 const [showTariffModal, setShowTariffModal] = useState(false);
 const [quotaStatus, setQuotaStatus] = useState(null);
+const planLimits = usePlanLimits(currentPlan, applications);
 const [billingPeriod, setBillingPeriod] = useState('monthly');
 // 🎁 Promo States
 const [showPromoModal, setShowPromoModal] = useState(false);
@@ -2747,46 +2809,44 @@ const handleInviteUser = async () => {
     return;
   }
 
+    // ============================================================
+  // 🆕 ПРОВЕРКА ЛИМИТА ПОЛЬЗОВАТЕЛЕЙ ДЛЯ ВСЕХ ТАРИФОВ
   // ============================================================
-  // 🔥 ЖЕСТКАЯ БЛОКИРОВКА ДЛЯ ПРИГЛАШЕНИЙ (ЛИМИТ ПОЛЬЗОВАТЕЛЕЙ)
-  // ============================================================
-  if (currentPlan?.id === 'basic' || !currentPlan) {
-    try {
-      const { count: currentUsers, error: countError } = await supabase
-        .from('company_users')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', userCompanyId)
-        .eq('is_active', true);
-      
-      if (countError) throw countError;
-      
-      const maxUsers = currentPlan?.maxUsers || 10;
-      
-      if (currentUsers >= maxUsers) {
-        showNotification(
-          `⚠️ Лимит пользователей исчерпан (${currentUsers}/${maxUsers}). Обновите тариф для добавления новых сотрудников.`,
-          'warning'
-        );
-        setCurrentView('tariffs');
-        return;
-      }
-      
-      if (currentUsers >= maxUsers - 1) {
-        showNotification(
-          `⚠️ Осталось ${maxUsers - currentUsers} место. Скоро лимит будет исчерпан.`,
-          'warning'
-        );
-      }
-      
-    } catch (err) {
-      console.error('Ошибка проверки лимита пользователей:', err);
-      showNotification('❌ Ошибка проверки лимитов. Попробуйте позже.', 'error');
-      return;
-    }
-  }
-
   if (!userCompanyId) {
     showNotification('Ошибка: компания не указана', 'error');
+    return;
+  }
+
+  try {
+    const { count: currentUsers, error: countError } = await supabase
+      .from('company_users')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', userCompanyId)
+      .eq('is_active', true);
+
+    if (countError) throw countError;
+
+    const maxUsers = currentPlan?.maxUsers ?? -1;
+    const isUnlimited = maxUsers === -1;
+
+    if (!isUnlimited && currentUsers >= maxUsers) {
+      showNotification(
+        `⚠️ Лимит пользователей исчерпан (${currentUsers}/${maxUsers}). Обновите тариф.`,
+        'warning'
+      );
+      setCurrentView('tariffs');
+      return;
+    }
+
+    if (!isUnlimited && currentUsers >= maxUsers - 2) {
+      showNotification(
+        `⚠️ Осталось ${maxUsers - currentUsers} места на вашем тарифе.`,
+        'warning'
+      );
+    }
+  } catch (err) {
+    console.error('Ошибка проверки лимита пользователей:', err);
+    showNotification('❌ Ошибка проверки лимитов. Попробуйте позже.', 'error');
     return;
   }
 
@@ -3040,40 +3100,61 @@ const handleSubmit = async (e) => {
 
   console.log('✅ Отправка заявки с companyId:', safeCompanyId);
 
-  // ============================================================
-  // 🔥 ЖЕСТКАЯ БЛОКИРОВКА ПРИ ИСТЕЧЕНИИ ТАРИФА
-  // ============================================================
-  if (currentPlan?.id === 'basic' || !currentPlan) {
-    try {
-      const quota = await checkQuota(supabase, safeCompanyId); // Используем safeCompanyId
-      
-      if (!quota.allowed) {
-        showNotification('❌ Лимит заявок исчерпан. Оплатите тариф.', 'error');
-        setCurrentView('tariffs');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      const validMaterials = formData.materials.filter(m =>
-        m.description?.trim() && m.quantity && m.quantity > 0 && !isNaN(m.quantity)
-      );
-      
-      const materialCheck = await checkMaterialsLimit(supabase, safeCompanyId, validMaterials.length); // Используем safeCompanyId
-      if (!materialCheck.allowed) {
-        showNotification(
-          `⚠️ В бесплатном тарифе максимум ${materialCheck.limit} материалов в заявке.`,
-          'warning'
-        );
-        setIsSubmitting(false);
-        return;
-      }
-    } catch (err) {
-      console.error('Ошибка проверки лимитов:', err);
-      showNotification('❌ Ошибка проверки лимитов. Попробуйте позже.', 'error');
-      setIsSubmitting(false);
-      return;
-    }
+  // 🆕 Проверка лимитов для ВСЕХ тарифов (не только basic)
+try {
+  // 1. Проверка квоты API
+  const quota = await checkQuota(supabase, safeCompanyId);
+  if (!quota.allowed) {
+    showNotification('❌ Лимит API-запросов исчерпан. Обновите тариф.', 'error');
+    setCurrentView('tariffs');
+    setIsSubmitting(false);
+    return;
   }
+
+  // 2. 🆕 Проверка лимита заявок в месяц
+  if (!planLimits.canCreateApplication) {
+    showNotification(
+      `⚠️ Лимит заявок в месяц исчерпан (${planLimits.applicationsThisMonth}/${planLimits.applicationsLimit}). Обновите тариф.`,
+      'warning'
+    );
+    setCurrentView('tariffs');
+    setIsSubmitting(false);
+    return;
+  }
+
+  // 3. 🆕 Проверка лимита объектов (если новый объект)
+  const existingObjectNames = new Set(applications.map(a => a.object_name));
+  const isNewObject = formData.objectName?.trim() &&
+    !existingObjectNames.has(formData.objectName.trim());
+  if (isNewObject && !planLimits.canAddObject) {
+    showNotification(
+      `⚠️ Лимит объектов исчерпан (${planLimits.objectsCount}/${planLimits.objectsLimit}). Обновите тариф.`,
+      'warning'
+    );
+    setCurrentView('tariffs');
+    setIsSubmitting(false);
+    return;
+  }
+
+  // 4. Проверка лимита материалов в заявке
+  const validMaterials = formData.materials.filter(m =>
+    m.description?.trim() && m.quantity && m.quantity > 0 && !isNaN(m.quantity)
+  );
+  const materialCheck = await checkMaterialsLimit(supabase, safeCompanyId, validMaterials.length);
+  if (!materialCheck.allowed) {
+    showNotification(
+      `⚠️ Максимум ${materialCheck.limit} материалов в заявке на вашем тарифе.`,
+      'warning'
+    );
+    setIsSubmitting(false);
+    return;
+  }
+} catch (err) {
+  console.error('Ошибка проверки лимитов:', err);
+  showNotification('❌ Ошибка проверки лимитов. Попробуйте позже.', 'error');
+  setIsSubmitting(false);
+  return;
+}
 
   // 🔐 Проверка роли - только прораб, снабженец могут создавать
   if (userRole !== 'master' && userRole !== 'foreman' && userRole !== 'supply_admin' && userRole !== 'client_manager') {
@@ -6186,25 +6267,40 @@ const { data } = await supabase
 // 🔐 Проверка квоты при просмотре формы создания заявки
 useEffect(() => {
   const checkQuotaOnView = async () => {
-    if (currentView === 'create' && (currentPlan?.id === 'basic' || !currentPlan)) {
-      if (!userCompanyId) return;
-      
-      try {
-        const quota = await checkQuota(supabase, userCompanyId);
-        setQuotaStatus(quota);
-        
-        // ✅ Если лимит исчерпан - показываем предупреждение
-        if (!quota.allowed) {
-          showNotification('⚠️ Лимит заявок исчерпан. Перейдите в раздел "Тарифы" для обновления.', 'warning');
-        }
-      } catch (err) {
-        console.debug('Quota check on view error:', err);
+    if (currentView !== 'create') return;
+    if (!userCompanyId) return;
+
+    try {
+      // API-квота
+      const quota = await checkQuota(supabase, userCompanyId);
+      setQuotaStatus(quota);
+
+      if (!quota.allowed) {
+        showNotification('⚠️ Лимит API-запросов исчерпан. Перейдите в раздел "Тарифы".', 'warning');
       }
+
+      // 🆕 Предупреждение о близком лимите заявок
+      if (planLimits.nearLimit && !planLimits.atLimit) {
+        showNotification(
+          `⚠️ Осталось ${planLimits.applicationsLimit - planLimits.applicationsThisMonth} заявок до лимита.`,
+          'warning'
+        );
+      }
+
+      // 🆕 Блокирующее сообщение, если лимит исчерпан
+      if (planLimits.atLimit) {
+        showNotification(
+          `❌ Лимит заявок исчерпан (${planLimits.applicationsThisMonth}/${planLimits.applicationsLimit}). Обновите тариф.`,
+          'error'
+        );
+      }
+    } catch (err) {
+      console.debug('Quota check on view error:', err);
     }
   };
-  
+
   checkQuotaOnView();
-}, [currentView, currentPlan, userCompanyId, supabase, showNotification]);
+}, [currentView, userCompanyId, supabase, showNotification, planLimits]);
 
 
  const renderLandingPage = () => (
@@ -7513,6 +7609,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       isSubmitting={isSubmitting}
       quotaStatus={quotaStatus}
       currentPlan={currentPlan}
+      planLimits={planLimits} 
       onUpgradeClick={() => setCurrentView('tariffs')}
     />
   </div>
@@ -7668,22 +7765,40 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         )}
         
         {currentView === 'calendar' && (
-  <CalendarView
-    supabase={supabase}
-    userCompanyId={userCompanyId}
-    user={user}
-    userRole={userRole}
-    userCompany={userCompany}   // ← ДОБАВИТЬ ЭТУ СТРОКУ
-    t={t}
-    language={language}
-    showNotification={showNotification}
-    onEventClick={(type, data) => {
-      if (type === 'application') {
-        setSelectedApplication(data);
-        setShowReceiveModal(true);
-      }
-    }}
-  />
+  checkFeatureAccess(currentPlan, 'calendar') ? (
+    <CalendarView
+      supabase={supabase}
+      userCompanyId={userCompanyId}
+      user={user}
+      userRole={userRole}
+      userCompany={userCompany}
+      t={t}
+      language={language}
+      showNotification={showNotification}
+      onEventClick={(type, data) => {
+        if (type === 'application') {
+          setSelectedApplication(data);
+          setShowReceiveModal(true);
+        }
+      }}
+    />
+  ) : (
+    <div className="max-w-2xl mx-auto p-8 text-center">
+      <div className="text-5xl mb-4">📅</div>
+      <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
+        Календарь доступен на тарифе Профессиональный
+      </h2>
+      <p className="text-gray-600 dark:text-gray-400 mb-6">
+        Обновите тариф, чтобы получить доступ к календарю и другим продвинутым функциям.
+      </p>
+      <button
+        onClick={() => setCurrentView('tariffs')}
+        className="px-6 py-3 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-xl hover:shadow-lg transition-all"
+      >
+        Посмотреть тарифы
+      </button>
+    </div>
+  )
 )}
         
        {currentView === 'inwork' && (
@@ -8517,6 +8632,8 @@ onClearFilters={handleClearFilters}
     cartItemsCount={formData.cart?.length || 0}
     chatUnreadCount={chatUnreadCount}
     currentView={currentView} 
+    currentPlan={currentPlan}       // 🆕
+    planLimits={planLimits}
     t={t}
   />
 )}

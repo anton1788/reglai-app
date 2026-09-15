@@ -3,16 +3,26 @@
 import { supabase } from './supabaseClient';
 
 // ============================================================
-// 📦 КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ (ОПТИМИЗИРОВАННАЯ)
-// 💰 Новая сетка (2026):
-//    basic      - 0 ₽       (1 польз., 50 запросов/мес)
-//    micro      - 490 ₽     (5 польз., 1 000 запросов/мес)
-//    pro        - 3 990 ₽   (50 польз., 15 000 запросов/мес)
-//    business   - 7 490 ₽   (200 польз., 60 000 запросов/мес)
-//    enterprise - 13 990 ₽  (1000+ польз., 200 000+ запросов/мес)
+// 📦 КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ (РАСШИРЕННАЯ)
+// ============================================================
+//
+// 💰 Сетка тарифов:
+//    basic      - 0 ₽       — знакомство
+//    micro      - 490 ₽     — небольшая бригада
+//    pro        - 3 990 ₽   — растущая компания ⭐
+//    business   - 7 490 ₽   — средний бизнес
+//    enterprise - 13 990 ₽  — холдинги
+//
+// 🎯 Функции разделены на 3 категории:
+//    Core       — базовые (создание заявок, склад, поддержка)
+//    Advanced   — продвинутые (API, webhooks, аналитика, календарь, чат)
+//    Premium    — премиум (SLA, SSO, мультикомпания, BI)
 // ============================================================
 
 export const TARIFF_PLANS = {
+  // ============================================================
+  // 🆓 БАЗОВЫЙ — 0 ₽
+  // ============================================================
   basic: {
     id: 'basic',
     name: 'Базовый',
@@ -20,21 +30,54 @@ export const TARIFF_PLANS = {
     annualPrice: 0,
     apiQuotaMonthly: 50,
     apiQuotaDaily: 10,
-    maxApiKeys: 1,
+    maxApiKeys: 0,
     maxUsers: 1,
+    maxObjects: 1,
+    maxApplicationsPerMonth: 10,
     features: {
-      warehouse: false,
-      analytics: false,
-      api: false,
+      // Core
+      create_applications: true,
+      warehouse_view: true,
+      warehouse_manage: false,
+      email_support: true,
+      basic_analytics: false,
+
+      // Advanced
+      api_access: false,
       webhooks: false,
-      support: 'email',
-      priority: false,
-      sla: false,
-      customIntegration: false
+      advanced_analytics: false,
+      calendar: false,
+      internal_chat: false,
+      client_portal: false,
+      partner_portal: false,
+      document_generator: false,
+      mobile_qr: false,
+      kanban_board: false,
+
+      // Premium
+      priority_processing: false,
+      sla_guarantee: false,
+      custom_integration: false,
+      multi_company: false,
+      sso_ldap: false,
+      support_247: false,
+      personal_manager: false,
+      bi_dashboards: false
     },
     popular: false,
-    color: '#4A6572'
+    color: '#4A6572',
+    tagline: 'Для знакомства с системой',
+    highlights: [
+      'До 10 заявок в месяц',
+      '1 объект',
+      'Только просмотр склада',
+      'Email-поддержка'
+    ]
   },
+
+  // ============================================================
+  // 🚀 МИКРО — 490 ₽
+  // ============================================================
   micro: {
     id: 'micro',
     name: 'Микро',
@@ -44,19 +87,55 @@ export const TARIFF_PLANS = {
     apiQuotaDaily: 100,
     maxApiKeys: 2,
     maxUsers: 5,
+    maxObjects: 5,
+    maxApplicationsPerMonth: 100,
     features: {
-      warehouse: true,
-      analytics: true,
-      api: true,
+      // Core
+      create_applications: true,
+      warehouse_view: true,
+      warehouse_manage: true,
+      email_support: true,
+      basic_analytics: true,
+
+      // Advanced
+      api_access: true,
       webhooks: false,
-      support: 'email',
-      priority: false,
-      sla: false,
-      customIntegration: false
+      advanced_analytics: false,
+      calendar: false,
+      internal_chat: false,
+      client_portal: false,
+      partner_portal: false,
+      document_generator: true,
+      mobile_qr: true,
+      kanban_board: false,
+
+      // Premium
+      priority_processing: false,
+      sla_guarantee: false,
+      custom_integration: false,
+      multi_company: false,
+      sso_ldap: false,
+      support_247: false,
+      personal_manager: false,
+      bi_dashboards: false
     },
     popular: false,
-    color: '#6B8FA3'
+    color: '#6B8FA3',
+    tagline: 'Для небольшой бригады',
+    highlights: [
+      'До 100 заявок в месяц',
+      '5 объектов',
+      'Полное управление складом',
+      'Простая аналитика',
+      'Документы (акты, сметы)',
+      'QR-сканер',
+      '2 API-ключа'
+    ]
   },
+
+  // ============================================================
+  // 💼 ПРОФЕССИОНАЛЬНЫЙ — 3 990 ₽ ⭐
+  // ============================================================
   pro: {
     id: 'pro',
     name: 'Профессиональный',
@@ -66,19 +145,56 @@ export const TARIFF_PLANS = {
     apiQuotaDaily: 1000,
     maxApiKeys: 10,
     maxUsers: 50,
+    maxObjects: 50,
+    maxApplicationsPerMonth: 1000,
     features: {
-      warehouse: true,
-      analytics: true,
-      api: true,
+      // Core
+      create_applications: true,
+      warehouse_view: true,
+      warehouse_manage: true,
+      email_support: true,
+      basic_analytics: true,
+
+      // Advanced
+      api_access: true,
       webhooks: true,
-      support: 'chat',
-      priority: true,
-      sla: false,
-      customIntegration: false
+      advanced_analytics: true,
+      calendar: true,
+      internal_chat: true,
+      client_portal: false,
+      partner_portal: false,
+      document_generator: true,
+      mobile_qr: true,
+      kanban_board: true,
+
+      // Premium
+      priority_processing: true,
+      sla_guarantee: false,
+      custom_integration: false,
+      multi_company: false,
+      sso_ldap: false,
+      support_247: false,
+      personal_manager: false,
+      bi_dashboards: false
     },
     popular: true,
-    color: '#F9AA33'
+    color: '#F9AA33',
+    tagline: 'Для растущей компании',
+    highlights: [
+      'До 1 000 заявок в месяц',
+      '50 объектов',
+      'Календарь + внутренний чат',
+      'Kanban-доска задач',
+      'Webhooks',
+      'Расширенная аналитика',
+      '10 API-ключей',
+      'Приоритетная обработка'
+    ]
   },
+
+  // ============================================================
+  // 🏢 БИЗНЕС — 7 490 ₽
+  // ============================================================
   business: {
     id: 'business',
     name: 'Бизнес',
@@ -88,19 +204,55 @@ export const TARIFF_PLANS = {
     apiQuotaDaily: 5000,
     maxApiKeys: 25,
     maxUsers: 200,
+    maxObjects: 200,
+    maxApplicationsPerMonth: 5000,
     features: {
-      warehouse: true,
-      analytics: true,
-      api: true,
+      // Core
+      create_applications: true,
+      warehouse_view: true,
+      warehouse_manage: true,
+      email_support: true,
+      basic_analytics: true,
+
+      // Advanced
+      api_access: true,
       webhooks: true,
-      support: '24/7',
-      priority: true,
-      sla: true,
-      customIntegration: true
+      advanced_analytics: true,
+      calendar: true,
+      internal_chat: true,
+      client_portal: true,
+      partner_portal: false,
+      document_generator: true,
+      mobile_qr: true,
+      kanban_board: true,
+
+      // Premium
+      priority_processing: true,
+      sla_guarantee: true,
+      custom_integration: true,
+      multi_company: false,
+      sso_ldap: false,
+      support_247: true,
+      personal_manager: false,
+      bi_dashboards: false
     },
     popular: false,
-    color: '#3b82f6'
+    color: '#3b82f6',
+    tagline: 'Для среднего бизнеса',
+    highlights: [
+      'До 5 000 заявок в месяц',
+      '200 объектов',
+      'Портал для заказчиков',
+      'SLA-гарантия 99.9%',
+      'Кастомные интеграции',
+      'Поддержка 24/7',
+      '25 API-ключей'
+    ]
   },
+
+  // ============================================================
+  // 👑 КОРПОРАТИВНЫЙ — 13 990 ₽
+  // ============================================================
   enterprise: {
     id: 'enterprise',
     name: 'Корпоративный',
@@ -110,18 +262,99 @@ export const TARIFF_PLANS = {
     apiQuotaDaily: 20000,
     maxApiKeys: 100,
     maxUsers: 1000,
+    maxObjects: -1,
+    maxApplicationsPerMonth: -1,
     features: {
-      warehouse: true,
-      analytics: true,
-      api: true,
+      // Core
+      create_applications: true,
+      warehouse_view: true,
+      warehouse_manage: true,
+      email_support: true,
+      basic_analytics: true,
+
+      // Advanced
+      api_access: true,
       webhooks: true,
-      support: '24/7',
-      priority: true,
-      sla: true,
-      customIntegration: true
+      advanced_analytics: true,
+      calendar: true,
+      internal_chat: true,
+      client_portal: true,
+      partner_portal: true,
+      document_generator: true,
+      mobile_qr: true,
+      kanban_board: true,
+
+      // Premium
+      priority_processing: true,
+      sla_guarantee: true,
+      custom_integration: true,
+      multi_company: true,
+      sso_ldap: true,
+      support_247: true,
+      personal_manager: true,
+      bi_dashboards: true
     },
     popular: false,
-    color: '#7c3aed'
+    color: '#7c3aed',
+    tagline: 'Для холдингов и крупных компаний',
+    highlights: [
+      'Безлимит заявок и объектов',
+      'Портал для партнёров',
+      'Мультикомпания (холдинг)',
+      'SSO / LDAP авторизация',
+      'BI-дашборды',
+      'Персональный менеджер',
+      '100 API-ключей',
+      'Всё включено'
+    ]
+  }
+};
+
+// ============================================================
+// 🎯 КАТЕГОРИИ ФУНКЦИЙ (для UI)
+// ============================================================
+
+export const FEATURE_CATEGORIES = {
+  core: {
+    label: 'Базовые',
+    description: 'Обязательные функции для работы',
+    features: [
+      { key: 'create_applications', label: '📋 Создание заявок', icon: '📋' },
+      { key: 'warehouse_view', label: '👁 Просмотр склада', icon: '👁' },
+      { key: 'warehouse_manage', label: '📦 Управление складом', icon: '📦' },
+      { key: 'basic_analytics', label: '📊 Базовая аналитика', icon: '📊' },
+      { key: 'email_support', label: '📧 Email-поддержка', icon: '📧' }
+    ]
+  },
+  advanced: {
+    label: 'Продвинутые',
+    description: 'Для эффективной командной работы',
+    features: [
+      { key: 'api_access', label: '🔌 API доступ', icon: '🔌' },
+      { key: 'webhooks', label: '🔔 Webhooks', icon: '🔔' },
+      { key: 'advanced_analytics', label: '📈 Расширенная аналитика', icon: '📈' },
+      { key: 'calendar', label: '📅 Календарь', icon: '📅' },
+      { key: 'internal_chat', label: '💬 Внутренний чат', icon: '💬' },
+      { key: 'client_portal', label: '👥 Портал заказчика', icon: '👥' },
+      { key: 'partner_portal', label: '🤝 Портал партнёра', icon: '🤝' },
+      { key: 'document_generator', label: '📄 Документы (акты, сметы)', icon: '📄' },
+      { key: 'mobile_qr', label: '📱 QR-сканер (мобильный)', icon: '📱' },
+      { key: 'kanban_board', label: '🎯 Kanban-доска', icon: '🎯' }
+    ]
+  },
+  premium: {
+    label: 'Премиум',
+    description: 'Для крупных компаний и холдингов',
+    features: [
+      { key: 'priority_processing', label: '⚡ Приоритетная обработка', icon: '⚡' },
+      { key: 'sla_guarantee', label: '🛡️ SLA-гарантия', icon: '🛡️' },
+      { key: 'custom_integration', label: '🔧 Кастомная интеграция', icon: '🔧' },
+      { key: 'multi_company', label: '🏢 Мультикомпания (холдинг)', icon: '🏢' },
+      { key: 'sso_ldap', label: '🔐 SSO / LDAP', icon: '🔐' },
+      { key: 'support_247', label: '📞 Поддержка 24/7', icon: '📞' },
+      { key: 'personal_manager', label: '👤 Персональный менеджер', icon: '👤' },
+      { key: 'bi_dashboards', label: '📈 BI-дашборды', icon: '📈' }
+    ]
   }
 };
 
@@ -185,6 +418,7 @@ export const getCompanyPlan = async (supabaseClient, companyId) => {
 // ============================================================
 
 export const checkFeatureAccess = (plan, feature) => {
+  if (!plan || !plan.features) return false;
   return plan.features[feature] === true ||
          typeof plan.features[feature] === 'string';
 };
@@ -225,6 +459,8 @@ export const comparePlans = (planIds) => {
         limits: {
           users: plan.maxUsers,
           apiKeys: plan.maxApiKeys,
+          objects: plan.maxObjects,
+          applicationsPerMonth: plan.maxApplicationsPerMonth,
           monthlyQuota: plan.apiQuotaMonthly,
           dailyQuota: plan.apiQuotaDaily
         },
@@ -241,12 +477,15 @@ export const comparePlans = (planIds) => {
 // ============================================================
 
 export const recommendPlan = (stats) => {
-  const { users, applications } = stats;
+  const { users = 0, applications = 0, objects = 0 } = stats || {};
 
-  if (users <= 1 && applications <= 50) return 'basic';
-  if (users <= 5 && applications <= 1000) return 'micro';
-  if (users <= 50 && applications <= 15000) return 'pro';
-  if (users <= 200 && applications <= 60000) return 'business';
+  // Проверяем, что тариф подходит по всем трём параметрам
+  // Если хотя бы один параметр превышает лимит — берём более высокий тариф
+
+  if (users <= 1 && applications <= 10 && objects <= 1) return 'basic';
+  if (users <= 5 && applications <= 100 && objects <= 5) return 'micro';
+  if (users <= 50 && applications <= 1000 && objects <= 50) return 'pro';
+  if (users <= 200 && applications <= 5000 && objects <= 200) return 'business';
   return 'enterprise';
 };
 
@@ -573,6 +812,16 @@ export const getTariffUpgradeBenefits = (currentPlanId) => {
     return Math.round(((to - from) / from) * 100);
   };
 
+  // Новые функции (которых не было в текущем тарифе)
+  const newFeatures = [];
+  Object.keys(nextPlan.features).forEach(key => {
+    const currentVal = currentPlan.features[key];
+    const nextVal = nextPlan.features[key];
+    if (nextVal === true && currentVal !== true) {
+      newFeatures.push(key);
+    }
+  });
+
   return {
     planId: nextPlanId,
     name: nextPlan.name,
@@ -595,13 +844,19 @@ export const getTariffUpgradeBenefits = (currentPlanId) => {
         increase: nextPlan.maxApiKeys - currentPlan.maxApiKeys,
         percent: safePercent(currentPlan.maxApiKeys, nextPlan.maxApiKeys)
       },
-      newFeatures: Object.keys(nextPlan.features).filter(
-        feature => nextPlan.features[feature] === true &&
-                   (currentPlan.features[feature] === false || currentPlan.features[feature] === undefined)
-      ),
-      supportUpgrade: nextPlan.features.support !== currentPlan.features.support,
-      prioritySupport: nextPlan.features.priority === true && currentPlan.features.priority !== true,
-      hasSla: nextPlan.features.sla === true && currentPlan.features.sla !== true,
+      objects: {
+        from: currentPlan.maxObjects,
+        to: nextPlan.maxObjects,
+        increase: nextPlan.maxObjects - currentPlan.maxObjects,
+        percent: safePercent(currentPlan.maxObjects, nextPlan.maxObjects)
+      },
+      applicationsPerMonth: {
+        from: currentPlan.maxApplicationsPerMonth,
+        to: nextPlan.maxApplicationsPerMonth,
+        increase: nextPlan.maxApplicationsPerMonth - currentPlan.maxApplicationsPerMonth,
+        percent: safePercent(currentPlan.maxApplicationsPerMonth, nextPlan.maxApplicationsPerMonth)
+      },
+      newFeatures
     }
   };
 };
@@ -617,18 +872,22 @@ export const checkTariffLimit = (planId, limitType, currentValue) => {
   const limits = {
     users: plan.maxUsers,
     apiKeys: plan.maxApiKeys,
+    objects: plan.maxObjects,
+    applicationsPerMonth: plan.maxApplicationsPerMonth,
     apiQuotaMonthly: plan.apiQuotaMonthly,
     apiQuotaDaily: plan.apiQuotaDaily,
   };
 
   const limit = limits[limitType];
   if (limit === undefined) return { allowed: true, limit: Infinity };
+  if (limit === -1) return { allowed: true, limit: -1, remaining: -1, usagePercent: 0, isUnlimited: true };
 
   return {
     allowed: currentValue <= limit,
     limit: limit,
     remaining: Math.max(0, limit - currentValue),
-    usagePercent: limit > 0 ? Math.round((currentValue / limit) * 100) : 0
+    usagePercent: limit > 0 ? Math.round((currentValue / limit) * 100) : 0,
+    isUnlimited: false
   };
 };
 
