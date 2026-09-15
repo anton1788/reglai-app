@@ -178,7 +178,7 @@ import { activatePromoPlan, syncPromoCodesToDB } from './utils/promoManager';
 import {
   Plus, ArrowLeft, History, Minus, Send, Package, Building, User, Calendar,
   AlertCircle, Download, FileText, Search, Check, X, Edit3,
-  Phone, LogOut, Eye, Printer, Shield, BarChart3, AlertTriangle,
+  Phone, LogOut, Eye, EyeOff, Printer, Shield, BarChart3, AlertTriangle,
   Copy, CheckCircleIcon, Globe, Mail, Users, TrendingUp,
   Moon, Sun, CheckCircle, Briefcase, Home, Clock, Archive, MessageCircle, Ban, Menu,
   HelpCircle, ArrowRight, Info, Loader2, WifiOff, Wifi, Trash2, ShoppingCart,
@@ -201,6 +201,7 @@ import SettingsPage from './components/SettingsPage';
 import PublicOfferModal from './components/PublicOfferModal';
 import LegalOfferModal from './components/LegalOfferModal';
 import ConsentModal from './components/ConsentModal';
+import UpdatePassword from './components/UpdatePassword';
 
 const getCleanCompanyId = (companyId) => {
   if (!companyId) return null;
@@ -1073,6 +1074,10 @@ useEffect(() => {
 }, [userCompanyId, user?.user_metadata?.company_id, safeSetUserCompanyId]);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [showSignupModal, setShowSignupModal] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
@@ -2537,6 +2542,28 @@ const checkForUpdates = useCallback(async () => {
     }
     setAuthEmail('');
     setAuthPassword('');
+  };
+
+    const handlePasswordReset = async () => {
+    if (!resetEmail) {
+      showNotification('Введите email для сброса пароля', 'error');
+      return;
+    }
+    setIsResettingPassword(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/update-password`,
+      });
+      if (error) throw error;
+      showNotification('✅ Ссылка для сброса пароля отправлена на ваш email', 'success');
+      setShowPasswordResetModal(false);
+      setResetEmail('');
+    } catch (err) {
+      console.error('Password reset error:', err);
+      showNotification(err.message || 'Ошибка при сбросе пароля', 'error');
+    } finally {
+      setIsResettingPassword(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -6442,19 +6469,38 @@ useEffect(() => {
                 required
               />
             </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('yourPassword')}
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="••••••••"
-                required
-              />
+                        <div>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {t('yourPassword')}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordResetModal(true)}
+                  className="text-xs text-[#4A6572] hover:text-[#344955] dark:text-[#F9AA33] dark:hover:text-[#F57C00] font-medium transition-colors"
+                >
+                  {language === 'ru' ? 'Забыли пароль?' : 'Forgot password?'}
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  className="w-full px-4 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="••••••••"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <button
               type="submit"
@@ -6675,6 +6721,72 @@ const renderAnalyticsDashboard = () => {
               className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg"
             >
               {t('login')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+    const renderPasswordResetModal = () => {
+    if (!showPasswordResetModal) return null;
+    return (
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[10000] fade-enter"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowPasswordResetModal(false);
+          }
+        }}
+      >
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+              {language === 'ru' ? 'Сброс пароля' : 'Reset Password'}
+            </h3>
+            <button
+              onClick={() => setShowPasswordResetModal(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              aria-label="Закрыть"
+            >
+              <X className="w-5 h-5" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {language === 'ru' 
+                ? 'Введите ваш email, и мы отправим ссылку для сброса пароля.' 
+                : 'Enter your email and we will send you a link to reset your password.'}
+            </p>
+            <div>
+              <label htmlFor="resetEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('yourEmail')}
+              </label>
+              <input
+                id="resetEmail"
+                type="email"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+            <button
+              onClick={handlePasswordReset}
+              disabled={isResettingPassword}
+              className="w-full py-2 px-4 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50"
+            >
+              {isResettingPassword ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+                  <span>{t('loading')}</span>
+                </>
+              ) : (
+                language === 'ru' ? 'Отправить ссылку' : 'Send Link'
+              )}
             </button>
           </div>
         </div>
@@ -7326,13 +7438,21 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 // ─────────────────────────────────────────────────────────
   // 📝 РЕГИСТРАЦИЯ ЗАКАЗЧИКА ПО ПРИГЛАШЕНИЮ
   // ─────────────────────────────────────────────────────────
-  const urlParams = new URLSearchParams(window.location.search);
+    const urlParams = new URLSearchParams(window.location.search);
   const inviteParam = urlParams.get('invite');
 
   // ✅ Если есть параметр invite - ВСЕГДА показываем регистрацию
   // Это позволяет заказчику перейти по ссылке даже если руководитель уже залогинен
   if (inviteParam) {
     return <ClientRegister />;
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // 🔐 МАРШРУТ ВОССТАНОВЛЕНИЯ ПАРОЛЯ
+  // ─────────────────────────────────────────────────────────
+  // Проверяем путь из URL (pathname + hash для токена из письма)
+  if (window.location.pathname === '/update-password') {
+    return <UpdatePassword />;
   }
 
   // ─────────────────────────────────────────────────────────
@@ -8476,6 +8596,7 @@ onClearFilters={handleClearFilters}
 />
       
       {renderAdminLoginModal()}
+      {renderPasswordResetModal()}
       {renderNotifications()}
       
       {!isSuperAdmin(userRole, user?.user_metadata) && showTutorial && (
