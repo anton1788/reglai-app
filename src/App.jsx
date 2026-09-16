@@ -192,7 +192,6 @@ import { supabase, getSafeCompanyId } from './utils/supabaseClient';
 // === APPROVAL WORKFLOW ===
 import ApprovalModal from './components/ApprovalWorkflow/ApprovalModal';
 import { useApproval } from './hooks/useApproval';
-import { useApplicationNotifications } from './hooks/useApplicationNotifications';
 // eslint-disable-next-line no-unused-vars
 import approvalEngine from './utils/approvalEngine'; 
 import EstimateCalculator from './components/EstimateCalculator';
@@ -1377,9 +1376,6 @@ const {
   // eslint-disable-next-line no-unused-vars
   requiresApproval
 } = useApproval(userCompanyId, user?.id, userRole);
-
-// 🔔 Уведомления о смене статуса заявок
-const { notifyStatusChange } = useApplicationNotifications(supabase);
 
   // ─────────────────────────────────────────────────────────
   // 🎨 INJECT GLOBAL STYLES (Pattern #1)
@@ -3963,49 +3959,23 @@ useEffect(() => {
   // App.jsx - обновлённая openReceiveModal
 
 const openReceiveModal = useCallback((application, mode = 'admin_receive') => {
-  // 🚫 ЗАЩИТА ОТ РАБОТЫ С ПОГЛОЩЁННОЙ ЗАЯВКОЙ
-  if (application.status === 'consolidated') {
-    showNotification(
-      '⚠️ Эта заявка уже объединена в сводную. Работайте со сводной заявкой.',
-      'warning'
-    );
+  // Проверка прав для разных режимов
+  if (mode === 'admin_receive' && userRole !== 'supply_admin' && userRole !== 'manager' && userRole !== 'foreman') {
+    showNotification('Нет прав на приёмку', 'error');
     return;
   }
   
-  // 🚫 ЗАЩИТА ОТ ДВОЙНОЙ РАБОТЫ СО СВОДНОЙ
-  if (application.is_consolidated === true && mode === 'master_confirm') {
-    // Можно, но с уведомлением
-    console.log('ℹ️ Работа со сводной заявкой в режиме подтверждения');
-  }
-
-  // ✅ Приёмка на склад: только supply_admin, manager, director
-  if (mode === 'admin_receive') {
-    const allowedRoles = ['supply_admin', 'manager', 'director'];
-    if (!allowedRoles.includes(userRole) && !isCompanyOwner) {
-      showNotification('Только снабженец или руководитель может принимать материалы', 'error');
-      return;
-    }
+  if (mode === 'admin_ready_to_issue' && userRole !== 'supply_admin' && userRole !== 'manager') {
+    showNotification('Только снабженец может выдавать материалы', 'error');
+    return;
   }
   
-  // ✅ Выдача мастеру: только supply_admin, manager, director
-  if (mode === 'admin_ready_to_issue') {
-    const allowedRoles = ['supply_admin', 'manager', 'director'];
-    if (!allowedRoles.includes(userRole) && !isCompanyOwner) {
-      showNotification('Только снабженец или руководитель может выдавать материалы', 'error');
-      return;
-    }
-  }
-  
-  // ✅ Подтверждение мастером: master, foreman
-  if (mode === 'master_confirm') {
-    const allowedRoles = ['master', 'foreman'];
-    if (!allowedRoles.includes(userRole)) {
-      showNotification('Только мастер или прораб может подтвердить получение', 'error');
-      return;
-    }
+  if (mode === 'master_confirm' && userRole !== 'master' && userRole !== 'foreman') {
+    showNotification('Нет прав на подтверждение', 'error');
+    return;
   }
 
-  // ✅ Проверка "Выдача со склада"
+  // ✅ ПРОВЕРКА: режим "Выдача со склада"
   if (mode === 'admin_ready_to_issue') {
     const hasMaterialsOnWarehouse = application.materials?.some(m => {
       const onWarehouse = Number(m.supplier_received_quantity) || 0;
@@ -4046,8 +4016,160 @@ const openReceiveModal = useCallback((application, mode = 'admin_receive') => {
   setSelectedApplication({ ...application, modalMode: mode });
   setShowReceiveModal(true);
   markAsViewed(application.id);
-}, [userRole, isCompanyOwner, showNotification, markAsViewed]);
+}, [userRole, showNotification, markAsViewed]);
 
+  const _saveReceiveStatus = async (localMaterialsFromModal) => {
+  try {
+    if (!userCompanyId) {
+      showNotification('Ошибка: компания не указана', 'error');
+      return;
+    }
+    
+    // ✅ Очищаем company_id
+    const cleanCompanyId = getSafeCompanyId(userCompanyId);
+    if (!cleanCompanyId) {
+      showNotification('Ошибка: компания не найдена', 'error');
+      return;
+    }
+      const materialsToSave = localMaterialsFromModal || selectedApplication?.materials;
+      const cleanMaterials = materialsToSave?.map(m => {
+        const requestedQty = Number(m.quantity) || 0;
+        const totalSupplierReceived = Number(m.supplier_received_quantity) || 0;
+        const employeeConfirmed = Number(m.received) || 0;
+        let materialStatus = ITEM_STATUS.PENDING;
+        if (employeeConfirmed >= requestedQty && requestedQty > 0) {
+          materialStatus = ITEM_STATUS.CONFIRMED;
+        } else if (totalSupplierReceived > 0) {
+          materialStatus = ITEM_STATUS.ON_WAREHOUSE;
+        }
+        return {
+          description: m.description || '',
+          quantity: requestedQty,
+          unit: m.unit || 'шт',
+          received: employeeConfirmed,
+          status: materialStatus,
+          supplier_received_quantity: totalSupplierReceived,
+          supplier_received_at: totalSupplierReceived > 0 ? new Date().toISOString() : m.supplier_received_at,
+          confirmed_by_employee_at: employeeConfirmed > 0 ? new Date().toISOString() : null,
+          confirmed_by_employee_id: employeeConfirmed > 0 ? user?.id : null
+        };
+      }) || [];
+      const allReceived = cleanMaterials.every(m =>
+        (m.received || 0) >= (m.quantity || 0)
+      );
+      const anyReceived = cleanMaterials.some(m => (m.received || 0) > 0);
+      const newStatus = allReceived
+        ? APPLICATION_STATUS.RECEIVED
+        : anyReceived
+          ? APPLICATION_STATUS.PARTIAL_RECEIVED
+          : APPLICATION_STATUS.ADMIN_PROCESSING;
+      const newHistoryEntry = {
+        user_id: user?.id,
+        user_email: user?.email,
+        old_status: selectedApplication?.status,
+        new_status: newStatus,
+        action: 'supplier_received',
+        timestamp: new Date().toISOString()
+      };
+      const updatedHistory = [...(selectedApplication?.status_history || []), newHistoryEntry];
+      logMaterialsReceived(
+        supabase,
+        { ...selectedApplication, materials: cleanMaterials, status: newStatus },
+        cleanMaterials.filter(m => m.supplier_received_quantity > 0).length,
+        cleanMaterials.length,
+        userContext
+      ).catch(err => console.warn('Аудит не записан:', err));
+      const { error: appError } = await supabase
+        .from('applications')
+        .update({
+          status: newStatus,
+          materials: cleanMaterials,
+          status_history: updatedHistory,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedApplication?.id);
+      if (appError) {
+        console.error('❌ Ошибка обновления заявки:', appError);
+        showNotification(`Ошибка: ${appError.message}`, 'error');
+        return;
+      }
+      console.log('🔄 [DEBUG] saveReceiveStatus вызван с:', {
+        userCompanyId,
+        userRole,
+        materialsCount: cleanMaterials?.length,
+        hasDelta: cleanMaterials?.some(m => (m.supplier_received_quantity || 0) > 0)
+      });
+      console.log('🔍 [WAREHOUSE DEBUG] Проверка:', {
+        WAREHOUSE_ENABLED,
+        userRole,
+        isSupplyAdmin: userRole === 'supply_admin',
+        isManager: userRole === 'manager',
+        materialsCount: cleanMaterials?.length,
+        hasMaterials: cleanMaterials?.some(m => (m.supplier_received_quantity || 0) > 0)
+      });
+      if (WAREHOUSE_ENABLED && (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'foreman')) {
+        for (const material of cleanMaterials) {
+          const qtyReceived = Number(material.supplier_received_quantity) || 0;
+          if (qtyReceived > 0) {
+            try {
+              console.log('📦 [WAREHOUSE] Отправка на склад:', {
+                item: material.description,
+                qty: qtyReceived,
+                unit: material.unit,
+                company_id: userCompanyId
+              });
+              const cleanCompanyId = getSafeCompanyId(userCompanyId);
+if (!cleanCompanyId) {
+  showNotification('Ошибка: компания не найдена', 'error');
+  return;
+}
+
+// Затем используйте cleanCompanyId
+const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
+      p_company_id: cleanCompanyId,
+                p_item_name: (material.description || '').trim(),
+                p_quantity: qtyReceived,
+                p_transaction_type: 'income',
+                p_user_id: user?.id || null,
+                p_user_email: user?.email || null,
+                p_comment: `Приёмка: ${selectedApplication?.object_name}`,
+                p_application_id: selectedApplication?.id || null,
+                p_unit: material.unit || 'шт',
+                p_target_object_name: selectedApplication?.object_name || null,
+                p_recipient_name: selectedApplication?.foreman_name || null,
+                p_recipient_phone: selectedApplication?.foreman_phone || null
+              });
+              if (rpcError) {
+                console.error('❌ [WAREHOUSE] RPC ошибка:', rpcError);
+                showNotification(`⚠️ Ошибка склада: ${rpcError.message}`, 'warning');
+              } else {
+                console.log('✅ [WAREHOUSE] Успешно сохранено:', material.description);
+              }
+            } catch (err) {
+              console.error('❌ [WAREHOUSE] Критическая ошибка:', err);
+              showNotification('⚠️ Ошибка обновления склада', 'warning');
+            }
+          }
+        }
+      }
+      const updatedAppForUI = {
+        ...selectedApplication,
+        status: newStatus,
+        materials: cleanMaterials,
+        status_history: updatedHistory,
+        updated_at: new Date().toISOString()
+      };
+      setApplications(applications.map(app =>
+        app.id === updatedAppForUI?.id ? updatedAppForUI : app
+      ));
+      setShowReceiveModal(false);
+      setSelectedApplication(null);
+      showNotification('✅ Приёмка зафиксирована', 'success');
+    } catch (err) {
+      console.error('❌ Критическая ошибка saveReceiveStatus:', err);
+      showNotification('Ошибка при обновлении статуса: ' + err.message, 'error');
+    }
+  };
   const handleSearchChange = useCallback((value) => {
   setSearchTerm(value);
   setPage(1); // ← УЖЕ ДОБАВЛЕНО
@@ -4076,12 +4198,11 @@ const handleClearFilters = useCallback(() => {
   setPage(1); // ← УЖЕ ДОБАВЛЕНО
 }, []);
 
-  
-// ============================================================
-// 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (с дельтами для склада)
+  // ============================================================
+// 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (ОБНОВЛЁННАЯ)
 // ============================================================
 const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
-  console.log('🔍 [handleAdminReceive] start', { 
+  console.log('🔍 [DEBUG] handleAdminReceive started', {
     applicationId: application?.id,
     materialsCount: materialsFromModal?.length || 0
   });
@@ -4090,104 +4211,87 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     showNotification('Ошибка: заявка не найдена', 'error');
     return { success: false };
   }
-
-  if (userRole !== 'supply_admin' && userRole !== 'manager' && userRole !== 'director' && !isCompanyOwner) {
-  showNotification('Нет прав на приёмку', 'error');
-  return { success: false };
-}
   
   try {
+    // ✅ Очищаем company_id
     const cleanCompanyId = getSafeCompanyId(userCompanyId);
     if (!cleanCompanyId) {
       showNotification('Ошибка: компания не найдена', 'error');
       return { success: false };
     }
     
-    // ✅ 1. Обновляем материалы + считаем ДЕЛЬТУ для склада
-    const updatedMaterials = [];
-    const warehouseChanges = [];  // { item_name, delta, unit, description }
-    
-    for (const originalMaterial of application.materials) {
-      const origName = (originalMaterial.description || originalMaterial.item_name || '').trim().toLowerCase();
-      const modalMaterial = materialsFromModal.find(m => 
-        (m.description || m.item_name || '').trim().toLowerCase() === origName
-      );
-      
-      if (!modalMaterial) {
-        updatedMaterials.push(originalMaterial);
-        continue;
-      }
-      
-      const oldReceived = Number(originalMaterial.supplier_received_quantity) || 0;
-      const newReceived = Number(modalMaterial.supplier_received_quantity) || 0;
-      const sentToMaster = Number(originalMaterial.sent_to_master_quantity) || 0;
-      const requested = Number(originalMaterial.quantity) || 0;
-      
-      // 🔥 ЗАЩИТА: нельзя принять меньше, чем уже отправлено мастеру
-      if (newReceived < sentToMaster) {
-        showNotification(
-          `❌ Нельзя принять "${originalMaterial.description}" меньше ${sentToMaster} — мастеру уже отправлено`,
-          'error'
-        );
-        return { success: false };
-      }
-      
-      const delta = newReceived - oldReceived;
-      
-      // Определяем статус материала
-      let materialStatus = originalMaterial.status || 'pending';
-      if (newReceived >= requested && requested > 0) {
-        materialStatus = 'on_warehouse';
-      } else if (newReceived > 0) {
-        materialStatus = 'partial';
-      }
-      
-      updatedMaterials.push({
-        ...originalMaterial,
-        supplier_received_quantity: newReceived,
-        supplier_received_at: delta > 0 
-          ? new Date().toISOString() 
-          : originalMaterial.supplier_received_at,
-        status: materialStatus
+    // ✅ 1. Создаём копию материалов с обновлёнными количествами
+    const updatedMaterials = application.materials.map((originalMaterial, index) => {
+      // Находим соответствующий материал из модалки
+      const modalMaterial = materialsFromModal.find(m => {
+        const originalName = (originalMaterial.description || originalMaterial.item_name || '').trim().toLowerCase();
+        const modalName = (m.description || m.item_name || '').trim().toLowerCase();
+        return originalName === modalName;
       });
       
-      // 🔥 Добавляем в очередь изменений склада (только если дельта != 0)
-      if (delta !== 0) {
-        warehouseChanges.push({
-          item_name: (originalMaterial.description || originalMaterial.item_name || '').trim(),
-          delta,
-          unit: originalMaterial.unit || 'шт',
-          description: originalMaterial.description
-        });
+      if (modalMaterial) {
+        const qtyReceived = Number(modalMaterial.supplier_received_quantity) || 0;
+        const requested = Number(originalMaterial.quantity) || 0;
+        
+        // Определяем статус материала
+        let materialStatus = originalMaterial.status || 'pending';
+        if (qtyReceived >= requested && requested > 0) {
+          materialStatus = 'on_warehouse';
+        } else if (qtyReceived > 0) {
+          materialStatus = 'partial';
+        }
+        
+        return {
+          ...originalMaterial,
+          supplier_received_quantity: qtyReceived,
+          supplier_received_at: qtyReceived > 0 ? new Date().toISOString() : originalMaterial.supplier_received_at,
+          status: materialStatus
+        };
       }
-    }
+      
+      return originalMaterial;
+    });
     
-    // ✅ 2. Определяем новый статус заявки
+    // ✅ 2. Проверяем, сколько материалов принято
     const totalReceived = updatedMaterials.filter(m => (Number(m.supplier_received_quantity) || 0) > 0).length;
     const totalMaterials = updatedMaterials.length;
     
+    // ============================================================
+    // 🔥 КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: ПРАВИЛЬНОЕ ОПРЕДЕЛЕНИЕ СТАТУСА
+    // ============================================================
+    
+    // ✅ 3. Проверяем, все ли материалы полностью приняты
     const allFullyReceived = updatedMaterials.every(m => {
       const received = Number(m.supplier_received_quantity) || 0;
       const quantity = Number(m.quantity) || 0;
-      return received >= quantity && quantity > 0;
+      return received >= quantity;
     });
     
+    // ✅ 4. Определяем новый статус заявки
     let newStatus;
     if (allFullyReceived && totalReceived > 0) {
-      newStatus = APPLICATION_STATUS.READY_FOR_ISSUE;
+      newStatus = 'ready_for_issue'; // ← ВСЁ принято → готово к выдаче
     } else if (totalReceived > 0) {
-      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
+      newStatus = 'partial_received'; // ← ЧАСТИЧНО принято → остаётся активной
     } else {
-      newStatus = APPLICATION_STATUS.ADMIN_PROCESSING;
+      newStatus = 'admin_processing'; // ← НИЧЕГО не принято
     }
     
-    console.log('📊 [RECEIVE]', { totalReceived, totalMaterials, allFullyReceived, newStatus });
+    console.log('📊 [RECEIVE] Результат:', {
+      totalReceived,
+      totalMaterials,
+      allFullyReceived,
+      newStatus  // ← ДОЛЖНО БЫТЬ 'partial_received' если принята часть!
+    });
     
-    // ✅ 3. Обновляем заявку в БД
+    // ============================================================
+    // ✅ 5. Обновляем заявку в БД
+    // ============================================================
+    
     const { error: updateError } = await supabase
       .from('applications')
       .update({
-        status: newStatus,
+        status: newStatus,  // ← ТЕПЕРЬ ПРАВИЛЬНЫЙ СТАТУС
         materials: updatedMaterials,
         updated_at: new Date().toISOString(),
         status_history: [
@@ -4206,64 +4310,53 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
       .eq('id', application.id);
     
     if (updateError) {
-      console.error('❌ [UPDATE]', updateError);
+      console.error('❌ [UPDATE] Ошибка обновления:', updateError);
       showNotification('Ошибка обновления заявки: ' + updateError.message, 'error');
       return { success: false };
     }
     
-    // ✅ 4. Обновляем склад (только ДЕЛЬТЫ!)
-    if (WAREHOUSE_ENABLED && warehouseChanges.length > 0) {
-      for (const change of warehouseChanges) {
-        const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
-          p_company_id: cleanCompanyId,
-          p_item_name: change.item_name,
-          p_quantity: Math.abs(change.delta),
-          p_transaction_type: change.delta > 0 ? 'income' : 'expense',
-          p_user_id: user?.id || null,
-          p_user_email: user?.email || null,
-          p_comment: change.delta > 0
-            ? `Приёмка: ${application.object_name}`
-            : `Корректировка приёмки: ${application.object_name}`,
-          p_application_id: application.id,
-          p_unit: change.unit,
-          p_target_object_name: application.object_name,
-          p_recipient_name: application.foreman_name,
-          p_recipient_phone: application.foreman_phone
-        });
-        
-        if (rpcError) {
-          console.error('❌ [WAREHOUSE]', rpcError);
-          // Не прерываем — заявка уже обновлена
-          showNotification(
-            `⚠️ Ошибка склада для "${change.item_name}": ${rpcError.message}`,
-            'warning'
-          );
-        } else {
-          console.log('✅ [WAREHOUSE] Дельта применена:', change);
+    // ✅ 6. Обновляем склад (если включено)
+    if (WAREHOUSE_ENABLED) {
+      const materialsToWarehouse = updatedMaterials.filter(m => {
+        return (Number(m.supplier_received_quantity) || 0) > 0;
+      });
+      
+      for (const material of materialsToWarehouse) {
+        const qtyReceived = Number(material.supplier_received_quantity) || 0;
+        if (qtyReceived > 0) {
+          try {
+            await supabase.rpc('update_warehouse_balance', {
+              p_company_id: cleanCompanyId,
+              p_item_name: (material.description || material.item_name || '').trim(),
+              p_quantity: qtyReceived,
+              p_transaction_type: 'income',
+              p_user_id: user?.id,
+              p_user_email: user?.email,
+              p_comment: `Приёмка: ${application.object_name}`,
+              p_application_id: application.id,
+              p_unit: material.unit || 'шт',
+              p_target_object_name: application.object_name,
+              p_recipient_name: application.foreman_name,
+              p_recipient_phone: application.foreman_phone
+            });
+          } catch (err) {
+            console.warn('⚠️ [WAREHOUSE] Ошибка обновления склада:', err);
+          }
         }
       }
     }
     
-    // ✅ 5. Обновляем UI
+    // ✅ 7. Обновляем UI
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
     
-    // ✅ 6. Уведомления
-    await notifyStatusChange({
-      application,
-      oldStatus: application.status,
-      newStatus,
-      changedBy: user?.id,
-      companyId: cleanCompanyId,
-      extraMessage: `Принято ${totalReceived} из ${totalMaterials} позиций`
-    });
-    
     showNotification(`✅ Принято ${totalReceived} позиций на склад`, 'success');
     setShowReceiveModal(false);
     
+    // ✅ 8. Если всё принято - показываем подсказку
     if (newStatus === 'ready_for_issue') {
       setTimeout(() => {
         showNotification('📤 Все материалы на складе. Перейдите в "Готовы к выдаче"', 'info');
@@ -4277,147 +4370,75 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     showNotification('Ошибка приёмки: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, userCompanyId, userRole, isCompanyOwner, supabase, showNotification, setApplications, notifyStatusChange]);
+}, [user, userCompanyId, supabase, showNotification, setApplications, WAREHOUSE_ENABLED]);
 
   // 🔹 Снабженец берет заявку в работу (поиск поставщика, запрос счета)
 // ✅ СТАЛО
 const handleTakeToWork = useCallback(async (application) => {
-  if (!application?.id) return;
+  // ✅ Очищаем company_id (для аудита)
+  const cleanCompanyId = getSafeCompanyId(userCompanyId);
   
-  try {
-    // 🔥 Проверяем актуальный статус
-    const { data: freshApp, error: fetchError } = await supabase
-      .from('applications')
-      .select('status, status_history')
-      .eq('id', application.id)
-      .single();
-    
-    if (fetchError) {
-      showNotification('Ошибка загрузки заявки', 'error');
-      return;
-    }
-    
-    if (freshApp.status !== APPLICATION_STATUS.PENDING) {
-      showNotification('Заявка уже взята в работу', 'warning');
-      await loadApplications(page);
-      return;
-    }
-    
-    const cleanCompanyId = getSafeCompanyId(userCompanyId);
-    
-    const { error } = await supabase
-      .from('applications')
-      .update({
-        status: APPLICATION_STATUS.ADMIN_PROCESSING,
-        status_history: [
-          ...(freshApp.status_history || []),
-          {
-            user_id: user?.id,
-            user_email: user?.email,
-            action: 'taken_to_work',
-            timestamp: new Date().toISOString(),
-            details: 'Снабженец принял заявку в обработку'
-          }
-        ],
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', application.id);
+  const { error } = await supabase
+    .from('applications')
+    .update({
+      status: APPLICATION_STATUS.ADMIN_PROCESSING,
+      status_history: [...(application.status_history || []), {
+        user_id: user?.id,
+        action: 'taken_to_work',
+        timestamp: new Date().toISOString(),
+        details: 'Снабженец принял заявку в обработку',
+        company_id: cleanCompanyId  // для истории
+      }]
+    })
+    .eq('id', application.id);
 
-    if (error) {
-      showNotification('Ошибка обновления статуса', 'error');
-      return;
-    }
-    
-    setApplications(prev => prev.map(a => 
-      a.id === application.id 
-        ? { ...a, status: APPLICATION_STATUS.ADMIN_PROCESSING } 
-        : a
-    ));
-    
-    await notifyStatusChange({
-      application,
-      oldStatus: APPLICATION_STATUS.PENDING,
-      newStatus: APPLICATION_STATUS.ADMIN_PROCESSING,
-      changedBy: user?.id,
-      companyId: cleanCompanyId
-    });
-    
-    setShowReceiveModal(false);
-    showNotification('📦 Заявка взята в работу. Теперь вы ищете поставщика.', 'success');
-  } catch (err) {
-    console.error('❌ handleTakeToWork:', err);
-    showNotification('Ошибка: ' + err.message, 'error');
+  if (error) { 
+    showNotification('Ошибка обновления статуса', 'error'); 
+    return; 
   }
-}, [user?.id, user?.email, userCompanyId, showNotification, supabase, page, loadApplications, notifyStatusChange]);
+  
+  setApplications(prev => prev.map(a => 
+    a.id === application.id 
+      ? { ...a, status: APPLICATION_STATUS.ADMIN_PROCESSING } 
+      : a
+  ));
+  setShowReceiveModal(false);
+  showNotification('📦 Заявка взята в работу. Теперь вы ищете поставщика.', 'success');
+}, [user?.id, userCompanyId, showNotification]);
 
 // 🔹 Снабженец отправляет на согласование (после получения счета/суммы)
 // ✅ СТАЛО
 const handleSendForApproval = useCallback(async (application) => {
-  if (!application?.id) return;
+  // ✅ Очищаем company_id (для аудита)
+  const cleanCompanyId = getSafeCompanyId(userCompanyId);
   
-  try {
-    const { data: freshApp, error: fetchError } = await supabase
-      .from('applications')
-      .select('status, status_history')
-      .eq('id', application.id)
-      .single();
-    
-    if (fetchError) {
-      showNotification('Ошибка загрузки заявки', 'error');
-      return;
-    }
-    
-    if (freshApp.status === APPLICATION_STATUS.PENDING_APPROVAL) {
-      showNotification('Заявка уже отправлена на согласование', 'warning');
-      return;
-    }
-    
-    const cleanCompanyId = getSafeCompanyId(userCompanyId);
-    
-    const { error } = await supabase
-      .from('applications')
-      .update({
-        status: APPLICATION_STATUS.PENDING_APPROVAL,
-        status_history: [
-          ...(freshApp.status_history || []),
-          {
-            user_id: user?.id,
-            user_email: user?.email,
-            action: 'sent_for_approval',
-            timestamp: new Date().toISOString(),
-            details: 'Отправлено руководителю (получен счет)'
-          }
-        ],
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', application.id);
+  const { error } = await supabase
+    .from('applications')
+    .update({
+      status: APPLICATION_STATUS.PENDING_APPROVAL,
+      status_history: [...(application.status_history || []), {
+        user_id: user?.id,
+        action: 'sent_for_approval',
+        timestamp: new Date().toISOString(),
+        details: 'Отправлено руководителю (получен счет)',
+        company_id: cleanCompanyId  // для истории
+      }]
+    })
+    .eq('id', application.id);
 
-    if (error) {
-      showNotification('Ошибка обновления статуса', 'error');
-      return;
-    }
-    
-    setApplications(prev => prev.map(a => 
-      a.id === application.id 
-        ? { ...a, status: APPLICATION_STATUS.PENDING_APPROVAL } 
-        : a
-    ));
-    
-    await notifyStatusChange({
-      application,
-      oldStatus: freshApp.status,
-      newStatus: APPLICATION_STATUS.PENDING_APPROVAL,
-      changedBy: user?.id,
-      companyId: cleanCompanyId
-    });
-    
-    setShowReceiveModal(false);
-    showNotification('📋 Отправлено руководителю на согласование', 'info');
-  } catch (err) {
-    console.error('❌ handleSendForApproval:', err);
-    showNotification('Ошибка: ' + err.message, 'error');
+  if (error) { 
+    showNotification('Ошибка обновления статуса', 'error'); 
+    return; 
   }
-}, [user?.id, user?.email, userCompanyId, showNotification, supabase, notifyStatusChange]);
+  
+  setApplications(prev => prev.map(a => 
+    a.id === application.id 
+      ? { ...a, status: APPLICATION_STATUS.PENDING_APPROVAL } 
+      : a
+  ));
+  setShowReceiveModal(false);
+  showNotification('📋 Отправлено руководителю на согласование', 'info');
+}, [user?.id, userCompanyId, showNotification]);
 
 
 
@@ -4465,11 +4486,11 @@ const handleNpsSubmit = async ({ score, comment }) => {
   }
 };
 
-// ============================================================
-// 🔹 ОТПРАВКА МАСТЕРУ (с проверкой остатков)
+  // ============================================================
+// 🔹 ОТПРАВКА МАСТЕРУ (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 // ============================================================
 const handleSendToMaster = useCallback(async (itemsToSend, application) => {
-  if (userRole !== 'supply_admin' && userRole !== 'manager' && userRole !== 'director' && !isCompanyOwner) {
+  if (userRole !== 'supply_admin' && userRole !== 'manager') {
     showNotification('Только снабженец может выдавать материалы мастеру', 'error');
     return { success: false };
   }
@@ -4481,12 +4502,8 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
 
   try {
     const cleanCompanyId = getSafeCompanyId(userCompanyId);
-    if (!cleanCompanyId) {
-      showNotification('Ошибка: компания не найдена', 'error');
-      return { success: false };
-    }
 
-    // ✅ Фильтруем только те, где quantityToSend > 0
+    // ✅ Фильтруем только те материалы, где quantityToSend > 0
     const validItems = itemsToSend.filter(item => (Number(item.quantityToSend) || 0) > 0);
 
     if (validItems.length === 0) {
@@ -4494,102 +4511,57 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
       return { success: false };
     }
 
-    // 🔥 ПРОВЕРКА ОСТАТКОВ НА СКЛАДЕ
-    for (const item of validItems) {
-      const itemName = (item.description || item.item_name || '').trim();
-      const requested = Number(item.quantityToSend) || 0;
-      
-      const { data: balance, error: balanceError } = await supabase
-        .from('warehouse_balances')
-        .select('quantity')
-        .eq('company_id', cleanCompanyId)
-        .eq('item_name', itemName)
-        .maybeSingle();
-      
-      if (balanceError) {
-        console.warn('[Warehouse] Ошибка проверки баланса:', balanceError.message);
-        // Продолжаем — RPC сам проверит
-      }
-      
-      const available = Number(balance?.quantity) || 0;
-      
-      if (available < requested) {
-        showNotification(
-          `❌ Недостаточно "${itemName}" на складе: доступно ${available} ${item.unit || 'шт'}, запрошено ${requested}`,
-          'error'
-        );
-        return { success: false };
-      }
-    }
-
     console.log('📦 Выдача материалов мастеру:', validItems);
 
     // 1. Обновляем материалы
-    // ✅ Очередь фактических дельт для склада
-const materialsDelta = [];
+    const updatedMaterials = application.materials.map(original => {
+      const itemToSend = validItems.find(i => 
+        (i.description || i.item_name) === (original.description || original.item_name)
+      );
 
-const updatedMaterials = application.materials.map(original => {
-  const origName = (original.description || original.item_name || '').trim();
-  const itemToSend = validItems.find(i => 
-    (i.description || i.item_name || '').trim() === origName
-  );
+      if (itemToSend && (Number(itemToSend.quantityToSend) || 0) > 0) {
+        const qtyToSend = Number(itemToSend.quantityToSend);
+        const currentSent = Number(original.sent_to_master_quantity) || 0;
+        const totalReceived = Number(original.supplier_received_quantity) || 0;
+        
+        const newSent = Math.min(currentSent + qtyToSend, totalReceived);
+        
+        // ✅ Проверяем, полностью ли отправлен материал
+        const isFullySent = newSent >= totalReceived && totalReceived > 0;
 
-  if (itemToSend && (Number(itemToSend.quantityToSend) || 0) > 0) {
-    const qtyRequested = Number(itemToSend.quantityToSend);
-    const currentSent = Number(original.sent_to_master_quantity) || 0;
-    const totalReceived = Number(original.supplier_received_quantity) || 0;
-    
-    // 🔥 Фактически выдаём не больше, чем осталось
-    const actualDelta = Math.min(
-      qtyRequested,
-      Math.max(totalReceived - currentSent, 0)
-    );
-    
-    if (actualDelta <= 0) return original;
-    
-    const newSent = currentSent + actualDelta;
-    const isFullySent = newSent >= totalReceived && totalReceived > 0;
-    
-    materialsDelta.push({
-      item_name: origName,
-      quantity: actualDelta,
-      unit: original.unit || 'шт'
+        return {
+          ...original,
+          sent_to_master_quantity: newSent,
+          // ✅ Если полностью отправлен - меняем статус
+          status: isFullySent ? ITEM_STATUS.SENT_TO_MASTER : 
+                  newSent > 0 ? ITEM_STATUS.PARTIAL_SENT : original.status,
+          sent_to_master_at: newSent > currentSent ? new Date().toISOString() : original.sent_to_master_at,
+          sent_to_master_by: user?.id
+        };
+      }
+      return original;
     });
 
-    return {
-      ...original,
-      sent_to_master_quantity: newSent,
-      status: isFullySent 
-        ? ITEM_STATUS.SENT_TO_MASTER 
-        : newSent > 0 
-          ? ITEM_STATUS.PARTIAL_SENT 
-          : original.status,
-      sent_to_master_at: newSent > currentSent 
-        ? new Date().toISOString() 
-        : original.sent_to_master_at,
-      sent_to_master_by: user?.id
-    };
-  }
-  return original;
-});
-
-    // 2. Проверяем, все ли отправлены
+    // 2. Проверяем, все ли материалы отправлены
     const allSent = updatedMaterials.every(m => {
       const totalReceived = Number(m.supplier_received_quantity) || 0;
       const sent = Number(m.sent_to_master_quantity) || 0;
       const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
       
+      // Если материал уже подтверждён мастером — пропускаем
       if (isFullyConfirmed) return true;
+      
       return sent >= totalReceived;
     });
 
+    // ✅ Новый статус: если все отправлено → ждем подтверждения мастера
     const newStatus = allSent 
       ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION
       : APPLICATION_STATUS.PARTIAL_RECEIVED;
 
-    console.log('📊 Новый статус после выдачи:', newStatus);
+    console.log('📊 Новый статус заявки после отправки:', newStatus);
 
-    // 3. Обновляем заявку
+    // 3. Обновляем заявку в БД
     const { error: updateError } = await supabase
       .from('applications')
       .update({
@@ -4611,33 +4583,28 @@ const updatedMaterials = application.materials.map(original => {
 
     if (updateError) throw updateError;
 
-    // 4. Списание со склада — по ФАКТИЧЕСКОЙ дельте
-if (WAREHOUSE_ENABLED && materialsDelta.length > 0) {
-  for (const delta of materialsDelta) {
-    const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
-      p_company_id: cleanCompanyId,
-      p_item_name: delta.item_name,
-      p_quantity: delta.quantity,
-      p_transaction_type: 'expense',
-      p_user_id: user?.id,
-      p_user_email: user?.email,
-      p_comment: `Выдача мастеру: ${application.object_name}`,
-      p_application_id: application.id,
-      p_unit: delta.unit,
-      p_target_object_name: application.object_name,
-      p_recipient_name: application.foreman_name,
-      p_recipient_phone: application.foreman_phone
-    });
-    
-    if (rpcError) {
-      console.error('❌ [WAREHOUSE] Ошибка списания:', rpcError);
-      showNotification(
-        `⚠️ Ошибка склада для "${delta.item_name}": ${rpcError.message}`,
-        'warning'
-      );
+    // 4. Списание со склада (если включено)
+    if (WAREHOUSE_ENABLED) {
+      for (const item of validItems) {
+        const qtyToSend = Number(item.quantityToSend) || 0;
+        if (qtyToSend > 0) {
+          await supabase.rpc('update_warehouse_balance', {
+            p_company_id: cleanCompanyId,
+            p_item_name: (item.description || item.item_name || '').trim(),
+            p_quantity: qtyToSend,
+            p_transaction_type: 'expense',
+            p_user_id: user?.id,
+            p_user_email: user?.email,
+            p_comment: `Выдача мастеру: ${application.object_name}`,
+            p_application_id: application.id,
+            p_unit: item.unit || 'шт',
+            p_target_object_name: application.object_name,
+            p_recipient_name: application.foreman_name,
+            p_recipient_phone: application.foreman_phone
+          });
+        }
+      }
     }
-  }
-}
 
     // 5. Обновляем UI
     setApplications(prev => prev.map(app =>
@@ -4646,20 +4613,11 @@ if (WAREHOUSE_ENABLED && materialsDelta.length > 0) {
         : app
     ));
 
-    // 6. Уведомления
-    const totalIssued = materialsDelta.reduce((sum, d) => sum + d.quantity, 0);
-    await notifyStatusChange({
-      application,
-      oldStatus: application.status,
-      newStatus,
-      changedBy: user?.id,
-      companyId: cleanCompanyId,
-      extraMessage: `Мастеру выдано ${totalIssued} единиц материалов`
-    });
-
+    const totalIssued = validItems.reduce((sum, i) => sum + (Number(i.quantityToSend) || 0), 0);
     showNotification(`✅ Выдано ${totalIssued} единиц материалов мастеру`, 'success');
     setShowReceiveModal(false);
 
+    // 6. Подсказка мастеру
     if (newStatus === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION) {
       setTimeout(() => {
         showNotification('📦 Материалы выданы мастеру. Ожидайте подтверждения.', 'info');
@@ -4669,17 +4627,14 @@ if (WAREHOUSE_ENABLED && materialsDelta.length > 0) {
     return { success: true };
 
   } catch (err) {
-    console.error('❌ Ошибка выдачи:', err);
+    console.error('❌ Ошибка выдачи материалов:', err);
     showNotification('Ошибка: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, userCompanyId, supabase, showNotification, setApplications, userRole, isCompanyOwner, notifyStatusChange]);
+}, [user, userCompanyId, supabase, showNotification, setApplications, WAREHOUSE_ENABLED]);
 
 // В App.jsx, там где вызывается onMasterConfirm из ReceiveModal:
 
-// ============================================================
-// 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ
-// ============================================================
 const handleMasterConfirm = useCallback(async (localMaterialsFromModal, application) => {
   console.log('✅ handleMasterConfirm вызван');
   
@@ -4687,94 +4642,61 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
     showNotification('Ошибка: заявка не найдена', 'error');
     return { success: false };
   }
-
-  if (userRole !== 'master' && userRole !== 'foreman') {
-  showNotification('Только мастер или прораб может подтвердить получение', 'error');
-  return { success: false };
-}
   
   try {
-        // 🔥 Защита: проверяем, есть ли вообще материалы для подтверждения
-    const hasMaterialsToConfirm = application.materials?.some(m =>
-      (Number(m.sent_to_master_quantity) || 0) > 0 &&
-      (Number(m.received) || 0) < (Number(m.quantity) || 0)
-    );
-    if (!hasMaterialsToConfirm) {
-      showNotification('Нет материалов для подтверждения мастером', 'warning');
-      return { success: false };
-    }
-    const cleanCompanyId = getSafeCompanyId(userCompanyId);
+    // ✅ 1. Обновляем материалы
+    const updatedMaterials = localMaterialsFromModal.map(m => ({
+      ...m,
+      received: Number(m.received) || 0,
+      supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
+      sent_to_master_quantity: Number(m.sent_to_master_quantity) || 0,
+      quantity: Number(m.quantity) || 0,
+      unit: m.unit || 'шт',
+      description: m.description || '',
+      status: m.status || ITEM_STATUS.PENDING
+    }));
     
-    // ✅ 1. Нормализуем — берём оригинал из application, если в модалке нет полей
-const updatedMaterials = localMaterialsFromModal.map(m => {
-  const original = application.materials.find(om =>
-    (om.description || om.item_name || '').trim().toLowerCase() ===
-    (m.description || m.item_name || '').trim().toLowerCase()
-  ) || {};
-  
-  return {
-    ...original,
-    ...m,
-    received: Number(m.received ?? original.received) || 0,
-    supplier_received_quantity: Number(
-      m.supplier_received_quantity ?? original.supplier_received_quantity
-    ) || 0,
-    sent_to_master_quantity: Number(
-      m.sent_to_master_quantity ?? original.sent_to_master_quantity
-    ) || 0,
-    quantity: Number(m.quantity ?? original.quantity) || 0,
-    unit: m.unit || original.unit || 'шт',
-    description: m.description || original.description || '',
-    status: m.status || original.status || ITEM_STATUS.PENDING
-  };
-});
-
-// 🔥 Защита: нельзя подтвердить больше, чем выдано
-for (const m of updatedMaterials) {
-  const sent = Number(m.sent_to_master_quantity) || 0;
-  const confirmed = Number(m.received) || 0;
-  if (confirmed > sent) {
-    showNotification(
-      `❌ Нельзя подтвердить "${m.description}" больше ${sent} — мастеру выдано только столько`,
-      'error'
-    );
-    return { success: false };
-  }
-}
-    
-    // ✅ 2. Анализируем состояние
-    const allFullyReceived = updatedMaterials.every(m => 
-      m.received >= m.quantity && m.quantity > 0
-    );
-    
-    // Материалы, отправленные, но не подтверждённые
-    const hasMaterialsInTransit = updatedMaterials.some(m => 
-      m.sent_to_master_quantity > m.received
-    );
-    
-    // Материалы, ещё не поступившие на склад
-    const hasMaterialsNotArrived = updatedMaterials.some(m => 
-      m.supplier_received_quantity < m.quantity
-    );
-    
-    // ✅ 3. Определяем статус
-    let newStatus;
-    if (allFullyReceived) {
-      newStatus = APPLICATION_STATUS.RECEIVED;
-    } else if (hasMaterialsInTransit || hasMaterialsNotArrived) {
-      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
-    } else {
-      newStatus = APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
-    }
-    
-    console.log('📊 Статус:', {
-      allFullyReceived,
-      hasMaterialsInTransit,
-      hasMaterialsNotArrived,
-      newStatus
+    // ✅ 2. Проверяем статус КАЖДОГО материала
+    const allFullyReceived = updatedMaterials.every(m => {
+      const received = Number(m.received) || 0;
+      const quantity = Number(m.quantity) || 0;
+      return received >= quantity && quantity > 0;
     });
     
-    // ✅ 4. Обновляем заявку
+    // ✅ 3. Проверяем, есть ли материалы, которые НЕ получены полностью
+    const hasPendingMaterials = updatedMaterials.some(m => {
+      const received = Number(m.received) || 0;
+      const quantity = Number(m.quantity) || 0;
+      const onWarehouse = Number(m.supplier_received_quantity) || 0;
+      const sent = Number(m.sent_to_master_quantity) || 0;
+      
+      // Материал не получен полностью, если:
+      // 1. Ещё не поступил на склад (onWarehouse < quantity)
+      // 2. Или поступил, но не отправлен мастеру (onWarehouse > sent)
+      // 3. Или отправлен, но не подтверждён (sent > received)
+      if (received >= quantity) return false; // уже получен полностью
+      
+      return true; // есть что-то, что ещё не получено
+    });
+    
+    // ✅ 4. Определяем новый статус заявки
+    let newStatus;
+    
+    // 🔥 КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: заявка завершена ТОЛЬКО если ВСЕ материалы получены
+    if (allFullyReceived) {
+      newStatus = APPLICATION_STATUS.RECEIVED;
+      console.log('📊 Статус: RECEIVED (все материалы полностью получены)');
+    } else if (hasPendingMaterials) {
+      // ✅ Есть материалы, которые ещё не получены → заявка остаётся активной
+      newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
+      console.log('📊 Статус: PARTIAL_RECEIVED (есть ещё материалы для получения)');
+    } else {
+      // На всякий случай, если что-то пошло не так
+      newStatus = APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
+      console.log('📊 Статус: PENDING_MASTER_CONFIRMATION (ожидание)');
+    }
+    
+    // ✅ 5. Обновляем заявку в БД
     const { error } = await supabase
       .from('applications')
       .update({
@@ -4788,40 +4710,29 @@ for (const m of updatedMaterials) {
             user_id: user?.id,
             user_email: user?.email,
             timestamp: new Date().toISOString(),
-            details: `Подтверждено материалов: ${updatedMaterials.filter(m => m.received > 0).length} позиций`
+            details: `Подтверждено материалов: ${updatedMaterials.filter(m => (Number(m.received) || 0) > 0).length} позиций`
           }
         ]
       })
       .eq('id', application.id);
     
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Ошибка обновления:', error);
+      throw error;
+    }
     
-    // ✅ 5. UI
+    // ✅ 6. Обновляем UI
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
     
-    // ✅ 6. Уведомления
-    if (cleanCompanyId) {
-      await notifyStatusChange({
-        application,
-        oldStatus: application.status,
-        newStatus,
-        changedBy: user?.id,
-        companyId: cleanCompanyId,
-        extraMessage: newStatus === APPLICATION_STATUS.RECEIVED 
-          ? 'Мастер подтвердил получение всех материалов'
-          : `Мастер подтвердил ${updatedMaterials.filter(m => m.received > 0).length} позиций`
-      });
-    }
-    
-    // ✅ 7. Уведомление пользователю
+    // ✅ 7. Показываем уведомление
     if (newStatus === APPLICATION_STATUS.RECEIVED) {
       showNotification('🎉 Все материалы получены! Заявка завершена.', 'success');
     } else {
-      const confirmedCount = updatedMaterials.filter(m => m.received > 0).length;
+      const confirmedCount = updatedMaterials.filter(m => (Number(m.received) || 0) > 0).length;
       const totalCount = updatedMaterials.length;
       showNotification(
         `✅ Подтверждено ${confirmedCount} из ${totalCount} позиций. Заявка остаётся активной.`,
@@ -4837,7 +4748,7 @@ for (const m of updatedMaterials) {
     showNotification('Ошибка подтверждения: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, userCompanyId, userRole, supabase, showNotification, setApplications, notifyStatusChange]);
+}, [user, supabase, showNotification, setApplications]);
 
   // ─────────────────────────────────────────────────────────
   // 🔐 ADMIN FUNCTIONS
@@ -5045,50 +4956,31 @@ useEffect(() => {
 }, [userCompanyId, employees]);
 
   const toggleEmployeeStatus = async (employeeId, currentStatus) => {
-  const newStatus = !currentStatus;
-  
-  // 🔥 Сначала получаем данные сотрудника ДО изменения
-  const employee = employees.find(e => e.id === employeeId);
-  if (!employee) {
-    showNotification('Сотрудник не найден', 'error');
-    return;
-  }
-  
-  const { error } = await supabase
-    .from('company_users')
-    .update({ is_active: newStatus, updated_at: new Date().toISOString() })
-    .eq('id', employeeId);
-  
-  if (error) {
-    showNotification('Ошибка при обновлении статуса', 'error');
-    return;
-  }
-  
-  const cleanCompanyId = getSafeCompanyId(userCompanyId);
-  
-  try {
-    const userContextWithCleanId = { ...userContext, companyId: cleanCompanyId };
-    await logEmployeeBlocked(
-      supabase, 
-      employee.user_id,  // ← user_id, а не employeeId
-      !newStatus,        // ← isBlocked = !isActive
-      userContextWithCleanId
-    );
-  } catch (err) {
-    console.warn('Аудит не записан:', err.message);
-  }
-  
-  setEmployees(prev =>
-    prev.map(emp =>
-      emp.id === employeeId ? { ...emp, is_active: newStatus } : emp
-    )
-  );
-  
-  showNotification(
-    newStatus ? t('employeeUnblocked') : t('employeeBlocked'),
-    'success'
-  );
-};
+    const newStatus = !currentStatus;
+    const { error } = await supabase
+      .from('company_users')
+      .update({ is_active: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', employeeId);
+    if (error) {
+      showNotification('Ошибка при обновлении статуса', 'error');
+    } else {
+      // ✅ СТАЛО
+// Добавьте очистку company_id для аудита
+const cleanCompanyId = getSafeCompanyId(userCompanyId);
+const userContextWithCleanId = { ...userContext, companyId: cleanCompanyId };
+
+await logEmployeeBlocked(supabase, employeeId, newStatus, userContextWithCleanId);
+      setEmployees(prev =>
+        prev.map(emp =>
+          emp.id === employeeId ? { ...emp, is_active: newStatus } : emp
+        )
+      );
+      showNotification(
+        newStatus ? t('employeeUnblocked') : t('employeeBlocked'),
+        'success'
+      );
+    }
+  };
 
   // ─────────────────────────────────────────────────────────
   // 📊 LOAD APPLICATIONS
