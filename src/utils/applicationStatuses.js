@@ -3,18 +3,19 @@
 // ============ КОНСТАНТЫ СТАТУСОВ ============
 
 export const APPLICATION_STATUS = {
-  PENDING: 'pending',                                       // Ожидает обработки
-  ADMIN_PROCESSING: 'admin_processing',                     // В обработке у снабженца
-  PENDING_APPROVAL: 'pending_approval',                     // На согласовании у руководителя
-  APPROVED: 'approved',                                     // Согласовано руководителем
-  PARTIAL_ON_WAREHOUSE: 'partial_on_warehouse',             // 🆕 Частично принято на склад (лежит на складе)
-  SUPPLIER_RECEIVED: 'supplier_received',                   // 🆕 Принято от поставщика (всё на складе)
-  PARTIAL_RECEIVED: 'partial_received',                     // Частично получено мастером
-  READY_FOR_ISSUE: 'ready_for_issue',                       // Готово к выдаче мастеру (всё на складе)
-  PENDING_MASTER_CONFIRMATION: 'pending_master_confirmation',// Ожидает подтверждения мастера
-  RECEIVED: 'received',                                     // Полностью получено мастером
-  REJECTED: 'rejected',                                     // Отклонено руководителем
-  CANCELED: 'canceled'                                      // Отменено
+  PENDING: 'pending',
+  ADMIN_PROCESSING: 'admin_processing',
+  PENDING_APPROVAL: 'pending_approval',
+  APPROVED: 'approved',
+  PARTIAL_ON_WAREHOUSE: 'partial_on_warehouse',
+  SUPPLIER_RECEIVED: 'supplier_received',
+  PARTIAL_RECEIVED: 'partial_received',
+  READY_FOR_ISSUE: 'ready_for_issue',
+  PENDING_MASTER_CONFIRMATION: 'pending_master_confirmation',
+  RECEIVED: 'received',
+  REJECTED: 'rejected',
+  CANCELED: 'canceled',
+  CONSOLIDATED: 'consolidated'   // 🆕 Сводная заявка (объединение)
 };
 
 export const ITEM_STATUS = {
@@ -41,6 +42,7 @@ export const STATUS_I18N = {
   [APPLICATION_STATUS.RECEIVED]: 'statusReceived',
   [APPLICATION_STATUS.REJECTED]: 'statusRejected',
   [APPLICATION_STATUS.CANCELED]: 'statusCanceled',
+  [APPLICATION_STATUS.CONSOLIDATED]: 'statusConsolidated', 
 
   [ITEM_STATUS.PENDING]: 'itemStatusPending',
   [ITEM_STATUS.ON_WAREHOUSE]: 'itemStatusOnWarehouse',
@@ -65,6 +67,7 @@ export const STATUS_COLORS = {
   [APPLICATION_STATUS.RECEIVED]: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200',
   [APPLICATION_STATUS.REJECTED]: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200',
   [APPLICATION_STATUS.CANCELED]: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200',
+  [APPLICATION_STATUS.CONSOLIDATED]: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200', 
 
   [ITEM_STATUS.PENDING]: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
   [ITEM_STATUS.ON_WAREHOUSE]: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200',
@@ -87,6 +90,7 @@ export const STATUS_ICONS = {
   [APPLICATION_STATUS.RECEIVED]: 'CheckCircle',
   [APPLICATION_STATUS.REJECTED]: 'ShieldX',
   [APPLICATION_STATUS.CANCELED]: 'XCircle',
+  [APPLICATION_STATUS.CONSOLIDATED]: 'Layers',
 
   [ITEM_STATUS.PENDING]: 'Circle',
   [ITEM_STATUS.ON_WAREHOUSE]: 'Package',
@@ -108,7 +112,8 @@ export const STATUS_PRIORITY = {
   [APPLICATION_STATUS.APPROVED]: 9,
   [APPLICATION_STATUS.RECEIVED]: 10,
   [APPLICATION_STATUS.REJECTED]: 11,
-  [APPLICATION_STATUS.CANCELED]: 12
+  [APPLICATION_STATUS.CANCELED]: 12,
+  [APPLICATION_STATUS.CONSOLIDATED]: 13 
 };
 
 // Проверка, активна ли заявка (требует действий)
@@ -133,7 +138,8 @@ export const isApplicationCompleted = (status) => {
   const completedStatuses = [
     APPLICATION_STATUS.RECEIVED,
     APPLICATION_STATUS.REJECTED,
-    APPLICATION_STATUS.CANCELED
+    APPLICATION_STATUS.CANCELED,
+    APPLICATION_STATUS.CONSOLIDATED   // 🆕 Сводные — тоже «завершённые» для обычных списков
   ];
   return completedStatuses.includes(status);
 };
@@ -297,6 +303,7 @@ export const getStatusText = (status, language = 'ru') => {
       statusReceived: 'Получено',
       statusRejected: 'Отклонено',
       statusCanceled: 'Отменено',
+      statusConsolidated: 'Объединено',
       // Item statuses
       itemStatusPending: 'Ожидает',
       itemStatusOnWarehouse: 'На складе',
@@ -318,6 +325,7 @@ export const getStatusText = (status, language = 'ru') => {
       statusReceived: 'Received',
       statusRejected: 'Rejected',
       statusCanceled: 'Canceled',
+      statusConsolidated: 'Consolidated',
       // Item statuses
       itemStatusPending: 'Pending',
       itemStatusOnWarehouse: 'On Warehouse',
@@ -507,11 +515,13 @@ export const getNextStatusForApplication = (application) => {
 export const STATUS_ALIASES = {
   'ready_to_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
   'ready_for_issue': APPLICATION_STATUS.READY_FOR_ISSUE,
-  'supplier_received': APPLICATION_STATUS.SUPPLIER_RECEIVED,   // ✅ теперь отдельный
+  'supplier_received': APPLICATION_STATUS.SUPPLIER_RECEIVED,
   'partial_on_warehouse': APPLICATION_STATUS.PARTIAL_ON_WAREHOUSE,
-  'on_warehouse': APPLICATION_STATUS.SUPPLIER_RECEIVED,        // алиас
+  'on_warehouse': APPLICATION_STATUS.SUPPLIER_RECEIVED,
   'sent': APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
   'confirmed': APPLICATION_STATUS.RECEIVED,
+  'consolidated': APPLICATION_STATUS.CONSOLIDATED,   // 🆕
+  'merged': APPLICATION_STATUS.CONSOLIDATED,         // 🆕 алиас
 };
 
 /**

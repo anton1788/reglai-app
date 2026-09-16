@@ -2080,6 +2080,21 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
   // 📤 SEND OFFLINE DRAFTS
   // ─────────────────────────────────────────────────────────
   const sendWithRetry = useCallback(async (draft, maxRetries = 5) => {
+    // 🔧 ВАЛИДАЦИЯ: не отправляем пустые черновики
+    if (!draft.objectName?.trim() || !draft.foremanName?.trim() || !draft.foremanPhone?.trim()) {
+      console.warn('⚠️ sendWithRetry: пропущен пустой черновик (нет объекта/прораба)', draft);
+      return { success: false, error: 'Empty draft skipped' };
+    }
+
+    const validMaterials = (draft.materials || []).filter(m =>
+      m.description?.trim() && m.quantity && m.quantity > 0 && !isNaN(m.quantity)
+    );
+
+    if (validMaterials.length === 0) {
+      console.warn('⚠️ sendWithRetry: пропущен пустой черновик (нет валидных материалов)', draft);
+      return { success: false, error: 'Empty draft skipped' };
+    }
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const cleanCompanyId = getSafeCompanyId(userCompanyId);
@@ -2088,10 +2103,10 @@ if (!cleanCompanyId) {
   return { success: false, error: 'Invalid company_id' };
 }
         const application = {
-          object_name: draft.objectName,
-          foreman_name: draft.foremanName,
+          object_name: draft.objectName.trim(),
+          foreman_name: draft.foremanName.trim(),
           foreman_phone: draft.foremanPhone,
-          materials: draft.materials.map(m => ({ ...m, received: 0, status: 'pending' })),
+          materials: validMaterials.map(m => ({ ...m, received: 0, status: 'pending' })),
           status: 'pending',
           user_id: user?.id,
           company_id: cleanCompanyId,
@@ -5002,11 +5017,19 @@ await logEmployeeBlocked(supabase, employeeId, newStatus, userContextWithCleanId
 
   console.log('✅ loadApplications запускается с чистым ID:', safeCompanyId);
 
-  // Проверка кэша
+    // Проверка кэша
   const cacheKey = `applications_${safeCompanyId}_page_${pageNumber}`;
   const cached = cacheManager.get('applications', cacheKey);
   if (cached) {
-    setApplications(cached.userApps);
+    // 🔧 КРИТИЧНО: применяем фильтр сводных и к кэшированным данным!
+    //    Это защита от старых кэшей, где сводные ещё были в списке.
+    const cachedAppsForLists = (cached.userApps || []).filter(app => {
+      if (app.is_consolidated === true) return false;
+      if (app.status === 'consolidated') return false;
+      return true;
+    });
+
+    setApplications(cachedAppsForLists);
     setTotalPages(cached.totalPages);
     setCompanyUsers(cached.usersData || []);
     setComments(cached.commentsMap || {});
@@ -5018,9 +5041,10 @@ await logEmployeeBlocked(supabase, employeeId, newStatus, userContextWithCleanId
   try {
         // ✅ 1. БАЗОВЫЙ ЗАПРОС с count
     let baseQuery = supabase
-      .from('applications')
-      .select('*', { count: 'exact' })
-      .eq('company_id', safeCompanyId);
+  .from('applications')
+  .select('*', { count: 'exact' })
+  .eq('company_id', safeCompanyId)
+  .or('is_deleted.is.null,is_deleted.eq.false');   // 🔧 Исключаем удалённые
 
     // ✅ 2. Применяем ВСЕ фильтры ДО пагинации
     if (userRole === 'master' || userRole === 'foreman') {
@@ -5090,7 +5114,10 @@ await logEmployeeBlocked(supabase, employeeId, newStatus, userContextWithCleanId
     // ✅ Фильтруем временные заявки (pending_*, draft_*)
 // ✅ Фильтруем временные заявки (pending_*, draft_*)
 const filteredApps = userApps.filter(app => 
-  app.id && !app.id.startsWith('pending_') && !app.id.startsWith('draft_')
+  app.id && 
+  !app.id.startsWith('pending_') && 
+  !app.id.startsWith('draft_') &&
+  app.is_deleted !== true   // 🔧 Исключаем soft-deleted заявки
 );
 
 const uniqueApps = filteredApps.reduce((acc, current) => {
@@ -8473,14 +8500,11 @@ onClearFilters={handleClearFilters}
           />
         )}
 
-      {currentView === 'merge' && 
+      {currentView === 'merge' && (
   (['manager', 'director', 'supply_admin', 'super_admin'].includes(userRole) || isCompanyOwner) ? (
     <ObjectMaterialsMerger
       supabase={supabase}
       companyId={userCompanyId}
-      // 🔧 ИСПОЛЬЗУЕМ allCompanyApplications (все заявки без пагинации)
-      //    Включает сводные → правильная логика «Уже объединено»
-      //    Если массив пуст (первый рендер до загрузки) — fallback на applications
       applications={allCompanyApplications.length > 0 ? allCompanyApplications : applications}
       showNotification={showNotification}
       userRole={userRole}
@@ -8511,7 +8535,7 @@ onClearFilters={handleClearFilters}
       </p>
     </div>
   )
-}
+)}
 {currentView === 'estimates' && (
   <EstimateCalculator
     supabase={supabase}
