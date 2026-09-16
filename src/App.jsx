@@ -4018,158 +4018,6 @@ const openReceiveModal = useCallback((application, mode = 'admin_receive') => {
   markAsViewed(application.id);
 }, [userRole, showNotification, markAsViewed]);
 
-  const _saveReceiveStatus = async (localMaterialsFromModal) => {
-  try {
-    if (!userCompanyId) {
-      showNotification('Ошибка: компания не указана', 'error');
-      return;
-    }
-    
-    // ✅ Очищаем company_id
-    const cleanCompanyId = getSafeCompanyId(userCompanyId);
-    if (!cleanCompanyId) {
-      showNotification('Ошибка: компания не найдена', 'error');
-      return;
-    }
-      const materialsToSave = localMaterialsFromModal || selectedApplication?.materials;
-      const cleanMaterials = materialsToSave?.map(m => {
-        const requestedQty = Number(m.quantity) || 0;
-        const totalSupplierReceived = Number(m.supplier_received_quantity) || 0;
-        const employeeConfirmed = Number(m.received) || 0;
-        let materialStatus = ITEM_STATUS.PENDING;
-        if (employeeConfirmed >= requestedQty && requestedQty > 0) {
-          materialStatus = ITEM_STATUS.CONFIRMED;
-        } else if (totalSupplierReceived > 0) {
-          materialStatus = ITEM_STATUS.ON_WAREHOUSE;
-        }
-        return {
-          description: m.description || '',
-          quantity: requestedQty,
-          unit: m.unit || 'шт',
-          received: employeeConfirmed,
-          status: materialStatus,
-          supplier_received_quantity: totalSupplierReceived,
-          supplier_received_at: totalSupplierReceived > 0 ? new Date().toISOString() : m.supplier_received_at,
-          confirmed_by_employee_at: employeeConfirmed > 0 ? new Date().toISOString() : null,
-          confirmed_by_employee_id: employeeConfirmed > 0 ? user?.id : null
-        };
-      }) || [];
-      const allReceived = cleanMaterials.every(m =>
-        (m.received || 0) >= (m.quantity || 0)
-      );
-      const anyReceived = cleanMaterials.some(m => (m.received || 0) > 0);
-      const newStatus = allReceived
-        ? APPLICATION_STATUS.RECEIVED
-        : anyReceived
-          ? APPLICATION_STATUS.PARTIAL_RECEIVED
-          : APPLICATION_STATUS.ADMIN_PROCESSING;
-      const newHistoryEntry = {
-        user_id: user?.id,
-        user_email: user?.email,
-        old_status: selectedApplication?.status,
-        new_status: newStatus,
-        action: 'supplier_received',
-        timestamp: new Date().toISOString()
-      };
-      const updatedHistory = [...(selectedApplication?.status_history || []), newHistoryEntry];
-      logMaterialsReceived(
-        supabase,
-        { ...selectedApplication, materials: cleanMaterials, status: newStatus },
-        cleanMaterials.filter(m => m.supplier_received_quantity > 0).length,
-        cleanMaterials.length,
-        userContext
-      ).catch(err => console.warn('Аудит не записан:', err));
-      const { error: appError } = await supabase
-        .from('applications')
-        .update({
-          status: newStatus,
-          materials: cleanMaterials,
-          status_history: updatedHistory,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedApplication?.id);
-      if (appError) {
-        console.error('❌ Ошибка обновления заявки:', appError);
-        showNotification(`Ошибка: ${appError.message}`, 'error');
-        return;
-      }
-      console.log('🔄 [DEBUG] saveReceiveStatus вызван с:', {
-        userCompanyId,
-        userRole,
-        materialsCount: cleanMaterials?.length,
-        hasDelta: cleanMaterials?.some(m => (m.supplier_received_quantity || 0) > 0)
-      });
-      console.log('🔍 [WAREHOUSE DEBUG] Проверка:', {
-        WAREHOUSE_ENABLED,
-        userRole,
-        isSupplyAdmin: userRole === 'supply_admin',
-        isManager: userRole === 'manager',
-        materialsCount: cleanMaterials?.length,
-        hasMaterials: cleanMaterials?.some(m => (m.supplier_received_quantity || 0) > 0)
-      });
-      if (WAREHOUSE_ENABLED && (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'foreman')) {
-        for (const material of cleanMaterials) {
-          const qtyReceived = Number(material.supplier_received_quantity) || 0;
-          if (qtyReceived > 0) {
-            try {
-              console.log('📦 [WAREHOUSE] Отправка на склад:', {
-                item: material.description,
-                qty: qtyReceived,
-                unit: material.unit,
-                company_id: userCompanyId
-              });
-              const cleanCompanyId = getSafeCompanyId(userCompanyId);
-if (!cleanCompanyId) {
-  showNotification('Ошибка: компания не найдена', 'error');
-  return;
-}
-
-// Затем используйте cleanCompanyId
-const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
-      p_company_id: cleanCompanyId,
-                p_item_name: (material.description || '').trim(),
-                p_quantity: qtyReceived,
-                p_transaction_type: 'income',
-                p_user_id: user?.id || null,
-                p_user_email: user?.email || null,
-                p_comment: `Приёмка: ${selectedApplication?.object_name}`,
-                p_application_id: selectedApplication?.id || null,
-                p_unit: material.unit || 'шт',
-                p_target_object_name: selectedApplication?.object_name || null,
-                p_recipient_name: selectedApplication?.foreman_name || null,
-                p_recipient_phone: selectedApplication?.foreman_phone || null
-              });
-              if (rpcError) {
-                console.error('❌ [WAREHOUSE] RPC ошибка:', rpcError);
-                showNotification(`⚠️ Ошибка склада: ${rpcError.message}`, 'warning');
-              } else {
-                console.log('✅ [WAREHOUSE] Успешно сохранено:', material.description);
-              }
-            } catch (err) {
-              console.error('❌ [WAREHOUSE] Критическая ошибка:', err);
-              showNotification('⚠️ Ошибка обновления склада', 'warning');
-            }
-          }
-        }
-      }
-      const updatedAppForUI = {
-        ...selectedApplication,
-        status: newStatus,
-        materials: cleanMaterials,
-        status_history: updatedHistory,
-        updated_at: new Date().toISOString()
-      };
-      setApplications(applications.map(app =>
-        app.id === updatedAppForUI?.id ? updatedAppForUI : app
-      ));
-      setShowReceiveModal(false);
-      setSelectedApplication(null);
-      showNotification('✅ Приёмка зафиксирована', 'success');
-    } catch (err) {
-      console.error('❌ Критическая ошибка saveReceiveStatus:', err);
-      showNotification('Ошибка при обновлении статуса: ' + err.message, 'error');
-    }
-  };
   const handleSearchChange = useCallback((value) => {
   setSearchTerm(value);
   setPage(1); // ← УЖЕ ДОБАВЛЕНО
@@ -4199,7 +4047,7 @@ const handleClearFilters = useCallback(() => {
 }, []);
 
   // ============================================================
-// 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (ОБНОВЛЁННАЯ)
+// 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (С ДЕЛЬТОЙ ДЛЯ СКЛАДА)
 // ============================================================
 const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
   console.log('🔍 [DEBUG] handleAdminReceive started', {
@@ -4220,78 +4068,105 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
       return { success: false };
     }
     
-    // ✅ 1. Создаём копию материалов с обновлёнными количествами
-    const updatedMaterials = application.materials.map((originalMaterial, index) => {
-      // Находим соответствующий материал из модалки
+    // ============================================================
+    // ✅ ШАГ 1: Считаем ДЕЛЬТУ для каждого материала
+    // ============================================================
+    const materialsWithDelta = application.materials.map((originalMaterial) => {
       const modalMaterial = materialsFromModal.find(m => {
         const originalName = (originalMaterial.description || originalMaterial.item_name || '').trim().toLowerCase();
         const modalName = (m.description || m.item_name || '').trim().toLowerCase();
         return originalName === modalName;
       });
       
-      if (modalMaterial) {
-        const qtyReceived = Number(modalMaterial.supplier_received_quantity) || 0;
-        const requested = Number(originalMaterial.quantity) || 0;
-        
-        // Определяем статус материала
-        let materialStatus = originalMaterial.status || 'pending';
-        if (qtyReceived >= requested && requested > 0) {
-          materialStatus = 'on_warehouse';
-        } else if (qtyReceived > 0) {
-          materialStatus = 'partial';
-        }
-        
-        return {
-          ...originalMaterial,
-          supplier_received_quantity: qtyReceived,
-          supplier_received_at: qtyReceived > 0 ? new Date().toISOString() : originalMaterial.supplier_received_at,
-          status: materialStatus
-        };
+      if (!modalMaterial) {
+        return { original: originalMaterial, delta: 0, newQty: Number(originalMaterial.supplier_received_quantity) || 0 };
       }
       
-      return originalMaterial;
+      const oldQty = Number(originalMaterial.supplier_received_quantity) || 0;
+      const newQty = Number(modalMaterial.supplier_received_quantity) || 0;
+      const delta = newQty - oldQty;
+      
+      return { original: originalMaterial, delta, newQty };
     });
     
-    // ✅ 2. Проверяем, сколько материалов принято
+    // ============================================================
+    // ✅ ШАГ 2: Обновляем материалы с учётом дельты
+    // ============================================================
+    const updatedMaterials = application.materials.map((originalMaterial) => {
+      const deltaInfo = materialsWithDelta.find(
+        d => d.original.description === originalMaterial.description
+      );
+      
+      if (!deltaInfo) return originalMaterial;
+      
+      const newQty = deltaInfo.newQty;
+      const requested = Number(originalMaterial.quantity) || 0;
+      
+      // Определяем статус материала
+      let materialStatus = originalMaterial.status || 'pending';
+      if (newQty >= requested && requested > 0) {
+        materialStatus = 'on_warehouse';
+      } else if (newQty > 0) {
+        materialStatus = 'partial';
+      }
+      
+      return {
+        ...originalMaterial,
+        supplier_received_quantity: newQty,
+        supplier_received_at: newQty > 0 ? new Date().toISOString() : originalMaterial.supplier_received_at,
+        status: materialStatus
+      };
+    });
+    
+    // ============================================================
+    // ✅ ШАГ 3: Фильтруем ТОЛЬКО материалы с положительной дельтой
+    //           (это те, что реально поступили СЕЙЧАС)
+    // ============================================================
+    const materialsToWarehouse = materialsWithDelta
+      .filter(d => d.delta > 0)
+      .map(d => ({
+        description: d.original.description || d.original.item_name,
+        unit: d.original.unit || 'шт',
+        delta: d.delta
+      }));
+    
     const totalReceived = updatedMaterials.filter(m => (Number(m.supplier_received_quantity) || 0) > 0).length;
     const totalMaterials = updatedMaterials.length;
     
     // ============================================================
-    // 🔥 КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: ПРАВИЛЬНОЕ ОПРЕДЕЛЕНИЕ СТАТУСА
+    // ✅ ШАГ 4: Определяем новый статус заявки
     // ============================================================
-    
-    // ✅ 3. Проверяем, все ли материалы полностью приняты
     const allFullyReceived = updatedMaterials.every(m => {
       const received = Number(m.supplier_received_quantity) || 0;
       const quantity = Number(m.quantity) || 0;
       return received >= quantity;
     });
     
-    // ✅ 4. Определяем новый статус заявки
     let newStatus;
     if (allFullyReceived && totalReceived > 0) {
-      newStatus = 'ready_for_issue'; // ← ВСЁ принято → готово к выдаче
+      newStatus = 'ready_for_issue';
     } else if (totalReceived > 0) {
-      newStatus = 'partial_received'; // ← ЧАСТИЧНО принято → остаётся активной
+      newStatus = 'partial_received';
     } else {
-      newStatus = 'admin_processing'; // ← НИЧЕГО не принято
+      newStatus = 'admin_processing';
     }
     
     console.log('📊 [RECEIVE] Результат:', {
       totalReceived,
       totalMaterials,
       allFullyReceived,
-      newStatus  // ← ДОЛЖНО БЫТЬ 'partial_received' если принята часть!
+      newStatus,
+      deltaCount: materialsToWarehouse.length,
+      totalDelta: materialsToWarehouse.reduce((s, m) => s + m.delta, 0)
     });
     
     // ============================================================
-    // ✅ 5. Обновляем заявку в БД
+    // ✅ ШАГ 5: Обновляем заявку в БД
     // ============================================================
-    
     const { error: updateError } = await supabase
       .from('applications')
       .update({
-        status: newStatus,  // ← ТЕПЕРЬ ПРАВИЛЬНЫЙ СТАТУС
+        status: newStatus,
         materials: updatedMaterials,
         updated_at: new Date().toISOString(),
         status_history: [
@@ -4315,48 +4190,61 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
       return { success: false };
     }
     
-    // ✅ 6. Обновляем склад (если включено)
-    if (WAREHOUSE_ENABLED) {
-      const materialsToWarehouse = updatedMaterials.filter(m => {
-        return (Number(m.supplier_received_quantity) || 0) > 0;
-      });
-      
-      for (const material of materialsToWarehouse) {
-        const qtyReceived = Number(material.supplier_received_quantity) || 0;
-        if (qtyReceived > 0) {
-          try {
-            await supabase.rpc('update_warehouse_balance', {
-              p_company_id: cleanCompanyId,
-              p_item_name: (material.description || material.item_name || '').trim(),
-              p_quantity: qtyReceived,
-              p_transaction_type: 'income',
-              p_user_id: user?.id,
-              p_user_email: user?.email,
-              p_comment: `Приёмка: ${application.object_name}`,
-              p_application_id: application.id,
-              p_unit: material.unit || 'шт',
-              p_target_object_name: application.object_name,
-              p_recipient_name: application.foreman_name,
-              p_recipient_phone: application.foreman_phone
-            });
-          } catch (err) {
-            console.warn('⚠️ [WAREHOUSE] Ошибка обновления склада:', err);
+    // ============================================================
+    // ✅ ШАГ 6: Склад — зачисляем ТОЛЬКО ДЕЛЬТУ
+    // ============================================================
+    if (WAREHOUSE_ENABLED && materialsToWarehouse.length > 0) {
+      for (const item of materialsToWarehouse) {
+        try {
+          console.log('📦 [WAREHOUSE] Зачисление на склад:', {
+            item: item.description,
+            delta: item.delta,
+            unit: item.unit
+          });
+          
+          const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
+            p_company_id: cleanCompanyId,
+            p_item_name: item.description.trim(),
+            p_quantity: item.delta,  // ✅ ТОЛЬКО ДЕЛЬТА
+            p_transaction_type: 'income',
+            p_user_id: user?.id,
+            p_user_email: user?.email,
+            p_comment: `Приёмка: ${application.object_name}`,
+            p_application_id: application.id,
+            p_unit: item.unit,
+            p_target_object_name: application.object_name,
+            p_recipient_name: application.foreman_name,
+            p_recipient_phone: application.foreman_phone
+          });
+          
+          if (rpcError) {
+            console.error('❌ [WAREHOUSE] RPC ошибка:', rpcError);
+            showNotification(`⚠️ Ошибка склада: ${rpcError.message}`, 'warning');
           }
+        } catch (err) {
+          console.error('❌ [WAREHOUSE] Ошибка:', err);
         }
       }
+    } else if (materialsToWarehouse.length === 0) {
+      console.log('ℹ️ [WAREHOUSE] Нет новых поступлений — склад не трогаем');
     }
     
-    // ✅ 7. Обновляем UI
+    // ============================================================
+    // ✅ ШАГ 7: Обновляем UI
+    // ============================================================
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
     
-    showNotification(`✅ Принято ${totalReceived} позиций на склад`, 'success');
+    // Инвалидируем кэш
+    cacheManager.delete('applications', `applications_${cleanCompanyId}_page_1`);
+    cacheManager.delete('analytics', `analytics_${cleanCompanyId}_${isAdminMode}`);
+    
+    showNotification(`✅ Принято ${totalReceived} позиций`, 'success');
     setShowReceiveModal(false);
     
-    // ✅ 8. Если всё принято - показываем подсказку
     if (newStatus === 'ready_for_issue') {
       setTimeout(() => {
         showNotification('📤 Все материалы на складе. Перейдите в "Готовы к выдаче"', 'info');
@@ -4370,7 +4258,7 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     showNotification('Ошибка приёмки: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, userCompanyId, supabase, showNotification, setApplications, WAREHOUSE_ENABLED]);
+}, [user, userCompanyId, supabase, showNotification, setApplications, isAdminMode]);
 
   // 🔹 Снабженец берет заявку в работу (поиск поставщика, запрос счета)
 // ✅ СТАЛО
@@ -4487,7 +4375,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
 };
 
   // ============================================================
-// 🔹 ОТПРАВКА МАСТЕРУ (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+// 🔹 ОТПРАВКА МАСТЕРУ (С ДЕЛЬТОЙ ДЛЯ СКЛАДА)
 // ============================================================
 const handleSendToMaster = useCallback(async (itemsToSend, application) => {
   if (userRole !== 'supply_admin' && userRole !== 'manager') {
@@ -4502,66 +4390,95 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
 
   try {
     const cleanCompanyId = getSafeCompanyId(userCompanyId);
-
-    // ✅ Фильтруем только те материалы, где quantityToSend > 0
-    const validItems = itemsToSend.filter(item => (Number(item.quantityToSend) || 0) > 0);
-
-    if (validItems.length === 0) {
-      showNotification('Выберите хотя бы один материал для выдачи', 'warning');
+    if (!cleanCompanyId) {
+      showNotification('Ошибка: компания не найдена', 'error');
       return { success: false };
     }
 
-    console.log('📦 Выдача материалов мастеру:', validItems);
+    // ============================================================
+    // ✅ ШАГ 1: Считаем ДЕЛЬТУ для каждого материала
+    // ============================================================
+    const validItems = itemsToSend
+      .map(item => {
+        const original = application.materials.find(m =>
+          (m.description || m.item_name) === (item.description || item.item_name)
+        );
+        if (!original) return null;
 
-    // 1. Обновляем материалы
-    const updatedMaterials = application.materials.map(original => {
-      const itemToSend = validItems.find(i => 
-        (i.description || i.item_name) === (original.description || original.item_name)
-      );
-
-      if (itemToSend && (Number(itemToSend.quantityToSend) || 0) > 0) {
-        const qtyToSend = Number(itemToSend.quantityToSend);
         const currentSent = Number(original.sent_to_master_quantity) || 0;
         const totalReceived = Number(original.supplier_received_quantity) || 0;
-        
-        const newSent = Math.min(currentSent + qtyToSend, totalReceived);
-        
-        // ✅ Проверяем, полностью ли отправлен материал
-        const isFullySent = newSent >= totalReceived && totalReceived > 0;
+        const requested = Number(item.quantityToSend) || 0;
+
+        // Максимум, сколько ЕЩЁ можно отправить
+        const maxAdditional = Math.max(0, totalReceived - currentSent);
+        const delta = Math.min(requested, maxAdditional);
+
+        if (delta <= 0) return null;
 
         return {
-          ...original,
-          sent_to_master_quantity: newSent,
-          // ✅ Если полностью отправлен - меняем статус
-          status: isFullySent ? ITEM_STATUS.SENT_TO_MASTER : 
-                  newSent > 0 ? ITEM_STATUS.PARTIAL_SENT : original.status,
-          sent_to_master_at: newSent > currentSent ? new Date().toISOString() : original.sent_to_master_at,
-          sent_to_master_by: user?.id
+          description: original.description || original.item_name,
+          unit: original.unit || 'шт',
+          delta,                                 // ← на склад
+          newSentValue: currentSent + delta,     // ← в БД
+          oldSentValue: currentSent,
+          totalReceived
         };
-      }
-      return original;
+      })
+      .filter(Boolean);
+
+    if (validItems.length === 0) {
+      showNotification('Нечего выдавать: всё уже отправлено мастеру', 'warning');
+      return { success: false };
+    }
+
+    console.log('📦 [SEND TO MASTER] Дельта по материалам:', validItems);
+
+    // ============================================================
+    // ✅ ШАГ 2: Обновляем материалы
+    // ============================================================
+    const updatedMaterials = application.materials.map(original => {
+      const change = validItems.find(v =>
+        v.description === (original.description || original.item_name)
+      );
+      if (!change) return original;
+
+      const isFullySent = change.newSentValue >= change.totalReceived && change.totalReceived > 0;
+
+      return {
+        ...original,
+        sent_to_master_quantity: change.newSentValue,
+        status: isFullySent ? ITEM_STATUS.SENT_TO_MASTER :
+                change.newSentValue > 0 ? ITEM_STATUS.PARTIAL_SENT : original.status,
+        sent_to_master_at: new Date().toISOString(),
+        sent_to_master_by: user?.id
+      };
     });
 
-    // 2. Проверяем, все ли материалы отправлены
+    // ============================================================
+    // ✅ ШАГ 3: Проверяем, все ли материалы отправлены
+    // ============================================================
     const allSent = updatedMaterials.every(m => {
       const totalReceived = Number(m.supplier_received_quantity) || 0;
       const sent = Number(m.sent_to_master_quantity) || 0;
       const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
-      
-      // Если материал уже подтверждён мастером — пропускаем
+
       if (isFullyConfirmed) return true;
-      
+
+      // ✅ Материал вообще не поступал → "не всё отправлено"
+      if (totalReceived === 0) return false;
+
       return sent >= totalReceived;
     });
 
-    // ✅ Новый статус: если все отправлено → ждем подтверждения мастера
-    const newStatus = allSent 
+    const newStatus = allSent
       ? APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION
       : APPLICATION_STATUS.PARTIAL_RECEIVED;
 
-    console.log('📊 Новый статус заявки после отправки:', newStatus);
+    console.log('📊 [SEND TO MASTER] Новый статус:', newStatus, { allSent });
 
-    // 3. Обновляем заявку в БД
+    // ============================================================
+    // ✅ ШАГ 4: Обновляем заявку в БД
+    // ============================================================
     const { error: updateError } = await supabase
       .from('applications')
       .update({
@@ -4583,41 +4500,60 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
 
     if (updateError) throw updateError;
 
-    // 4. Списание со склада (если включено)
+    // ============================================================
+    // ✅ ШАГ 5: Склад — списываем ТОЛЬКО ДЕЛЬТУ
+    // ============================================================
     if (WAREHOUSE_ENABLED) {
       for (const item of validItems) {
-        const qtyToSend = Number(item.quantityToSend) || 0;
-        if (qtyToSend > 0) {
-          await supabase.rpc('update_warehouse_balance', {
+        try {
+          console.log('📦 [WAREHOUSE] Списание со склада:', {
+            item: item.description,
+            delta: item.delta,
+            unit: item.unit
+          });
+
+          const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
             p_company_id: cleanCompanyId,
-            p_item_name: (item.description || item.item_name || '').trim(),
-            p_quantity: qtyToSend,
+            p_item_name: item.description.trim(),
+            p_quantity: item.delta,  // ✅ ТОЛЬКО ДЕЛЬТА
             p_transaction_type: 'expense',
             p_user_id: user?.id,
             p_user_email: user?.email,
             p_comment: `Выдача мастеру: ${application.object_name}`,
             p_application_id: application.id,
-            p_unit: item.unit || 'шт',
+            p_unit: item.unit,
             p_target_object_name: application.object_name,
             p_recipient_name: application.foreman_name,
             p_recipient_phone: application.foreman_phone
           });
+
+          if (rpcError) {
+            console.error('❌ [WAREHOUSE] RPC ошибка:', rpcError);
+            showNotification(`⚠️ Ошибка склада: ${rpcError.message}`, 'warning');
+          }
+        } catch (err) {
+          console.error('❌ [WAREHOUSE] Ошибка:', err);
         }
       }
     }
 
-    // 5. Обновляем UI
+    // ============================================================
+    // ✅ ШАГ 6: Обновляем UI
+    // ============================================================
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
 
-    const totalIssued = validItems.reduce((sum, i) => sum + (Number(i.quantityToSend) || 0), 0);
+    // Инвалидируем кэш
+    cacheManager.delete('applications', `applications_${cleanCompanyId}_page_1`);
+    cacheManager.delete('analytics', `analytics_${cleanCompanyId}_${isAdminMode}`);
+
+    const totalIssued = validItems.reduce((sum, i) => sum + i.delta, 0);
     showNotification(`✅ Выдано ${totalIssued} единиц материалов мастеру`, 'success');
     setShowReceiveModal(false);
 
-    // 6. Подсказка мастеру
     if (newStatus === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION) {
       setTimeout(() => {
         showNotification('📦 Материалы выданы мастеру. Ожидайте подтверждения.', 'info');
@@ -4631,10 +4567,11 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
     showNotification('Ошибка: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, userCompanyId, supabase, showNotification, setApplications, WAREHOUSE_ENABLED]);
+}, [user, userCompanyId, supabase, showNotification, setApplications, isAdminMode, userRole]);
 
-// В App.jsx, там где вызывается onMasterConfirm из ReceiveModal:
-
+// ============================================================
+// 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (С ЗАЩИТОЙ ОТ УМЕНЬШЕНИЯ)
+// ============================================================
 const handleMasterConfirm = useCallback(async (localMaterialsFromModal, application) => {
   console.log('✅ handleMasterConfirm вызван');
   
@@ -4644,59 +4581,70 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
   }
   
   try {
-    // ✅ 1. Обновляем материалы
-    const updatedMaterials = localMaterialsFromModal.map(m => ({
-      ...m,
-      received: Number(m.received) || 0,
-      supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
-      sent_to_master_quantity: Number(m.sent_to_master_quantity) || 0,
-      quantity: Number(m.quantity) || 0,
-      unit: m.unit || 'шт',
-      description: m.description || '',
-      status: m.status || ITEM_STATUS.PENDING
-    }));
+    // ============================================================
+    // ✅ ШАГ 1: Обновляем материалы с защитой от уменьшения
+    // ============================================================
+    const updatedMaterials = localMaterialsFromModal.map(m => {
+      const original = application.materials.find(o =>
+        (o.description || o.item_name) === (m.description || m.item_name)
+      );
+
+      const previousReceived = Number(original?.received) || 0;
+      const newReceived = Number(m.received) || 0;
+
+      // ✅ Не позволяем уменьшать уже подтверждённое
+      const finalReceived = Math.max(previousReceived, newReceived);
+
+      // Не позволяем получить больше, чем отправлено
+      const sentToMaster = Number(m.sent_to_master_quantity) || 0;
+      const safeReceived = Math.min(finalReceived, sentToMaster);
+
+      return {
+        ...m,
+        received: safeReceived,
+        supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
+        sent_to_master_quantity: sentToMaster,
+        quantity: Number(m.quantity) || 0,
+        unit: m.unit || 'шт',
+        description: m.description || '',
+        status: m.status || ITEM_STATUS.PENDING
+      };
+    });
     
-    // ✅ 2. Проверяем статус КАЖДОГО материала
+    // ============================================================
+    // ✅ ШАГ 2: Проверяем статус каждого материала
+    // ============================================================
     const allFullyReceived = updatedMaterials.every(m => {
       const received = Number(m.received) || 0;
       const quantity = Number(m.quantity) || 0;
       return received >= quantity && quantity > 0;
     });
     
-    // ✅ 3. Проверяем, есть ли материалы, которые НЕ получены полностью
     const hasPendingMaterials = updatedMaterials.some(m => {
       const received = Number(m.received) || 0;
       const quantity = Number(m.quantity) || 0;
-      const onWarehouse = Number(m.supplier_received_quantity) || 0;
-      const sent = Number(m.sent_to_master_quantity) || 0;
-      
-      // Материал не получен полностью, если:
-      // 1. Ещё не поступил на склад (onWarehouse < quantity)
-      // 2. Или поступил, но не отправлен мастеру (onWarehouse > sent)
-      // 3. Или отправлен, но не подтверждён (sent > received)
-      if (received >= quantity) return false; // уже получен полностью
-      
-      return true; // есть что-то, что ещё не получено
+      if (received >= quantity) return false;
+      return true;
     });
     
-    // ✅ 4. Определяем новый статус заявки
+    // ============================================================
+    // ✅ ШАГ 3: Определяем новый статус
+    // ============================================================
     let newStatus;
     
-    // 🔥 КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: заявка завершена ТОЛЬКО если ВСЕ материалы получены
     if (allFullyReceived) {
       newStatus = APPLICATION_STATUS.RECEIVED;
-      console.log('📊 Статус: RECEIVED (все материалы полностью получены)');
+      console.log('📊 Статус: RECEIVED (все материалы получены)');
     } else if (hasPendingMaterials) {
-      // ✅ Есть материалы, которые ещё не получены → заявка остаётся активной
       newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
-      console.log('📊 Статус: PARTIAL_RECEIVED (есть ещё материалы для получения)');
+      console.log('📊 Статус: PARTIAL_RECEIVED (есть ещё материалы)');
     } else {
-      // На всякий случай, если что-то пошло не так
       newStatus = APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
-      console.log('📊 Статус: PENDING_MASTER_CONFIRMATION (ожидание)');
     }
     
-    // ✅ 5. Обновляем заявку в БД
+    // ============================================================
+    // ✅ ШАГ 4: Обновляем БД
+    // ============================================================
     const { error } = await supabase
       .from('applications')
       .update({
@@ -4721,14 +4669,18 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
       throw error;
     }
     
-    // ✅ 6. Обновляем UI
+    // ============================================================
+    // ✅ ШАГ 5: Обновляем UI
+    // ============================================================
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: newStatus, materials: updatedMaterials }
         : app
     ));
     
-    // ✅ 7. Показываем уведомление
+    // ============================================================
+    // ✅ ШАГ 6: Уведомления
+    // ============================================================
     if (newStatus === APPLICATION_STATUS.RECEIVED) {
       showNotification('🎉 Все материалы получены! Заявка завершена.', 'success');
     } else {
