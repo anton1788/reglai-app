@@ -1,23 +1,53 @@
 // src/components/ObjectMaterialsMerger.jsx
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { 
-  Package, AlertCircle, CheckCircle, 
+import {
+  Package, AlertCircle, CheckCircle,
   Layers, Merge, X,
   ClipboardList, Building, Calendar, Users,
   Loader2, Filter, Search, ChevronDown, ChevronUp,
   Trash2, Edit3, Eye, FileText, Download,
-  Sparkles, RefreshCw, Bell, BellOff, 
+  Sparkles, RefreshCw, Bell, BellOff,
   Clock, DollarSign, TrendingUp, BarChart3
 } from 'lucide-react';
 
-const ObjectMaterialsMerger = ({ 
-  supabase, 
-  companyId, 
-  applications, 
+// ─────────────────────────────────────────────────────────────
+// 🔧 ХЕЛПЕР: нормализация имени объекта (для группировки)
+// ─────────────────────────────────────────────────────────────
+const normalizeObjectName = (name) =>
+  (name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+// ─────────────────────────────────────────────────────────────
+// 🔧 ХЕЛПЕР: активная ли заявка (можно ли её объединять)
+// ─────────────────────────────────────────────────────────────
+const isActiveForMerge = (app) => {
+  if (!app) return false;
+  if (app.is_consolidated === true) return false;
+  if (app.status === 'consolidated') return false;
+  if (app.status === 'received') return false;
+  if (app.status === 'canceled') return false;
+  return true;
+};
+
+// ─────────────────────────────────────────────────────────────
+// 🔧 ХЕЛПЕР: роли, которым разрешено объединять заявки
+// ─────────────────────────────────────────────────────────────
+const ROLES_ALLOWED_TO_MERGE = ['super_admin', 'manager', 'director', 'supply_admin'];
+
+const ObjectMaterialsMerger = ({
+  supabase,
+  companyId,
+  applications,
   showNotification,
   onMerged,
-  onRefresh
+  onRefresh,
+  userRole,
 }) => {
+  // 🆕 ПРАВА: кто может объединять заявки
+  const canMergeApplications = useMemo(
+    () => ROLES_ALLOWED_TO_MERGE.includes(userRole),
+    [userRole]
+  );
+
   // ===== СОСТОЯНИЯ =====
   const [isLoading, setIsLoading] = useState(false);
   const [mergedData, setMergedData] = useState(null);
@@ -35,14 +65,18 @@ const ObjectMaterialsMerger = ({
     const loadMergeHistory = async () => {
       if (!companyId) return;
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('applications')
           .select('id, object_name, foreman_name, created_at, consolidated_from')
           .eq('company_id', companyId)
           .eq('is_consolidated', true)
           .order('created_at', { ascending: false })
           .limit(10);
-        
+
+        if (error) {
+          console.warn('Не удалось загрузить историю:', error.message);
+          return;
+        }
         if (data) setMergeHistory(data);
       } catch (err) {
         console.warn('Не удалось загрузить историю:', err);
@@ -54,14 +88,18 @@ const ObjectMaterialsMerger = ({
   // ===== ГРУППИРОВКА ЗАЯВОК ПО ОБЪЕКТАМ =====
   const objectsWithApplications = useMemo(() => {
     const objects = {};
-    
+
     applications.forEach(app => {
+      if (app.is_consolidated && !showArchived) return;
       if (app.status === 'consolidated' && !showArchived) return;
-      
-      const objName = app.object_name;
-      if (!objects[objName]) {
-        objects[objName] = {
-          name: objName,
+
+      const key = `${app.company_id || 'no-company'}::${normalizeObjectName(app.object_name)}`;
+
+      if (!objects[key]) {
+        objects[key] = {
+          name: app.object_name,
+          normalizedName: normalizeObjectName(app.object_name),
+          companyId: app.company_id,
           applications: [],
           totalMaterials: 0,
           uniqueMaterials: new Map(),
@@ -71,25 +109,25 @@ const ObjectMaterialsMerger = ({
           totalQuantity: 0,
           receivedQuantity: 0,
           totalCost: 0,
-          isConsolidated: false
+          isConsolidated: false,
         };
       }
-      
-      const obj = objects[objName];
+
+      const obj = objects[key];
       obj.applications.push(app);
       obj.statuses.add(app.status);
       obj.createdDates.push(new Date(app.created_at));
       obj.foremen.add(app.foreman_name);
-      
+
       if (app.is_consolidated) obj.isConsolidated = true;
-      
+
       app.materials?.forEach(mat => {
-        const key = mat.description.toLowerCase().trim();
-        const existing = obj.uniqueMaterials.get(key);
+        const matKey = (mat.description || '').toLowerCase().trim();
+        const existing = obj.uniqueMaterials.get(matKey);
         const qty = Number(mat.quantity) || 0;
         const received = Number(mat.received) || 0;
         const price = Number(mat.price) || 0;
-        
+
         if (existing) {
           existing.totalQuantity += qty;
           existing.totalReceived += received;
@@ -99,12 +137,12 @@ const ObjectMaterialsMerger = ({
             date: app.created_at,
             foreman: app.foreman_name,
             quantity: qty,
-            received: received,
+            received,
             status: mat.status,
-            price: price
+            price,
           });
         } else {
-          obj.uniqueMaterials.set(key, {
+          obj.uniqueMaterials.set(matKey, {
             name: mat.description,
             unit: mat.unit || 'шт',
             totalQuantity: qty,
@@ -115,34 +153,39 @@ const ObjectMaterialsMerger = ({
               date: app.created_at,
               foreman: app.foreman_name,
               quantity: qty,
-              received: received,
+              received,
               status: mat.status,
-              price: price
-            }]
+              price,
+            }],
           });
         }
-        
+
         obj.totalQuantity += qty;
         obj.receivedQuantity += received;
         obj.totalCost += qty * price;
       });
-      
+
       obj.totalMaterials += app.materials?.length || 0;
     });
-    
+
     return Object.values(objects)
-      .map(obj => ({
-        ...obj,
-        uniqueMaterialsArray: Array.from(obj.uniqueMaterials.values()),
-        totalUniqueMaterials: obj.uniqueMaterials.size,
-        lastActivity: obj.createdDates.length > 0 
-          ? new Date(Math.max(...obj.createdDates)).toLocaleDateString('ru-RU')
-          : '—',
-        mergeScore: obj.applications.filter(a => a.status !== 'consolidated').length * 10 + obj.uniqueMaterials.size,
-        foremen: Array.from(obj.foremen),
-        activeApplications: obj.applications.filter(a => a.status !== 'consolidated').length,
-        mergeable: obj.applications.filter(a => a.status !== 'consolidated').length >= 2
-      }))
+      .map(obj => {
+        const activeApps = obj.applications.filter(isActiveForMerge);
+
+        return {
+          ...obj,
+          uniqueMaterialsArray: Array.from(obj.uniqueMaterials.values()),
+          totalUniqueMaterials: obj.uniqueMaterials.size,
+          lastActivity: obj.createdDates.length > 0
+            ? new Date(Math.max(...obj.createdDates)).toLocaleDateString('ru-RU')
+            : '—',
+          mergeScore: activeApps.length * 10 + obj.uniqueMaterials.size,
+          foremen: Array.from(obj.foremen),
+          activeApplications: activeApps.length,
+          mergeable: activeApps.length >= 2 && !obj.isConsolidated,
+          activeApplicationsList: activeApps,
+        };
+      })
       .sort((a, b) => {
         switch (sortBy) {
           case 'applications': return b.activeApplications - a.activeApplications;
@@ -157,42 +200,48 @@ const ObjectMaterialsMerger = ({
   // ===== ФИЛЬТРАЦИЯ =====
   const filteredObjects = useMemo(() => {
     let result = objectsWithApplications;
-    
+
     if (viewMode === 'mergeable') {
       result = result.filter(obj => obj.mergeable);
     } else if (viewMode === 'duplicates') {
-      result = result.filter(obj => obj.totalUniqueMaterials > obj.uniqueMaterialsArray.filter(m => m.applications.length > 1).length);
+      result = result.filter(
+        obj => obj.totalUniqueMaterials >
+          obj.uniqueMaterialsArray.filter(m => m.applications.length > 1).length
+      );
     }
-    
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter(obj => 
+      result = result.filter(obj =>
         obj.name.toLowerCase().includes(query) ||
         obj.foremen?.some(f => f.toLowerCase().includes(query)) ||
         obj.uniqueMaterialsArray.some(m => m.name.toLowerCase().includes(query))
       );
     }
-    
+
     return result;
   }, [objectsWithApplications, viewMode, searchQuery]);
 
   // ===== ОБНАРУЖЕНИЕ ДУБЛИКАТОВ МЕЖДУ ЗАЯВКАМИ =====
   const duplicates = useMemo(() => {
     const allMaterials = {};
-    
+
     applications.forEach(app => {
+      if (app.is_consolidated && !showArchived) return;
       if (app.status === 'consolidated' && !showArchived) return;
-      
+      if (app.status === 'received' || app.status === 'canceled') return;
+
       app.materials?.forEach(mat => {
-        const key = `${app.object_name}|${mat.description.toLowerCase().trim()}`;
+        const key = `${app.company_id || 'no-company'}|${normalizeObjectName(app.object_name)}|${(mat.description || '').toLowerCase().trim()}`;
         if (!allMaterials[key]) {
           allMaterials[key] = {
+            companyId: app.company_id,
             objectName: app.object_name,
             materialName: mat.description,
             unit: mat.unit || 'шт',
             applications: [],
             totalQuantity: 0,
-            totalCost: 0
+            totalCost: 0,
           };
         }
         const qty = Number(mat.quantity) || 0;
@@ -203,13 +252,13 @@ const ObjectMaterialsMerger = ({
           quantity: qty,
           date: app.created_at,
           status: app.status,
-          price: price
+          price,
         });
         allMaterials[key].totalQuantity += qty;
         allMaterials[key].totalCost += qty * price;
       });
     });
-    
+
     return Object.values(allMaterials)
       .filter(m => m.applications.length > 1)
       .sort((a, b) => b.applications.length - a.applications.length);
@@ -218,18 +267,18 @@ const ObjectMaterialsMerger = ({
   // ===== ОБНАРУЖЕНИЕ ДУБЛИРУЮЩИХСЯ МАТЕРИАЛОВ ВНУТРИ ОДНОЙ ЗАЯВКИ =====
   const findDuplicatesInsideApplications = useMemo(() => {
     const result = [];
-    
+
     applications.forEach(app => {
       if (app.status === 'consolidated') return;
-      
+      if (app.is_consolidated) return;
+
       const materialMap = new Map();
-      
+
       app.materials?.forEach((mat, index) => {
-        const key = mat.description.toLowerCase().trim();
+        const key = (mat.description || '').toLowerCase().trim();
         const existing = materialMap.get(key);
-        
+
         if (existing) {
-          // Нашли дубль внутри заявки
           result.push({
             applicationId: app.id,
             applicationName: app.object_name,
@@ -237,38 +286,36 @@ const ObjectMaterialsMerger = ({
             unit: mat.unit || 'шт',
             occurrences: [
               { index: existing.index, quantity: existing.quantity },
-              { index: index, quantity: Number(mat.quantity) || 0 }
+              { index, quantity: Number(mat.quantity) || 0 },
             ],
             totalQuantity: existing.quantity + (Number(mat.quantity) || 0),
-            totalReceived: (existing.received || 0) + (Number(mat.received) || 0)
+            totalReceived: (existing.received || 0) + (Number(mat.received) || 0),
           });
         } else {
           materialMap.set(key, {
-            index: index,
+            index,
             quantity: Number(mat.quantity) || 0,
-            received: Number(mat.received) || 0
+            received: Number(mat.received) || 0,
           });
         }
       });
     });
-    
+
     return result;
   }, [applications]);
 
   // ===== ОБЪЕДИНЕНИЕ ДУБЛЕЙ ВНУТРИ ОДНОЙ ЗАЯВКИ =====
   const consolidateApplicationMaterials = useCallback(async (applicationId) => {
     if (!applicationId) return { success: false, error: 'Нет ID заявки' };
-    
-    // Находим заявку
+
     const app = applications.find(a => a.id === applicationId);
     if (!app || !app.materials) {
       return { success: false, error: 'Заявка не найдена' };
     }
-    
-    // Группируем материалы по названию
+
     const materialMap = new Map();
     app.materials.forEach(mat => {
-      const key = mat.description.toLowerCase().trim();
+      const key = (mat.description || '').toLowerCase().trim();
       const existing = materialMap.get(key);
       if (existing) {
         existing.quantity += Number(mat.quantity) || 0;
@@ -276,78 +323,123 @@ const ObjectMaterialsMerger = ({
         existing._mergedFrom = existing._mergedFrom || [];
         existing._mergedFrom.push(mat);
       } else {
-        materialMap.set(key, { 
-          ...mat, 
+        materialMap.set(key, {
+          ...mat,
           quantity: Number(mat.quantity) || 0,
-          received: Number(mat.received) || 0 
+          received: Number(mat.received) || 0,
         });
       }
     });
-    
+
     const consolidatedMaterials = Array.from(materialMap.values());
     const removedCount = app.materials.length - consolidatedMaterials.length;
-    
+
     if (removedCount === 0) {
       showNotification('Нет дублей для объединения', 'info');
       return { success: false, removedCount: 0 };
     }
-    
-    // Обновляем в БД
+
     const { error } = await supabase
       .from('applications')
-      .update({ 
+      .update({
         materials: consolidatedMaterials,
         status_history: [
           ...(app.status_history || []),
           {
             action: 'consolidated_duplicates',
             timestamp: new Date().toISOString(),
-            details: `Объединено ${removedCount} дублирующихся материалов`
-          }
-        ]
+            details: `Объединено ${removedCount} дублирующихся материалов`,
+          },
+        ],
       })
       .eq('id', applicationId);
-    
+
     if (error) throw error;
-    
+
     showNotification(`✅ Объединено ${removedCount} дублей в заявке "${app.object_name}"`, 'success');
-    
-    // Обновляем UI
+
     if (onRefresh) onRefresh();
-    
+
     return { success: true, removedCount };
   }, [applications, supabase, showNotification, onRefresh]);
 
-  // ===== ФУНКЦИЯ ОБЪЕДИНЕНИЯ =====
+  // ===== ФУНКЦИЯ ОБЪЕДИНЕНИЯ (подготовка данных) =====
   const mergeObjectMaterials = useCallback(async (objectName, applicationsToMerge) => {
     if (mergingInProgress.has(objectName)) return;
-    
+
+    // 🆕 ПРОВЕРКА ПРАВ
+    if (!canMergeApplications) {
+      showNotification('⚠️ У вашей роли нет прав на объединение заявок', 'error');
+      return;
+    }
+
+    // 🔧 ПРОВЕРКА: нет ли уже сводной заявки для этого объекта
+    const existingConsolidated = applications.find(a =>
+      a.is_consolidated === true &&
+      normalizeObjectName(a.object_name) === normalizeObjectName(objectName)
+    );
+    if (existingConsolidated) {
+      showNotification(
+        `⚠️ Для объекта "${objectName}" уже есть сводная заявка (#${existingConsolidated.id?.slice(0, 8)})`,
+        'warning'
+      );
+      return;
+    }
+
+    const validApps = applicationsToMerge.filter(isActiveForMerge);
+
+    if (validApps.length < 2) {
+      showNotification('⚠️ Нужно минимум 2 активные заявки для объединения', 'warning');
+      return;
+    }
+
+    const appsWithReceivedMaterials = validApps.filter(app =>
+      app.materials?.some(m =>
+        (Number(m.supplier_received_quantity) || 0) > 0 ||
+        (Number(m.received) || 0) > 0 ||
+        (Number(m.sent_to_master_quantity) || 0) > 0
+      )
+    );
+
+    if (appsWithReceivedMaterials.length > 0) {
+      const confirmed = window.confirm(
+        `⚠️ В ${appsWithReceivedMaterials.length} из ${validApps.length} заявок уже есть принятые материалы.\n\n` +
+        `После объединения эти количества БУДУТ СОХРАНЕНЫ в сводной заявке.\n\n` +
+        `Продолжить?`
+      );
+      if (!confirmed) return;
+    }
+
     setMergingInProgress(prev => new Set(prev).add(objectName));
     setIsLoading(true);
-    
+
     try {
       const mergedMaterials = new Map();
       let totalCost = 0;
-      
-      applicationsToMerge.forEach(app => {
+
+      validApps.forEach(app => {
         app.materials?.forEach(mat => {
-          const key = mat.description.toLowerCase().trim();
+          const key = (mat.description || '').toLowerCase().trim();
           const existing = mergedMaterials.get(key);
           const qty = Number(mat.quantity) || 0;
           const received = Number(mat.received) || 0;
+          const supplierReceived = Number(mat.supplier_received_quantity) || 0;
+          const sentToMaster = Number(mat.sent_to_master_quantity) || 0;
           const price = Number(mat.price) || 0;
-          
+
           if (existing) {
             existing.totalQuantity += qty;
             existing.totalReceived += received;
+            existing.totalSupplierReceived += supplierReceived;
+            existing.totalSentToMaster += sentToMaster;
             existing.totalCost += qty * price;
             existing.applications.push({
               id: app.id,
               foreman: app.foreman_name,
               quantity: qty,
-              received: received,
+              received,
               date: app.created_at,
-              price: price
+              price,
             });
           } else {
             mergedMaterials.set(key, {
@@ -355,34 +447,34 @@ const ObjectMaterialsMerger = ({
               unit: mat.unit || 'шт',
               totalQuantity: qty,
               totalReceived: received,
+              totalSupplierReceived: supplierReceived,
+              totalSentToMaster: sentToMaster,
               totalCost: qty * price,
-              requestedQuantity: qty,
-              receivedQuantity: received,
               applications: [{
                 id: app.id,
                 foreman: app.foreman_name,
                 quantity: qty,
-                received: received,
+                received,
                 date: app.created_at,
-                price: price
-              }]
+                price,
+              }],
             });
           }
           totalCost += qty * price;
         });
       });
-      
+
       const materialsArray = Array.from(mergedMaterials.values());
       const categories = {
         'Строительные': [],
         'Отделочные': [],
         'Электрика': [],
         'Сантехника': [],
-        'Прочее': []
+        'Прочее': [],
       };
-      
+
       materialsArray.forEach(m => {
-        const name = m.description.toLowerCase();
+        const name = (m.description || '').toLowerCase();
         if (name.includes('цемент') || name.includes('песок') || name.includes('щебень') || name.includes('кирпич')) {
           categories['Строительные'].push(m);
         } else if (name.includes('плитка') || name.includes('краска') || name.includes('шпаклёвка')) {
@@ -395,22 +487,21 @@ const ObjectMaterialsMerger = ({
           categories['Прочее'].push(m);
         }
       });
-      
+
       setMergedData({
         objectName,
-        applications: applicationsToMerge,
+        applications: validApps,
         materials: materialsArray,
         materialsByCategory: categories,
-        totalApplications: applicationsToMerge.length,
+        totalApplications: validApps.length,
         totalMaterials: mergedMaterials.size,
-        foremen: [...new Set(applicationsToMerge.map(a => a.foreman_name))],
+        foremen: [...new Set(validApps.map(a => a.foreman_name))],
         totalQuantity: materialsArray.reduce((sum, m) => sum + m.totalQuantity, 0),
-        totalCost: totalCost,
-        createdDates: applicationsToMerge.map(a => new Date(a.created_at))
+        totalCost,
+        createdDates: validApps.map(a => new Date(a.created_at)),
       });
-      
+
       setShowMergeModal(true);
-      
     } catch (err) {
       console.error('Ошибка объединения:', err);
       showNotification('Ошибка при анализе заявок: ' + err.message, 'error');
@@ -422,26 +513,32 @@ const ObjectMaterialsMerger = ({
         return next;
       });
     }
-  }, [mergingInProgress, showNotification]);
+  }, [mergingInProgress, showNotification, applications, canMergeApplications]);
 
   // ===== БЫСТРОЕ ОБЪЕДИНЕНИЕ ВСЕХ ПОДХОДЯЩИХ ОБЪЕКТОВ =====
   const handleMergeAll = useCallback(async () => {
+    // 🆕 ПРОВЕРКА ПРАВ
+    if (!canMergeApplications) {
+      showNotification('⚠️ У вашей роли нет прав на объединение заявок', 'error');
+      return;
+    }
+
     const mergeable = objectsWithApplications.filter(obj => obj.mergeable);
     if (mergeable.length === 0) {
       showNotification('Нет объектов для массового объединения', 'warning');
       return;
     }
-    
-    if (!window.confirm(`Объединить заявки на ${mergeable.length} объектах? Это создаст ${mergeable.length} сводных заявок.`)) {
-      return;
-    }
-    
+
+    if (!window.confirm(
+      `Объединить заявки на ${mergeable.length} объектах? Это создаст ${mergeable.length} сводных заявок.`
+    )) return;
+
     let successCount = 0;
     let failCount = 0;
-    
+
     for (const obj of mergeable) {
       try {
-        await mergeObjectMaterials(obj.name, obj.applications.filter(a => a.status !== 'consolidated'));
+        await mergeObjectMaterials(obj.name, obj.activeApplicationsList || []);
         await new Promise(resolve => setTimeout(resolve, 500));
         successCount++;
       } catch (err) {
@@ -449,20 +546,21 @@ const ObjectMaterialsMerger = ({
         console.error(`Ошибка объединения ${obj.name}:`, err);
       }
     }
-    
-    showNotification(`✅ Объединено: ${successCount}, ❌ Ошибок: ${failCount}`, 
+
+    showNotification(
+      `✅ Объединено: ${successCount}, ❌ Ошибок: ${failCount}`,
       failCount === 0 ? 'success' : 'warning'
     );
-    
+
     if (onRefresh) onRefresh();
-  }, [objectsWithApplications, mergeObjectMaterials, showNotification, onRefresh]);
+  }, [objectsWithApplications, mergeObjectMaterials, showNotification, onRefresh, canMergeApplications]);
 
   // ===== СОЗДАНИЕ СВОДНОЙ ЗАЯВКИ =====
   const createConsolidatedApplication = useCallback(async () => {
     if (!mergedData) return;
-    
+
     setIsLoading(true);
-    
+
     try {
       const { data: existing } = await supabase
         .from('applications')
@@ -470,14 +568,21 @@ const ObjectMaterialsMerger = ({
         .eq('object_name', mergedData.objectName)
         .eq('is_consolidated', true)
         .maybeSingle();
-      
+
       if (existing) {
         showNotification('⚠️ Для этого объекта уже есть сводная заявка', 'warning');
         setShowMergeModal(false);
         setIsLoading(false);
         return;
       }
-      
+
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        showNotification('Ошибка авторизации', 'error');
+        setIsLoading(false);
+        return;
+      }
+
       const consolidatedApp = {
         object_name: mergedData.objectName,
         foreman_name: `Сводная заявка (${mergedData.foremen.join(', ')})`,
@@ -486,69 +591,85 @@ const ObjectMaterialsMerger = ({
           description: m.description,
           quantity: m.totalQuantity,
           unit: m.unit,
-          received: 0,
-          supplier_received_quantity: 0,
-          status: 'pending',
+          received: m.totalReceived || 0,
+          supplier_received_quantity: m.totalSupplierReceived || 0,
+          sent_to_master_quantity: m.totalSentToMaster || 0,
+          status:
+            (m.totalReceived || 0) >= m.totalQuantity
+              ? 'confirmed'
+              : (m.totalSupplierReceived || 0) > 0
+                ? 'partial'
+                : 'pending',
           price: m.applications.reduce((sum, a) => sum + (a.price || 0), 0) / m.applications.length,
           original_applications: m.applications.map(a => a.id),
           original_quantities: m.applications.map(a => ({
             applicationId: a.id,
             quantity: a.quantity,
             foreman: a.foreman,
-            price: a.price || 0
-          }))
+            price: a.price || 0,
+          })),
         })),
         status: 'pending',
-        user_id: (await supabase.auth.getUser()).data.user?.id,
+        user_id: currentUser.id,
         company_id: companyId,
         created_at: new Date().toISOString(),
         is_consolidated: true,
         consolidated_from: mergedData.applications.map(a => a.id),
-        total_amount: mergedData.totalCost || mergedData.materials.reduce((sum, m) => sum + (m.totalQuantity * 1000), 0),
+        total_amount: mergedData.totalCost || 0,
         status_history: [{
           action: 'created_consolidated',
           timestamp: new Date().toISOString(),
           details: `Объединено ${mergedData.applications.length} заявок от ${mergedData.foremen.join(', ')}`,
-          total_cost: mergedData.totalCost || 0
-        }]
+          total_cost: mergedData.totalCost || 0,
+          user_id: currentUser.id,
+        }],
       };
-      
+
       const { data, error } = await supabase
         .from('applications')
         .insert([consolidatedApp])
         .select();
-      
+
       if (error) throw error;
-      
+
+      const originalIds = mergedData.applications.map(a => a.id);
+      const { error: updateError } = await supabase
+        .from('applications')
+        .update({
+          status: 'consolidated',
+          consolidated_into: data[0].id,
+        })
+        .in('id', originalIds);
+
+      if (updateError) {
+        console.error('Ошибка обновления оригиналов:', updateError);
+      }
+
       for (const app of mergedData.applications) {
         await supabase
           .from('applications')
           .update({
-            status: 'consolidated',
-            consolidated_into: data[0].id,
             status_history: [
               ...(app.status_history || []),
               {
                 action: 'consolidated',
                 timestamp: new Date().toISOString(),
-                details: `Объединено в сводную заявку #${data[0].id}`
-              }
-            ]
+                details: `Объединено в сводную заявку #${data[0].id.slice(0, 8)}`,
+              },
+            ],
           })
           .eq('id', app.id);
       }
-      
-      showNotification(`✅ Создана сводная заявка для "${mergedData.objectName}"`, 'success');
+
+      showNotification(
+        `✅ Создана сводная заявка для "${mergedData.objectName}" (${mergedData.applications.length} заявок)`,
+        'success'
+      );
       setShowMergeModal(false);
       setMergedData(null);
-      
-      if (onMerged) {
-        onMerged(data[0]);
-      }
-      if (onRefresh) {
-        onRefresh();
-      }
-      
+
+      if (onMerged) onMerged(data[0]);
+      if (onRefresh) onRefresh();
     } catch (err) {
       console.error('Ошибка создания сводной заявки:', err);
       showNotification('Ошибка при создании сводной заявки: ' + err.message, 'error');
@@ -561,11 +682,8 @@ const ObjectMaterialsMerger = ({
   const toggleObject = useCallback((objectName) => {
     setExpandedObjects(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(objectName)) {
-        newSet.delete(objectName);
-      } else {
-        newSet.add(objectName);
-      }
+      if (newSet.has(objectName)) newSet.delete(objectName);
+      else newSet.add(objectName);
       return newSet;
     });
   }, []);
@@ -579,14 +697,14 @@ const ObjectMaterialsMerger = ({
 
   // ===== СТАТИСТИКА =====
   const stats = useMemo(() => {
-    const activeApps = applications.filter(a => a.status !== 'consolidated');
+    const activeApps = applications.filter(isActiveForMerge);
     const totalApps = activeApps.length;
     const totalObjects = objectsWithApplications.filter(o => o.activeApplications > 0).length;
     const totalDuplicates = duplicates.length;
     const totalInsideDuplicates = findDuplicatesInsideApplications.length;
     const mergeableObjects = objectsWithApplications.filter(o => o.mergeable).length;
     const totalCost = objectsWithApplications.reduce((sum, o) => sum + o.totalCost, 0);
-    
+
     return { totalApps, totalObjects, totalDuplicates, totalInsideDuplicates, mergeableObjects, totalCost };
   }, [applications, objectsWithApplications, duplicates, findDuplicatesInsideApplications]);
 
@@ -595,21 +713,22 @@ const ObjectMaterialsMerger = ({
     const duplicateCount = duplicates.filter(d => d.objectName === obj.name).length;
     const insideDuplicateCount = findDuplicatesInsideApplications.filter(d => d.applicationName === obj.name).length;
     const isExpanded = expandedObjects.has(obj.name);
-    const canMerge = obj.activeApplications >= 2 && !obj.isConsolidated;
+    // 🆕 Учитываем права при определении canMerge
+    const canMerge = canMergeApplications && obj.activeApplications >= 2 && !obj.isConsolidated;
     const isMerging = mergingInProgress.has(obj.name);
     const totalQty = obj.uniqueMaterialsArray.reduce((sum, m) => sum + m.totalQuantity, 0);
     const receivedQty = obj.uniqueMaterialsArray.reduce((sum, m) => sum + m.totalReceived, 0);
     const completionPercent = totalQty > 0 ? Math.round((receivedQty / totalQty) * 100) : 0;
-    
+
     return (
-      <div 
+      <div
         className={`bg-white dark:bg-gray-800 rounded-xl border transition-all ${
-          canMerge ? 'border-indigo-200 dark:border-indigo-800 hover:shadow-lg' : 
-          obj.isConsolidated ? 'border-green-200 dark:border-green-800' :
-          'border-gray-200/60 dark:border-gray-700/60'
+          canMerge ? 'border-indigo-200 dark:border-indigo-800 hover:shadow-lg'
+          : obj.isConsolidated ? 'border-green-200 dark:border-green-800'
+          : 'border-gray-200/60 dark:border-gray-700/60'
         }`}
       >
-        <div 
+        <div
           className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded-xl transition-colors"
           onClick={() => toggleObject(obj.name)}
         >
@@ -626,7 +745,6 @@ const ObjectMaterialsMerger = ({
               </h3>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Бейдж с дублями внутри заявок */}
               {insideDuplicateCount > 0 && (
                 <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-full text-xs flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
@@ -644,12 +762,12 @@ const ObjectMaterialsMerger = ({
                   {obj.activeApplications}
                 </span>
               )}
-              <ChevronDown 
-                className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+              <ChevronDown
+                className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
               />
             </div>
           </div>
-          
+
           <div className="flex flex-wrap gap-3 mt-2 text-sm text-gray-600 dark:text-gray-400">
             <span className="flex items-center gap-1">
               <ClipboardList className="w-3.5 h-3.5" />
@@ -672,7 +790,7 @@ const ObjectMaterialsMerger = ({
             {totalQty > 0 && (
               <span className="flex items-center gap-1">
                 <div className="w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-green-500 rounded-full transition-all"
                     style={{ width: `${completionPercent}%` }}
                   />
@@ -682,7 +800,7 @@ const ObjectMaterialsMerger = ({
             )}
           </div>
         </div>
-        
+
         {isExpanded && (
           <div className="px-4 pb-4 pt-0 border-t border-gray-100 dark:border-gray-700">
             <div className="mt-3 space-y-1.5">
@@ -701,72 +819,66 @@ const ObjectMaterialsMerger = ({
                 </div>
               ))}
             </div>
-            
-            {/* ДУБЛИ ВНУТРИ ЗАЯВОК - ОБЩАЯ КНОПКА */}
-{insideDuplicateCount > 0 && (
-  <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-xs font-medium text-red-700 dark:text-red-300 flex items-center gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5" />
-          Обнаружены дубли внутри заявок ({insideDuplicateCount})
-        </p>
-        <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
-          Одинаковые материалы указаны несколько раз в заявках
-        </p>
-      </div>
-      <button
-        onClick={async () => {
-          // Находим все заявки объекта с дублями
-          const appIds = [...new Set(
-            findDuplicatesInsideApplications
-              .filter(d => d.applicationName === obj.name)
-              .map(d => d.applicationId)
-          )];
-          
-          let successCount = 0;
-          for (const appId of appIds) {
-            const result = await consolidateApplicationMaterials(appId);
-            if (result.success) successCount++;
-          }
-          
-          showNotification(`✅ Объединено дублей в ${successCount} заявках`, 'success');
-        }}
-        className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1.5"
-      >
-        <Merge className="w-3.5 h-3.5" />
-        Объединить все дубли
-      </button>
-    </div>
-    
-    {/* Список дублей */}
-    <div className="mt-2 space-y-1">
-      {findDuplicatesInsideApplications
-        .filter(d => d.applicationName === obj.name)
-        .slice(0, 3)
-        .map((d, idx) => (
-          <div key={idx} className="text-xs text-red-600 dark:text-red-400 flex justify-between items-center bg-white/50 dark:bg-gray-800/50 px-2 py-1 rounded">
-            <span>
-              • {d.materialName}
-              <span className="text-gray-500 text-[10px] ml-1">
-                (повторяется {d.occurrences.length} раза)
-              </span>
-            </span>
-            <span className="font-medium">
-              всего {d.totalQuantity} {d.unit}
-            </span>
-          </div>
-        ))}
-      {insideDuplicateCount > 3 && (
-        <p className="text-xs text-red-500">
-          + ещё {insideDuplicateCount - 3}
-        </p>
-      )}
-    </div>
-  </div>
-)}
-            
-            {/* ДУБЛИ МЕЖДУ ЗАЯВКАМИ - ЖЁЛТАЯ КАРТОЧКА */}
+
+            {insideDuplicateCount > 0 && (
+              <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-red-700 dark:text-red-300 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Обнаружены дубли внутри заявок ({insideDuplicateCount})
+                    </p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                      Одинаковые материалы указаны несколько раз в заявках
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const appIds = [...new Set(
+                        findDuplicatesInsideApplications
+                          .filter(d => d.applicationName === obj.name)
+                          .map(d => d.applicationId)
+                      )];
+
+                      let successCount = 0;
+                      for (const appId of appIds) {
+                        const result = await consolidateApplicationMaterials(appId);
+                        if (result.success) successCount++;
+                      }
+
+                      showNotification(`✅ Объединено дублей в ${successCount} заявках`, 'success');
+                    }}
+                    className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    <Merge className="w-3.5 h-3.5" />
+                    Объединить все дубли
+                  </button>
+                </div>
+
+                <div className="mt-2 space-y-1">
+                  {findDuplicatesInsideApplications
+                    .filter(d => d.applicationName === obj.name)
+                    .slice(0, 3)
+                    .map((d, idx) => (
+                      <div key={idx} className="text-xs text-red-600 dark:text-red-400 flex justify-between items-center bg-white/50 dark:bg-gray-800/50 px-2 py-1 rounded">
+                        <span>
+                          • {d.materialName}
+                          <span className="text-gray-500 text-[10px] ml-1">
+                            (повторяется {d.occurrences.length} раза)
+                          </span>
+                        </span>
+                        <span className="font-medium">
+                          всего {d.totalQuantity} {d.unit}
+                        </span>
+                      </div>
+                    ))}
+                  {insideDuplicateCount > 3 && (
+                    <p className="text-xs text-red-500">+ ещё {insideDuplicateCount - 3}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {duplicateCount > 0 && (
               <div className="mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg">
                 <p className="text-xs text-yellow-700 dark:text-yellow-300 font-medium">
@@ -786,9 +898,9 @@ const ObjectMaterialsMerger = ({
                 </div>
               </div>
             )}
-            
+
             <button
-              onClick={() => mergeObjectMaterials(obj.name, obj.applications.filter(a => a.status !== 'consolidated'))}
+              onClick={() => mergeObjectMaterials(obj.name, obj.activeApplicationsList || [])}
               disabled={isLoading || !canMerge || isMerging}
               className={`w-full mt-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${
                 canMerge && !isMerging
@@ -796,27 +908,29 @@ const ObjectMaterialsMerger = ({
                   : 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
               }`}
             >
-              {isMerging ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : isLoading ? (
+              {isMerging || isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <Merge className="w-4 h-4" />
               )}
-              {canMerge ? `Объединить ${obj.activeApplications} заявок` : 
-               obj.isConsolidated ? 'Уже объединено' : 
-               'Нет заявок для объединения'}
+              {canMerge
+                ? `Объединить ${obj.activeApplications} заявок`
+                : obj.isConsolidated
+                  ? 'Уже объединено'
+                  : !canMergeApplications
+                    ? 'Нет прав'
+                    : 'Нет заявок для объединения'}
             </button>
           </div>
         )}
       </div>
     );
-  }, [duplicates, findDuplicatesInsideApplications, expandedObjects, toggleObject, mergingInProgress, isLoading, mergeObjectMaterials, consolidateApplicationMaterials]);
+  }, [duplicates, findDuplicatesInsideApplications, expandedObjects, toggleObject, mergingInProgress, isLoading, mergeObjectMaterials, consolidateApplicationMaterials, canMergeApplications, showNotification]);
 
   // ===== МОДАЛЬНОЕ ОКНО ПРЕДПРОСМОТРА =====
   const MergePreviewModal = useCallback(() => {
     if (!showMergeModal || !mergedData) return null;
-    
+
     return (
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -828,14 +942,14 @@ const ObjectMaterialsMerger = ({
                 {mergedData.totalApplications} заявок
               </span>
             </div>
-            <button 
-              onClick={() => setShowMergeModal(false)} 
+            <button
+              onClick={() => setShowMergeModal(false)}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
-          
+
           <div className="p-4 space-y-4">
             <div className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 p-4 rounded-xl">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -857,7 +971,7 @@ const ObjectMaterialsMerger = ({
                 </div>
               </div>
             </div>
-            
+
             {mergedData.materialsByCategory && (
               <div>
                 <h4 className="font-semibold mb-3 flex items-center gap-2">
@@ -865,7 +979,7 @@ const ObjectMaterialsMerger = ({
                   Материалы по категориям
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {Object.entries(mergedData.materialsByCategory).map(([category, items]) => 
+                  {Object.entries(mergedData.materialsByCategory).map(([category, items]) =>
                     items.length > 0 && (
                       <div key={category} className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg">
                         <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
@@ -888,7 +1002,7 @@ const ObjectMaterialsMerger = ({
                 </div>
               </div>
             )}
-            
+
             <div>
               <h4 className="font-semibold mb-3 flex items-center gap-2">
                 <ClipboardList className="w-4 h-4" />
@@ -925,7 +1039,7 @@ const ObjectMaterialsMerger = ({
               </div>
             </div>
           </div>
-          
+
           <div className="flex justify-end gap-3 p-4 border-t bg-gray-50 dark:bg-gray-800/50 rounded-b-2xl">
             <button
               onClick={() => setShowMergeModal(false)}
@@ -949,7 +1063,7 @@ const ObjectMaterialsMerger = ({
         </div>
       </div>
     );
-  }, [showMergeModal, mergedData, isLoading, createConsolidatedApplication]);
+  }, [showMergeModal, mergedData, isLoading, createConsolidatedApplication, showNotification]);
 
   // ===== РЕНДЕР =====
   if (objectsWithApplications.length === 0 && !showArchived) {
@@ -985,7 +1099,7 @@ const ObjectMaterialsMerger = ({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {stats.mergeableObjects > 1 && (
+          {canMergeApplications && stats.mergeableObjects > 1 && (
             <button
               onClick={handleMergeAll}
               disabled={isLoading}
@@ -995,7 +1109,7 @@ const ObjectMaterialsMerger = ({
               Объединить всё ({stats.mergeableObjects})
             </button>
           )}
-          
+
           <button
             onClick={onRefresh}
             className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
@@ -1005,6 +1119,22 @@ const ObjectMaterialsMerger = ({
           </button>
         </div>
       </div>
+
+      {!canMergeApplications && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-medium text-amber-800 dark:text-amber-300">
+                👁️ Режим просмотра
+              </h4>
+              <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                У вашей роли нет прав на объединение заявок. Вы можете просматривать информацию, но кнопки объединения недоступны.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-xl">
@@ -1040,7 +1170,7 @@ const ObjectMaterialsMerger = ({
             className="w-full pl-9 pr-4 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white/80 dark:bg-gray-700/80 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
-        
+
         <select
           value={viewMode}
           onChange={(e) => setViewMode(e.target.value)}
@@ -1050,7 +1180,7 @@ const ObjectMaterialsMerger = ({
           <option value="mergeable">Доступны для объединения</option>
           <option value="duplicates">С дубликатами</option>
         </select>
-        
+
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
@@ -1062,7 +1192,7 @@ const ObjectMaterialsMerger = ({
           <option value="foremen">По бригадам</option>
           <option value="cost">По стоимости</option>
         </select>
-        
+
         <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
           <input
             type="checkbox"
@@ -1072,7 +1202,7 @@ const ObjectMaterialsMerger = ({
           />
           Показать архив
         </label>
-        
+
         {(searchQuery || viewMode !== 'all' || sortBy !== 'score') && (
           <button
             onClick={clearFilters}

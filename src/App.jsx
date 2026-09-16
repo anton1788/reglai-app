@@ -1018,6 +1018,8 @@ const App = () => {
   const [currentView, setCurrentView] = useState('create');
   const [applications, setApplications] = useState([]);
   const [allApplications, setAllApplications] = useState([]);
+// 🔧 НОВЫЙ STATE: все заявки компании БЕЗ пагинации (для мерджера и других нужд)
+const [allCompanyApplications, setAllCompanyApplications] = useState([]);
   const [formData, setFormData] = useState({
     objectName: '',
     foremanName: '',
@@ -1459,15 +1461,25 @@ const featureAdoption = useMemo(() => {
 }, [companyUsers, applications, allApplications, isAdminMode, auditLogs]);
 
 // ===== КОЛИЧЕСТВО ОБЪЕКТОВ ДЛЯ ОБЪЕДИНЕНИЯ =====
+// 🔧 Синхронизировано с логикой ObjectMaterialsMerger:
+//    - исключаем is_consolidated / status=consolidated / received / canceled
+//    - группируем по company_id + нормализованному имени
 const mergeableCount = useMemo(() => {
   const groups = {};
+  const normalizeObjectName = (name) =>
+    (name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
   applications.forEach(app => {
+    if (app.is_consolidated === true) return;
     if (app.status === 'consolidated') return;
-    if (!groups[app.object_name]) {
-      groups[app.object_name] = [];
-    }
-    groups[app.object_name].push(app);
+    if (app.status === 'received') return;
+    if (app.status === 'canceled') return;
+
+    const key = `${app.company_id || 'no-company'}::${normalizeObjectName(app.object_name)}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(app);
   });
+
   return Object.values(groups).filter(group => group.length >= 2).length;
 }, [applications]);
 // ===== КОЛИЧЕСТВО ЗАЯВОК, ГОТОВЫХ К ВЫДАЧЕ =====
@@ -2576,6 +2588,8 @@ const checkForUpdates = useCallback(async () => {
   safeSetUserCompanyId(null);
   setIsAdminMode(false);
   setCurrentView('create');
+  // 🔧 Очищаем все заявки компании (для мерджера и других мест)
+  setAllCompanyApplications([]);
 };
 
   // ─────────────────────────────────────────────────────────
@@ -5074,6 +5088,7 @@ await logEmployeeBlocked(supabase, employeeId, newStatus, userContextWithCleanId
     if (userError) throw userError;
 
     // ✅ Фильтруем временные заявки (pending_*, draft_*)
+// ✅ Фильтруем временные заявки (pending_*, draft_*)
 const filteredApps = userApps.filter(app => 
   app.id && !app.id.startsWith('pending_') && !app.id.startsWith('draft_')
 );
@@ -5086,7 +5101,37 @@ const uniqueApps = filteredApps.reduce((acc, current) => {
   return acc;
 }, []);
 
-setApplications(uniqueApps);
+// 🔧 Исключаем сводные заявки и оригиналы, поглощённые сводной,
+//    из ОБЫЧНЫХ списков (/inwork, /received, /history, /readyToIssue).
+//    Они видны только в разделе /merge и в аналитике (если нужно).
+const appsForRegularLists = uniqueApps.filter(app => {
+  // Сама сводная заявка
+  if (app.is_consolidated === true) return false;
+  // Оригинал, который был объединён
+  if (app.status === 'consolidated') return false;
+  return true;
+});
+
+setApplications(appsForRegularLists);
+
+// 🔧 НОВОЕ: загружаем ВСЕ заявки компании (без пагинации) для мерджера.
+//    Это решает 2 проблемы:
+//    1. Мерджер видел только текущую страницу (20 записей)
+//    2. Мерджер не видел сводные заявки → не мог корректно показать «Уже объединено»
+//    Загружаем ОДИН раз здесь (не на каждый фильтр), потому что это «сырой» снимок.
+const { data: allAppsForMerge, error: allAppsError } = await supabase
+  .from('applications')
+  .select('*')
+  .eq('company_id', safeCompanyId)
+  .order('created_at', { ascending: false })
+  .limit(1000);
+
+if (allAppsError) {
+  console.warn('⚠️ Не удалось загрузить все заявки для мерджера:', allAppsError.message);
+} else if (allAppsForMerge) {
+  setAllCompanyApplications(allAppsForMerge);
+  console.log(`✅ Загружено ${allAppsForMerge.length} заявок для мерджера`);
+}
 
     // Загрузка пользователей
     const { data: usersData } = await supabase
@@ -8428,21 +8473,45 @@ onClearFilters={handleClearFilters}
           />
         )}
 
-        {currentView === 'merge' && (
-  <ObjectMaterialsMerger
-    supabase={supabase}
-    companyId={userCompanyId}
-    applications={applications}
-    showNotification={showNotification}
-    userRole={userRole}
-    onMerged={(newApp) => {
-      // Обновляем список заявок после объединения
-      setApplications(prev => [newApp, ...prev]);
-      // Можно перезагрузить страницу
-      loadApplications(page);
-    }}
-  />
-)}
+      {currentView === 'merge' && 
+  (['manager', 'director', 'supply_admin', 'super_admin'].includes(userRole) || isCompanyOwner) ? (
+    <ObjectMaterialsMerger
+      supabase={supabase}
+      companyId={userCompanyId}
+      // 🔧 ИСПОЛЬЗУЕМ allCompanyApplications (все заявки без пагинации)
+      //    Включает сводные → правильная логика «Уже объединено»
+      //    Если массив пуст (первый рендер до загрузки) — fallback на applications
+      applications={allCompanyApplications.length > 0 ? allCompanyApplications : applications}
+      showNotification={showNotification}
+      userRole={userRole}
+      onMerged={(_newApp) => {
+        cacheManager.delete('applications', `applications_${userCompanyId}_page_1`);
+        cacheManager.delete('applications', `applications_${userCompanyId}_page_${page}`);
+        cacheManager.delete('analytics', `analytics_${userCompanyId}_${isAdminMode}`);
+        setPage(1);
+        loadApplications(1);
+        showNotification('🔄 Список заявок обновлён', 'info');
+      }}
+      onRefresh={() => {
+        cacheManager.delete('applications', `applications_${userCompanyId}_page_1`);
+        cacheManager.delete('applications', `applications_${userCompanyId}_page_${page}`);
+        cacheManager.delete('analytics', `analytics_${userCompanyId}_${isAdminMode}`);
+        setPage(1);
+        loadApplications(1);
+      }}
+    />
+  ) : (
+    <div className="max-w-2xl mx-auto p-8 text-center">
+      <div className="text-5xl mb-4">🔒</div>
+      <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
+        Доступ ограничен
+      </h2>
+      <p className="text-gray-600 dark:text-gray-400">
+        Объединение заявок доступно руководителю и снабженцу.
+      </p>
+    </div>
+  )
+}
 {currentView === 'estimates' && (
   <EstimateCalculator
     supabase={supabase}
