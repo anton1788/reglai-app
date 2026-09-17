@@ -4614,31 +4614,29 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
     // ============================================================
     // ✅ ШАГ 2: Проверяем статус каждого материала
     // ============================================================
-    // ✅ СТАЛО
-// Мастер получил всё, что ему выдали?
-const masterReceivedAll = updatedMaterials.every(m => {
+    // ✅ ПРАВИЛЬНАЯ ЛОГИКА: заявка закрывается только когда ВСЁ заказанное
+//    привезено, выдано мастеру и подтверждено им.
+const allItemsFullyConfirmed = updatedMaterials.every(m => {
   const received = Number(m.received) || 0;
-  const sentToMaster = Number(m.sent_to_master_quantity) || 0;
-  // Если мастеру ничего не отправляли — пропускаем позицию
-  if (sentToMaster === 0) return true;
-  // Иначе: получил ли он всё, что было отправлено?
-  return received >= sentToMaster;
+  const quantity = Number(m.quantity) || 0;
+  // quantity = 0 — позиция удалена, пропускаем
+  if (quantity === 0) return true;
+  return received >= quantity;
 });
 
-// Всё, что было выдано мастеру — подтверждено?
-// → заявка завершена, даже если поставщик привёз меньше заказанного
 const hasAnythingSent = updatedMaterials.some(m =>
   (Number(m.sent_to_master_quantity) || 0) > 0
 );
 
 let newStatus;
-if (masterReceivedAll && hasAnythingSent) {
+if (allItemsFullyConfirmed) {
+  // 🎉 Всё заказанное полностью подтверждено — заявка закрыта
   newStatus = APPLICATION_STATUS.RECEIVED;
 } else if (hasAnythingSent) {
-  // Мастер что-то подтвердил, но не всё выданное
-  newStatus = APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
+  // 🟡 Мастер что-то подтвердил, но остались незакрытые позиции —
+  //     оставляем заявку в partial_received, чтобы снабженец мог довезти остальное
+  newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
 } else {
-  // Ничего не выдавали мастеру — оставляем как есть
   newStatus = application.status;
 }
     
