@@ -1,5 +1,5 @@
 // src/version.js
 // ⚠️ ВАЖНО: Версия должна быть фиксированной для production
-export const VERSION = '0.0.75-beta';
+export const VERSION = '0.0.76-beta';
 export const ASSET_SUFFIX = `v${VERSION}`;
 export const CACHE_NAME = `reglai-system-${VERSION}`;
