@@ -72,6 +72,7 @@ const styles = `
 // ─────────────────────────────────────────────────────────────
 // 🔧 ХЕЛПЕРЫ
 // ─────────────────────────────────────────────────────────────
+
 const formatNumber = function(num) {
   return new Intl.NumberFormat('ru-RU').format(num || 0);
 };
@@ -81,24 +82,49 @@ const clamp = function(value, min = 0, max = 10000) {
   return isNaN(num) ? min : Math.max(min, Math.min(num, max));
 };
 
+/**
+ * ✅ ЕДИНАЯ ЛОГИКА: определяет, можно ли ещё что-то выдать со склада мастеру
+ *    Не сравнивает с quantity — только с фактически принятым количеством
+ */
+const canIssueFromWarehouse = (m) => {
+  const onWarehouse = Number(m.supplier_received_quantity) || 0;
+  const alreadySent = Number(m.sent_to_master_quantity) || 0;
+  const received = Number(m.received) || 0;
+
+  if (onWarehouse <= 0) return false;
+  if (alreadySent >= onWarehouse) return false;
+  if (alreadySent > 0 && received >= alreadySent) return false;
+
+  return true;
+};
+
+/**
+ * ✅ ЕДИНАЯ ЛОГИКА: сколько доступно для выдачи
+ */
+const getAvailableToIssue = (m) => {
+  const onWarehouse = Number(m.supplier_received_quantity) || 0;
+  const alreadySent = Number(m.sent_to_master_quantity) || 0;
+  return Math.max(0, onWarehouse - alreadySent);
+};
+
 // ─────────────────────────────────────────────────────────────
 // 🎨 UI КОМПОНЕНТЫ
 // ─────────────────────────────────────────────────────────────
 
-// ✅ Статус материала
 const MaterialStatusBadge = memo(function({ status, t }) {
   const config = {
     [ITEM_STATUS.PENDING]: { color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300', label: 'statusPending' },
     [ITEM_STATUS.ON_WAREHOUSE]: { color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300', label: 'itemStatusOnWarehouse' },
     [ITEM_STATUS.SENT_TO_MASTER]: { color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300', label: 'itemStatusSent' },
+    [ITEM_STATUS.PARTIAL_SENT]: { color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', label: 'itemStatusPartialSent' },
     [ITEM_STATUS.CONFIRMED]: { color: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300', label: 'itemStatusConfirmed' },
     [ITEM_STATUS.REJECTED]: { color: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', label: 'itemStatusRejected' }
   };
-  
+
   const itemConfig = config[status] || config[ITEM_STATUS.PENDING];
   const colorClass = itemConfig.color;
   const labelKey = itemConfig.label;
-  
+
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${colorClass}`}>
       {t(labelKey) || status}
@@ -107,15 +133,13 @@ const MaterialStatusBadge = memo(function({ status, t }) {
 });
 MaterialStatusBadge.displayName = 'MaterialStatusBadge';
 
-/// ✅ Прогресс-бар для материала
 const MaterialProgress = memo(function({ requested, onWarehouse, confirmed, sentToMaster }) {
   const warehouseProgress = requested > 0 ? Math.round((onWarehouse / requested) * 100) : 0;
   const confirmationProgress = requested > 0 ? Math.round((confirmed / requested) * 100) : 0;
   const sentProgress = requested > 0 ? Math.round((sentToMaster / requested) * 100) : 0;
-  
+
   return (
     <div className="space-y-2">
-      {/* На складе */}
       <div className="flex items-center gap-2 text-xs">
         <Warehouse className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
         <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
@@ -128,8 +152,7 @@ const MaterialProgress = memo(function({ requested, onWarehouse, confirmed, sent
           {formatNumber(onWarehouse)}/{formatNumber(requested)}
         </span>
       </div>
-      
-      {/* ✅ Отправлено мастеру */}
+
       {sentToMaster > 0 && (
         <div className="flex items-center gap-2 text-xs">
           <Send className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" aria-hidden="true" />
@@ -144,8 +167,7 @@ const MaterialProgress = memo(function({ requested, onWarehouse, confirmed, sent
           </span>
         </div>
       )}
-      
-      {/* Подтверждено */}
+
       {confirmed > 0 && (
         <div className="flex items-center gap-2 text-xs">
           <CheckCircle2 className="w-3.5 h-3.5 text-green-600 dark:text-green-400" aria-hidden="true" />
@@ -165,7 +187,6 @@ const MaterialProgress = memo(function({ requested, onWarehouse, confirmed, sent
 });
 MaterialProgress.displayName = 'MaterialProgress';
 
-// ✅ Строка материала для админа (приёмка на склад)
 const AdminReceiveRow = memo(function({
   material,
   index,
@@ -177,29 +198,29 @@ const AdminReceiveRow = memo(function({
   const requestedQty = Number(material.quantity) || 0;
   const onWarehouse = Number(material.supplier_received_quantity) || 0;
   const remaining = requestedQty - onWarehouse;
-  
+
   const unitOptions = ['шт', 'м', 'кг', 'л', 'упак', 'комплект', 'партия', 'м²', 'м³'];
-  
+
   const handleQuantityChange = useCallback(function(e) {
     const rawValue = e.target.value;
     const value = rawValue === '' ? 0 : clamp(parseInt(rawValue, 10), 0, requestedQty);
     onUpdate(index, 'supplier_received_quantity', value);
   }, [index, requestedQty, onUpdate]);
-  
+
   const handleIncrement = useCallback(function() {
     const newValue = clamp(onWarehouse + 1, 0, requestedQty);
     onUpdate(index, 'supplier_received_quantity', newValue);
   }, [index, onWarehouse, requestedQty, onUpdate]);
-  
+
   const handleDecrement = useCallback(function() {
     const newValue = clamp(onWarehouse - 1, 0, requestedQty);
     onUpdate(index, 'supplier_received_quantity', newValue);
   }, [index, onWarehouse, requestedQty, onUpdate]);
-  
+
   const handleUnitChange = useCallback(function(e) {
     onUpdate(index, 'unit', e.target.value);
   }, [index, onUpdate]);
-  
+
   return (
     <article className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
       <div className="flex flex-col sm:flex-row gap-4">
@@ -216,14 +237,13 @@ const AdminReceiveRow = memo(function({
               <Camera className="w-4 h-4" />
             </button>
           </div>
-          
+
           <MaterialProgress
             requested={requestedQty}
             onWarehouse={onWarehouse}
             confirmed={Number(material.received) || 0}
           />
-          
-          {/* ✅ ЦЕНА - ТОЛЬКО ЕСЛИ НЕ СКРЫТА */}
+
           {!hidePrices && (
             <div className="mt-3 flex items-center gap-3 text-sm border-t border-gray-200 dark:border-gray-700 pt-2">
               {material.supplier_price !== undefined && material.supplier_price !== null && (
@@ -239,7 +259,7 @@ const AdminReceiveRow = memo(function({
             </div>
           )}
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="quantity-stepper flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-1">
             <button
@@ -271,7 +291,7 @@ const AdminReceiveRow = memo(function({
               <ChevronUp className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
-          
+
           <div className="flex flex-col gap-1">
             <select
               value={material.unit || 'шт'}
@@ -287,7 +307,7 @@ const AdminReceiveRow = memo(function({
           </div>
         </div>
       </div>
-      
+
       {remaining > 0 && (
         <div className="mt-3 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
           <Info className="w-3.5 h-3.5" aria-hidden="true" />
@@ -299,7 +319,6 @@ const AdminReceiveRow = memo(function({
 });
 AdminReceiveRow.displayName = 'AdminReceiveRow';
 
-// ✅ ПОЛНОСТЬЮ ПЕРЕПИСАННЫЙ MasterConfirmRow
 const MasterConfirmRow = memo(function({
   material,
   index,
@@ -310,39 +329,33 @@ const MasterConfirmRow = memo(function({
   const requestedQty = Number(material.quantity) || 0;
   const sentToMaster = Number(material.sent_to_master_quantity) || 0;
   const currentReceived = Number(material.received) || 0;
-  
-  // ✅ Локальное состояние для количества
+
   const [localConfirmed, setLocalConfirmed] = useState(currentReceived);
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [isRejected, setIsRejected] = useState(false);
-  
-  // Проверяем, частично ли отправлено
+
   const isPartial = sentToMaster > 0 && sentToMaster < requestedQty;
   const isFullySent = sentToMaster >= requestedQty && requestedQty > 0;
-  
-  // ✅ ИСПОЛЬЗУЕМ handleQuantityChange для установки всех
+
   const handleQuantityChange = useCallback(function(value) {
     const newValue = clamp(value, 0, sentToMaster);
     setLocalConfirmed(newValue);
     onUpdateQuantity(index, newValue);
   }, [index, sentToMaster, onUpdateQuantity]);
-  
-  // ✅ Обработчик увеличения
+
   const handleIncrement = useCallback(function() {
     const newValue = clamp(localConfirmed + 1, 0, sentToMaster);
     setLocalConfirmed(newValue);
     onUpdateQuantity(index, newValue);
   }, [index, localConfirmed, sentToMaster, onUpdateQuantity]);
-  
-  // ✅ Обработчик уменьшения
+
   const handleDecrement = useCallback(function() {
     const newValue = clamp(localConfirmed - 1, 0, sentToMaster);
     setLocalConfirmed(newValue);
     onUpdateQuantity(index, newValue);
   }, [index, localConfirmed, sentToMaster, onUpdateQuantity]);
-  
-  // ✅ Обработчик ввода
+
   const handleInputChange = useCallback(function(e) {
     const rawValue = e.target.value;
     let value;
@@ -354,8 +367,7 @@ const MasterConfirmRow = memo(function({
     setLocalConfirmed(value);
     onUpdateQuantity(index, value);
   }, [index, sentToMaster, onUpdateQuantity]);
-  
-  // ✅ Обработчик отклонения
+
   const handleReject = useCallback(function() {
     if (rejectReason.trim()) {
       onReject(index, rejectReason.trim());
@@ -366,19 +378,18 @@ const MasterConfirmRow = memo(function({
       onUpdateQuantity(index, 0);
     }
   }, [index, rejectReason, onReject, onUpdateQuantity]);
-  
-  // ✅ Отменить отклонение
+
   const handleCancelReject = useCallback(function() {
     setIsRejected(false);
     setLocalConfirmed(0);
     onUpdateQuantity(index, 0);
   }, [index, onUpdateQuantity]);
-  
+
   const allConfirmed = localConfirmed >= sentToMaster && sentToMaster > 0;
-  
+
   return (
     <article className={`material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60 ${
-      isRejected ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-900/10' : 
+      isRejected ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-900/10' :
       allConfirmed ? 'border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10' :
       isPartial ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10' : ''
     }`}>
@@ -389,39 +400,39 @@ const MasterConfirmRow = memo(function({
               {material.description || '—'}
             </h4>
             <MaterialStatusBadge status={material.status} t={t} />
-            
+
             {isFullySent && !isRejected && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full">
                 ✅ Полностью отправлено
               </span>
             )}
-            
+
             {allConfirmed && !isRejected && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full">
                 ✅ Подтверждено
               </span>
             )}
-            
+
             {isPartial && !isRejected && !allConfirmed && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 rounded-full">
                 🟡 Частично
               </span>
             )}
-            
+
             {isRejected && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-full">
                 ❌ Отклонен
               </span>
             )}
           </div>
-          
+
           <MaterialProgress
             requested={requestedQty}
             onWarehouse={Number(material.supplier_received_quantity) || 0}
             confirmed={localConfirmed}
             sentToMaster={sentToMaster}
           />
-          
+
           {isPartial && !isRejected && (
             <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
               <Info className="w-3 h-3" />
@@ -429,28 +440,28 @@ const MasterConfirmRow = memo(function({
               <span className="text-gray-400 ml-1">(осталось: {requestedQty - sentToMaster})</span>
             </div>
           )}
-          
+
           {sentToMaster > 0 && !isRejected && (
             <div className="mt-1 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
               <CheckCircle className="w-3 h-3" />
               Доступно для подтверждения: <strong>{sentToMaster}</strong> {material.unit || 'шт'}
             </div>
           )}
-          
+
           {localConfirmed > 0 && !isRejected && (
             <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
               Подтверждено: <strong>{localConfirmed}</strong> {material.unit || 'шт'}
             </div>
           )}
-          
+
           {allConfirmed && !isRejected && (
             <div className="mt-1 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
               <CheckCircle className="w-3 h-3" />
               ✅ Все отправленные материалы подтверждены
             </div>
           )}
-          
+
           {isRejected && material.reject_reason && (
             <div className="mt-1 text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
               <XCircle className="w-3 h-3" />
@@ -458,7 +469,7 @@ const MasterConfirmRow = memo(function({
             </div>
           )}
         </div>
-        
+
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
             {!isRejected ? (
@@ -492,8 +503,7 @@ const MasterConfirmRow = memo(function({
                     <ChevronUp className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
-                
-                {/* ✅ КНОПКА "ВСЕ" - ИСПОЛЬЗУЕТ handleQuantityChange */}
+
                 <button
                   onClick={() => handleQuantityChange(sentToMaster)}
                   disabled={sentToMaster <= 0 || localConfirmed >= sentToMaster}
@@ -501,7 +511,7 @@ const MasterConfirmRow = memo(function({
                 >
                   Все
                 </button>
-                
+
                 <button
                   onClick={function() { setShowRejectInput(!showRejectInput); }}
                   disabled={sentToMaster <= 0}
@@ -522,7 +532,7 @@ const MasterConfirmRow = memo(function({
               </button>
             )}
           </div>
-          
+
           {showRejectInput && !isRejected && (
             <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
               <input
@@ -573,10 +583,9 @@ const ReceiveModal = memo(function({
   onPhotoClick,
   onQRClick,
 }) {
-  // ✅ БЕЗОПАСНОЕ ПОЛУЧЕНИЕ ID КОМПАНИИ
   const safeCompanyId = useMemo(() => {
     if (!userCompanyId) return null;
-    
+
     if (typeof userCompanyId === 'object' && userCompanyId !== null) {
       const id = userCompanyId.id || userCompanyId.company_id || userCompanyId._id || null;
       if (id) return String(id);
@@ -590,39 +599,30 @@ const ReceiveModal = memo(function({
       }
       return null;
     }
-    
+
     return String(userCompanyId);
   }, [userCompanyId]);
-  
+
   const { shouldHidePrices, isMaster } = usePriceVisibility(userRole);
-  
-  // ─────────────────────────────────────────────────────────
-  // 📊 STATE
-  // ─────────────────────────────────────────────────────────
+
   const [localMaterials, setLocalMaterials] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [transferComment, setTransferComment] = useState('');
   const [itemsToSend, setItemsToSend] = useState([]);
   const modalContentRef = useRef(null);
-  
+
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [_photos, _setPhotos] = useState([]);
   const [currentMaterialIndex, setCurrentMaterialIndex] = useState(null);
-  
-  // ─────────────────────────────────────────────────────────
-  // 📞 INJECT STYLES
-  // ─────────────────────────────────────────────────────────
+
   useEffect(function() {
     const styleEl = document.createElement('style');
     styleEl.textContent = styles;
     document.head.appendChild(styleEl);
     return function() { document.head.removeChild(styleEl); };
   }, []);
-  
-  // ─────────────────────────────────────────────────────────
-  // 🎯 FOCUS MANAGEMENT
-  // ─────────────────────────────────────────────────────────
+
   useEffect(function() {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -632,21 +632,21 @@ const ReceiveModal = memo(function({
     }
     return function() { document.body.style.overflow = ''; };
   }, [isOpen]);
-  
+
   // ─────────────────────────────────────────────────────────
-  // 🔁 INIT LOCAL MATERIALS
+  // 🔁 INIT LOCAL MATERIALS (ИСПРАВЛЕНО)
   // ─────────────────────────────────────────────────────────
   useEffect(function() {
     if (selectedApplication && selectedApplication.materials) {
       let materials = selectedApplication.materials;
-      
+
       if (modalMode === 'master_confirm') {
         materials = materials.filter(function(m) {
           const sentToMaster = Number(m.sent_to_master_quantity) || 0;
           return sentToMaster > 0;
         });
       }
-      
+
       const validMaterials = materials
         .filter(function(m) { return m.description && m.description.trim(); })
         .map(function(m, idx) {
@@ -660,90 +660,97 @@ const ReceiveModal = memo(function({
             quantity: Number(m.quantity) || 0
           };
         });
-      
+
       setLocalMaterials(validMaterials);
-      
+
       if (modalMode === 'admin_ready_to_issue') {
+        // ✅ ИСПРАВЛЕНО: используем единый helper canIssueFromWarehouse
         const availableItems = validMaterials
-          .filter(function(m) {
-            const onWarehouse = Number(m.supplier_received_quantity) || 0;
-            const alreadySent = Number(m.sent_to_master_quantity) || 0;
-            const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
-            
-            if (isFullyConfirmed) return false;
-            return onWarehouse > 0 && alreadySent < onWarehouse;
-          })
+          .filter(canIssueFromWarehouse)
           .map(function(m) {
-            const onWarehouse = Number(m.supplier_received_quantity) || 0;
-            const alreadySent = Number(m.sent_to_master_quantity) || 0;
-            const available = onWarehouse - alreadySent;
-            
             return {
               ...m,
-              quantityToSend: available,
+              quantityToSend: getAvailableToIssue(m),
               unit: m.unit || 'шт'
             };
           });
-        
+
         setItemsToSend(availableItems);
       }
     }
   }, [selectedApplication, modalMode]);
-  
+
   // ─────────────────────────────────────────────────────────
-  // ⌨️ KEYBOARD SHORTCUTS
+  // ⌨️ HANDLE SAVE (ИСПРАВЛЕНО)
   // ─────────────────────────────────────────────────────────
   const handleSave = useCallback(async function() {
     if (isSaving) {
       console.log('⏳ Уже сохраняется, пропускаем');
       return;
     }
-    
+
     setIsSaving(true);
     try {
       let result;
-      
+
       if (modalMode === 'admin_receive' && typeof onAdminReceive === 'function') {
-        result = await onAdminReceive(localMaterials, selectedApplication);
+        // ✅ Отправляем ВСЕ материалы — RPC посчитает дельты от старого значения
+        const allMaterials = selectedApplication.materials.map(original => {
+          const fromModal = localMaterials.find(m =>
+            (m.description || m.item_name) === (original.description || original.item_name)
+          );
+          return {
+            description: original.description || original.item_name,
+            unit: original.unit || 'шт',
+            supplier_received_quantity: fromModal
+              ? Number(fromModal.supplier_received_quantity) || 0
+              : Number(original.supplier_received_quantity) || 0,
+          };
+        });
+
+        result = await onAdminReceive(allMaterials, selectedApplication);
       }
       else if ((modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && typeof onSendToMaster === 'function') {
-        const items = itemsToSend.filter(i => (Number(i.quantityToSend) || 0) > 0);
-        
+        // ✅ ИСПРАВЛЕНО: нормализуем items к единому формату
+        const items = itemsToSend
+          .filter(i => (Number(i.quantityToSend) || 0) > 0)
+          .map(i => ({
+            description: (i.description || i.item_name || '').trim(),
+            quantityToSend: Number(i.quantityToSend) || 0,
+            unit: i.unit || 'шт',
+          }));
+
         if (items.length === 0) {
           if (showNotification) showNotification('Выберите хотя бы один материал для выдачи', 'warning');
           setIsSaving(false);
           return;
         }
-        
-        console.log('🔔 Вызов onSendToMaster с items:', items);
+
+        console.log('🔔 [SEND TO MASTER] Нормализованные items:', items);
         result = await onSendToMaster(items, selectedApplication);
       }
       else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
-  // ✅ ФИКС: Получаем полный список материалов заявки
-  const fullMaterials = selectedApplication.materials.map((originalMaterial) => {
-    // Ищем обновленный материал в localMaterials
-    const updatedMaterial = localMaterials.find(m => 
-      (m.description || m.item_name) === (originalMaterial.description || originalMaterial.item_name)
-    );
+        // ✅ Отправляем ПОЛНЫЙ список материалов заявки (включая неотправленные)
+        const fullMaterials = selectedApplication.materials.map((originalMaterial) => {
+          const updatedMaterial = localMaterials.find(m =>
+            (m.description || m.item_name) === (originalMaterial.description || originalMaterial.item_name)
+          );
 
-    if (updatedMaterial) {
-      // Если нашли, возвращаем обновленный (с новым received, reject_reason и т.д.)
-      return {
-        ...originalMaterial,
-        ...updatedMaterial,
-        // Убеждаемся, что сюда не попали временные поля модалки, если они есть
-        _index: undefined
-      };
-    }
-    
-    // Если не нашли (материал не был отправлен мастеру) — оставляем его БЕЗ ИЗМЕНЕНИЙ
-    return originalMaterial;
-  }).filter(m => m._index !== undefined || m.description); // Убираем мусор, если он есть
+          if (updatedMaterial) {
+            return {
+              ...originalMaterial,
+              ...updatedMaterial,
+              _index: undefined
+            };
+          }
 
-  console.log('🔔 Вызов onMasterConfirm с ПОЛНЫМ списком материалов (включая неотправленные):', fullMaterials);
-  result = await onMasterConfirm(fullMaterials, selectedApplication);
-}
-      
+          return originalMaterial;
+        }).filter(m => m._index !== undefined || m.description);
+
+        console.log('🔔 [MASTER CONFIRM] Полный список материалов:', fullMaterials);
+        result = await onMasterConfirm(fullMaterials, selectedApplication);
+      }
+
       if (result && result.success) {
         if (showNotification) {
           if (modalMode === 'admin_ready_to_issue') {
@@ -763,7 +770,7 @@ const ReceiveModal = memo(function({
       setIsSaving(false);
     }
   }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, saveReceiveStatus, localMaterials, itemsToSend, selectedApplication, onClose, t, showNotification, isSaving]);
-  
+
   useEffect(function() {
     const handleKeyDown = function(e) {
       if (!isOpen) return;
@@ -778,10 +785,7 @@ const ReceiveModal = memo(function({
     document.addEventListener('keydown', handleKeyDown);
     return function() { document.removeEventListener('keydown', handleKeyDown); };
   }, [isOpen, isSaving, onClose, handleSave]);
-  
-  // ─────────────────────────────────────────────────────────
-  // 🎛️ HANDLERS
-  // ─────────────────────────────────────────────────────────
+
   const handleMaterialUpdate = useCallback(function(index, field, value) {
     setLocalMaterials(function(prev) {
       return prev.map(function(m, idx) {
@@ -789,37 +793,29 @@ const ReceiveModal = memo(function({
       });
     });
   }, []);
-  
+
   const handleItemToSendUpdate = useCallback(function(index, quantity) {
     setItemsToSend(function(prev) {
       return prev.map(function(item, idx) {
         if (idx === index) {
-          const maxQty = Number(item.supplier_received_quantity) || 0;
-          const alreadySent = Number(item.sent_to_master_quantity) || 0;
-          const available = maxQty - alreadySent;
+          const available = getAvailableToIssue(item);
           return { ...item, quantityToSend: clamp(quantity, 0, available) };
         }
         return item;
       });
     });
   }, []);
-  
-  // ✅ УПРОЩЕННАЯ handleMasterUpdate - только обновляет received
+
   const handleMasterUpdateQuantity = useCallback(function(index, value) {
-    console.log('🔄 [MASTER] Обновление количества:', { index, value });
-    
-    // ✅ Обновляем localMaterials.received напрямую
     setLocalMaterials(function(prev) {
       return prev.map(function(m, idx) {
         if (idx === index) {
           const sentToMaster = Number(m.sent_to_master_quantity) || 0;
           const newReceived = Math.min(value, sentToMaster);
-          console.log(`📊 Обновляем материал ${idx}: received ${m.received} -> ${newReceived}`);
-          return { 
-            ...m, 
+          return {
+            ...m,
             received: newReceived,
-            // Обновляем статус материала
-            status: newReceived >= sentToMaster ? ITEM_STATUS.CONFIRMED : 
+            status: newReceived >= sentToMaster ? ITEM_STATUS.CONFIRMED :
                     newReceived > 0 ? ITEM_STATUS.PARTIAL_CONFIRMED : ITEM_STATUS.PENDING
           };
         }
@@ -827,16 +823,13 @@ const ReceiveModal = memo(function({
       });
     });
   }, []);
-  
-  // ✅ Обработчик отклонения
+
   const handleMasterReject = useCallback(function(index, reason) {
-    console.log('🔄 [MASTER] Отклонение материала:', { index, reason });
-    
     setLocalMaterials(function(prev) {
       return prev.map(function(m, idx) {
         if (idx === index) {
-          return { 
-            ...m, 
+          return {
+            ...m,
             received: 0,
             status: ITEM_STATUS.REJECTED,
             reject_reason: reason,
@@ -848,28 +841,27 @@ const ReceiveModal = memo(function({
       });
     });
   }, [userId]);
-  
-  // Обработка QR
+
   const handleQRScan = useCallback(function(qrData) {
     if (!safeCompanyId) {
       console.error('❌ QRScan: нет валидного companyId');
       if (showNotification) showNotification('Ошибка: компания не найдена', 'error');
       return;
     }
-    
+
     try {
       const parts = qrData.split('|');
       const materialName = parts[0];
       const quantity = parts[1];
       const unit = parts[2];
-      
+
       let materialIndex = -1;
       if (selectedApplication && selectedApplication.materials) {
         materialIndex = selectedApplication.materials.findIndex(function(m) {
           return m.description === materialName;
         });
       }
-      
+
       if (materialIndex !== -1 && localMaterials) {
         const newMaterials = [...localMaterials];
         const currentMaterial = newMaterials[materialIndex];
@@ -888,8 +880,7 @@ const ReceiveModal = memo(function({
       if (showNotification) showNotification('Неверный формат QR-кода', 'error');
     }
   }, [selectedApplication, localMaterials, showNotification, safeCompanyId]);
-  
-  // Обработка фото
+
   const handlePhotoCapture = useCallback(function(capturedPhotos) {
     const photosArray = Array.isArray(capturedPhotos) ? capturedPhotos : [capturedPhotos];
     const photosWithMeta = photosArray.map(function(photo) {
@@ -906,31 +897,28 @@ const ReceiveModal = memo(function({
     if (showNotification) showNotification('Добавлено ' + photosArray.length + ' фото для материала', 'success');
     setCurrentMaterialIndex(null);
   }, [currentMaterialIndex, localMaterials, showNotification]);
-  
+
   const handleOpenPhotoForMaterial = useCallback(function(materialIndex) {
     setCurrentMaterialIndex(materialIndex);
     setShowPhotoCapture(true);
   }, []);
-  
-  // ─────────────────────────────────────────────────────────
-  // 🔁 MEMOIZED VALUES
-  // ─────────────────────────────────────────────────────────
+
   const hasChanges = useMemo(function() {
     if (!selectedApplication || !selectedApplication.materials) return false;
-    
+
     if (modalMode === 'admin_receive') {
       return localMaterials.some(function(m, idx) {
         const originalMaterial = selectedApplication.materials[idx];
         return (Number(m.supplier_received_quantity) || 0) !== (Number(originalMaterial ? originalMaterial.supplier_received_quantity : 0) || 0);
       });
     }
-    
+
     if (modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') {
-      return itemsToSend.some(function(i) { 
-        return (Number(i.quantityToSend) || 0) > 0; 
+      return itemsToSend.some(function(i) {
+        return (Number(i.quantityToSend) || 0) > 0;
       });
     }
-    
+
     if (modalMode === 'master_confirm') {
       return localMaterials.some(function(m, idx) {
         const originalMaterial = selectedApplication.materials[idx];
@@ -942,23 +930,22 @@ const ReceiveModal = memo(function({
         return currentReceived !== originalReceived;
       });
     }
-    
+
     return false;
   }, [modalMode, localMaterials, itemsToSend, selectedApplication]);
-  
+
   const totalToAccept = useMemo(function() {
     return localMaterials.reduce(function(sum, m) {
       return sum + (Number(m.supplier_received_quantity) || 0);
     }, 0);
   }, [localMaterials]);
-  
+
   const totalToSend = useMemo(function() {
     return itemsToSend.reduce(function(sum, i) {
       return sum + (Number(i.quantityToSend) || 0);
     }, 0);
   }, [itemsToSend]);
-  
-  // ✅ Для master_confirm - считаем подтвержденные материалы
+
   const confirmedCount = useMemo(function() {
     return localMaterials.filter(function(m) {
       const sentToMaster = Number(m.sent_to_master_quantity) || 0;
@@ -966,7 +953,7 @@ const ReceiveModal = memo(function({
       return sentToMaster > 0 && received >= sentToMaster;
     }).length;
   }, [localMaterials]);
-  
+
   const totalSentCount = useMemo(function() {
     return localMaterials.filter(function(m) {
       return (Number(m.sent_to_master_quantity) || 0) > 0;
@@ -974,17 +961,11 @@ const ReceiveModal = memo(function({
   }, [localMaterials]);
 
   // ============================================================
-  // 🔹 РЕЖИМ: ВЫДАЧА СО СКЛАДА (для снабженца)
+  // 🔹 РЕЖИМ: ВЫДАЧА СО СКЛАДА (ИСПРАВЛЕНО)
   // ============================================================
   const renderReadyToIssue = function() {
-    const availableMaterials = localMaterials.filter(function(m) {
-      const onWarehouse = Number(m.supplier_received_quantity) || 0;
-      const alreadySent = Number(m.sent_to_master_quantity) || 0;
-      const isFullyConfirmed = Number(m.received) >= Number(m.quantity);
-      
-      if (isFullyConfirmed) return false;
-      return onWarehouse > 0 && alreadySent < onWarehouse;
-    });
+    // ✅ ИСПРАВЛЕНО: используем единый helper canIssueFromWarehouse
+    const availableMaterials = localMaterials.filter(canIssueFromWarehouse);
 
     if (availableMaterials.length === 0) {
       return (
@@ -1010,10 +991,9 @@ const ReceiveModal = memo(function({
 
         <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
           {availableMaterials.map(function(m, index) {
-            const onWarehouse = Number(m.supplier_received_quantity) || 0;
+            const available = getAvailableToIssue(m);
             const alreadySent = Number(m.sent_to_master_quantity) || 0;
-            const available = onWarehouse - alreadySent;
-            
+
             const safeIndex = itemsToSend.findIndex(function(item) {
               return (item.description || item.item_name) === (m.description || m.item_name);
             });
@@ -1044,7 +1024,7 @@ const ReceiveModal = memo(function({
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <div className="quantity-stepper flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 rounded-xl p-1 border border-amber-200 dark:border-amber-800">
                       <button
@@ -1061,7 +1041,7 @@ const ReceiveModal = memo(function({
                       >
                         <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
-                      
+
                       <input
                         type="number"
                         min="0"
@@ -1076,7 +1056,7 @@ const ReceiveModal = memo(function({
                         className="w-14 text-center px-1 py-1 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         aria-label={t('quantityToSend')}
                       />
-                      
+
                       <button
                         type="button"
                         onClick={function() {
@@ -1092,7 +1072,7 @@ const ReceiveModal = memo(function({
                         <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     </div>
-                    
+
                     <button
                       onClick={function() {
                         if (safeIndex >= 0) {
@@ -1141,12 +1121,9 @@ const ReceiveModal = memo(function({
       </div>
     );
   };
-  
-  // ─────────────────────────────────────────────────────────
-  // 📋 RENDERING
-  // ─────────────────────────────────────────────────────────
+
   if (!isOpen || !selectedApplication) return null;
-  
+
   const modalTitles = {
     admin_receive: t('acceptToWarehouse') || 'Приёмка на склад',
     admin_send_to_master: t('sendToMaster') || 'Отправка мастеру',
@@ -1160,12 +1137,10 @@ const ReceiveModal = memo(function({
     master_confirm: CheckCircle2,
     admin_ready_to_issue: Package
   };
-  
+
   const ModalIcon = modalIcons[modalMode] || Warehouse;
-  
-  // ✅ Для master_confirm показываем прогресс
   const showMasterProgress = modalMode === 'master_confirm' && totalSentCount > 0;
-  
+
   return (
     <div
       className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-enter"
@@ -1174,12 +1149,12 @@ const ReceiveModal = memo(function({
       aria-labelledby="receive-modal-title"
       onClick={function(e) { if (e.target === e.currentTarget && onClose) onClose(); }}
     >
-     <div
+      <div
         ref={modalContentRef}
         className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl shadow-2xl w-full sm:max-w-4xl max-h-[92vh] sm:max-h-[85vh] flex flex-col border border-gray-200/50 dark:border-gray-700/50 outline-none rounded-t-3xl sm:rounded-3xl"
         tabIndex={-1}
       >
-               {/* Header */}
+        {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200/60 dark:border-gray-700/60">
           <div className="flex items-center gap-3">
             <div className="p-2 sm:p-2.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl">
@@ -1203,10 +1178,9 @@ const ReceiveModal = memo(function({
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
-        
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-                    {/* Инфо о заявке */}
           <div className="bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 p-3 sm:p-4 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-sm">
               <div>
@@ -1232,7 +1206,6 @@ const ReceiveModal = memo(function({
             </div>
           </div>
 
-          {/* История статусов заявки */}
           {selectedApplication.status_history && selectedApplication.status_history.length > 0 && (
             <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
               <h4 className="font-semibold text-sm text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
@@ -1259,54 +1232,52 @@ const ReceiveModal = memo(function({
               </div>
             </div>
           )}
-          
+
           {/* 🔹 АДМИН: Приёмка на склад */}
           {modalMode === 'admin_receive' && (
-  <>
-    <div className="flex gap-2 mb-4">
-      <button
-        onClick={() => {
-          // ✅ ИСПОЛЬЗУЕМ onPhotoClick
-          if (onPhotoClick) {
-            onPhotoClick(null);
-          } else {
-            setCurrentMaterialIndex(null);
-            setShowPhotoCapture(true);
-          }
-        }}
-        className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 transition-colors shadow-sm"
-      >
-        <Camera className="w-4 h-4" />
-        Фото материалов
-      </button>
-      
-      <button
-        onClick={() => {
-          // ✅ ИСПОЛЬЗУЕМ onQRClick
-          if (onQRClick) {
-            onQRClick();
-          } else {
-            setShowQRScanner(true);
-          }
-        }}
-        className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 transition-colors shadow-sm"
-      >
-        <QrCode className="w-4 h-4" />
-        Сканировать QR
-      </button>
-    </div>
-              
+            <>
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => {
+                    if (onPhotoClick) {
+                      onPhotoClick(null);
+                    } else {
+                      setCurrentMaterialIndex(null);
+                      setShowPhotoCapture(true);
+                    }
+                  }}
+                  className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 transition-colors shadow-sm"
+                >
+                  <Camera className="w-4 h-4" />
+                  Фото материалов
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (onQRClick) {
+                      onQRClick();
+                    } else {
+                      setShowQRScanner(true);
+                    }
+                  }}
+                  className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 transition-colors shadow-sm"
+                >
+                  <QrCode className="w-4 h-4" />
+                  Сканировать QR
+                </button>
+              </div>
+
               <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
                 <Info className="w-4 h-4" aria-hidden="true" />
                 {t('acceptToWarehouseHint') || 'Укажите количество принятого материала для каждой позиции'}
               </div>
-              
+
               <div className="space-y-3">
                 {localMaterials.map(function(material, index) {
-                  const displayMaterial = isMaster 
+                  const displayMaterial = isMaster
                     ? sanitizeMaterialForMaster(material)
                     : material;
-                  
+
                   return (
                     <AdminReceiveRow
                       key={index}
@@ -1320,7 +1291,7 @@ const ReceiveModal = memo(function({
                   );
                 })}
               </div>
-              
+
               {totalToAccept > 0 && (
                 <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
                   <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
@@ -1333,7 +1304,7 @@ const ReceiveModal = memo(function({
               )}
             </>
           )}
-          
+
           {/* 🔹 ПАНЕЛЬ РЕШЕНИЙ ДЛЯ СНАБЖЕНЦА */}
           {modalMode === 'admin_receive' && userRole === 'supply_admin' && (
             <div className="mt-4 p-4 bg-gradient-to-r from-indigo-50/80 to-blue-50/80 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl border border-indigo-200/50 dark:border-indigo-700/50">
@@ -1348,7 +1319,7 @@ const ReceiveModal = memo(function({
                   <Package className="w-4 h-4" />
                   {t('takeToWork') || '📦 Взять в работу'}
                 </button>
-                
+
                 <button
                   onClick={function() { if (onSendForApproval) onSendForApproval(selectedApplication); }}
                   className="px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all shadow-lg shadow-orange-500/25"
@@ -1362,15 +1333,15 @@ const ReceiveModal = memo(function({
               </p>
             </div>
           )}
-          
-          {/* 🔹 АДМИН: Отправка мастеру (для обратной совместимости) */}
+
+          {/* 🔹 АДМИН: Отправка мастеру */}
           {modalMode === 'admin_send_to_master' && (
             <>
               <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
                 <Mail className="w-4 h-4" aria-hidden="true" />
                 {t('sendToMasterHint') || 'Выберите материалы и количество для отправки мастеру'}
               </div>
-              
+
               <div className="space-y-3">
                 {itemsToSend.map(function(item, index) {
                   return (
@@ -1421,7 +1392,7 @@ const ReceiveModal = memo(function({
                   );
                 })}
               </div>
-              
+
               <div>
                 <label htmlFor="transfer-comment" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   {t('transferComment')}
@@ -1435,7 +1406,7 @@ const ReceiveModal = memo(function({
                   rows="3"
                 />
               </div>
-              
+
               {totalToSend > 0 && (
                 <div className="flex items-center justify-between p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
                   <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
@@ -1448,18 +1419,18 @@ const ReceiveModal = memo(function({
               )}
             </>
           )}
-          
+
           {/* 🔹 АДМИН: Выдача со склада (ОСНОВНОЙ РЕЖИМ) */}
           {modalMode === 'admin_ready_to_issue' && renderReadyToIssue()}
-          
-          {/* 🔹 МАСТЕР: Подтверждение получения (ПЕРЕПИСАННАЯ ВЕРСИЯ) */}
+
+          {/* 🔹 МАСТЕР: Подтверждение получения */}
           {modalMode === 'master_confirm' && (
             <>
               <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
                 <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
                 {t('confirmReceiptHint') || 'Подтвердите получение материалов или укажите причину отклонения'}
               </div>
-              
+
               {showMasterProgress && (
                 <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-200 dark:border-green-800">
                   <div className="flex items-center justify-between">
@@ -1478,15 +1449,13 @@ const ReceiveModal = memo(function({
                   </div>
                 </div>
               )}
-              
+
               <div className="space-y-3">
                 {localMaterials.map(function(material, index) {
                   const originalIndex = material._index !== undefined ? material._index : index;
-                  
-                  // Показываем только те материалы, которые были отправлены
                   const sentToMaster = Number(material.sent_to_master_quantity) || 0;
                   if (sentToMaster <= 0) return null;
-                  
+
                   return (
                     <MasterConfirmRow
                       key={originalIndex}
@@ -1499,7 +1468,7 @@ const ReceiveModal = memo(function({
                   );
                 })}
               </div>
-              
+
               {localMaterials.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                   <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -1520,8 +1489,8 @@ const ReceiveModal = memo(function({
             </p>
           </div>
         )}
-        
-                {/* Footer */}
+
+        {/* Footer */}
         <div className="p-3 sm:p-6 border-t border-gray-200/60 dark:border-gray-700/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-b-3xl flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 pb-safe">
           <button
             onClick={onClose}
@@ -1530,13 +1499,13 @@ const ReceiveModal = memo(function({
           >
             {t('cancel')}
           </button>
-          
+
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 order-1 sm:order-2 w-full sm:w-auto">
             <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded mr-2">Ctrl+Enter — сохранить</span>
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть</span>
             </div>
-            
+
             {(modalMode === 'admin_receive' || modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue' || modalMode === 'master_confirm') && (
               <button
                 onClick={handleSave}
@@ -1581,8 +1550,7 @@ const ReceiveModal = memo(function({
           </div>
         </div>
       </div>
-      
-      {/* Модальные окна для QR и фото */}
+
       {showQRScanner && (
         <QRScanner
           onScan={handleQRScan}
@@ -1592,7 +1560,7 @@ const ReceiveModal = memo(function({
           companyId={safeCompanyId}
         />
       )}
-      
+
       {showPhotoCapture && (
         <PhotoCapture
           onCapture={handlePhotoCapture}
