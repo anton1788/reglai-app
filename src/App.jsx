@@ -3196,8 +3196,13 @@ try {
   const validMaterials = formData.materials.filter(m =>
     m.description?.trim() && m.quantity && m.quantity > 0 && !isNaN(m.quantity)
   );
-  const materialCheck = await checkMaterialsLimit(supabase, safeCompanyId, validMaterials.length);
-  if (!materialCheck.allowed) {
+  let materialCheck = { allowed: true, limit: 9999 };
+try {
+  materialCheck = await checkMaterialsLimit(supabase, safeCompanyId, validMaterials.length);
+} catch (e) {
+  console.debug('checkMaterialsLimit skipped:', e.message);
+}
+if (!materialCheck.allowed) {
     showNotification(
       `⚠️ Максимум ${materialCheck.limit} материалов в заявке на вашем тарифе.`,
       'warning'
@@ -3406,18 +3411,22 @@ try {
     }
     
     if (safeCompanyId && currentPlan?.id) { // Используем safeCompanyId
-      logApiUsage(supabase, {
-        apiKeyId: 'frontend-app',
-        companyId: safeCompanyId,
-        endpoint: '/applications',
-        method: 'POST',
-        statusCode: 200,
-        responseTimeMs: Date.now() - startTime,
-        requestSizeBytes: JSON.stringify(newApplication).length,
-        responseSizeBytes: JSON.stringify(data || {}).length,
-        ipAddress: '',
-        userAgent: navigator.userAgent
-      }).catch(err => console.warn('API usage log failed:', err));
+      try {
+  await logApiUsage(supabase, {
+    apiKeyId: null,           // ✅ null, а не строка
+    companyId: safeCompanyId,
+    endpoint: '/applications',
+    method: 'POST',
+    statusCode: 200,
+    responseTimeMs: Date.now() - startTime,
+    requestSizeBytes: JSON.stringify(newApplication).length,
+    responseSizeBytes: JSON.stringify(data || {}).length,
+    ipAddress: null,
+    userAgent: navigator.userAgent
+  });
+} catch (err) {
+  console.debug('API usage log skipped (non-critical):', err.message);
+}
     }
     
   } catch (error) {
