@@ -721,10 +721,12 @@ const WarehouseView = ({
   autoReorderEnabled = true,
   onToggleAutoReorder,
   onIssueToApplication,
-  isMobile = false, // ✅ ДОБАВЛЕН ПРОП isMobile
+  isMobile = false,
+  employees = [], // 🆕 Список сотрудников для выбора получателя
 }) => {
   const [warehouseItems, setWarehouseItems] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  // ✅ Используем showAllMaterials для переключения "показать всё / только активные"
   const [showAllMaterials, setShowAllMaterials] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -735,7 +737,7 @@ const WarehouseView = ({
   const [transferModal, setTransferModal] = useState({ isOpen: false, item: null });
   const [itemDetailsModal, setItemDetailsModal] = useState({ isOpen: false, item: null });
   const [itemHistory, setItemHistory] = useState([]);
-  const [employees, setEmployees] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [actionLoading, setActionLoading] = useState({ adjust: null, transfer: null, details: null, delete: null, add: false });
   const [statsModal, setStatsModal] = useState({ isOpen: false, type: null, data: [] });
   const [showAddItemModal, setShowAddItemModal] = useState(false);
@@ -758,63 +760,7 @@ const WarehouseView = ({
     return () => clearTimeout(searchTimerRef.current);
   }, [searchTerm]);
 
-  const warehouseMaterials = useMemo(() => {
-    const materialsMap = new Map();
-
-    applications.forEach(app => {
-      app.materials?.forEach(m => {
-        const received = Number(m.supplier_received_quantity) || 0;
-        const confirmed = Number(m.received) || 0;
-        const requested = Number(m.quantity) || 0;
-
-        if (received <= 0) return;
-        if (!showAllMaterials && confirmed >= requested && requested > 0) return;
-
-        const key = `${(m.description || m.material_name || '').trim().toLowerCase()}__${(m.unit || 'шт').toLowerCase()}`;
-
-        if (materialsMap.has(key)) {
-          const existing = materialsMap.get(key);
-          materialsMap.set(key, {
-            ...existing,
-            balance: existing.balance + received,
-            totalIncome: existing.totalIncome + received,
-            requested: existing.requested + requested,
-            confirmed: (existing.confirmed || 0) + confirmed,
-            received_at: m.supplier_received_at || existing.received_at,
-            applications: [...(existing.applications || []), {
-              id: app.id,
-              object_name: app.object_name,
-              foreman_name: app.foreman_name
-            }]
-          });
-        } else {
-          materialsMap.set(key, {
-            ...m,
-            id: `app_${app.id}_mat_${m.id || m.name || Math.random().toString(36).substr(2, 9)}`,
-            application_id: app.id,
-            object_name: app.object_name,
-            foreman_name: app.foreman_name,
-            received_at: m.supplier_received_at,
-            name: m.description || m.material_name,
-            balance: received,
-            unit: m.unit || 'шт',
-            totalIncome: received,
-            requested: requested,
-            confirmed: confirmed,
-            status: m.status || 'pending',
-            applications: [{
-              id: app.id,
-              object_name: app.object_name,
-              foreman_name: app.foreman_name
-            }]
-          });
-        }
-      });
-    });
-
-    return Array.from(materialsMap.values());
-  }, [applications, showAllMaterials]);
-
+  // ✅ ЗАГРУЗКА ДАННЫХ ИЗ НОВЫХ ТАБЛИЦ
   const loadWarehouseData = useCallback(async () => {
     if (!userCompanyId) {
       console.error('❌ [WAREHOUSE] userCompanyId отсутствует!');
@@ -822,46 +768,89 @@ const WarehouseView = ({
     }
     setIsLoading(true);
     try {
-      const { data: items, error: itemsError } = await supabase
-        .from('warehouse_balance')
-        .select('id, company_id, item_name, quantity, unit, last_updated')
+      // 1. Загружаем остатки из warehouse_stock
+      const { data: stockItems, error: stockError } = await supabase
+        .from('warehouse_stock')
+        .select('*')
         .eq('company_id', userCompanyId)
-        .order('item_name', { ascending: true });
-      if (itemsError) throw itemsError;
+        .order('description', { ascending: true });
+      if (stockError) throw stockError;
 
-      const { data: trans, error: transError } = await supabase
-        .from('warehouse_transactions')
+      // 2. Загружаем движения из stock_movements
+      const { data: movements, error: movementsError } = await supabase
+        .from('stock_movements')
         .select('*, applications ( object_name )')
         .eq('company_id', userCompanyId)
         .order('created_at', { ascending: false });
-      if (transError) console.warn('⚠️ Ошибка транзакций:', transError);
+      if (movementsError) console.warn('⚠️ Ошибка загрузки движений:', movementsError);
 
+      // 3. Считаем приход для каждого товара
       const incomeMap = {};
-      (trans || []).forEach(tx => {
-        if (tx.transaction_type === 'income' && tx.item_name) {
-          const name = tx.item_name.trim();
-          incomeMap[name] = (incomeMap[name] || 0) + (Number(tx.quantity) || 0);
+      (movements || []).forEach(mv => {
+        if (mv.type === 'income' && mv.stock_id) {
+          const stockItem = stockItems.find(s => s.id === mv.stock_id);
+          if (stockItem) {
+            const key = stockItem.description;
+            incomeMap[key] = (incomeMap[key] || 0) + (Number(mv.quantity) || 0);
+          }
         }
       });
 
-      const itemsWithIncome = (items || []).map(item => ({
+      let itemsWithIncome = (stockItems || []).map(item => ({
         ...item,
-        name: item.item_name,
+        name: item.description, // Для совместимости с UI
         balance: Number(item.quantity) || 0,
-        totalIncome: incomeMap[item.item_name?.trim()] || 0
+        totalIncome: incomeMap[item.description] || 0
       }));
 
-      setWarehouseItems(itemsWithIncome);
-      setTransactions(trans || []);
+      // ✅ Используем showAllMaterials: если false, показываем только позиции с остатком > 0
+      if (!showAllMaterials) {
+        itemsWithIncome = itemsWithIncome.filter(i => i.balance > 0 || i.totalIncome > 0);
+      }
 
+      // ✅ Если warehouse_stock пуст, но есть applications — показываем fallback из заявок (для отладки)
+      if (itemsWithIncome.length === 0 && applications && applications.length > 0) {
+        const fallbackMap = new Map();
+        applications.forEach(app => {
+          app.materials?.forEach(m => {
+            const received = Number(m.supplier_received_quantity) || 0;
+            if (received <= 0) return;
+            const key = (m.description || '').trim().toLowerCase();
+            if (fallbackMap.has(key)) {
+              const existing = fallbackMap.get(key);
+              fallbackMap.set(key, { ...existing, balance: existing.balance + received, totalIncome: existing.totalIncome + received });
+            } else {
+              fallbackMap.set(key, {
+                id: `fallback_${app.id}_${m.description}`,
+                name: m.description,
+                description: m.description,
+                unit: m.unit || 'шт',
+                balance: received,
+                totalIncome: received,
+                isFallback: true
+              });
+            }
+          });
+        });
+        itemsWithIncome = Array.from(fallbackMap.values());
+        if (itemsWithIncome.length > 0) {
+          console.warn('⚠️ warehouse_stock пуст, показываем fallback из заявок:', itemsWithIncome.length);
+        }
+      }
+
+      setWarehouseItems(itemsWithIncome);
+      setTransactions(movements || []);
+
+      // 4. Загружаем сотрудников
       if (userRole === 'supply_admin' || userRole === 'manager') {
-        const { data: staff } = await supabase
+        const { data: staffData } = await supabase
           .from('company_users')
-          .select('id, full_name, phone, role')
+          .select('id, user_id, full_name, phone, role')
           .eq('company_id', userCompanyId)
           .eq('is_active', true)
           .in('role', ['master', 'foreman']);
-        setEmployees(staff || []);
+        // ✅ Если staffData пуст, используем employees из пропсов (fallback)
+        setStaff(staffData && staffData.length > 0 ? staffData : (employees || []));
       }
     } catch (error) {
       console.error('❌ [WAREHOUSE] Критическая ошибка:', error);
@@ -869,12 +858,11 @@ const WarehouseView = ({
     } finally {
       setIsLoading(false);
     }
-  }, [userRole, supabase, t, showNotification, userCompanyId]);
+  }, [userRole, supabase, t, showNotification, userCompanyId, showAllMaterials, applications, employees]);
 
   useEffect(() => {
     if (userCompanyId && user?.id) {
       const userCtx = getUserContext(user, null, userRole, userCompanyId);
-
       if (shouldLogFeature('warehouse', userCompanyId, lastLoggedRef.current)) {
         logWarehouseAccess(supabase, userCtx, 'view');
       }
@@ -885,15 +873,16 @@ const WarehouseView = ({
     loadWarehouseData();
   }, [loadWarehouseData]);
 
+  // ✅ ФИЛЬТРАЦИЯ
   const displayItems = useMemo(() => {
-    const baseItems = viewMode === 'warehouse' ? warehouseItems : warehouseMaterials;
+    const baseItems = viewMode === 'warehouse' ? warehouseItems : [];
     if (!debouncedSearch) return baseItems;
     return baseItems.filter(item => item.name?.toLowerCase().includes(debouncedSearch));
-  }, [viewMode, warehouseItems, warehouseMaterials, debouncedSearch]);
+  }, [viewMode, warehouseItems, debouncedSearch]);
 
   const filteredTransactions = useMemo(() => {
     return (transactions || []).filter(tx => {
-      const matchesType = filterType === 'all' || tx.transaction_type === filterType;
+      const matchesType = filterType === 'all' || tx.type === filterType;
       const matchesSearch = !debouncedSearch || tx.item_name?.toLowerCase().includes(debouncedSearch);
       return matchesType && matchesSearch;
     });
@@ -901,26 +890,27 @@ const WarehouseView = ({
 
   const stats = useMemo(() => {
     const sum = (arr, key) => arr.reduce((s, i) => s + (Number(i[key]) || 0), 0);
-    const source = viewMode === 'warehouse' ? warehouseItems : warehouseMaterials;
+    const source = viewMode === 'warehouse' ? warehouseItems : [];
     return {
       totalItems: source.length,
       lowStock: source.filter(i => (i.balance || 0) < LOW_STOCK_THRESHOLD).length,
       totalValue: sum(source, 'balance'),
       totalIncome: sum(source, 'totalIncome')
     };
-  }, [viewMode, warehouseItems, warehouseMaterials]);
+  }, [viewMode, warehouseItems]);
 
+  // ✅ ЗАГРУЗКА ДЕТАЛЕЙ СТАТИСТИКИ
   const loadStatsDetails = useCallback(async (type) => {
     setActionLoading(prev => ({ ...prev, details: type }));
     try {
-      let data = viewMode === 'warehouse' ? warehouseItems : warehouseMaterials;
+      let data = viewMode === 'warehouse' ? warehouseItems : [];
       if (type === 'lowStock') data = data.filter(i => (i.balance || 0) < LOW_STOCK_THRESHOLD);
       if (type === 'income') {
         const { data: income } = await supabase
-          .from('warehouse_transactions')
+          .from('stock_movements')
           .select('*')
           .eq('company_id', userCompanyId)
-          .eq('transaction_type', 'income')
+          .eq('type', 'income')
           .order('created_at', { ascending: false })
           .limit(500);
         data = income || [];
@@ -932,17 +922,18 @@ const WarehouseView = ({
     } finally {
       setActionLoading(prev => ({ ...prev, details: null }));
     }
-  }, [userCompanyId, supabase, warehouseItems, warehouseMaterials, viewMode, showNotification]);
+  }, [userCompanyId, supabase, warehouseItems, viewMode, showNotification]);
 
+  // ✅ ЭКСПОРТ В EXCEL
   const exportToExcel = useCallback(() => {
-    const dataToExport = viewMode === 'warehouse' ? warehouseItems : warehouseMaterials;
+    const dataToExport = viewMode === 'warehouse' ? warehouseItems : [];
     if (!dataToExport.length) return showNotification(t('noData'), 'warning');
     const ws = XLSX.utils.json_to_sheet(dataToExport.map(i => ({
       [t('name')]: i.name,
       [t('unit')]: i.unit,
       [t('income')]: i.totalIncome,
       [t('balance')]: i.balance,
-      [t('updated')]: formatDate(viewMode === 'warehouse' ? i.last_updated : i.received_at, language),
+      [t('updated')]: formatDate(i.updated_at, language),
       ...(viewMode === 'fromApplications' && {
         [t('application')]: i.object_name,
         [t('foreman')]: i.foreman_name,
@@ -953,8 +944,9 @@ const WarehouseView = ({
     XLSX.utils.book_append_sheet(wb, ws, viewMode === 'warehouse' ? t('warehouse') : t('fromApplications'));
     XLSX.writeFile(wb, `Warehouse_${viewMode}_${new Date().toISOString().split('T')[0]}.xlsx`);
     showNotification(t('exported'), 'success');
-  }, [viewMode, warehouseItems, warehouseMaterials, t, language, showNotification]);
+  }, [viewMode, warehouseItems, t, language, showNotification]);
 
+  // ✅ КОРРЕКТИРОВКА ОСТАТКА (через RPC)
   const adjustBalance = useCallback(async (item) => {
     const qty = window.prompt(`${t('enterQty')}:`, '1');
     if (!qty || isNaN(qty) || Number(qty) <= 0) return;
@@ -979,101 +971,108 @@ const WarehouseView = ({
     } finally {
       setActionLoading(prev => ({ ...prev, adjust: null }));
     }
-  }, [user, supabase, t, showNotification, loadWarehouseData]);
+  }, [user, supabase, t, showNotification, loadWarehouseData, userCompanyId]);
 
+  // ✅ УДАЛЕНИЕ ТОВАРА
   const deleteItem = useCallback(async (item) => {
     if (!window.confirm(`Вы уверены, что хотите удалить товар "${item.name}" со склада?`)) {
       return;
     }
-
     setActionLoading(prev => ({ ...prev, delete: item.id }));
     try {
       if (item.balance > 0) {
         showNotification(`Нельзя удалить товар с остатком ${item.balance} ${item.unit}. Сначала спишите остатки.`, 'error');
         return;
       }
-
       const { error } = await supabase
-        .from('warehouse_balance')
+        .from('warehouse_stock')
         .delete()
         .eq('id', item.id);
-
       if (error) throw error;
-
       showNotification(`✅ Товар "${item.name}" удалён со склада`, 'success');
       await loadWarehouseData();
-
     } catch (err) {
       console.error('Delete error:', err);
       showNotification(t('error') || 'Ошибка удаления', 'error');
     } finally {
       setActionLoading(prev => ({ ...prev, delete: null }));
     }
-  }, [supabase, userCompanyId, t, showNotification, loadWarehouseData]);
+  }, [supabase, t, showNotification, loadWarehouseData]);
 
+  // ✅ ДОБАВЛЕНИЕ НОВОГО ТОВАРА
   const addNewItem = useCallback(async () => {
     if (!newItemForm.name.trim()) {
       showNotification('Введите название товара', 'error');
       return;
     }
-
     if (newItemForm.quantity <= 0) {
       showNotification('Количество должно быть больше 0', 'error');
       return;
     }
-
     setActionLoading(prev => ({ ...prev, add: true }));
     try {
       const { data: existing } = await supabase
-        .from('warehouse_balance')
+        .from('warehouse_stock')
         .select('id, quantity')
         .eq('company_id', userCompanyId)
-        .eq('item_name', newItemForm.name.trim())
+        .eq('description', newItemForm.name.trim())
         .maybeSingle();
 
       if (existing) {
-        const { error } = await supabase
-          .from('warehouse_balance')
-          .update({
-            quantity: existing.quantity + newItemForm.quantity,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existing.id);
-
-        if (error) throw error;
+        await supabase.rpc('update_warehouse_balance', {
+          p_company_id: userCompanyId,
+          p_item_name: newItemForm.name.trim(),
+          p_quantity: newItemForm.quantity,
+          p_transaction_type: 'income',
+          p_user_id: user?.id,
+          p_user_email: user?.email,
+          p_comment: 'Ручное добавление',
+          p_unit: newItemForm.unit
+        });
         showNotification(`✅ Товар "${newItemForm.name}" обновлён (+${newItemForm.quantity})`, 'success');
       } else {
-        const { error } = await supabase
-          .from('warehouse_balance')
+        const { data: inserted, error } = await supabase
+          .from('warehouse_stock')
           .insert([{
             company_id: userCompanyId,
-            item_name: newItemForm.name.trim(),
+            description: newItemForm.name.trim(),
             quantity: newItemForm.quantity,
             unit: newItemForm.unit,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
-          }]);
-
+          }])
+          .select()
+          .single();
         if (error) throw error;
+        if (inserted?.id) {
+          await supabase.from('stock_movements').insert([{
+            company_id: userCompanyId,
+            stock_id: inserted.id,
+            type: 'income',
+            quantity: newItemForm.quantity,
+            user_id: user?.id,
+            comment: 'Начальный остаток',
+            created_at: new Date().toISOString()
+          }]);
+        }
         showNotification(`✅ Товар "${newItemForm.name}" добавлен на склад`, 'success');
       }
-
       setShowAddItemModal(false);
       setNewItemForm({ name: '', quantity: 1, unit: 'шт' });
       await loadWarehouseData();
-
     } catch (err) {
       console.error('Add item error:', err);
       showNotification(t('error') || 'Ошибка добавления', 'error');
     } finally {
       setActionLoading(prev => ({ ...prev, add: false }));
     }
-  }, [supabase, userCompanyId, newItemForm, t, showNotification, loadWarehouseData]);
+  }, [supabase, userCompanyId, newItemForm, t, showNotification, loadWarehouseData, user?.id, user?.email]);
 
+  // ✅ ВЫДАЧА СО СКЛАДА (через RPC)
   const createTransfer = useCallback(async (item, recipientId, objectName, quantity, comment) => {
     setActionLoading(prev => ({ ...prev, transfer: item.id }));
     try {
-      const recipient = employees.find(e => e.id === recipientId);
+      const recipient = staff.find(e => e.id === recipientId);
       if (!recipient) throw new Error('Сотрудник не найден');
 
       if (Number(item.balance) < Number(quantity)) {
@@ -1081,22 +1080,18 @@ const WarehouseView = ({
         throw new Error('Недостаточно материала');
       }
 
-      const { error: rpcError } = await supabase.rpc('update_warehouse_balance', {
+      // ✅ Вызываем RPC для списания и создания движения
+      const { error: rpcError } = await supabase.rpc('issue_materials_from_stock', {
         p_company_id: userCompanyId,
-        p_item_name: item.name,
-        p_quantity: Number(quantity),
-        p_transaction_type: 'expense',
         p_user_id: user?.id,
-        p_user_email: user?.email,
-        p_comment: comment || `Выдача: ${objectName}`,
-        p_unit: item.unit || 'шт',
-        p_target_object_name: objectName,
-        p_recipient_name: recipient.full_name,
-        p_recipient_phone: recipient.phone || null
+        p_items: [{ description: item.name, quantity: Number(quantity), unit: item.unit || 'шт' }],
+        p_recipient_id: recipient.user_id,
+        p_application_id: null
       });
 
       if (rpcError) throw rpcError;
 
+      // ✅ Создаём запись в material_issues (используем comment)
       await supabase
         .from('material_issues')
         .insert([{
@@ -1109,7 +1104,8 @@ const WarehouseView = ({
           target_object: objectName,
           issued_by: user?.id,
           issued_by_name: profileData?.full_name || user?.email,
-          issued_at: new Date().toISOString()
+          issued_at: new Date().toISOString(),
+          comment: comment || null // ✅ Используем comment
         }]);
 
       showNotification(t('transferred') || `✅ Выдано ${quantity} ${item.unit} сотруднику ${recipient.full_name}`, 'success');
@@ -1122,15 +1118,16 @@ const WarehouseView = ({
     } finally {
       setActionLoading(prev => ({ ...prev, transfer: null }));
     }
-  }, [userCompanyId, user, profileData, supabase, t, showNotification, loadWarehouseData, employees]);
+  }, [userCompanyId, user, profileData, supabase, t, showNotification, loadWarehouseData, staff]);
 
+  // ✅ ЗАГРУЗКА ИСТОРИИ ТОВАРА
   const loadItemHistory = useCallback(async (item) => {
     setActionLoading(prev => ({ ...prev, details: item.id }));
     try {
       const { data } = await supabase
-        .from('warehouse_transactions')
+        .from('stock_movements')
         .select('*')
-        .eq('item_name', item.name)
+        .eq('stock_id', item.id)
         .eq('company_id', userCompanyId)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -1144,11 +1141,12 @@ const WarehouseView = ({
     }
   }, [userCompanyId, supabase, showNotification]);
 
+  // ✅ РЕДАКТИРОВАНИЕ ЕДИНИЦЫ
   const editUnit = useCallback(async (item) => {
     const newUnit = window.prompt(`${t('newUnit')}:`, item.unit || 'шт');
     if (!newUnit?.trim()) return;
     try {
-      await supabase.from('warehouse_items').update({ unit: newUnit.trim() }).eq('id', item.id);
+      await supabase.from('warehouse_stock').update({ unit: newUnit.trim() }).eq('id', item.id);
       showNotification(t('unitUpdated'), 'success');
       await loadWarehouseData();
     } catch {
@@ -1186,7 +1184,7 @@ const WarehouseView = ({
   }
 
   // ============================================================
-  // 📱 МОБИЛЬНЫЙ РЕНДЕРИНГ (ЕСЛИ isMobile === true)
+  // 📱 МОБИЛЬНЫЙ РЕНДЕРИНГ
   // ============================================================
   const renderMobileCards = () => (
     <div className="space-y-3">
@@ -1271,11 +1269,11 @@ const WarehouseView = ({
   );
 
   // ============================================================
-  // 🖥️ ДЕСКТОПНЫЙ РЕНДЕРИНГ (ЕСЛИ isMobile === false)
+  // 🖥️ ДЕСКТОПНЫЙ РЕНДЕРИНГ
   // ============================================================
   return (
-    <div className="max-w-7xl mx-auto p-3 space-y-4 pb-24"> {/* pb-24 чтобы нижняя навигация не перекрывала */}
-      {/* ⬇️ НОВАЯ МОБИЛЬНАЯ ШАПКА (Вместо старого SectionHeader) ⬇️ */}
+    <div className="max-w-7xl mx-auto p-3 space-y-4 pb-24">
+      {/* ШАПКА */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
           <div className="p-2 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/20">
@@ -1286,8 +1284,6 @@ const WarehouseView = ({
             <p className="text-xs text-gray-500 dark:text-gray-400">{viewMode === 'warehouse' ? 'Остатки' : 'Из заявок'}</p>
           </div>
         </div>
-
-        {/* Кнопка добавления (если можно) */}
         {canEdit && viewMode === 'warehouse' && (
           <button
             onClick={() => setShowAddItemModal(true)}
@@ -1298,7 +1294,7 @@ const WarehouseView = ({
         )}
       </div>
 
-      {/* ⬇️ МОБИЛЬНЫЕ ВКЛАДКИ (Вместо mode-toggle и лишних кнопок) ⬇️ */}
+      {/* ВКЛАДКИ */}
       <div className="flex gap-2 overflow-x-auto pb-2 mb-4 -mx-4 px-4 no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
         <button
           onClick={() => setViewMode('warehouse')}
@@ -1310,31 +1306,6 @@ const WarehouseView = ({
         >
           <Package className="w-4 h-4 inline mr-1" /> {t('warehouse') || 'Склад'}
         </button>
-
-        <button
-          onClick={() => setViewMode('fromApplications')}
-          className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
-            viewMode === 'fromApplications'
-              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25'
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600'
-          }`}
-        >
-          <FileText className="w-4 h-4 inline mr-1" /> Заявки ({warehouseMaterials.length})
-        </button>
-
-        {viewMode === 'fromApplications' && (
-          <button
-            onClick={() => setShowAllMaterials(!showAllMaterials)}
-            className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap ${
-              showAllMaterials
-                ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600'
-            }`}
-          >
-            {showAllMaterials ? 'Все' : 'Принятые'}
-          </button>
-        )}
-
         <button
           onClick={() => setShowTransactions(!showTransactions)}
           className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap ${
@@ -1343,7 +1314,17 @@ const WarehouseView = ({
         >
           {showTransactions ? 'Остатки' : 'Движения'}
         </button>
-
+        {/* ✅ Кнопка "Показать все / Только активные" — использует showAllMaterials */}
+        <button
+          onClick={() => setShowAllMaterials(!showAllMaterials)}
+          className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap ${
+            showAllMaterials
+              ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600'
+          }`}
+        >
+          {showAllMaterials ? 'Все' : 'Активные'}
+        </button>
         <button
           onClick={exportToExcel}
           disabled={!displayItems.length}
@@ -1353,7 +1334,7 @@ const WarehouseView = ({
         </button>
       </div>
 
-      {/* ⬇️ АВТОЗАКАЗ (Уменьшенный для мобильного) ⬇️ */}
+      {/* АВТОЗАКАЗ */}
       {canEdit && (
         <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-200/60 dark:border-gray-700/60 mb-4">
           <div className="flex items-center gap-2">
@@ -1369,7 +1350,7 @@ const WarehouseView = ({
         </div>
       )}
 
-      {/* ⬇️ СТАТИСТИКА (Карточки в 2 колонки на мобильном) ⬇️ */}
+      {/* СТАТИСТИКА */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <StatCard label="Позиции" value={stats.totalItems} icon={Package} color="text-gray-900 dark:text-white" onClick={() => loadStatsDetails('totalItems')} />
         <StatCard label="Приход" value={stats.totalIncome} icon={TrendingUp} color="text-blue-600" onClick={() => loadStatsDetails('income')} />
@@ -1377,7 +1358,7 @@ const WarehouseView = ({
         <StatCard label="Остаток" value={stats.totalValue} icon={Package} color="text-green-600" onClick={() => loadStatsDetails('totalBalance')} />
       </div>
 
-      {/* ⬇️ ПОИСК (Мобильный) ⬇️ */}
+      {/* ПОИСК */}
       <div className="relative mb-4">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
@@ -1394,13 +1375,11 @@ const WarehouseView = ({
         )}
       </div>
 
-      {/* ⬇️ ДАЛЬШЕ ИДЕТ СПИСОК (Карточки или Таблица) ⬇️ */}
+      {/* СПИСОК ИЛИ ДВИЖЕНИЯ */}
       {!showTransactions ? (
         isMobile ? (
-          // ✅ ПОКАЗЫВАЕМ КАРТОЧКИ НА МОБИЛЬНОМ
           renderMobileCards()
         ) : (
-          // ✅ ПОКАЗЫВАЕМ ТАБЛИЦУ НА ДЕСКТОПЕ
           <WarehouseTable
             items={displayItems}
             onAdjust={viewMode === 'warehouse' ? adjustBalance : undefined}
@@ -1417,7 +1396,6 @@ const WarehouseView = ({
           />
         )
       ) : (
-        // ТРАНЗАКЦИИ (Для обоих типов экранов оставляем таблицу, но добавляем скролл)
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/60 dark:border-gray-700/60 overflow-hidden">
           <div className="p-4 border-b border-gray-200/60 dark:border-gray-700/60 flex flex-wrap gap-3">
             <select
@@ -1460,11 +1438,12 @@ const WarehouseView = ({
         </div>
       )}
 
+      {/* МОДАЛЬНЫЕ ОКНА */}
       <TransferModal
         isOpen={transferModal.isOpen}
         onClose={() => setTransferModal({ isOpen: false, item: null })}
         item={transferModal.item}
-        employees={employees}
+        employees={staff}
         onCreate={createTransfer}
         isLoading={!!actionLoading.transfer}
         t={t}
@@ -1492,6 +1471,7 @@ const WarehouseView = ({
         language={language}
       />
 
+      {/* МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ ТОВАРА */}
       {showAddItemModal && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-enter"

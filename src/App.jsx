@@ -4059,10 +4059,8 @@ const handleClearFilters = useCallback(() => {
 }, []);
 
   // ============================================================
-// 🔹 ОБРАБОТКА ПРИЁМКИ СНАБЖЕНЦЕМ (С ДЕЛЬТОЙ ДЛЯ СКЛАДА)
-// ============================================================
-// ============================================================
 // 🔹 ПРИЁМКА СНАБЖЕНЦЕМ — через атомарную RPC
+//     Обновляет warehouse_stock и создаёт stock_movements
 // ============================================================
 const handleAdminReceive = useCallback(async (materialsFromModal, application) => {
   console.log('🔍 [RECEIVE] handleAdminReceive started', {
@@ -4091,6 +4089,7 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
 
     console.log('📦 [RECEIVE] Отправляем в RPC:', materialsPayload);
 
+    // ✅ 1. Вызываем RPC receive_materials_from_supplier
     const { data, error } = await supabase.rpc('receive_materials_from_supplier', {
       p_application_id: application.id,
       p_company_id: cleanCompanyId,
@@ -4112,7 +4111,7 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
 
     console.log('✅ [RECEIVE] Успешно:', data);
 
-    // Обновляем локальный стейт
+    // ✅ 2. Обновляем локальный стейт заявки
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? { ...app, status: data.status, materials: data.materials }
@@ -4254,11 +4253,12 @@ const handleNpsSubmit = async ({ score, comment }) => {
   }
 };
 
-  // ============================================================
+  /// ============================================================
 // 🔹 ВЫДАЧА МАСТЕРУ — через атомарную RPC
 //     Списывает со склада + проверяет остаток
+//     ИСПРАВЛЕНО: принимает recipientId и recipientName
 // ============================================================
-const handleSendToMaster = useCallback(async (itemsToSend, application) => {
+const handleSendToMaster = useCallback(async (itemsToSend, application, recipientId, recipientName) => {
   if (userRole !== 'supply_admin' && userRole !== 'manager') {
     showNotification('Только снабженец может выдавать материалы мастеру', 'error');
     return { success: false };
@@ -4290,33 +4290,117 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
       return { success: false };
     }
 
-    console.log('📦 [SEND TO MASTER] Отправляем в RPC:', itemsPayload);
+    console.log('📦 [SEND TO MASTER] Отправляем в RPC:', itemsPayload, 'Recipient:', recipientName);
 
-    const { data, error } = await supabase.rpc('send_materials_to_master', {
-      p_application_id: application.id,
+    // ✅ 1. Списываем со склада через RPC issue_materials_from_stock
+    const { data: stockData, error: stockError } = await supabase.rpc('issue_materials_from_stock', {
       p_company_id: cleanCompanyId,
       p_user_id: user?.id,
-      p_user_email: user?.email,
-      p_items: itemsPayload,
+      p_items: itemsPayload.map(i => ({
+        description: i.description,
+        quantity: i.quantityToSend,
+        unit: i.unit
+      })),
+      p_recipient_id: recipientId || application.user_id, // Кому выдали
+      p_application_id: application.id
     });
 
-    if (error) {
-      console.error('❌ [SEND TO MASTER] RPC ошибка:', error);
-      showNotification(`Ошибка выдачи: ${error.message}`, 'error');
+    if (stockError) {
+      console.error('❌ [SEND TO MASTER] Ошибка списания со склада:', stockError);
+      showNotification(`Ошибка списания: ${stockError.message}`, 'error');
       return { success: false };
     }
 
-    if (!data?.success) {
-      showNotification('Ошибка выдачи: неверный ответ сервера', 'error');
+    if (!stockData?.success) {
+      showNotification('Ошибка списания: неверный ответ сервера', 'error');
       return { success: false };
     }
 
-    console.log('✅ [SEND TO MASTER] Успешно:', data);
+    console.log('✅ [SEND TO MASTER] Успешно списано со склада:', stockData);
+
+    // ✅ 2. Обновляем статус заявки
+    const updatedMaterials = application.materials.map(original => {
+      const sentItem = itemsPayload.find(i => 
+        (i.description || i.item_name) === (original.description || original.item_name)
+      );
+      if (sentItem) {
+        return {
+          ...original,
+          sent_to_master_quantity: (Number(original.sent_to_master_quantity) || 0) + sentItem.quantityToSend,
+          status: ITEM_STATUS.SENT_TO_MASTER
+        };
+      }
+      return original;
+    });
+
+    const { error: updateError } = await supabase
+      .from('applications')
+      .update({
+        status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+        materials: updatedMaterials,
+        updated_at: new Date().toISOString(),
+        status_history: [
+          ...(application.status_history || []),
+          {
+            action: 'sent_to_master',
+            user_id: user?.id,
+            user_email: user?.email,
+            timestamp: new Date().toISOString(),
+            details: `Выдано мастеру ${recipientName || application.foreman_name}: ${itemsPayload.map(i => `${i.description} (${i.quantityToSend} ${i.unit})`).join(', ')}`
+          }
+        ]
+      })
+      .eq('id', application.id);
+
+    if (updateError) {
+      console.error('❌ [SEND TO MASTER] Ошибка обновления заявки:', updateError);
+      // Не выбрасываем ошибку, так как склад уже списан
+    }
+
+    // ✅ 3. Если выдали другому мастеру — создаём новую заявку для него
+    if (recipientId && recipientId !== application.user_id) {
+      const newApplicationForRecipient = {
+        object_name: application.object_name,
+        foreman_name: recipientName || 'Получатель',
+        foreman_phone: '', // Можно взять из employees
+        materials: itemsPayload.map(i => ({
+          description: i.description,
+          quantity: i.quantityToSend,
+          unit: i.unit,
+          received: 0,
+          supplier_received_quantity: 0,
+          sent_to_master_quantity: 0,
+          status: ITEM_STATUS.PENDING
+        })),
+        status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
+        user_id: recipientId,
+        company_id: cleanCompanyId,
+        created_at: new Date().toISOString(),
+        source_application_id: application.id,
+        status_history: [{
+          action: 'created_from_warehouse_issue',
+          user_id: user?.id,
+          user_email: user?.email,
+          timestamp: new Date().toISOString(),
+          details: `Создана при выдаче со склада по заявке ${application.object_name}`
+        }]
+      };
+
+      const { error: newAppError } = await supabase
+        .from('applications')
+        .insert([newApplicationForRecipient]);
+
+      if (newAppError) {
+        console.warn('⚠️ Не удалось создать новую заявку для получателя:', newAppError);
+      } else {
+        console.log('✅ Создана новая заявка для получателя:', recipientName);
+      }
+    }
 
     // Обновляем локальный стейт
     setApplications(prev => prev.map(app =>
       app.id === application.id
-        ? { ...app, status: data.status, materials: data.materials }
+        ? { ...app, status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION, materials: updatedMaterials }
         : app
     ));
 
@@ -4325,10 +4409,10 @@ const handleSendToMaster = useCallback(async (itemsToSend, application) => {
     cacheManager.delete('analytics', `analytics_${cleanCompanyId}_${isAdminMode}`);
 
     const totalIssued = itemsPayload.reduce((sum, i) => sum + i.quantityToSend, 0);
-    showNotification(`✅ Выдано ${totalIssued} единиц мастеру`, 'success');
+    showNotification(`✅ Выдано ${totalIssued} единиц мастеру ${recipientName || application.foreman_name}`, 'success');
     setShowReceiveModal(false);
 
-    if (data.status === 'pending_master_confirmation') {
+    if (APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION) {
       setTimeout(() => {
         showNotification('📦 Материалы выданы мастеру. Ожидайте подтверждения.', 'info');
       }, 1000);
@@ -8035,6 +8119,7 @@ onClearFilters={handleClearFilters}
             language={language}
             showNotification={showNotification}
             applications={applications}
+            employees={employees}
             onOpenApplication={(appId) => {
               const app = applications.find(a => a.id === appId);
               if (app) {
@@ -8419,6 +8504,7 @@ onClearFilters={handleClearFilters}
   showNotification={showNotification}
   userCompanyId={userCompanyId}
   userId={user?.id}
+  employees={employees}
   onPhotoClick={(materialIndex) => {
     setActiveMaterialIndex(materialIndex);
     setShowPhotoCapture(true);

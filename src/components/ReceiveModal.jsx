@@ -4,7 +4,7 @@ import {
   X, CheckCircle, XCircle, Package, Warehouse, Send, AlertCircle,
   Loader2, Info, ChevronDown, ChevronUp, Undo2, ShoppingCart,
   ArrowRight, FileText, Download, Mail, CheckCircle2, AlertTriangle,
-  Camera, QrCode, Shield
+  Camera, QrCode, Shield, UserCheck, Users
 } from 'lucide-react';
 import {
   APPLICATION_STATUS,
@@ -582,6 +582,7 @@ const ReceiveModal = memo(function({
   userRole,
   onPhotoClick,
   onQRClick,
+  employees = [], // 🆕 Список сотрудников для выбора получателя
 }) {
   const safeCompanyId = useMemo(() => {
     if (!userCompanyId) return null;
@@ -609,6 +610,7 @@ const ReceiveModal = memo(function({
   const [isSaving, setIsSaving] = useState(false);
   const [transferComment, setTransferComment] = useState('');
   const [itemsToSend, setItemsToSend] = useState([]);
+  const [selectedRecipientId, setSelectedRecipientId] = useState(''); // 🆕 ID выбранного мастера
   const modalContentRef = useRef(null);
 
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -726,8 +728,20 @@ const ReceiveModal = memo(function({
           return;
         }
 
-        console.log('🔔 [SEND TO MASTER] Нормализованные items:', items);
-        result = await onSendToMaster(items, selectedApplication);
+        // 🆕 Проверяем, выбран ли получатель, если это не привязано к заявке
+        let recipientId = selectedApplication.user_id;
+        let recipientName = selectedApplication.foreman_name;
+
+        if (modalMode === 'admin_ready_to_issue' && selectedRecipientId) {
+          const recipient = employees.find(e => e.id === selectedRecipientId);
+          if (recipient) {
+            recipientId = recipient.user_id;
+            recipientName = recipient.full_name;
+          }
+        }
+
+        console.log('🔔 [SEND TO MASTER] Нормализованные items:', items, 'Recipient:', recipientName);
+        result = await onSendToMaster(items, selectedApplication, recipientId, recipientName);
       }
       else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
         // ✅ Отправляем ПОЛНЫЙ список материалов заявки (включая неотправленные)
@@ -769,7 +783,7 @@ const ReceiveModal = memo(function({
     } finally {
       setIsSaving(false);
     }
-  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, saveReceiveStatus, localMaterials, itemsToSend, selectedApplication, onClose, t, showNotification, isSaving]);
+  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, saveReceiveStatus, localMaterials, itemsToSend, selectedApplication, onClose, t, showNotification, isSaving, selectedRecipientId, employees]);
 
   useEffect(function() {
     const handleKeyDown = function(e) {
@@ -977,6 +991,11 @@ const ReceiveModal = memo(function({
       );
     }
 
+    // 🆕 Фильтруем сотрудников для выбора получателя
+    const availableRecipients = employees.filter(e => 
+      e.role === 'master' || e.role === 'foreman'
+    );
+
     return (
       <div className="space-y-4">
         <div className="flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-xl border border-amber-200 dark:border-amber-800">
@@ -984,9 +1003,32 @@ const ReceiveModal = memo(function({
           <div>
             <p className="font-medium">Выдача материалов со склада</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Мастер <strong>{selectedApplication?.foreman_name}</strong> получит указанное количество материалов
+              Выберите получателя и укажите количество материалов
             </p>
           </div>
+        </div>
+
+        {/* 🆕 ВЫБОР ПОЛУЧАТЕЛЯ */}
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <Users className="w-4 h-4 inline mr-1" />
+            Получатель (мастер/прораб)
+          </label>
+          <select
+            value={selectedRecipientId}
+            onChange={(e) => setSelectedRecipientId(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500"
+          >
+            <option value="">— По умолчанию: {selectedApplication?.foreman_name} —</option>
+            {availableRecipients.map(emp => (
+              <option key={emp.id} value={emp.id}>
+                {emp.full_name} {emp.phone ? `(${emp.phone})` : ''}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            Если выбрать другого мастера, будет создана новая заявка для него.
+          </p>
         </div>
 
         <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
@@ -1100,7 +1142,9 @@ const ReceiveModal = memo(function({
               </span>
             </div>
             <span className="text-xs text-gray-500">
-              Мастер: {selectedApplication?.foreman_name}
+              Получатель: {selectedRecipientId 
+                ? employees.find(e => e.id === selectedRecipientId)?.full_name 
+                : selectedApplication?.foreman_name}
             </span>
           </div>
         )}
