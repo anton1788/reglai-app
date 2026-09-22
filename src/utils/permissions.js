@@ -298,14 +298,14 @@ export const canInviteRole = (inviterRole, targetRole, isCompanyOwner = false) =
 // Получить доступные роли для приглашения
 export const getAvailableRolesForInvite = (inviterRole, isCompanyOwner = false) => {
   const allRoles = [
-    { value: 'manager', label: 'Руководитель' },
-    { value: 'supply_admin', label: 'Администратор снабжения' },
-    { value: 'master', label: 'Прораб' },
-    { value: 'foreman', label: 'Мастер' },
-    { value: 'accountant', label: 'Бухгалтер' },
-    { value: 'client', label: 'Заказчик' },
-    { value: 'client_manager', label: 'Менеджер по работе с клиентами' },
-  ];
+  { value: 'manager', label: 'Руководитель' },
+  { value: 'supply_admin', label: 'Администратор снабжения' },
+  { value: 'master', label: 'Мастер (Исполнитель)' },    // ✅ ИСПРАВЛЕНО
+  { value: 'foreman', label: 'Прораб' },                 // ✅ ИСПРАВЛЕНО
+  { value: 'accountant', label: 'Бухгалтер' },
+  { value: 'client', label: 'Заказчик' },
+  { value: 'client_manager', label: 'Менеджер по работе с клиентами' },
+];
   
   // Владелец может приглашать все роли
   if (inviterRole === 'manager' || isCompanyOwner) {
