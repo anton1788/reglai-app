@@ -182,22 +182,52 @@ const WarehouseTable = memo(({
               const itemLoading = isLoading?.adjust === item.id || isLoading?.transfer === item.id || isLoading?.delete === item.id;
 
               const getStatusConfig = () => {
-                if (isFromApplications) {
-                  const confirmed = Number(item.confirmed || item.received) || 0;
-                  if (confirmed >= requested && requested > 0) {
-                    return { label: t('received') || 'Принято', class: 'status-received', icon: CheckCircle2 };
-                  }
-                  if (confirmed > 0 && confirmed < requested) {
-                    return { label: t('partial') || 'Частично', class: 'status-partial', icon: Package };
-                  }
-                  return { label: t('pending') || 'Ожидает', class: 'status-pending', icon: AlertCircle };
-                }
-                return isLow
-                  ? { label: t('lowStock') || 'Мало', class: 'status-low', icon: AlertCircle }
-                  : isMedium
-                    ? { label: t('mediumStock') || 'Средне', class: 'status-medium', icon: Info }
-                    : { label: t('inStock') || 'В наличии', class: 'status-ok', icon: CheckCircle2 };
-              };
+  if (isFromApplications) {
+    const confirmed = Number(item.confirmed || item.received) || 0;
+    if (confirmed >= requested && requested > 0) {
+      return { label: t('received') || 'Принято', subLabel: '', class: 'status-received', icon: CheckCircle2 };
+    }
+    if (confirmed > 0 && confirmed < requested) {
+      return { label: t('partial') || 'Частично', subLabel: '', class: 'status-partial', icon: Package };
+    }
+    return { label: t('pending') || 'Ожидает', subLabel: '', class: 'status-pending', icon: AlertCircle };
+  }
+
+  // ✅ НОВАЯ ЛОГИКА НА ОСНОВЕ ПРОЦЕНТОВ
+  const targetStock = 50; // Целевой запас (можно будет вынести в настройки компании)
+  const percentage = Math.min(100, Math.round((balance / targetStock) * 100));
+
+  if (balance === 0) {
+    return { 
+      label: 'Нет в наличии', 
+      subLabel: '0% от нормы',
+      class: 'status-low', 
+      icon: XCircle 
+    };
+  }
+  if (percentage < 20) {
+    return { 
+      label: 'Критически мало', 
+      subLabel: `${percentage}% от нормы`,
+      class: 'status-low', 
+      icon: AlertCircle 
+    };
+  }
+  if (percentage < 50) {
+    return { 
+      label: 'Заканчивается', 
+      subLabel: `${percentage}% от нормы`,
+      class: 'status-medium', 
+      icon: AlertTriangle 
+    };
+  }
+  return { 
+    label: 'В наличии', 
+    subLabel: `${percentage}% от нормы`,
+    class: 'status-ok', 
+    icon: CheckCircle2 
+  };
+};
 
               const statusConfig = getStatusConfig();
 
@@ -254,10 +284,17 @@ const WarehouseTable = memo(({
                     </td>
                   )}
                   <td className="text-center">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.class}`}>
-                      <statusConfig.icon className="w-3 h-3" />
-                      {statusConfig.label}
-                    </span>
+                    <span className={`inline-flex flex-col items-start gap-0.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.class}`}>
+  <span className="flex items-center gap-1">
+    <statusConfig.icon className="w-3 h-3" />
+    {statusConfig.label}
+  </span>
+  {statusConfig.subLabel && (
+    <span className="text-[10px] opacity-80 font-normal leading-none">
+      {statusConfig.subLabel}
+    </span>
+  )}
+</span>
                   </td>
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
