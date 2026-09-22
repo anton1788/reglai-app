@@ -83,29 +83,20 @@ const clamp = function(value, min = 0, max = 10000) {
 };
 
 /**
- * ✅ ЕДИНАЯ ЛОГИКА: определяет, можно ли ещё что-то выдать со склада мастеру
- *    Не сравнивает с quantity — только с фактически принятым количеством
- */
-const canIssueFromWarehouse = (m) => {
-  const onWarehouse = Number(m.supplier_received_quantity) || 0;
-  const alreadySent = Number(m.sent_to_master_quantity) || 0;
-  const received = Number(m.received) || 0;
-
-  if (onWarehouse <= 0) return false;
-  if (alreadySent >= onWarehouse) return false;
-  if (alreadySent > 0 && received >= alreadySent) return false;
-
-  return true;
-};
-
-/**
- * ✅ ЕДИНАЯ ЛОГИКА: сколько доступно для выдачи
+ * ✅ ЕДИНАЯ ЛОГИКА: сколько доступно для выдачи со склада
+ *    Используется и для фильтра, и для получения количества
  */
 const getAvailableToIssue = (m) => {
   const onWarehouse = Number(m.supplier_received_quantity) || 0;
   const alreadySent = Number(m.sent_to_master_quantity) || 0;
   return Math.max(0, onWarehouse - alreadySent);
 };
+
+/**
+ * ✅ ЕДИНАЯ ЛОГИКА: можно ли ещё что-то выдать со склада мастеру
+ *    (обёртка над getAvailableToIssue для читаемости)
+ */
+const canIssueFromWarehouse = (m) => getAvailableToIssue(m) > 0;
 
 // ─────────────────────────────────────────────────────────────
 // 🎨 UI КОМПОНЕНТЫ
@@ -338,6 +329,11 @@ const MasterConfirmRow = memo(function({
   const isPartial = sentToMaster > 0 && sentToMaster < requestedQty;
   const isFullySent = sentToMaster >= requestedQty && requestedQty > 0;
 
+  // ✅ Синхронизация при изменении пропсов (например, после перезагрузки заявки)
+  useEffect(function() {
+    setLocalConfirmed(currentReceived);
+  }, [currentReceived]);
+
   const handleQuantityChange = useCallback(function(value) {
     const newValue = clamp(value, 0, sentToMaster);
     setLocalConfirmed(newValue);
@@ -569,7 +565,6 @@ const ReceiveModal = memo(function({
   onAdminReceive,
   onSendToMaster,
   onMasterConfirm,
-  saveReceiveStatus,
   language,
   escapeHtml,
   onTakeToWork,
@@ -582,7 +577,7 @@ const ReceiveModal = memo(function({
   userRole,
   onPhotoClick,
   onQRClick,
-  employees = [], // 🆕 Список сотрудников для выбора получателя
+  employees = [],
 }) {
   const safeCompanyId = useMemo(() => {
     if (!userCompanyId) return null;
@@ -610,7 +605,7 @@ const ReceiveModal = memo(function({
   const [isSaving, setIsSaving] = useState(false);
   const [transferComment, setTransferComment] = useState('');
   const [itemsToSend, setItemsToSend] = useState([]);
-  const [selectedRecipientId, setSelectedRecipientId] = useState(''); // 🆕 ID выбранного мастера
+  const [selectedRecipientId, setSelectedRecipientId] = useState('');
   const modalContentRef = useRef(null);
 
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -636,7 +631,7 @@ const ReceiveModal = memo(function({
   }, [isOpen]);
 
   // ─────────────────────────────────────────────────────────
-  // 🔁 INIT LOCAL MATERIALS (ИСПРАВЛЕНО)
+  // ✅ INIT LOCAL MATERIALS — исправлена логика для admin_ready_to_issue
   // ─────────────────────────────────────────────────────────
   useEffect(function() {
     if (selectedApplication && selectedApplication.materials) {
@@ -654,7 +649,7 @@ const ReceiveModal = memo(function({
         .map(function(m, idx) {
           return {
             ...m,
-            _index: m._index || idx,
+            _index: m._index !== undefined ? m._index : idx,
             unit: m.unit || 'шт',
             received: Number(m.received) || 0,
             supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
@@ -666,7 +661,8 @@ const ReceiveModal = memo(function({
       setLocalMaterials(validMaterials);
 
       if (modalMode === 'admin_ready_to_issue') {
-        // ✅ ИСПРАВЛЕНО: используем единый helper canIssueFromWarehouse
+        // ✅ Показываем ВСЕ материалы, у которых есть остаток на складе,
+        //    даже если что-то уже отправлено (можно доложить остаток)
         const availableItems = validMaterials
           .filter(canIssueFromWarehouse)
           .map(function(m) {
@@ -677,13 +673,15 @@ const ReceiveModal = memo(function({
             };
           });
 
+        console.log('🔍 [READY-TO-ISSUE] validMaterials:', validMaterials);
+        console.log('🔍 [READY-TO-ISSUE] availableItems:', availableItems);
         setItemsToSend(availableItems);
       }
     }
   }, [selectedApplication, modalMode]);
 
   // ─────────────────────────────────────────────────────────
-  // ⌨️ HANDLE SAVE (ИСПРАВЛЕНО)
+  // ⌨️ HANDLE SAVE
   // ─────────────────────────────────────────────────────────
   const handleSave = useCallback(async function() {
     if (isSaving) {
@@ -713,7 +711,7 @@ const ReceiveModal = memo(function({
         result = await onAdminReceive(allMaterials, selectedApplication);
       }
       else if ((modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && typeof onSendToMaster === 'function') {
-        // ✅ ИСПРАВЛЕНО: нормализуем items к единому формату
+        // ✅ Нормализуем items к единому формату
         const items = itemsToSend
           .filter(i => (Number(i.quantityToSend) || 0) > 0)
           .map(i => ({
@@ -722,13 +720,21 @@ const ReceiveModal = memo(function({
             unit: i.unit || 'шт',
           }));
 
+        console.log('🚀 [handleSave] items к отправке:', items);
+        console.log('🚀 [handleSave] itemsToSend (raw):', itemsToSend);
+
         if (items.length === 0) {
-          if (showNotification) showNotification('Выберите хотя бы один материал для выдачи', 'warning');
+          if (showNotification) {
+            showNotification(
+              'Выберите хотя бы один материал для выдачи (укажите количество > 0)',
+              'warning'
+            );
+          }
           setIsSaving(false);
           return;
         }
 
-        // 🆕 Проверяем, выбран ли получатель, если это не привязано к заявке
+        // ✅ Определяем получателя
         let recipientId = selectedApplication.user_id;
         let recipientName = selectedApplication.foreman_name;
 
@@ -740,8 +746,15 @@ const ReceiveModal = memo(function({
           }
         }
 
-        console.log('🔔 [SEND TO MASTER] Нормализованные items:', items, 'Recipient:', recipientName);
-        result = await onSendToMaster(items, selectedApplication, recipientId, recipientName);
+        console.log('🚀 [handleSave] recipientId:', recipientId, 'recipientName:', recipientName);
+
+        result = await onSendToMaster(
+          items,
+          selectedApplication,
+          recipientId,
+          recipientName,
+          transferComment
+        );
       }
       else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
         // ✅ Отправляем ПОЛНЫЙ список материалов заявки (включая неотправленные)
@@ -783,7 +796,7 @@ const ReceiveModal = memo(function({
     } finally {
       setIsSaving(false);
     }
-  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, saveReceiveStatus, localMaterials, itemsToSend, selectedApplication, onClose, t, showNotification, isSaving, selectedRecipientId, employees]);
+  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, localMaterials, itemsToSend, selectedApplication, onClose, t, showNotification, isSaving, selectedRecipientId, employees, transferComment]);
 
   useEffect(function() {
     const handleKeyDown = function(e) {
@@ -975,24 +988,52 @@ const ReceiveModal = memo(function({
   }, [localMaterials]);
 
   // ============================================================
-  // 🔹 РЕЖИМ: ВЫДАЧА СО СКЛАДА (ИСПРАВЛЕНО)
+  // ✅ РЕЖИМ: ВЫДАЧА СО СКЛАДА — используем единый helper
   // ============================================================
   const renderReadyToIssue = function() {
-    // ✅ ИСПРАВЛЕНО: используем единый helper canIssueFromWarehouse
+    // ✅ Используем общий helper canIssueFromWarehouse
     const availableMaterials = localMaterials.filter(canIssueFromWarehouse);
 
+    console.log('🔍 [renderReadyToIssue] localMaterials:', localMaterials);
+    console.log('🔍 [renderReadyToIssue] availableMaterials:', availableMaterials);
+
     if (availableMaterials.length === 0) {
+      // ✅ Показываем разную подсказку в зависимости от ситуации
+      const hasAnyMaterials = localMaterials.length > 0;
+      const hasAnyOnWarehouse = localMaterials.some(
+        m => (Number(m.supplier_received_quantity) || 0) > 0
+      );
+
       return (
         <div className="text-center py-8 text-gray-500">
           <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-          <p className="font-medium">Нет материалов для выдачи</p>
-          <p className="text-sm">Все материалы уже отправлены мастеру или получены</p>
+          {!hasAnyMaterials ? (
+            <>
+              <p className="font-medium">В заявке нет материалов</p>
+              <p className="text-sm">Обратитесь к администратору</p>
+            </>
+          ) : !hasAnyOnWarehouse ? (
+            <>
+              <p className="font-medium">Материалы ещё не приняты на склад</p>
+              <p className="text-sm">
+                Сначала примите материалы от поставщика (раздел «Приёмка»),
+                затем вернитесь сюда для выдачи
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-medium">Все материалы уже выданы мастеру</p>
+              <p className="text-sm">
+                Ожидайте подтверждения от мастера или запросите ещё материалов
+              </p>
+            </>
+          )}
         </div>
       );
     }
 
     // 🆕 Фильтруем сотрудников для выбора получателя
-    const availableRecipients = employees.filter(e => 
+    const availableRecipients = employees.filter(e =>
       e.role === 'master' || e.role === 'foreman'
     );
 
@@ -1142,8 +1183,8 @@ const ReceiveModal = memo(function({
               </span>
             </div>
             <span className="text-xs text-gray-500">
-              Получатель: {selectedRecipientId 
-                ? employees.find(e => e.id === selectedRecipientId)?.full_name 
+              Получатель: {selectedRecipientId
+                ? employees.find(e => e.id === selectedRecipientId)?.full_name
                 : selectedApplication?.foreman_name}
             </span>
           </div>

@@ -4267,7 +4267,7 @@ const handleNpsSubmit = async ({ score, comment }) => {
 //     Списывает со склада + проверяет остаток
 //     ИСПРАВЛЕНО: принимает recipientId и recipientName
 // ============================================================
-const handleSendToMaster = useCallback(async (itemsToSend, application, recipientId, recipientName) => {
+const handleSendToMaster = useCallback(async (itemsToSend, application, recipientId, recipientName, comment = '') => {
   if (userRole !== 'supply_admin' && userRole !== 'manager') {
     showNotification('Только снабженец может выдавать материалы мастеру', 'error');
     return { success: false };
@@ -4299,7 +4299,7 @@ const handleSendToMaster = useCallback(async (itemsToSend, application, recipien
       return { success: false };
     }
 
-    console.log('📦 [SEND TO MASTER] Отправляем в RPC:', itemsPayload, 'Recipient:', recipientName);
+        console.log('📦 [SEND TO MASTER] Отправляем в RPC:', itemsPayload, 'Recipient:', recipientName);
 
     // ✅ 1. Списываем со склада через RPC issue_materials_from_stock
     const { data: stockData, error: stockError } = await supabase.rpc('issue_materials_from_stock', {
@@ -4310,18 +4310,31 @@ const handleSendToMaster = useCallback(async (itemsToSend, application, recipien
         quantity: i.quantityToSend,
         unit: i.unit
       })),
-      p_recipient_id: recipientId || application.user_id, // Кому выдали
+      p_recipient_id: recipientId || application.user_id,
       p_application_id: application.id
     });
 
+    console.log('📦 [SEND TO MASTER] RPC ответ:', { stockData, stockError });
+
     if (stockError) {
-      console.error('❌ [SEND TO MASTER] Ошибка списания со склада:', stockError);
-      showNotification(`Ошибка списания: ${stockError.message}`, 'error');
+      console.error('❌ [SEND TO MASTER] Ошибка RPC:', stockError);
+      showNotification(`Ошибка списания со склада: ${stockError.message}`, 'error');
       return { success: false };
     }
 
-    if (!stockData?.success) {
-      showNotification('Ошибка списания: неверный ответ сервера', 'error');
+    // ✅ ФИКС: RPC может вернуть { success: false, error: "..." } без HTTP-ошибки
+    if (stockData && stockData.success === false) {
+      console.error('❌ [SEND TO MASTER] RPC вернул success=false:', stockData);
+      showNotification(
+        `Не удалось списать со склада: ${stockData.error || 'недостаточно материала'}`,
+        'error'
+      );
+      return { success: false };
+    }
+
+    if (!stockData) {
+      console.error('❌ [SEND TO MASTER] RPC вернул пустой ответ');
+      showNotification('Ошибка: RPC вернул пустой ответ. Проверьте, что функция issue_materials_from_stock создана в Supabase.', 'error');
       return { success: false };
     }
 
@@ -4366,23 +4379,26 @@ const handleSendToMaster = useCallback(async (itemsToSend, application, recipien
       // Не выбрасываем ошибку, так как склад уже списан
     }
 
-    // ✅ 3. Если выдали другому мастеру — создаём новую заявку для него
+        // ✅ 3. Если выдали другому мастеру — создаём новую заявку для него
     if (recipientId && recipientId !== application.user_id) {
       const newApplicationForRecipient = {
         object_name: application.object_name,
         foreman_name: recipientName || 'Получатель',
-        foreman_phone: '', // Можно взять из employees
+        foreman_phone: '',
         materials: itemsPayload.map(i => ({
           description: i.description,
           quantity: i.quantityToSend,
           unit: i.unit,
           received: 0,
           supplier_received_quantity: 0,
-          sent_to_master_quantity: 0,
-          status: ITEM_STATUS.PENDING
+          // ✅ ФИКС: сразу указываем, что выдали мастеру
+          sent_to_master_quantity: i.quantityToSend,
+          status: ITEM_STATUS.SENT_TO_MASTER
         })),
         status: APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION,
         user_id: recipientId,
+        // ✅ ФИКС: дублируем получателя отдельным полем для запросов
+        recipient_user_id: recipientId,
         company_id: cleanCompanyId,
         created_at: new Date().toISOString(),
         source_application_id: application.id,
@@ -4391,18 +4407,26 @@ const handleSendToMaster = useCallback(async (itemsToSend, application, recipien
           user_id: user?.id,
           user_email: user?.email,
           timestamp: new Date().toISOString(),
-          details: `Создана при выдаче со склада по заявке ${application.object_name}`
+          details: `Создана при выдаче со склада по заявке ${application.object_name}${comment ? '. Комментарий: ' + comment : ''}`
         }]
       };
 
-      const { error: newAppError } = await supabase
+      const { data: createdApp, error: newAppError } = await supabase
         .from('applications')
-        .insert([newApplicationForRecipient]);
+        .insert([newApplicationForRecipient])
+        .select()
+        .single();
 
       if (newAppError) {
         console.warn('⚠️ Не удалось создать новую заявку для получателя:', newAppError);
       } else {
-        console.log('✅ Создана новая заявка для получателя:', recipientName);
+        console.log('✅ Создана новая заявка для получателя:', recipientName, createdApp?.id);
+        // ✅ ФИКС: добавляем в локальный state, чтобы мастер сразу увидел
+        setApplications(prev => {
+          const exists = prev.some(a => a.id === createdApp.id);
+          if (exists) return prev;
+          return [createdApp, ...prev];
+        });
       }
     }
 
@@ -4480,31 +4504,44 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
     // ============================================================
     // ✅ ШАГ 2: Проверяем статус каждого материала
     // ============================================================
-    // ✅ ПРАВИЛЬНАЯ ЛОГИКА: заявка закрывается только когда ВСЁ заказанное
-//    привезено, выдано мастеру и подтверждено им.
-const allItemsFullyConfirmed = updatedMaterials.every(m => {
+    // ✅ ФИКС: заявка закрывается, когда ВСЁ, что было ОТПРАВЛЕНО мастеру,
+//    подтверждено. Если что-то ещё не отправлено — заявка остаётся активной.
+const allSentConfirmed = updatedMaterials.every(m => {
+  const sentToMaster = Number(m.sent_to_master_quantity) || 0;
   const received = Number(m.received) || 0;
-  const quantity = Number(m.quantity) || 0;
-  // quantity = 0 — позиция удалена, пропускаем
-  if (quantity === 0) return true;
-  return received >= quantity;
+  // ✅ ФИКС: отклонённые материалы не должны блокировать закрытие заявки
+  if (m.status === ITEM_STATUS.REJECTED) return true;
+  if (sentToMaster === 0) return true; // не отправляли — не проверяем
+  return received >= sentToMaster;
 });
 
 const hasAnythingSent = updatedMaterials.some(m =>
   (Number(m.sent_to_master_quantity) || 0) > 0
 );
 
+const hasAnythingPending = updatedMaterials.some(m => {
+  const sentToMaster = Number(m.sent_to_master_quantity) || 0;
+  const quantity = Number(m.quantity) || 0;
+  // Есть материал, который ещё не отправлен мастеру
+  return sentToMaster < quantity && quantity > 0;
+});
+
 let newStatus;
-if (allItemsFullyConfirmed) {
-  // 🎉 Всё заказанное полностью подтверждено — заявка закрыта
+if (allSentConfirmed && !hasAnythingPending) {
+  // 🎉 Всё заказанное полностью выдано и подтверждено
   newStatus = APPLICATION_STATUS.RECEIVED;
 } else if (hasAnythingSent) {
-  // 🟡 Мастер что-то подтвердил, но остались незакрытые позиции —
-  //     оставляем заявку в partial_received, чтобы снабженец мог довезти остальное
+  // 🟡 Частично подтверждено — ждём остальное
   newStatus = APPLICATION_STATUS.PARTIAL_RECEIVED;
 } else {
   newStatus = application.status;
 }
+
+console.log('📊 [MASTER CONFIRM] newStatus:', newStatus, {
+  allSentConfirmed,
+  hasAnythingSent,
+  hasAnythingPending
+});
     
     // ============================================================
     // ✅ ШАГ 4: Обновляем БД
@@ -4879,9 +4916,12 @@ await logEmployeeBlocked(supabase, employeeId, newStatus, userContextWithCleanId
   .eq('company_id', safeCompanyId)
   .or('is_deleted.is.null,is_deleted.eq.false');   // 🔧 Исключаем удалённые
 
-    // ✅ 2. Применяем ВСЕ фильтры ДО пагинации
+        // ✅ 2. Применяем ВСЕ фильтры ДО пагинации
     if (userRole === 'master' || userRole === 'foreman') {
-      baseQuery = baseQuery.eq('user_id', user?.id);
+      // ✅ ФИКС: мастер/прораб видит свои заявки И те, где он получатель
+      baseQuery = baseQuery.or(
+        `user_id.eq.${user?.id},recipient_user_id.eq.${user?.id}`
+      );
     }
     if (userRole === 'accountant') {
       baseQuery = baseQuery.eq('status', 'received');
@@ -8117,27 +8157,31 @@ onClearFilters={handleClearFilters}
         )}
         
         {currentView === 'warehouse' && (
-          <WarehouseView
-            supabase={supabase}
-            isMobile={isMobile}
-            userCompanyId={userCompanyId}
-            user={user}
-            userRole={userRole}
-            profileData={profileDataForHeader} 
-            t={t}
-            language={language}
-            showNotification={showNotification}
-            applications={applications}
-            employees={employees}
-            onOpenApplication={(appId) => {
-              const app = applications.find(a => a.id === appId);
-              if (app) {
-                setSelectedApplication(app);
-                setShowReceiveModal(true);
-              }
-            }}
-          />
-        )}
+  <WarehouseView
+    supabase={supabase}
+    isMobile={isMobile}
+    userCompanyId={userCompanyId}
+    user={user}
+    userRole={userRole}
+    profileData={profileDataForHeader}
+    t={t}
+    language={language}
+    showNotification={showNotification}
+    applications={applications}
+    employees={employees}
+    onOpenApplication={(appId) => {
+      const app = applications.find(a => a.id === appId);
+      if (app) {
+        setSelectedApplication(app);
+        setShowReceiveModal(true);
+      }
+    }}
+    onIssueToApplication={async (item) => {
+      // ✅ ФИКС: после выдачи перезагружаем склад и заявки
+      await loadApplications(page);
+    }}
+  />
+)}
         
         {currentView === 'documents' && (
           <DocumentGenerator
