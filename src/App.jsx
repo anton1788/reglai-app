@@ -1099,6 +1099,8 @@ useEffect(() => {
   const [viewedFilter, setViewedFilter] = useState('all');
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState(null);
+    // ✅ РАЗДЕЛЕНО: тосты (всплывающие) и уведомления из БД (колокольчик)
+  const [toasts, setToasts] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
@@ -1362,6 +1364,7 @@ const [showConsentUpdate, setShowConsentUpdate] = useState(false);
   const notifiedOverdueAppIdsRef = useRef(new Set());
   const lastLoggedRef = useRef({});  // ← ДЛЯ ДЕБАУНСА ФИЧЕР-ЛОГОВ
   const aiAssistantRef = useRef(null);
+  const applicationsRef = useRef([]);  // ✅ ДЛЯ open-application
 
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK
@@ -1525,12 +1528,13 @@ const statusCounts = useMemo(() => {
   // ─────────────────────────────────────────────────────────
   // 🔔 ENHANCED NOTIFICATIONS (Pattern #4: Toast with undo)
   // ─────────────────────────────────────────────────────────
-  const showNotification = useCallback((message, type = 'info', isUpdate = false, undoFn = null) => {
+    const showNotification = useCallback((message, type = 'info', isUpdate = false, undoFn = null) => {
     const id = notificationId.current++;
-    setNotifications(prev => [...prev, { id, message, type, isUpdate, undoFn }]);
+    // ✅ ИСПРАВЛЕНО: пишем в toasts, а не в notifications
+    setToasts(prev => [...prev, { id, message, type, isUpdate, undoFn }]);
     if (!isUpdate && !undoFn) {
       setTimeout(() => {
-        setNotifications(prev => prev.filter(n => n.id !== id));
+        setToasts(prev => prev.filter(n => n.id !== id));
       }, 5000);
     }
   }, []);
@@ -5201,6 +5205,27 @@ useEffect(() => {
     };
   }, [user?.id, showNotification]);
 
+    // ✅ Периодическая загрузка уведомлений (страховка от пропущенных real-time событий)
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    // Загрузка при возврате на вкладку
+    const handleFocus = () => {
+      loadNotifications();
+    };
+    window.addEventListener('focus', handleFocus);
+    
+    // Периодическая загрузка каждые 60 секунд
+    const interval = setInterval(() => {
+      loadNotifications();
+    }, 60000);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [user?.id, loadNotifications]);
+
   // ✅ ПРОАКТИВНЫЕ УВЕДОМЛЕНИЯ ОТ AI-АССИСТЕНТА
   useEffect(() => {
     if (!user?.id || !aiAssistantRef.current) return;
@@ -5540,26 +5565,6 @@ const { error } = await supabase.rpc('reset_company_limits', {
   return () => clearInterval(interval);
 }, [userCompanyId, supabase]);
 
-  useEffect(() => {
-  const loadAuditLogs = async () => {
-    // ✅ ДОБАВИТЬ ПРОВЕРКУ
-    if (!userCompanyId) return;
-    
-    let safeId = userCompanyId;
-    if (typeof safeId === 'object') {
-      safeId = safeId.id || safeId.company_id || null;
-    }
-    if (!safeId || String(safeId).includes('[object')) return;
-
-    const { data } = await supabase
-      .from('audit_logs')
-      .select('*')
-      .eq('company_id', safeId) // ✅ Используем safeId
-      .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
-    if (data) setAuditLogs(data);
-  };
-  loadAuditLogs();
-}, [userCompanyId, supabase]);
 
 useEffect(() => {
   // Проверка обновлений при загрузке
@@ -5816,6 +5821,48 @@ useEffect(() => {
     return () => { window.fetch = originalFetch; };
   }
 }, [userRole]);
+
+// ✅ Обработчик клика по уведомлению — открывает заявку
+// 🔧 applicationsRef объявлен выше, в начале компонента
+useEffect(() => {
+  applicationsRef.current = applications;
+}, [applications]);
+
+useEffect(() => {
+  const handler = async (e) => {
+    const appId = e.detail?.applicationId;
+    if (!appId) {
+      console.warn('⚠️ [open-application] applicationId не передан');
+      return;
+    }
+    
+    // Ищем заявку в актуальном стейте
+    let app = applicationsRef.current.find(a => a.id === appId);
+    
+    if (!app) {
+      console.log('🔄 Заявка не найдена в стейте, перезагружаю...');
+      try {
+        await loadApplications(1);
+        // Ждём тик, чтобы React успел обновить стейт
+        await new Promise(r => setTimeout(r, 100));
+        app = applicationsRef.current.find(a => a.id === appId);
+      } catch (err) {
+        console.error('Ошибка перезагрузки заявок:', err);
+      }
+    }
+    
+    if (app) {
+      setSelectedApplication(app);
+      setShowReceiveModal(true);
+    } else {
+      console.warn('⚠️ Заявка не найдена даже после перезагрузки:', appId);
+      showNotification('Заявка не найдена', 'warning');
+    }
+  };
+  
+  window.addEventListener('open-application', handler);
+  return () => window.removeEventListener('open-application', handler);
+}, [loadApplications, showNotification]);
   // 🎯 Onboarding Tour Logic
 useEffect(() => {
   const checkOnboarding = async () => {
@@ -6740,9 +6787,9 @@ const renderAnalyticsDashboard = () => {
   };
 
 
-  const renderNotifications = () => (
+    const renderNotifications = () => (
     <div className="fixed top-4 right-4 z-50 space-y-2">
-      {notifications.map((notification) => (
+      {toasts.map((notification) => (
         <div
           key={notification.id}
           className={`px-4 py-3 rounded-lg shadow-lg max-w-xs fade-enter ${notification.type === 'success'
@@ -6771,7 +6818,7 @@ const renderAnalyticsDashboard = () => {
                       setTimeout(() => window.location.reload(true), 500);
                     }
                   });
-                  setNotifications(prev => prev.filter(n => !n.isUpdate));
+                  setToasts(prev => prev.filter(n => !n.isUpdate));
                 }}
                 className="ml-2 text-sm font-medium underline"
               >
@@ -6782,7 +6829,7 @@ const renderAnalyticsDashboard = () => {
               <button
                 onClick={() => {
                   notification.undoFn();
-                  setNotifications(prev => prev.filter(n => n.id !== notification.id));
+                  setToasts(prev => prev.filter(n => n.id !== notification.id));
                 }}
                 className="ml-2 text-sm font-medium flex items-center gap-1"
               >
@@ -7519,38 +7566,44 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         readyToIssueCount={readyToIssueCount}
         onOpenAIAssistant={() => aiAssistantRef.current?.toggle()}
                onMarkNotificationRead={async (id) => {
-          if (!id) {
-            console.error('❌ [Notifications] ID уведомления не передан!');
-            return;
-          }
-          
-          try {
-            // 1. Обновляем в Базе Данных
-            const { error } = await supabase
-              .from('user_notifications')
-              .update({ is_read: true })
-              .eq('id', id);
-              
-            if (error) throw error;
+  if (!id) {
+    console.error('❌ [Notifications] ID уведомления не передан!');
+    return;
+  }
+  
+  try {
+    // ✅ ИСПРАВЛЕНО: используем таблицу 'notifications', а не 'user_notifications'
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id);
+      
+    if (error) throw error;
 
-            // 2. Мгновенно обновляем локальный список (чтобы красная точка погасла)
-            setNotifications(prev => prev.map(n => 
-              n.id === id ? { ...n, is_read: true } : n
-            ));
-            
-            console.log('✅ Уведомление помечено прочитанным:', id);
-            
-          } catch (err) {
-            console.error('❌ Ошибка при пометке уведомления:', err);
-          }
-        }}
+    // Мгновенно обновляем локальный список
+    setNotifications(prev => prev.map(n => 
+      n.id === id ? { ...n, is_read: true } : n
+    ));
+    
+    console.log('✅ Уведомление помечено прочитанным:', id);
+    
+  } catch (err) {
+    console.error('❌ Ошибка при пометке уведомления:', err);
+  }
+}}
         onClearNotifications={async () => {
-          await supabase.from('user_notifications').update({ is_read: true }).eq('user_id', user.id);
-          setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-        }}
+  // ✅ ИСПРАВЛЕНО: используем 'notifications'
+  await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('user_id', user.id);
+  setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+}}
 
         // 🚀 ВОТ ЭТИ 4 СТРОКИ ДОЛЖНЫ БЫТЬ ВНУТРИ, ПЕРЕД ПОСЛЕДНЕЙ СКОБКОЙ />
-        onNotificationClick={(notif) => {
+                onNotificationClick={(notif) => {
+          // ✅ Пометка прочитанным уже сделана в Navbar через onMarkNotificationRead
+          // Здесь только открываем модалку
           setSelectedNotification(notif);
           setShowNotificationModal(true);
         }}

@@ -815,10 +815,14 @@ const WarehouseView = ({
 
       // 2. Загружаем движения из stock_movements
       const { data: movements, error: movementsError } = await supabase
-        .from('stock_movements')
-        .select('*, applications ( object_name )')
-        .eq('company_id', userCompanyId)
-        .order('created_at', { ascending: false });
+  .from('stock_movements')
+  .select(`
+    *,
+    applications ( object_name ),
+    warehouse_stock ( description, unit )
+  `)
+  .eq('company_id', userCompanyId)
+  .order('created_at', { ascending: false });
       if (movementsError) console.warn('⚠️ Ошибка загрузки движений:', movementsError);
 
       // 3. Считаем приход для каждого товара

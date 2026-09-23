@@ -798,16 +798,29 @@ const Navbar = ({
                       ) : (
                         notifications.map(notif => (
                           <div
-                            key={notif.id}
-                            className={`p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${!notif.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                            onClick={() => {
-                              if (onNotificationClick) {
-                                onNotificationClick(notif);
-                              } else {
-                                onMarkNotificationRead?.(notif.id);
-                              }
-                            }}
-                          >
+  key={notif.id}
+  className={`p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${!notif.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+   onClick={() => {
+  // ✅ 1. Помечаем прочитанным
+  onMarkNotificationRead?.(notif.id);
+  
+  // ✅ 2. ВСЕГДА закрываем выпадающий список
+  setIsNotificationsOpen(false);
+  
+  // ✅ 3. Если есть привязка к заявке — открываем её
+  if (notif.related_data?.application_id) {
+    window.dispatchEvent(new CustomEvent('open-application', {
+      detail: { applicationId: notif.related_data.application_id }
+    }));
+    return;
+  }
+  
+  // ✅ 4. Иначе — показываем модалку уведомления
+  if (onNotificationClick) {
+    onNotificationClick(notif);
+  }
+}}
+>
                             <p className="text-sm font-medium text-gray-900 dark:text-white">{notif.title}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{notif.message}</p>
                             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{notif.time}</p>
