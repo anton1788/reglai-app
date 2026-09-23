@@ -1352,6 +1352,7 @@ const [showFeedbackForm, setShowFeedbackForm] = useState(false);
 const [showPublicOffer, setShowPublicOffer] = useState(false);
 const [showLegalOffer, setShowLegalOffer] = useState(false);
 const [showConsentUpdate, setShowConsentUpdate] = useState(false);
+const [selectedChatId, setSelectedChatId] = useState(null);
 
   // ─────────────────────────────────────────────────────────
   // 🎯 FOCUS MANAGEMENT (Pattern #3)
@@ -5188,7 +5189,7 @@ useEffect(() => {
           table: 'notifications',
           filter: `user_id=eq.${user.id}`
         },
-        (payload) => {
+               (payload) => {
           const newNotif = {
             ...payload.new,
             time: new Date(payload.new.created_at).toLocaleString('ru-RU')
@@ -5196,6 +5197,18 @@ useEffect(() => {
           setNotifications(prev => [newNotif, ...prev]);
           // Показываем всплывающее уведомление
           showNotification(newNotif.title + ': ' + newNotif.message, 'info');
+          
+          // 🔔 Звук при новом уведомлении
+          try {
+            const audio = new Audio('/notification.mp3');
+            audio.volume = 0.3;
+            audio.play().catch(() => {
+              // Браузер может блокировать автоплей до первого взаимодействия
+              console.debug('🔇 Звук уведомления заблокирован браузером');
+            });
+          } catch (err) {
+            console.debug('Audio not supported:', err);
+          }
         }
       )
       .subscribe();
@@ -5204,6 +5217,20 @@ useEffect(() => {
       supabase.removeChannel(channel);
     };
   }, [user?.id, showNotification]);
+
+  // ============================================================
+// 🔔 СЧЁТЧИК НЕПРОЧИТАННЫХ В TITLE СТРАНИЦЫ
+// ============================================================
+useEffect(() => {
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+  document.title = unreadCount > 0 
+    ? `(${unreadCount}) Реглай` 
+    : 'Реглай';
+  
+  return () => {
+    document.title = 'Реглай';
+  };
+}, [notifications]);
 
     // ✅ Периодическая загрузка уведомлений (страховка от пропущенных real-time событий)
   useEffect(() => {
@@ -5863,6 +5890,24 @@ useEffect(() => {
   window.addEventListener('open-application', handler);
   return () => window.removeEventListener('open-application', handler);
 }, [loadApplications, showNotification]);
+
+// ✅ Обработчик открытия чата
+useEffect(() => {
+  const handler = (e) => {
+    const chatId = e.detail?.chatId;
+    if (!chatId) {
+      setCurrentView('chat');
+      return;
+    }
+    
+    // Передаём chatId в CompanyChat через глобальный стейт
+    setSelectedChatId(chatId);
+    setCurrentView('chat');
+  };
+  
+  window.addEventListener('open-chat', handler);
+  return () => window.removeEventListener('open-chat', handler);
+}, []);
   // 🎯 Onboarding Tour Logic
 useEffect(() => {
   const checkOnboarding = async () => {
@@ -8305,6 +8350,8 @@ onClearFilters={handleClearFilters}
     userRole={userRole}
     showNotification={showNotification}
     onUnreadCountChange={setChatUnreadCount}
+    initialChatId={selectedChatId}
+    onChatOpened={() => setSelectedChatId(null)}
   />
 )}
         

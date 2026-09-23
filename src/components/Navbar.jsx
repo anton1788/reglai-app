@@ -34,6 +34,46 @@ const getCleanCompanyId = (companyId) => {
   return null;
 };
 
+// ============================================================
+// 🎨 ИКОНКА ПО ТИПУ УВЕДОМЛЕНИЯ
+// ============================================================
+const getNotificationIcon = (notif) => {
+  const title = notif.title || '';
+
+  // Приоритет — эмодзи в заголовке
+  if (title.includes('📋')) return '📋';
+  if (title.includes('🔧')) return '🔧';
+  if (title.includes('📝')) return '📝';
+  if (title.includes('✅')) return '✅';
+  if (title.includes('❌')) return '❌';
+  if (title.includes('📦')) return '📦';
+  if (title.includes('🎉')) return '🎉';
+  if (title.includes('💬')) return '💬';
+  if (title.includes('✉️')) return '✉️';
+  if (title.includes('📥')) return '📥';
+  if (title.includes('⚠️')) return '⚠️';
+
+  // Fallback по типу
+  switch (notif.type) {
+    case 'success': return '✅';
+    case 'error': return '❌';
+    case 'warning': return '⚠️';
+    default: return 'ℹ️';
+  }
+};
+
+// ============================================================
+// 🎨 ЦВЕТ ФОНА ИКОНКИ ПО ТИПУ
+// ============================================================
+const getNotificationBgClass = (notif) => {
+  switch (notif.type) {
+    case 'success': return 'bg-green-100 dark:bg-green-900/30';
+    case 'error': return 'bg-red-100 dark:bg-red-900/30';
+    case 'warning': return 'bg-yellow-100 dark:bg-yellow-900/30';
+    default: return 'bg-blue-100 dark:bg-blue-900/30';
+  }
+};
+
 const Navbar = ({
   user,
   isMobile = false,
@@ -322,7 +362,6 @@ const Navbar = ({
     return icons[planId] || '📦';
   };
 
-  // 🆕 Утилита для проверки функции текущего тарифа
   const can = useCallback((feature) => {
     if (!currentPlan) return false;
     return checkFeatureAccess(currentPlan, feature);
@@ -336,11 +375,9 @@ const Navbar = ({
   const getNavItems = () => {
     const items = [];
 
-    // === ВСЕГДА ДОСТУПНЫЕ ===
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/', always: true });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications', always: true });
 
-    // === ГОТОВЫ К ВЫДАЧЕ (для снабженцев) ===
     if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
       items.push({
         id: 'readyToIssue',
@@ -350,7 +387,6 @@ const Navbar = ({
       });
     }
 
-    // === ПРОЕКТЫ ===
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'master' || userRole === 'foreman') {
       items.push({
         id: 'projects',
@@ -360,12 +396,10 @@ const Navbar = ({
       });
     }
 
-    // === CRM ===
     if (userRole === 'manager' || userRole === 'supply_admin') {
       items.push({ id: 'crm-sales', label: 'CRM Лиды', icon: Users, path: '/crm-sales' });
     }
 
-    // === ОБЪЕДИНЕНИЕ ===
     if (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || isCompanyOwner) {
       items.push({
         id: 'merge',
@@ -375,70 +409,58 @@ const Navbar = ({
       });
     }
 
-    // === МАСТЕР/ПРОРАБ ===
     if (userRole === 'master' || userRole === 'foreman') {
       items.push({ id: 'inwork', label: 'В работе', icon: Clock, path: '/inwork' });
       items.push({ id: 'history', label: 'История', icon: History, path: '/history' });
     }
 
-    // === СКЛАД (только если тариф позволяет) ===
     if ((userRole === 'manager' || userRole === 'supply_admin' || userRole === 'foreman' || userRole === 'accountant') &&
         (!currentPlan || can('warehouse_view'))) {
       items.push({ id: 'warehouse', label: 'Склад', icon: Package, path: '/warehouse' });
     }
 
-    // === КЛИЕНТЫ (только если есть client_portal) ===
     if ((userRole === 'manager' || userRole === 'client_manager') &&
         (!currentPlan || can('client_portal'))) {
       items.push({ id: 'clients', label: 'Клиенты', icon: Users, path: '/clients' });
     }
 
-    // === АНАЛИТИКА (только если есть basic_analytics) ===
     if ((userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) &&
         (!currentPlan || can('basic_analytics'))) {
       items.push({ id: 'analytics', label: 'Аналитика', icon: BarChart3, path: '/analytics' });
     }
 
-    // === API (только если есть api_access) ===
     if ((userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) &&
         (!currentPlan || can('api_access'))) {
       items.push({ id: 'api', label: 'API', icon: Code, path: '/api' });
     }
 
-    // === СМЕТЫ (только если есть document_generator) ===
     if ((userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) &&
         (!currentPlan || can('document_generator'))) {
       items.push({ id: 'estimates', label: 'Сметы', icon: Calculator, path: '/estimates' });
     }
 
-    // === ОТЧЁТЫ (только если есть advanced_analytics) ===
     if ((userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) &&
         (!currentPlan || can('advanced_analytics'))) {
       items.push({ id: 'reports', label: 'Отчёты', icon: FileText, path: '/reports' });
     }
 
-    // === ИНТЕГРАЦИЯ (только если есть custom_integration) ===
     if ((userRole === 'manager' || userRole === 'director' || userRole === 'supply_admin' || isCompanyOwner) &&
         (!currentPlan || can('custom_integration'))) {
       items.push({ id: 'integration', label: 'Интеграция', icon: Settings, path: '/integration' });
     }
 
-    // === ДОКУМЕНТЫ (только если есть document_generator) ===
     if (userRole !== 'client' && (!currentPlan || can('document_generator'))) {
       items.push({ id: 'documents', label: 'Документы', icon: FileText, path: '/documents' });
     }
 
-    // === ЧАТ (только если есть internal_chat) ===
     if (!currentPlan || can('internal_chat')) {
       items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
     }
 
-    // === КАЛЕНДАРЬ (только если есть calendar) ===
     if (!currentPlan || can('calendar')) {
       items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
     }
 
-    // === СОГЛАСОВАНИЕ ===
     if (userRole === 'manager' || userRole === 'director') {
       items.push({
         id: 'approvals',
@@ -448,27 +470,22 @@ const Navbar = ({
       });
     }
 
-    // === СОТРУДНИКИ ===
     if (userRole === 'manager') {
       items.push({ id: 'employees', label: 'Сотрудники', icon: Users, path: '/employees' });
     }
 
-    // === КОРЗИНА ===
     if (cartItemsCount > 0) {
       items.push({ id: 'cart', label: `Корзина (${cartItemsCount})`, icon: ShoppingCart, path: '/cart' });
     }
 
-    // === АУДИТ ===
     if (userRole === 'manager' || userRole === 'director' || userRole === 'accountant' || isCompanyOwner) {
       items.push({ id: 'audit', label: 'Аудит', icon: Eye, path: '/audit' });
     }
 
-    // === ЗАДАЧИ (Kanban — только если есть kanban_board) ===
     if (userRole !== 'client' && (!currentPlan || can('kanban_board'))) {
       items.push({ id: 'tasks', label: 'Задачи', icon: Target, path: '/tasks' });
     }
 
-    // === КЛИЕНТ ===
     if (userRole === 'client') {
       items.push({ id: 'clientDashboard', label: 'Мой объект', icon: Home, path: '/client' });
       items.push({ id: 'clientDocuments', label: 'Мои документы', icon: FileText, path: '/client/documents' });
@@ -501,10 +518,76 @@ const Navbar = ({
         from { transform: translateX(-100%); }
         to { transform: translateX(0); }
       }
+      .notif-line-clamp {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
   }, []);
+
+  // ============================================================
+  // 🎯 ОБРАБОТЧИК КЛИКА ПО УВЕДОМЛЕНИЮ
+  // ============================================================
+  const handleNotificationClick = useCallback((notif) => {
+    // 1. Помечаем прочитанным
+    onMarkNotificationRead?.(notif.id);
+
+    // 2. Закрываем список
+    setIsNotificationsOpen(false);
+
+    // 3. Обрабатываем разные типы действий
+    const action = notif.related_data?.action;
+    const data = notif.related_data || {};
+
+    switch (action) {
+      case 'open_application':
+        if (data.application_id) {
+          window.dispatchEvent(new CustomEvent('open-application', {
+            detail: { applicationId: data.application_id }
+          }));
+        }
+        return;
+
+      case 'open_chat':
+        window.dispatchEvent(new CustomEvent('open-chat', {
+          detail: { chatId: data.chat_id }
+        }));
+        return;
+
+      case 'open_warehouse':
+        onNavigate?.('/warehouse');
+        return;
+
+      case 'open_ready_to_issue':
+        onNavigate?.('/ready-to-issue');
+        return;
+
+      case 'open_employees':
+        onNavigate?.('/employees');
+        return;
+
+      case 'open_superAdmin':
+        onNavigate?.('/superAdmin');
+        return;
+
+      default:
+        // Fallback: если есть application_id, но нет action
+        if (data.application_id) {
+          window.dispatchEvent(new CustomEvent('open-application', {
+            detail: { applicationId: data.application_id }
+          }));
+          return;
+        }
+        // Иначе — модалка уведомления
+        if (onNotificationClick) {
+          onNotificationClick(notif);
+        }
+    }
+  }, [onMarkNotificationRead, onNavigate, onNotificationClick]);
 
   const renderTariffIndicator = () => {
     if (planLoading) {
@@ -763,7 +846,9 @@ const Navbar = ({
                 </button>
               )}
 
-              {/* Уведомления */}
+              {/* ============================================================ */}
+              {/* 🔔 УВЕДОМЛЕНИЯ — ОБНОВЛЁННЫЙ БЛОК */}
+              {/* ============================================================ */}
               <div className="relative" ref={notificationsRef}>
                 <button
                   onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
@@ -777,13 +862,20 @@ const Navbar = ({
                 </button>
 
                 {isNotificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-50">
                     <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                      <h3 className="font-semibold text-gray-900 dark:text-white">Уведомления</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-gray-900 dark:text-white">Уведомления</h3>
+                        {unreadCount > 0 && (
+                          <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs rounded-full font-medium">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </div>
                       {notifications.length > 0 && (
                         <button
                           onClick={onClearNotifications}
-                          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                         >
                           Очистить все
                         </button>
@@ -798,32 +890,34 @@ const Navbar = ({
                       ) : (
                         notifications.map(notif => (
                           <div
-  key={notif.id}
-  className={`p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${!notif.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-   onClick={() => {
-  // ✅ 1. Помечаем прочитанным
-  onMarkNotificationRead?.(notif.id);
-  
-  // ✅ 2. ВСЕГДА закрываем выпадающий список
-  setIsNotificationsOpen(false);
-  
-  // ✅ 3. Если есть привязка к заявке — открываем её
-  if (notif.related_data?.application_id) {
-    window.dispatchEvent(new CustomEvent('open-application', {
-      detail: { applicationId: notif.related_data.application_id }
-    }));
-    return;
-  }
-  
-  // ✅ 4. Иначе — показываем модалку уведомления
-  if (onNotificationClick) {
-    onNotificationClick(notif);
-  }
-}}
->
-                            <p className="text-sm font-medium text-gray-900 dark:text-white">{notif.title}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{notif.message}</p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{notif.time}</p>
+                            key={notif.id}
+                            className={`p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex gap-3 ${
+                              !notif.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                            }`}
+                            onClick={() => handleNotificationClick(notif)}
+                          >
+                            {/* Иконка типа */}
+                            <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-lg ${getNotificationBgClass(notif)}`}>
+                              {getNotificationIcon(notif)}
+                            </div>
+
+                            {/* Контент */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {notif.title}
+                                </p>
+                                {!notif.is_read && (
+                                  <span className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-1.5"></span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 notif-line-clamp">
+                                {notif.message}
+                              </p>
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                {notif.time || (notif.created_at ? new Date(notif.created_at).toLocaleString('ru-RU') : '')}
+                              </p>
+                            </div>
                           </div>
                         ))
                       )}
