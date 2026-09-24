@@ -1,10 +1,21 @@
 // src/components/SettingsPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Sun, Moon, Monitor, Bell, Mail, MessageCircle, 
+  Sun, Moon, Monitor, Bell, Mail, MessageCircle,
   FileText, Shield, Globe, Database, RefreshCw,
-  Smartphone, Lock, Eye, EyeOff, Save, Loader2, Palette, Settings
+  Smartphone, Eye, EyeOff, Save, Loader2, Palette, Settings
 } from 'lucide-react';
+
+// ✅ ХЕЛПЕР ДЛЯ ОЧИСТКИ COMPANY_ID
+const getCleanCompanyId = (companyId) => {
+  if (!companyId) return null;
+  if (typeof companyId === 'string') return companyId.trim();
+  if (typeof companyId === 'object') {
+    const id = companyId.id || companyId.company_id || companyId._id;
+    return id ? String(id).trim() : null;
+  }
+  return String(companyId).trim();
+};
 
 const SettingsPage = ({
   user,
@@ -28,12 +39,12 @@ const SettingsPage = ({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  
+
   // 🎨 Внешний вид
   const [localTheme, setLocalTheme] = useState(theme || 'system');
   const [localLanguage, setLocalLanguage] = useState(language || 'ru');
   const [accentColor, setAccentColor] = useState('#4A6572');
-  
+
   // 🔔 Уведомления
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
@@ -45,46 +56,52 @@ const SettingsPage = ({
     weeklyReport: true,
     soundEnabled: true
   });
-  
+
   // 📧 Способы отправки
   const [sendMethod, setSendMethod] = useState('email');
   const [emailAddress, setEmailAddress] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  
+
   // 🔐 Безопасность
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [sessionTimeout, setSessionTimeout] = useState(60);
-  
+
   // 📊 Экспорт
   const [exportFormat, setExportFormat] = useState('pdf');
   const [exportIncludeComments, setExportIncludeComments] = useState(true);
   const [exportIncludeHistory, setExportIncludeHistory] = useState(true);
   const [autoExportEnabled, setAutoExportEnabled] = useState(false);
-  
+
   // 💾 Данные
   const [dataRetentionDays, setDataRetentionDays] = useState(365);
   const [autoCleanupEnabled, setAutoCleanupEnabled] = useState(true);
-  
+
   // 📱 Приложение
   const [appVersion, setAppVersion] = useState('1.0.0');
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  
+
   // 📋 Активные вкладки
   const [activeTab, setActiveTab] = useState('appearance');
 
-  // Загрузка настроек
+  // ✅ Загрузка настроек
   const loadSettings = useCallback(async () => {
+    if (!user?.id) return;
+
     setLoading(true);
     try {
-      // Загружаем настройки пользователя
-      const { data: userPrefs } = await supabase
+      // ✅ ИСПРАВЛЕНО: maybeSingle вместо single + обработка ошибки
+      const { data: userPrefs, error: prefsError } = await supabase
         .from('user_preferences')
         .select('*')
-        .eq('user_id', user?.id)
-        .single();
+        .eq('user_id', user.id)
+        .maybeSingle();   // ← НЕ падает при 0 строк
+
+      if (prefsError) {
+        console.warn('⚠️ Ошибка загрузки настроек:', prefsError.message);
+      }
 
       if (userPrefs) {
         setLocalTheme(userPrefs.theme || 'system');
@@ -112,19 +129,25 @@ const SettingsPage = ({
         setAutoExportEnabled(userPrefs.auto_export_enabled || false);
         setDataRetentionDays(userPrefs.data_retention_days || 365);
         setAutoCleanupEnabled(userPrefs.auto_cleanup_enabled ?? true);
+      } else {
+        // ✅ Если настроек ещё нет — оставляем дефолтные значения
+        console.log('ℹ️ Настройки ещё не созданы, используем дефолтные');
       }
 
-      // Загружаем API ключ (адаптировано под вашу структуру)
-      const { data: apiData } = await supabase
-        .from('api_keys')
-        .select('key_value, key_name, is_active')
-        .eq('company_id', userCompanyId)
-        .eq('created_by', user?.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
+      // Загружаем API ключ
+      const cleanCompanyId = getCleanCompanyId(userCompanyId);
+      if (cleanCompanyId) {
+        const { data: apiData } = await supabase
+          .from('api_keys')
+          .select('key_value, key_name, is_active')
+          .eq('company_id', cleanCompanyId)
+          .eq('created_by', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
 
-      if (apiData && apiData.length > 0) {
-        setApiKey(apiData[0].key_value);
+        if (apiData && apiData.length > 0) {
+          setApiKey(apiData[0].key_value);
+        }
       }
 
       // Загружаем версию приложения
@@ -147,10 +170,10 @@ const SettingsPage = ({
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-    
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -162,44 +185,66 @@ const SettingsPage = ({
     loadSettings();
   }, [loadSettings]);
 
+  // ✅ ИСПРАВЛЕНО: saveSettings с onConflict + очисткой company_id
   const saveSettings = async () => {
+    if (!user?.id) {
+      showNotification('❌ Пользователь не авторизован', 'error');
+      return;
+    }
+
+    const cleanCompanyId = getCleanCompanyId(userCompanyId);
+    if (!cleanCompanyId) {
+      showNotification('❌ Ошибка: компания не найдена', 'error');
+      return;
+    }
+
     setSaving(true);
     try {
-      // Сохраняем настройки пользователя
+      const payload = {
+        user_id: user.id,
+        company_id: cleanCompanyId,  // ✅ ТОЛЬКО строка UUID
+        theme: localTheme,
+        language: localLanguage,
+        accent_color: accentColor,
+        email_notifications: notificationSettings.emailNotifications,
+        push_notifications: notificationSettings.pushNotifications,
+        telegram_notifications: notificationSettings.telegramNotifications,
+        new_application_alerts: notificationSettings.newApplicationAlerts,
+        status_change_alerts: notificationSettings.statusChangeAlerts,
+        daily_digest: notificationSettings.dailyDigest,
+        weekly_report: notificationSettings.weeklyReport,
+        sound_enabled: notificationSettings.soundEnabled,
+        send_method: sendMethod,
+        email_address: emailAddress || null,
+        telegram_chat_id: telegramChatId || null,
+        phone_number: phoneNumber || null,
+        two_factor_enabled: twoFactorEnabled,
+        session_timeout: sessionTimeout,
+        export_format: exportFormat,
+        export_include_comments: exportIncludeComments,
+        export_include_history: exportIncludeHistory,
+        auto_export_enabled: autoExportEnabled,
+        data_retention_days: dataRetentionDays,
+        auto_cleanup_enabled: autoCleanupEnabled,
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('💾 [Settings] Сохраняем:', payload);
+
+      // ✅ ИСПРАВЛЕНО: onConflict + игнорируем возвращаемые данные
       const { error: saveError } = await supabase
         .from('user_preferences')
-        .upsert({
-          user_id: user?.id,
-          company_id: userCompanyId,
-          theme: localTheme,
-          language: localLanguage,
-          accent_color: accentColor,
-          email_notifications: notificationSettings.emailNotifications,
-          push_notifications: notificationSettings.pushNotifications,
-          telegram_notifications: notificationSettings.telegramNotifications,
-          new_application_alerts: notificationSettings.newApplicationAlerts,
-          status_change_alerts: notificationSettings.statusChangeAlerts,
-          daily_digest: notificationSettings.dailyDigest,
-          weekly_report: notificationSettings.weeklyReport,
-          sound_enabled: notificationSettings.soundEnabled,
-          send_method: sendMethod,
-          email_address: emailAddress,
-          telegram_chat_id: telegramChatId,
-          phone_number: phoneNumber,
-          two_factor_enabled: twoFactorEnabled,
-          session_timeout: sessionTimeout,
-          export_format: exportFormat,
-          export_include_comments: exportIncludeComments,
-          export_include_history: exportIncludeHistory,
-          auto_export_enabled: autoExportEnabled,
-          data_retention_days: dataRetentionDays,
-          auto_cleanup_enabled: autoCleanupEnabled,
-          updated_at: new Date().toISOString()
-        });
+        .upsert(payload, {
+  onConflict: 'user_id,company_id',   // ← составной ключ
+  ignoreDuplicates: false
+});
 
-      if (saveError) throw saveError;
+      if (saveError) {
+        console.error('❌ [Settings] Ошибка:', saveError);
+        throw saveError;
+      }
 
-      // Обновляем глобальные настройки
+      // ✅ Обновляем глобальные настройки
       if (onThemeChange) onThemeChange(localTheme);
       if (onLanguageChange) onLanguageChange(localLanguage);
       if (onSettingsUpdate) {
@@ -211,35 +256,66 @@ const SettingsPage = ({
         });
       }
 
+      // ✅ Обновляем тему сразу в DOM (пользователь видит результат мгновенно)
+      if (localTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else if (localTheme === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', isDark);
+      }
+
+      // ✅ Сохраняем в метаданные пользователя (для кросс-девайс синхронизации)
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            theme: localTheme,
+            language: localLanguage,
+            accent_color: accentColor
+          }
+        });
+      } catch (metaErr) {
+        console.warn('⚠️ Не удалось обновить метаданные:', metaErr);
+      }
+
       showNotification('✅ Настройки сохранены!', 'success');
     } catch (err) {
-      console.error('Ошибка сохранения:', err);
-      showNotification('❌ Ошибка сохранения настроек', 'error');
+      console.error('❌ Ошибка сохранения:', err);
+      showNotification(
+        `❌ Ошибка сохранения: ${err.message || 'неизвестная ошибка'}`,
+        'error'
+      );
     } finally {
       setSaving(false);
     }
   };
 
   const generateApiKey = async () => {
+    const cleanCompanyId = getCleanCompanyId(userCompanyId);
+    if (!cleanCompanyId || !user?.id) {
+      showNotification('❌ Ошибка: компания не найдена', 'error');
+      return;
+    }
+
     setLoading(true);
     try {
       const newKey = `rg_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
-      
-      // Адаптировано под вашу структуру api_keys
+
       const { error } = await supabase
         .from('api_keys')
         .insert({
-          company_id: userCompanyId,
+          company_id: cleanCompanyId,   // ✅ ТОЛЬКО строка
           key_name: `API Key ${new Date().toLocaleDateString()}`,
           key_value: newKey,
           is_active: true,
-          created_by: user?.id,
+          created_by: user.id,
           permissions: { read: true, write: true },
           created_at: new Date().toISOString()
         });
 
       if (error) throw error;
-      
+
       setApiKey(newKey);
       showNotification('🔑 Новый API ключ сгенерирован', 'success');
     } catch (err) {
@@ -260,7 +336,7 @@ const SettingsPage = ({
     try {
       const response = await fetch('/version.json?v=' + Date.now());
       const data = await response.json();
-      
+
       if (data.version && data.version !== appVersion) {
         showNotification(
           `🔄 Доступно обновление v${data.version}! Текущая: v${appVersion}`,
@@ -296,8 +372,8 @@ const SettingsPage = ({
           <button
             onClick={() => setLocalTheme('light')}
             className={`p-4 rounded-xl border-2 transition-all ${
-              localTheme === 'light' 
-                ? 'border-[#4A6572] bg-[#4A6572]/10' 
+              localTheme === 'light'
+                ? 'border-[#4A6572] bg-[#4A6572]/10'
                 : 'border-gray-200 dark:border-gray-700 hover:border-gray-400'
             }`}
           >
@@ -307,8 +383,8 @@ const SettingsPage = ({
           <button
             onClick={() => setLocalTheme('dark')}
             className={`p-4 rounded-xl border-2 transition-all ${
-              localTheme === 'dark' 
-                ? 'border-[#4A6572] bg-[#4A6572]/10' 
+              localTheme === 'dark'
+                ? 'border-[#4A6572] bg-[#4A6572]/10'
                 : 'border-gray-200 dark:border-gray-700 hover:border-gray-400'
             }`}
           >
@@ -318,8 +394,8 @@ const SettingsPage = ({
           <button
             onClick={() => setLocalTheme('system')}
             className={`p-4 rounded-xl border-2 transition-all ${
-              localTheme === 'system' 
-                ? 'border-[#4A6572] bg-[#4A6572]/10' 
+              localTheme === 'system'
+                ? 'border-[#4A6572] bg-[#4A6572]/10'
                 : 'border-gray-200 dark:border-gray-700 hover:border-gray-400'
             }`}
           >
@@ -335,8 +411,8 @@ const SettingsPage = ({
           <button
             onClick={() => setLocalLanguage('ru')}
             className={`p-3 rounded-xl border-2 transition-all ${
-              localLanguage === 'ru' 
-                ? 'border-[#4A6572] bg-[#4A6572]/10' 
+              localLanguage === 'ru'
+                ? 'border-[#4A6572] bg-[#4A6572]/10'
                 : 'border-gray-200 dark:border-gray-700'
             }`}
           >
@@ -346,8 +422,8 @@ const SettingsPage = ({
           <button
             onClick={() => setLocalLanguage('en')}
             className={`p-3 rounded-xl border-2 transition-all ${
-              localLanguage === 'en' 
-                ? 'border-[#4A6572] bg-[#4A6572]/10' 
+              localLanguage === 'en'
+                ? 'border-[#4A6572] bg-[#4A6572]/10'
                 : 'border-gray-200 dark:border-gray-700'
             }`}
           >
