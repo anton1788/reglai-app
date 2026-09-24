@@ -12,6 +12,7 @@ import {
 import { supabase } from '../../utils/supabaseClient';
 import ObjectDashboard from './ObjectDashboard';
 import ObjectForm from './ObjectForm';
+import ObjectDocuments from './ObjectDocuments';
 import { getObject } from '../../api/objects';
 import {
   OBJECT_STATUS_LABELS,
@@ -293,13 +294,11 @@ const ObjectHub = memo(({
 
       case 'documents':
         return (
-          <ComingSoonTab
-            title={isRu ? 'Документы' : 'Documents'}
-            description={isRu
-              ? 'Акты, договоры, счета и накладные по объекту.'
-              : 'Acts, contracts, invoices and waybills for the object.'}
-            icon={FolderOpen}
-            isRu={isRu}
+          <ObjectDocuments
+            objectId={object.id}
+            language={language}
+            showNotification={showNotification}
+            onOpenApplication={onOpenApplication}
           />
         );
 
