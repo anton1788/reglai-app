@@ -59,6 +59,8 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => {
       { keywords: ['сумма', 'деньги', 'финанс'], action: 'show_finance', label: 'Финансовая сводка', icon: '💰' },
       { keywords: ['сотрудник', 'employee', 'команда'], action: 'show_employees', label: 'Управление сотрудниками', icon: '👥' },
       { keywords: ['склад', 'warehouse', 'остаток'], action: 'show_warehouse', label: 'Остатки на складе', icon: '📦' },
+      // ✅ НОВОЕ: раздел "Объекты" (множественное число) — ДО 'объект', чтобы не перехватилось
+      { keywords: ['объекты', 'мои объекты', 'папк'], action: 'navigate_objects', label: 'Открыть раздел "Объекты"', icon: '🏢' },
       { keywords: ['объект', 'object'], action: 'search_object', label: `Поиск по объекту: ${searchQuery}`, icon: '🏗️' },
     ];
 
@@ -120,6 +122,12 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => {
     else if (lowerCommand.includes('склад') || lowerCommand.includes('остаток')) {
       setTranscript('Показываю складские остатки');
       onNavigate?.('warehouse');
+    }
+    // ✅ НОВОЕ: голосовая команда → раздел "Объекты"
+    //    ВАЖНО: проверяем ПОСЛЕ "склад", но ДО "создай" и ДО match(/объект\s+(.+)/i)
+    else if (lowerCommand.includes('объекты') || lowerCommand.includes('мои объекты') || lowerCommand.includes('папки')) {
+      setTranscript('Открываю раздел "Объекты"');
+      onNavigate?.('objects');
     }
     else if (lowerCommand.includes('создай') || lowerCommand.includes('новая заявка')) {
       setTranscript('Перехожу к созданию заявки');
@@ -212,7 +220,12 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => {
       onNavigate?.('employees');
     } else if (suggestion.action === 'show_warehouse') {
       onNavigate?.('warehouse');
-    } else if (suggestion.action === 'search_object') {
+    }
+    // ✅ НОВОЕ: переход в раздел "Объекты"
+    else if (suggestion.action === 'navigate_objects') {
+      onNavigate?.('objects');
+    }
+    else if (suggestion.action === 'search_object') {
       onSearch?.(suggestion.label.replace('Поиск по объекту: ', ''));
     } else if (suggestion.action === 'text_search') {
       onSearch?.(searchQuery);
@@ -342,6 +355,11 @@ const SmartVoiceSearch = ({ onSearch, onNavigate, className = '' }) => {
               }} />
               <FilterChip icon="📦" label="Склад" onClick={() => {
                 onNavigate?.('warehouse');
+                setIsExpanded(false);
+              }} />
+              {/* ✅ НОВОЕ: быстрый фильтр "Объекты" */}
+              <FilterChip icon="🏢" label="Объекты" onClick={() => {
+                onNavigate?.('objects');
                 setIsExpanded(false);
               }} />
             </div>

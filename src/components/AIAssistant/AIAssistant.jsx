@@ -75,6 +75,7 @@ const ALL_VIEWS = {
   received: { view: 'received', label: 'Приёмка', icon: Truck, path: '/received', description: 'Приёмка материалов' },
   history: { view: 'history', label: 'История', icon: History, path: '/history', description: 'Завершённые заявки' },
   projects: { view: 'projects', label: 'Проекты', icon: Briefcase, path: '/projects', description: 'Управление проектами' },
+  objects: { view: 'objects', label: 'Объекты', icon: Building, path: '/objects', description: 'Папки объектов и проектов' },
   merge: { view: 'merge', label: 'Объединение', icon: Layers, path: '/merge', description: 'Объединить заявки' },
   clients: { view: 'clients', label: 'Клиенты', icon: Users, path: '/clients', description: 'Управление клиентами' },
   'crm-sales': { view: 'crm-sales', label: 'CRM Лиды', icon: Target, path: '/crm-sales', description: 'Управление лидами' },
@@ -112,35 +113,35 @@ const ALL_VIEWS = {
 // ─────────────────────────────────────────────────────────────
 const ROLE_VIEWS = {
   master: [
-    'dashboard', 'create', 'inwork', 'projects', 'history',
+    'dashboard', 'create', 'inwork', 'objects', 'projects', 'history',
     'warehouse', 'documents', 'chat', 'calendar', 'tasks', 'profile', 'help'
   ],
   foreman: [
-    'dashboard', 'create', 'inwork', 'projects', 'history',
+    'dashboard', 'create', 'inwork', 'objects', 'projects', 'history',
     'warehouse', 'documents', 'chat', 'calendar', 'tasks', 'profile', 'help'
   ],
   supply_admin: [
-    'dashboard', 'create', 'inwork', 'readyToIssue', 'received', 'projects',
+    'dashboard', 'create', 'inwork', 'objects', 'readyToIssue', 'received', 'projects',
     'crm-sales', 'merge', 'warehouse', 'analytics', 'api', 'estimates',
     'reports', 'integration', 'documents', 'chat', 'calendar', 'tasks',
     'profile', 'help'
   ],
   manager: [
-    'dashboard', 'create', 'inwork', 'readyToIssue', 'received', 'projects',
+    'dashboard', 'create', 'inwork', 'objects', 'readyToIssue', 'received', 'projects',
     'merge', 'clients', 'crm-sales', 'warehouse', 'analytics', 'api',
     'estimates', 'reports', 'integration', 'documents', 'chat', 'calendar',
     'tasks', 'employees', 'approvals', 'audit', 'companyProfile',
     'tariffs', 'profile', 'help'
   ],
   director: [
-    'dashboard', 'inwork', 'readyToIssue', 'received', 'projects',
+    'dashboard', 'inwork', 'objects', 'readyToIssue', 'received', 'projects',
     'clients', 'crm-sales', 'warehouse', 'analytics', 'api', 'estimates',
     'reports', 'integration', 'documents', 'chat', 'calendar', 'tasks',
     'employees', 'approvals', 'audit', 'companyProfile', 'tariffs',
     'profile', 'help'
   ],
   accountant: [
-    'dashboard', 'inwork', 'received', 'history', 'warehouse',
+    'dashboard', 'inwork', 'objects', 'received', 'history', 'warehouse',
     'analytics', 'reports', 'estimates', 'documents', 'chat',
     'calendar', 'tasks', 'profile', 'help'
   ],
@@ -163,11 +164,13 @@ const QUICK_ACTIONS = {
   master: [
     { id: 'create_app', label: '➕ Создать заявку', icon: Plus, group: 'quick' },
     { id: 'my_applications', label: '📋 Мои активные заявки', icon: Package, group: 'quick' },
+    { id: 'my_objects', label: '🏢 Мои объекты', icon: Building, group: 'quick' },
     { id: 'not_received', label: '⏳ Что ещё не получено', icon: Clock, group: 'quick' },
   ],
   foreman: [
     { id: 'create_app', label: '➕ Создать заявку', icon: Plus, group: 'quick' },
     { id: 'my_applications', label: '📋 Мои активные заявки', icon: Package, group: 'quick' },
+    { id: 'my_objects', label: '🏢 Мои объекты', icon: Building, group: 'quick' },
     { id: 'not_received', label: '⏳ Что ещё не получено', icon: Clock, group: 'quick' },
   ],
   supply_admin: [
@@ -179,12 +182,14 @@ const QUICK_ACTIONS = {
     { id: 'analytics_summary', label: '📊 Аналитика компании', icon: BarChart3, group: 'quick' },
     { id: 'problem_apps', label: '⚠️ Проблемные заявки', icon: AlertTriangle, group: 'quick' },
     { id: 'team_activity', label: '👥 Активность команды', icon: User, group: 'quick' },
+    { id: 'my_objects', label: '🏢 Мои объекты', icon: Building, group: 'quick' },
     { id: 'top_objects', label: '🏗️ Топ объектов', icon: TrendingUp, group: 'quick' },
   ],
   director: [
     { id: 'analytics_summary', label: '📊 Аналитика компании', icon: BarChart3, group: 'quick' },
     { id: 'problem_apps', label: '⚠️ Проблемные заявки', icon: AlertTriangle, group: 'quick' },
     { id: 'team_activity', label: '👥 Активность команды', icon: User, group: 'quick' },
+    { id: 'my_objects', label: '🏢 Мои объекты', icon: Building, group: 'quick' },
   ],
   accountant: [
     { id: 'completed_apps', label: '✅ Завершённые заявки', icon: CheckCircle, group: 'quick' },
@@ -235,6 +240,9 @@ const CONTEXTUAL_ACTIONS = {
   clients: [
     { id: 'team_activity', label: '👥 Активность', icon: User, isContextual: true },
   ],
+  objects: [
+    { id: 'my_objects', label: '🏢 Все объекты', icon: Building, isContextual: true },
+  ],
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -276,7 +284,7 @@ const getStatusLabel = (status) => {
 
 function getViewGroup(viewId) {
   const groups = {
-    'Основные': ['dashboard', 'inwork', 'create', 'received', 'history', 'readyToIssue'],
+    'Основные': ['dashboard', 'inwork', 'create', 'received', 'history', 'readyToIssue', 'objects'],
     'Работа с материалами': ['warehouse', 'merge'],
     'Клиенты и проекты': ['clients', 'crm-sales', 'projects'],
     'Аналитика и финансы': ['analytics', 'reports', 'estimates', 'tariffs'],
@@ -893,6 +901,14 @@ const AIAssistant = forwardRef(({
         return { content: `🏗️ **Топ объектов:**\n\n${list}` };
       }
 
+      // ✅ НОВОЕ: переход в раздел "Объекты"
+      case 'my_objects': {
+        onNavigate?.('objects');
+        return {
+          content: '🏢 Открываю раздел **Объекты**...\n\nЗдесь собраны все папки проектов: заявки, материалы, прогресс, участники.',
+        };
+      }
+
       case 'completed_apps': {
         const monthAgo = Date.now() - 30 * 86400000;
         const completed = applications.filter(a =>
@@ -967,6 +983,12 @@ const AIAssistant = forwardRef(({
         if (lowerText.includes('заявк') && (lowerText.includes('мои') || lowerText.includes('актив'))) {
           return executeAction('my_applications');
         }
+
+        // ✅ НОВОЕ: ключевые слова для "Объекты"
+        if (lowerText.includes('объект') || lowerText.includes('папк') || lowerText.includes('жк') || lowerText.includes('проект')) {
+          return executeAction('my_objects');
+        }
+
         if (lowerText.includes('склад') && (lowerText.includes('остат') || lowerText.includes('товар'))) {
           return executeAction('warehouse_stock');
         }
@@ -1039,8 +1061,9 @@ const AIAssistant = forwardRef(({
         }
 
         return {
-          content: `🔍 По запросу "${text}" ничего не найдено.\n\nПопробуйте:\n• "склад"\n• "аналитика"\n• "мои заявки"\n• "документы"`,
+          content: `🔍 По запросу "${text}" ничего не найдено.\n\nПопробуйте:\n• "объекты"\n• "склад"\n• "аналитика"\n• "мои заявки"\n• "документы"`,
           actions: [
+            { id: 'my_objects', label: '🏢 Объекты' },
             { id: 'my_applications', label: '📋 Мои заявки' },
             { id: 'help', label: '❓ Что я умею' },
           ],
@@ -1152,7 +1175,7 @@ ${msg.content}
     showNotification?.('✅ Ответ сохранён', 'success');
   }, [user?.email, showNotification]);
 
-    // ✅ НОВОЕ: Озвучка (TTS)
+  // ✅ НОВОЕ: Озвучка (TTS)
   const speakText = useCallback((text) => {
     if (!('speechSynthesis' in window)) {
       showNotification?.('Озвучка не поддерживается браузером', 'warning');
@@ -1166,16 +1189,16 @@ ${msg.content}
     const EMOJIS_TO_REMOVE = [
       '📋', '📦', '📥', '📤', '✅', '⏳', '🔴', '🟡', '🏭', '📊',
       '⚠️', '👥', '🏗️', '🎤', '💡', '🔍', '📍', '➡️', '❌', '🤔',
-      '📭', '📄', '🆕', '🎯', '📌', '⭐', '🔊', '👁', '🕐',
+      '📭', '📄', '🆕', '🎯', '📌', '⭐', '🔊', '👁', '🕐', '🏢',
     ];
 
     let cleanText = text.replace(/\*\*/g, '');
-    
+
     // Убираем каждое эмодзи через replaceAll
     EMOJIS_TO_REMOVE.forEach((emoji) => {
       cleanText = cleanText.split(emoji).join('');
     });
-    
+
     cleanText = cleanText.trim();
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
