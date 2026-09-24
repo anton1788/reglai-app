@@ -75,6 +75,7 @@ import ApplicationList from './components/ApplicationList';
 // 🆕 ОБЪЕКТЫ (Project Hub)
 import ObjectsList from './components/Objects/ObjectsList';
 import ObjectForm from './components/Objects/ObjectForm';
+import ObjectHub from './components/Objects/ObjectHub';
 import WarehouseView from './components/WarehouseView';
 import CalendarView from './components/CalendarView';
 // eslint-disable-next-line no-unused-vars
@@ -8594,20 +8595,32 @@ onClearFilters={handleClearFilters}
     companyId={userCompanyId}
     userId={user?.id}
     userRole={userRole}
-    t={t}
     language={language}
     showNotification={showNotification}
     onOpenObject={(obj) => {
-      // Пока — просто лог. ObjectHub сделаем в Шаге 4.
-      console.log('🖱️ Открытие объекта:', obj);
+      // 🆕 Открываем папку объекта
       setSelectedObjectId(obj.id);
-      // TODO: setCurrentView('object-hub');
-      showNotification?.(
-        language === 'ru'
-          ? `📁 Объект "${obj.name}" — папка появится в следующем шаге`
-          : `📁 Object "${obj.name}" — hub coming soon`,
-        'info'
-      );
+      setCurrentView('object-hub');
+    }}
+  />
+)}
+{/* 🆕 ПАПКА ОБЪЕКТА (Object Hub) */}
+{currentView === 'object-hub' && selectedObjectId && (
+  <ObjectHub
+    objectId={selectedObjectId}
+    companyId={userCompanyId}
+    userId={user?.id}
+    userRole={userRole}
+    language={language}
+    showNotification={showNotification}
+    companyUsers={companyUsers}
+    onBack={() => {
+      setSelectedObjectId(null);
+      setCurrentView('objects');
+    }}
+    onOpenApplication={(app) => {
+      setSelectedApplication(app);
+      setShowReceiveModal(true);
     }}
   />
 )}
@@ -8618,7 +8631,7 @@ onClearFilters={handleClearFilters}
   'superAdmin', 'tariffs', 'clientDashboard', 'clientChat', 'clientDocuments', 
   'clientApplications', 'clientCalendar', 'clientConfirmation', 'clientPhotos', 
   'clientWorkAct', 'companyProfile', 'merge', 'estimates', 'reports', 'integration', 
-  'help', 'settings', 'projects', 'objects', 'tasks', 'chat', 'approvals', 'api'].includes(currentView) && (
+  'help', 'settings', 'projects', 'objects', 'object-hub', 'tasks', 'chat', 'approvals', 'api'].includes(currentView) && (
     <div className="max-w-7xl mx-auto px-4">
         <ApplicationList
             applications={filteredApplications}
