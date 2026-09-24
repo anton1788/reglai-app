@@ -41,6 +41,7 @@ const TaskCard = ({
   applications,
   showNotification,
   userRole,
+  user,                // 🆕 ДОБАВЛЕНО
   isMobile = false
 }) => {
   const [showMenu, setShowMenu] = useState(false);
@@ -52,6 +53,17 @@ const TaskCard = ({
 
   // 🆕 Может ли текущий пользователь сменить статус (для мастера — на своих задачах)
   const canChangeStatus = canEdit || userRole === 'master' || userRole === 'foreman';
+
+  // 🆕 Мастер может открывать комментарии к своим/общим задачам
+  const isMaster = userRole === 'master' || userRole === 'foreman';
+  const isOwnOrSharedTask =
+    task.assigned_to === user?.id ||
+    task.created_by === user?.id ||
+    !task.assigned_to;
+  const canOpenComments = canEdit || canDelete || (isMaster && isOwnOrSharedTask);
+
+  // 🆕 Мастер может перетаскивать свои/общие задачи
+  const canDrag = canEdit || (isMaster && isOwnOrSharedTask);
 
   const priorityConfig = {
     low:    { color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300', border: 'border-l-emerald-500', label: 'Низкий',  icon: '🟢' },
@@ -87,12 +99,12 @@ const TaskCard = ({
 
   return (
     <div
-      draggable={canEdit && !isMobile}
-      onDragStart={(e) => canEdit && !isMobile && e.dataTransfer.setData('taskId', task.id)}
+      draggable={canDrag && !isMobile}
+      onDragStart={(e) => canDrag && !isMobile && e.dataTransfer.setData('taskId', task.id)}
       onTouchStart={() => setIsHovered(true)}
       onTouchEnd={() => setTimeout(() => setIsHovered(false), 300)}
       className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm mb-3 transition-all duration-200 overflow-hidden touch-manipulation
-        ${canEdit && !isMobile ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
+        ${canDrag && !isMobile ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
         ${isHovered ? 'shadow-md' : 'shadow-sm'}
         ${statusConfig[task.status]?.border}
       `}
@@ -103,7 +115,7 @@ const TaskCard = ({
             {task.title}
           </h4>
 
-          {(canEdit || canDelete) && (
+          {(canEdit || canDelete || canOpenComments) && (
             <div className="relative flex-shrink-0">
               <button
                 onClick={() => {
@@ -209,46 +221,78 @@ const TaskCard = ({
           )}
         </div>
 
-        {/* БЛОК БЫСТРОЙ СМЕНЫ СТАТУСА (только на мобильных) */}
-        {isMobile && canChangeStatus && onStatusChange && (
+        {/* 🆕 БЛОК СМЕНЫ СТАТУСА — мобильная и десктопная версии */}
+        {canChangeStatus && onStatusChange && (
           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-            <button
-              onClick={() => {
-                setShowStatusMenu(!showStatusMenu);
-                setShowMenu(false);
-              }}
-              className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                {statusConfig[task.status]?.icon}
-                Переместить в...
-              </span>
-              <ChevronDown className={`w-4 h-4 transition-transform ${showStatusMenu ? 'rotate-180' : ''}`} />
-            </button>
+            {isMobile ? (
+              /* ============ 📱 МОБИЛЬНАЯ ВЕРСИЯ ============ */
+              <>
+                <button
+                  onClick={() => {
+                    setShowStatusMenu(!showStatusMenu);
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    {statusConfig[task.status]?.icon}
+                    Переместить в...
+                  </span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showStatusMenu ? 'rotate-180' : ''}`} />
+                </button>
 
-            {showStatusMenu && (
-              <div className="mt-2 grid grid-cols-2 gap-1.5">
-                {STATUS_LIST.map(status => {
-                  const isCurrent = task.status === status.id;
-                  return (
-                    <button
-                      key={status.id}
-                      disabled={isCurrent}
-                      onClick={() => {
-                        setShowStatusMenu(false);
-                        if (!isCurrent) onStatusChange(task.id, status.id);
-                      }}
-                      className={`flex items-center justify-center gap-1.5 px-2 py-2 text-xs rounded-lg font-medium transition-colors ${
-                        isCurrent
-                          ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                          : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 hover:bg-[#4A6572] hover:text-white text-gray-700 dark:text-gray-300'
-                      }`}
-                    >
-                      <span>{status.icon}</span>
-                      <span>{status.label}</span>
-                    </button>
-                  );
-                })}
+                {showStatusMenu && (
+                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                    {STATUS_LIST.map(status => {
+                      const isCurrent = task.status === status.id;
+                      return (
+                        <button
+                          key={status.id}
+                          disabled={isCurrent}
+                          onClick={() => {
+                            setShowStatusMenu(false);
+                            if (!isCurrent) onStatusChange(task.id, status.id);
+                          }}
+                          className={`flex items-center justify-center gap-1.5 px-2 py-2 text-xs rounded-lg font-medium transition-colors ${
+                            isCurrent
+                              ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                              : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 hover:bg-[#4A6572] hover:text-white text-gray-700 dark:text-gray-300'
+                          }`}
+                        >
+                          <span>{status.icon}</span>
+                          <span>{status.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : (
+              /* ============ 🖥️ ДЕСКТОПНАЯ ВЕРСИЯ ============ */
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                  Статус:
+                </span>
+                <select
+                  value={task.status}
+                  onChange={(e) => {
+                    const newStatus = e.target.value;
+                    if (newStatus !== task.status) {
+                      onStatusChange(task.id, newStatus);
+                    }
+                  }}
+                  className="flex-1 px-2 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-600 
+                             bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 
+                             hover:border-[#4A6572] focus:outline-none focus:ring-2 focus:ring-[#4A6572]/30 
+                             cursor-pointer transition-colors"
+                  title="Изменить статус задачи"
+                >
+                  {STATUS_LIST.map(status => (
+                    <option key={status.id} value={status.id}>
+                      {status.icon} {status.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
           </div>
@@ -1002,8 +1046,8 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
 
   const handleDragOver = (e) => e.preventDefault();
 
+  // 🆕 handleDrop разрешён мастеру — handleStatusChange сам проверит права
   const handleDrop = async (e, newStatus) => {
-    if (!canEditTasks) return;
     e.preventDefault();
     const taskId = e.dataTransfer.getData('taskId');
     if (taskId) {
@@ -1290,6 +1334,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
                           applications={applications}
                           showNotification={showNotification}
                           userRole={userRole}
+                          user={user}
                           isMobile={true}
                         />
                       ))
@@ -1332,6 +1377,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
                         applications={applications}
                         showNotification={showNotification}
                         userRole={userRole}
+                        user={user}
                         isMobile={false}
                       />
                     ))}
@@ -1353,6 +1399,7 @@ const TaskBoard = ({ user, userCompanyId, applications, showNotification, userRo
               applications={applications}
               showNotification={showNotification}
               userRole={userRole}
+              user={user}
               isMobile={isMobileView}
             />
           ))}
