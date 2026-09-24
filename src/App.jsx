@@ -76,6 +76,7 @@ import ApplicationList from './components/ApplicationList';
 import ObjectsList from './components/Objects/ObjectsList';
 import ObjectForm from './components/Objects/ObjectForm';
 import ObjectHub from './components/Objects/ObjectHub';
+import { normalizeObjectName } from './api/objects';
 import WarehouseView from './components/WarehouseView';
 import CalendarView from './components/CalendarView';
 // eslint-disable-next-line no-unused-vars
@@ -1027,13 +1028,14 @@ const [selectedObjectId, setSelectedObjectId] = useState(null);
 // 🔧 НОВЫЙ STATE: все заявки компании БЕЗ пагинации (для мерджера и других нужд)
 const [allCompanyApplications, setAllCompanyApplications] = useState([]);
   const [formData, setFormData] = useState({
-    objectName: '',
-    foremanName: '',
-    foremanPhone: '',
-    sourceType: 'purchase',
-    materials: [{ description: '', quantity: 1, unit: 'шт' }],
-    cart: []
-  });
+  objectId: '',           // 🆕 ID объекта из таблицы objects
+  objectName: '',         // для отображения в форме
+  foremanName: '',
+  foremanPhone: '',
+  sourceType: 'purchase',
+  materials: [{ description: '', quantity: 1, unit: 'шт' }],
+  cart: []
+});
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState('master');
   const [userCompany, setUserCompany] = useState(null);
@@ -1979,14 +1981,15 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
         setOfflineDrafts(drafts);
         const formDraft = drafts.find(d => d.id === 'current_form_draft');
         if (formDraft) {
-          setFormData({
-            objectName: formDraft.objectName || '',
-            foremanName: formDraft.foremanName || '',
-            foremanPhone: formDraft.foremanPhone || '',
-            materials: Array.isArray(formDraft.materials) ? [...formDraft.materials] : [{ description: '', quantity: 1, unit: 'шт' }],
-            cart: Array.isArray(formDraft.cart) ? [...formDraft.cart] : []
-          });
-        }
+  setFormData({
+    objectId: formDraft.objectId || '',
+    objectName: formDraft.objectName || '',
+    foremanName: formDraft.foremanName || '',
+    foremanPhone: formDraft.foremanPhone || '',
+    materials: Array.isArray(formDraft.materials) ? [...formDraft.materials] : [{ description: '', quantity: 1, unit: 'шт' }],
+    cart: Array.isArray(formDraft.cart) ? [...formDraft.cart] : []
+  });
+}
         setHasLoadedDrafts(true);
       }
     };
@@ -2114,22 +2117,23 @@ if (!cleanCompanyId) {
   return { success: false, error: 'Invalid company_id' };
 }
         const application = {
-          object_name: draft.objectName.trim(),
-          foreman_name: draft.foremanName.trim(),
-          foreman_phone: draft.foremanPhone,
-          materials: validMaterials.map(m => ({ ...m, received: 0, status: 'pending' })),
-          status: 'pending',
-          user_id: user?.id,
-          company_id: cleanCompanyId,
-          created_at: draft.timestamp || new Date().toISOString(),
-          status_history: [{
-            user_id: user?.id,
-            user_email: user?.email,
-            action: 'created_from_draft',
-            timestamp: new Date().toISOString()
-          }],
-          viewed_by_supply_admin: false
-        };
+  object_id: draft.objectId || null,   // 🆕
+  object_name: draft.objectName.trim(),
+  foreman_name: draft.foremanName.trim(),
+  foreman_phone: draft.foremanPhone,
+  materials: validMaterials.map(m => ({ ...m, received: 0, status: 'pending' })),
+  status: 'pending',
+  user_id: user?.id,
+  company_id: cleanCompanyId,
+  created_at: draft.timestamp || new Date().toISOString(),
+  status_history: [{
+    user_id: user?.id,
+    user_email: user?.email,
+    action: 'created_from_draft',
+    timestamp: new Date().toISOString()
+  }],
+  viewed_by_supply_admin: false
+};
         // 🕐 Замер времени для логирования
         const { data, error } = await supabase
           .from('applications')
@@ -3288,26 +3292,50 @@ if (!materialCheck.allowed) {
   );
   
   const startTime = Date.now();
-  
-  // 📦 Формируем объект заявки С ЧИСТЫМ ID
-  const newApplication = {
-    object_name: formData.objectName.trim(),
-    foreman_name: formData.foremanName.trim(),
-    foreman_phone: formData.foremanPhone,
-    materials: materialsWithTracking,
-    status: initialStatus,
+
+// 🆕 Резолвим object_id (если не выбран в форме — ищем по имени)
+let finalObjectId = formData.objectId || null;
+
+if (!finalObjectId && formData.objectName?.trim()) {
+  // Пытаемся найти существующий объект по нормализованному имени
+  try {
+    const normalized = normalizeObjectName(formData.objectName.trim());
+    const { data: existingObj } = await supabase
+      .from('objects')
+      .select('id')
+      .eq('company_id', safeCompanyId)
+      .eq('normalized_name', normalized)
+      .maybeSingle();
+
+    if (existingObj?.id) {
+      finalObjectId = existingObj.id;
+      console.log('✅ Найден объект по имени:', existingObj.id);
+    }
+  } catch (err) {
+    console.warn('⚠️ Не удалось найти объект по имени:', err);
+  }
+}
+
+// 📦 Формируем объект заявки С ЧИСТЫМ ID
+const newApplication = {
+  object_id: finalObjectId,        // 🆕 Привязка к объекту
+  object_name: formData.objectName.trim(),
+  foreman_name: formData.foremanName.trim(),
+  foreman_phone: formData.foremanPhone,
+  materials: materialsWithTracking,
+  status: initialStatus,
+  user_id: sessionUser.id,
+  company_id: safeCompanyId,
+  created_at: new Date().toISOString(),
+  total_amount: totalAmount,
+  status_history: [{
     user_id: sessionUser.id,
-    company_id: safeCompanyId, // ✅ Теперь здесь ТОЧНО строка UUID
-    created_at: new Date().toISOString(),
-    total_amount: totalAmount,
-    status_history: [{
-      user_id: sessionUser.id,
-      user_email: sessionUser.email,
-      action: 'created',
-      timestamp: new Date().toISOString()
-    }],
-    viewed_by_supply_admin: false
-  };
+    user_email: sessionUser.email,
+    action: 'created',
+    timestamp: new Date().toISOString()
+  }],
+  viewed_by_supply_admin: false
+};
   
   setIsSubmitting(true);
 
@@ -3405,12 +3433,12 @@ if (!materialCheck.allowed) {
     }
     
     setFormData({
-      objectName: '',
-      foremanName: '',
-      foremanPhone: '',
-      materials: [{ description: '', quantity: 1, unit: 'шт' }],
-      cart: []
-    });
+  objectName: '',
+  foremanName: '',
+  foremanPhone: '',
+  materials: [{ description: '', quantity: 1, unit: 'шт' }],
+  cart: []
+});
     await deleteDraftFromDB('current_form_draft');
     setCurrentView('inwork');
     setPage(1);
@@ -3474,12 +3502,13 @@ if (!materialCheck.allowed) {
       
       // Очищаем форму
       setFormData({
-        objectName: '',
-        foremanName: '',
-        foremanPhone: '',
-        materials: [{ description: '', quantity: 1, unit: 'шт' }],
-        cart: []
-      });
+  objectId: '',
+  objectName: '',
+  foremanName: '',
+  foremanPhone: '',
+  materials: [{ description: '', quantity: 1, unit: 'шт' }],
+  cart: []
+});
       await deleteDraftFromDB('current_form_draft');
       setCurrentView('inwork');
       setPage(1);
@@ -3547,16 +3576,17 @@ const { data: lastApp } = await supabase
   .single();
       if (lastApp) {
         setFormData(prev => ({
-          ...prev,
-          objectName: lastApp.object_name,
-          foremanName: lastApp.foreman_name,
-          foremanPhone: lastApp.foreman_phone,
-          materials: lastApp.materials.map(m => ({
-            ...m,
-            received: 0,
-            status: 'pending'
-          }))
-        }));
+  ...prev,
+  objectId: lastApp.object_id || '',       // 🆕 копируем и object_id
+  objectName: lastApp.object_name,
+  foremanName: lastApp.foreman_name,
+  foremanPhone: lastApp.foreman_phone,
+  materials: lastApp.materials.map(m => ({
+    ...m,
+    received: 0,
+    status: 'pending'
+  }))
+}));
         showNotification('📋 Данные скопированы из последней заявки', 'success');
       } else {
         showNotification('⚠️ Нет предыдущих заявок', 'warning');
@@ -7781,6 +7811,8 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       currentPlan={currentPlan}
       planLimits={planLimits} 
       onUpgradeClick={() => setCurrentView('tariffs')}
+      userId={user?.id}                    // 🆕 для ObjectSelector
+      showNotification={showNotification}
     />
   </div>
 )}

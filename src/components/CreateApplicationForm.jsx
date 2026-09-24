@@ -1,12 +1,13 @@
 // src/components/CreateApplicationForm.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import {
-  Plus, Trash2, Save, Package, ShoppingCart, CheckCircle, X, Send, Loader2,
-  Copy, Download, Briefcase, FileText, Warehouse, AlertCircle, Sparkles,
-  ChevronDown, RotateCcw, Undo2, Info, Minus, Camera
+  Plus, Trash2, Save, Package, CheckCircle, X, Send, Loader2,
+  Copy, Download, Briefcase, FileText, Warehouse, AlertCircle,
+  ChevronDown, Minus, Camera
 } from 'lucide-react';
 import MaterialCart from './MaterialCart';
 import ClientSelector from './ClientSelector';
+import ObjectSelector from './Objects/ObjectSelector';
 
 // ─────────────────────────────────────────────────────────────
 // 📦 КОНСТАНТЫ
@@ -71,7 +72,6 @@ const styles = `
 
 const sanitizeInput = (text, maxLength = MAX_INPUT_LENGTH) => {
   if (typeof text !== 'string') return '';
-  // Удаляем только опасные символы, НЕ удаляем пробелы
   return text.replace(/[<>]/g, '').slice(0, maxLength);
 };
 
@@ -84,21 +84,6 @@ const clamp = (value, min = 1, max = 10000) => {
 // 🎣 КАСТОМНЫЕ ХУКИ
 // ─────────────────────────────────────────────────────────────
 
-const useClickOutside = (ref, handler) => {
-  useEffect(() => {
-    const listener = (event) => {
-      if (!ref.current || ref.current.contains(event.target)) return;
-      handler(event);
-    };
-    document.addEventListener('mousedown', listener);
-    document.addEventListener('touchstart', listener);
-    return () => {
-      document.removeEventListener('mousedown', listener);
-      document.removeEventListener('touchstart', listener);
-    };
-  }, [ref, handler]);
-};
-
 const useDebounce = (value, delay) => {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -109,7 +94,7 @@ const useDebounce = (value, delay) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🎨 UI КОМПОНЕНТЫ (мемоизированные)
+// 🎨 UI КОМПОНЕНТЫ
 // ─────────────────────────────────────────────────────────────
 
 const FormHeader = memo(({ t }) => (
@@ -169,107 +154,6 @@ const QuickActions = memo(({ onCloneLast, onDownloadTemplate, onImportExcel, onS
   );
 });
 QuickActions.displayName = 'QuickActions';
-
-const ObjectInput = memo(({
-  value,
-  onChange,
-  onFocus,
-  onKeyDown,
-  suggestions,
-  showSuggestions,
-  activeIndex,
-  onSelect,
-  error,
-  t,
-  inputRef,
-  listRef
-}) => {
-  const listboxId = 'object-suggestions';
-  
-  return (
-    <fieldset className="relative">
-      <legend className="sr-only">{t('objectName')}</legend>
-      <label htmlFor="objectName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-        {t('objectName')} <span className="text-red-500" aria-hidden="true">*</span>
-      </label>
-      
-      <div className="relative">
-        <input
-          id="objectName"
-          ref={inputRef}
-          type="text"
-          value={value}
-          onChange={onChange}
-          onFocus={onFocus}
-          onKeyDown={onKeyDown}
-          autoCorrect="off"
-          autoCapitalize="sentences"
-          spellCheck="false"  
-          className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white transition-all ${
-            error ? 'border-red-400 focus:ring-red-500' : 'border-gray-200/60 dark:border-gray-600/60 hover:border-indigo-300/60'
-          }`}
-          placeholder={t('objectNamePlaceholder')}
-          required
-          aria-invalid={!!error}
-          aria-describedby={error ? 'objectName-error' : undefined}
-          aria-autocomplete="list"
-          aria-controls={showSuggestions ? listboxId : undefined}
-          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-item-${activeIndex}` : undefined}
-        />
-        {value && (
-          <button
-            type="button"
-            onClick={() => onChange({ target: { value: '' } })}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-            aria-label={t('clear')}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-      
-      {error && (
-        <p id="objectName-error" className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5 form-error" role="alert">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-          {error}
-        </p>
-      )}
-      
-      {showSuggestions && suggestions.length > 0 && (
-        <ul
-          id={listboxId}
-          ref={listRef}
-          role="listbox"
-          className="absolute z-30 mt-2 w-full bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border border-gray-200/60 dark:border-gray-600/60 rounded-xl shadow-xl max-h-60 overflow-auto form-enter"
-        >
-          {suggestions.map((obj, idx) => (
-            <li
-              key={idx}
-              id={`${listboxId}-item-${idx}`}
-              role="option"
-              aria-selected={idx === activeIndex}
-              className={`px-4 py-3 cursor-pointer text-gray-900 dark:text-white transition-all ${
-                idx === activeIndex
-                  ? 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 text-indigo-900 dark:text-indigo-100 border-l-4 border-indigo-500'
-                  : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
-              }`}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onSelect(obj);
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-gray-400" aria-hidden="true" />
-                <span className="font-medium">{obj}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </fieldset>
-  );
-});
-ObjectInput.displayName = 'ObjectInput';
 
 const ForemanField = memo(({ id, label, value, onChange, type = 'text', placeholder, error }) => (
   <div>
@@ -348,9 +232,9 @@ const MaterialRow = memo(({
   const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef(null);
   const listboxId = `material-suggestions-${index}`;
-  
+
   const debouncedValue = useDebounce(material.description, DEBOUNCE_MS);
-  
+
   useEffect(() => {
     if (debouncedValue && suggestions.length > 0) {
       const filtered = suggestions
@@ -365,7 +249,7 @@ const MaterialRow = memo(({
 
   const handleKeyDown = useCallback((e) => {
     if (!showSuggestions || localSuggestions.length === 0) return;
-    
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setActiveIndex(prev => Math.min(prev + 1, localSuggestions.length - 1));
@@ -414,16 +298,15 @@ const MaterialRow = memo(({
             type="text"
             value={material.description}
             onChange={(e) => {
-  const value = e.target.value;
-  // Только удаляем опасные символы, сохраняем все пробелы
-  const sanitized = value.replace(/[<>]/g, '').slice(0, MAX_INPUT_LENGTH);
-  onUpdate(index, 'description', sanitized);
-}}
+              const value = e.target.value;
+              const sanitized = value.replace(/[<>]/g, '').slice(0, MAX_INPUT_LENGTH);
+              onUpdate(index, 'description', sanitized);
+            }}
             onFocus={() => setLocalSuggestions(localSuggestions.length > 0 ? localSuggestions : [])}
             onKeyDown={handleKeyDown}
             autoCorrect="off"
             autoCapitalize="sentences"
-            spellCheck="false" 
+            spellCheck="false"
             className="w-full px-4 py-3 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
             placeholder={t('materialDescriptionPlaceholder')}
             required
@@ -431,7 +314,7 @@ const MaterialRow = memo(({
             aria-controls={localSuggestions.length > 0 ? listboxId : undefined}
             aria-activedescendant={activeIndex >= 0 ? `${listboxId}-item-${activeIndex}` : undefined}
           />
-          
+
           {showSuggestions && localSuggestions.length > 0 && (
             <ul
               id={listboxId}
@@ -445,8 +328,8 @@ const MaterialRow = memo(({
                   role="option"
                   aria-selected={idx === activeIndex}
                   className={`px-4 py-2.5 cursor-pointer text-gray-900 dark:text-white transition-all ${
-                    idx === activeIndex 
-                      ? 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 text-indigo-900 dark:text-indigo-100 border-l-4 border-indigo-500' 
+                    idx === activeIndex
+                      ? 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 text-indigo-900 dark:text-indigo-100 border-l-4 border-indigo-500'
                       : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                   }`}
                   onMouseDown={(e) => {
@@ -462,7 +345,7 @@ const MaterialRow = memo(({
             </ul>
           )}
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="quantity-stepper flex items-center gap-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-1">
             <button
@@ -492,7 +375,7 @@ const MaterialRow = memo(({
               <Plus className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
-          
+
           <select
             value={material.unit}
             onChange={(e) => onUpdate(index, 'unit', e.target.value)}
@@ -503,7 +386,7 @@ const MaterialRow = memo(({
               <option key={unit} value={unit}>{unit}</option>
             ))}
           </select>
-          
+
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -514,7 +397,7 @@ const MaterialRow = memo(({
             >
               <Camera className="w-4.5 h-4.5" aria-hidden="true" />
             </button>
-            
+
             <button
               type="button"
               onClick={() => onRemove(index)}
@@ -527,13 +410,13 @@ const MaterialRow = memo(({
           </div>
         </div>
       </div>
-      
+
       {photos.length > 0 && (
         <div className="flex gap-2 mt-3 flex-wrap">
           {photos.map((url, i) => (
             <div key={i} className="relative group">
-              <img 
-                src={url} 
+              <img
+                src={url}
                 alt={`${t('materialPhoto') || 'Фото материала'} ${i + 1}`}
                 className="w-12 h-12 object-cover rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm"
               />
@@ -561,7 +444,7 @@ MaterialRow.displayName = 'MaterialRow';
 
 const TemplateSelector = memo(({ templates, onLoad, t }) => {
   if (!templates?.length) return null;
-  
+
   return (
     <div className="flex flex-wrap gap-3 items-end">
       <div className="flex-1 min-w-[200px]">
@@ -594,7 +477,6 @@ const TemplateSelector = memo(({ templates, onLoad, t }) => {
 });
 TemplateSelector.displayName = 'TemplateSelector';
 
-// CreateApplicationForm.jsx — SubmitButton:
 const SubmitButton = memo(({ canSubmit, isLoading, t }) => (
   <button
     type="submit"
@@ -627,7 +509,7 @@ SubmitButton.displayName = 'SubmitButton';
 
 const TemplateModal = memo(({ templateName, setTemplateName, onSave, onClose, t }) => {
   const inputRef = useRef(null);
-  
+
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
@@ -638,7 +520,7 @@ const TemplateModal = memo(({ templateName, setTemplateName, onSave, onClose, t 
   }, [templateName, onSave, onClose]);
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 fade-enter"
       role="dialog"
       aria-modal="true"
@@ -664,7 +546,7 @@ const TemplateModal = memo(({ templateName, setTemplateName, onSave, onClose, t 
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </header>
-        
+
         <div className="space-y-5">
           <div>
             <label htmlFor="template-name-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -683,7 +565,7 @@ const TemplateModal = memo(({ templateName, setTemplateName, onSave, onClose, t 
               required
             />
           </div>
-          
+
           <footer className="flex justify-end gap-3 pt-4 border-t border-gray-200/60 dark:border-gray-700/60">
             <button
               onClick={onClose}
@@ -732,15 +614,9 @@ const CreateApplicationForm = memo(({
   updateMaterial,
   restoreFromCart,
   removeFromCartPermanently,
-  selectObject,
-  handleObjectInput,
   saveTemplate,
   selectMaterial,
   loadTemplate,
-  filteredObjects,
-  showObjectSuggestions,
-  setShowObjectSuggestions,
-  objectInputRef,
   materialHistory,
   showMaterialSuggestions,
   unitOptions = UNIT_OPTIONS,
@@ -755,28 +631,25 @@ const CreateApplicationForm = memo(({
   selectedClientId,
   onClientSelect,
   companyId,
+  language = 'ru',
   // 🆕 НОВЫЕ ПРОПСЫ
   quotaStatus,
   currentPlan,
   onUpgradeClick,
+  userId,
+  showNotification,
 }) => {
   // ─────────────────────────────────────────────────────────
   // 📊 STATE & REFS
   // ─────────────────────────────────────────────────────────
-  
-  const [objectSearch, setObjectSearch] = useState('');
-  const [activeObjectIndex, setActiveObjectIndex] = useState(-1);
-  const [formErrors, setFormErrors] = useState({}); // ✅ ДОБАВЛЕНО ДЛЯ ВАЛИДАЦИИ
-  
-  const objectListRef = useRef(null);
+
+  const [formErrors, setFormErrors] = useState({});
   const formRef = useRef(null);
-  
-  const debouncedObjectSearch = useDebounce(objectSearch, DEBOUNCE_MS);
 
   // ─────────────────────────────────────────────────────────
   // 🎨 INJECT STYLES
   // ─────────────────────────────────────────────────────────
-  
+
   useEffect(() => {
     const styleEl = document.createElement('style');
     styleEl.textContent = styles;
@@ -787,13 +660,6 @@ const CreateApplicationForm = memo(({
   // ─────────────────────────────────────────────────────────
   // 🔁 MEMOIZED VALUES
   // ─────────────────────────────────────────────────────────
-  
-  const filteredObjectsMemo = useMemo(() => {
-    if (!debouncedObjectSearch) return filteredObjects.slice(0, 10);
-    return filteredObjects
-      .filter(obj => obj.toLowerCase().includes(debouncedObjectSearch.toLowerCase()))
-      .slice(0, 10);
-  }, [debouncedObjectSearch, filteredObjects]);
 
   const canSubmit = useMemo(() => {
     return (
@@ -807,29 +673,29 @@ const CreateApplicationForm = memo(({
   }, [formData, isLoading]);
 
   // ─────────────────────────────────────────────────────────
-  // ✅ ФУНКЦИЯ ВАЛИДАЦИИ (ДОБАВЛЕНА)
+  // ✅ ФУНКЦИЯ ВАЛИДАЦИИ
   // ─────────────────────────────────────────────────────────
-  
+
   const validateForm = useCallback(() => {
     const errors = {};
-    
+
     if (!formData.objectName?.trim()) {
       errors.objectName = t('requiredField') || 'Укажите название объекта';
     }
-    
+
     if (!formData.foremanName?.trim()) {
       errors.foremanName = t('requiredField') || 'Укажите ФИО прораба';
     }
-    
+
     if (!PHONE_REGEX.test(formData.foremanPhone)) {
       errors.foremanPhone = t('invalidPhone') || 'Неверный формат телефона. Пример: +7 (999) 123-45-67';
     }
-    
+
     const validMaterials = formData.materials.filter(m => m.description?.trim() && m.quantity > 0);
     if (validMaterials.length === 0) {
       errors.materials = t('invalidMaterials') || 'Добавьте хотя бы один материал';
     }
-    
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [formData, t]);
@@ -837,7 +703,7 @@ const CreateApplicationForm = memo(({
   // ─────────────────────────────────────────────────────────
   // ⌨️ KEYBOARD SHORTCUTS
   // ─────────────────────────────────────────────────────────
-  
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && canSubmit && !isLoading) {
@@ -845,64 +711,36 @@ const CreateApplicationForm = memo(({
         formRef.current?.requestSubmit();
         return;
       }
-      if (e.key === 'Escape') {
-        setShowObjectSuggestions(false);
-      }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [canSubmit, isLoading, setShowObjectSuggestions]);
+  }, [canSubmit, isLoading]);
 
   // ─────────────────────────────────────────────────────────────
-// 🔧 ФИКС ПРОБЕЛОВ - ПРОСТО ПРЕДОТВРАЩАЕМ БЛОКИРОВКУ
-// ─────────────────────────────────────────────────────────────
-useEffect(() => {
-  const preventSpaceBlocking = (e) => {
-    // Ничего не блокируем, просто даём браузеру работать
-    // Это нужно, чтобы переопределить возможные глобальные блокировки
-    const target = e.target;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-      // Пробел работает нормально - ничего не делаем
-      if (e.key === ' ' || e.key === 'Space') {
-        // Просто разрешаем стандартное поведение
-        return;
+  // 🔧 ФИКС ПРОБЕЛОВ
+  // ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const preventSpaceBlocking = (e) => {
+      const target = e.target;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        if (e.key === ' ' || e.key === 'Space') {
+          return;
+        }
       }
-    }
-  };
-  
-  document.addEventListener('keydown', preventSpaceBlocking);
-  return () => document.removeEventListener('keydown', preventSpaceBlocking);
-}, []);
+    };
+
+    document.addEventListener('keydown', preventSpaceBlocking);
+    return () => document.removeEventListener('keydown', preventSpaceBlocking);
+  }, []);
 
   // ─────────────────────────────────────────────────────────
   // 🎛️ ОБРАБОТЧИКИ
   // ─────────────────────────────────────────────────────────
-  
-  const handleObjectKeyDown = useCallback((e) => {
-    if (!showObjectSuggestions || filteredObjectsMemo.length === 0) return;
-    
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setActiveObjectIndex(prev => Math.min(prev + 1, filteredObjectsMemo.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActiveObjectIndex(prev => Math.max(prev - 1, -1));
-    } else if (e.key === 'Enter' && activeObjectIndex >= 0) {
-      e.preventDefault();
-      selectObject(filteredObjectsMemo[activeObjectIndex]);
-      setShowObjectSuggestions(false);
-      setActiveObjectIndex(-1);
-    } else if (e.key === 'Escape') {
-      setShowObjectSuggestions(false);
-      setActiveObjectIndex(-1);
-    }
-  }, [showObjectSuggestions, filteredObjectsMemo, activeObjectIndex, selectObject, setShowObjectSuggestions]);
 
   const handleMaterialSuggestionSelect = useCallback((index, suggestion) => {
     selectMaterial(index, suggestion);
   }, [selectMaterial]);
 
-  // ✅ ОБНОВЛЕННЫЙ onSubmit С ВАЛИДАЦИЕЙ
   const onSubmit = useCallback((e) => {
     e.preventDefault();
     if (validateForm()) {
@@ -915,9 +753,6 @@ useEffect(() => {
     }
   }, [validateForm, handleSubmit]);
 
-  // Закрытие dropdown при клике вне
-  useClickOutside(objectListRef, () => setShowObjectSuggestions(false));
-
   // ─────────────────────────────────────────────────────────
   // 📋 РЕНДЕРИНГ
   // ─────────────────────────────────────────────────────────
@@ -925,10 +760,10 @@ useEffect(() => {
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
       <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-gray-200/50 dark:border-gray-700/50 form-enter">
-        
+
         {/* Header */}
         <FormHeader t={t} />
-        
+
         {/* Quick Actions */}
         <QuickActions
           onCloneLast={onCloneLast}
@@ -937,9 +772,9 @@ useEffect(() => {
           onSaveTemplate={() => setShowTemplateModal(true)}
           t={t}
         />
-        
+
         <form ref={formRef} onSubmit={onSubmit} className="space-y-6" noValidate>
-          
+
           {/* Hidden File Input */}
           <input
             type="file"
@@ -950,29 +785,28 @@ useEffect(() => {
             aria-hidden="true"
             tabIndex={-1}
           />
-          
-          {/* Object Name with Autocomplete */}
-          <ObjectInput
-            value={formData.objectName}
-            onChange={(e) => {
-              setObjectSearch(e.target.value);
-              handleObjectInput?.(e);
-              if (formErrors.objectName) setFormErrors(prev => ({ ...prev, objectName: null }));
+
+          {/* 🆕 Object Selector — умный автокомплит с поиском в БД */}
+          <ObjectSelector
+            companyId={companyId}
+            userId={userId}
+            value={formData.objectId || ''}
+            valueName={formData.objectName || ''}
+            onChange={({ objectId, name }) => {
+              setFormData(prev => ({
+                ...prev,
+                objectId: objectId || '',
+                objectName: name || '',
+              }));
+              if (formErrors.objectName) {
+                setFormErrors(prev => ({ ...prev, objectName: null }));
+              }
             }}
-            onFocus={() => setShowObjectSuggestions(true)}
-            onKeyDown={handleObjectKeyDown}
-            suggestions={filteredObjectsMemo}
-            showSuggestions={showObjectSuggestions}
-            activeIndex={activeObjectIndex}
-            onSelect={(obj) => {
-              selectObject(obj);
-              setShowObjectSuggestions(false);
-              if (formErrors.objectName) setFormErrors(prev => ({ ...prev, objectName: null }));
-            }}
+            language={language}
+            showNotification={showNotification}
+            required
             error={formErrors.objectName}
-            t={t}
-            inputRef={objectInputRef}
-            listRef={objectListRef}
+            autoFocus={false}
           />
 
           {/* Выбор заказчика */}
@@ -1049,15 +883,14 @@ useEffect(() => {
                 <span className="text-sm font-medium">{t('addMaterial')}</span>
               </button>
             </div>
-            
-            {/* ✅ ОТОБРАЖЕНИЕ ОШИБКИ МАТЕРИАЛОВ */}
+
             {formErrors.materials && (
               <p className="mb-4 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5 form-error" role="alert">
                 <AlertCircle className="w-4 h-4" aria-hidden="true" />
                 {formErrors.materials}
               </p>
             )}
-            
+
             <div className="space-y-3" role="list" aria-label={t('materialsList')}>
               {formData.materials.map((material, index) => (
                 <MaterialRow
@@ -1080,57 +913,58 @@ useEffect(() => {
           </section>
 
           {/* 🆕 ИНДИКАЦИЯ ЛИМИТОВ ДЛЯ БЕСПЛАТНОГО ТАРИФА */}
-{currentPlan?.id === 'basic' && quotaStatus && (
-  <div className={`mb-4 p-4 rounded-xl border ${
-    quotaStatus.allowed 
-      ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700/50' 
-      : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50'
-  }`}>
-    <div className="flex items-center justify-between flex-wrap gap-2">
-      <div className="flex items-center gap-3">
-        <AlertCircle className={`w-5 h-5 ${
-          quotaStatus.allowed ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
-        }`} />
-        <div>
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Бесплатный тариф: <span className="font-bold">{quotaStatus.dailyUsage || 0}</span>/{quotaStatus.dailyLimit || 100} заявок
-          </p>
-          {!quotaStatus.allowed && (
-            <p className="text-sm text-red-600 dark:text-red-400 font-medium">
-              ⚠️ Лимит исчерпан. Обновите тариф для продолжения работы.
-            </p>
+          {currentPlan?.id === 'basic' && quotaStatus && (
+            <div className={`mb-4 p-4 rounded-xl border ${
+              quotaStatus.allowed
+                ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700/50'
+                : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50'
+            }`}>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className={`w-5 h-5 ${
+                    quotaStatus.allowed ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
+                  }`} />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Бесплатный тариф: <span className="font-bold">{quotaStatus.dailyUsage || 0}</span>/{quotaStatus.dailyLimit || 100} заявок
+                    </p>
+                    {!quotaStatus.allowed && (
+                      <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                        ⚠️ Лимит исчерпан. Обновите тариф для продолжения работы.
+                      </p>
+                    )}
+                    {quotaStatus.dailyRemaining <= 3 && quotaStatus.dailyRemaining > 0 && (
+                      <p className="text-sm text-orange-600 dark:text-orange-400">
+                        ⚠️ Осталось {quotaStatus.dailyRemaining} заявок
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {!quotaStatus.allowed && onUpgradeClick && (
+                  <button
+                    type="button"
+                    onClick={onUpgradeClick}
+                    className="px-4 py-2 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all"
+                  >
+                    🔓 Обновить тариф
+                  </button>
+                )}
+              </div>
+            </div>
           )}
-          {quotaStatus.dailyRemaining <= 3 && quotaStatus.dailyRemaining > 0 && (
-            <p className="text-sm text-orange-600 dark:text-orange-400">
-              ⚠️ Осталось {quotaStatus.dailyRemaining} заявок
-            </p>
-          )}
-        </div>
-      </div>
-      {!quotaStatus.allowed && onUpgradeClick && (
-        <button
-          type="button"
-          onClick={onUpgradeClick}
-          className="px-4 py-2 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all"
-        >
-          🔓 Обновить тариф
-        </button>
-      )}
-    </div>
-  </div>
-)}
-{/* Submit Button */}
-<SubmitButton 
-  canSubmit={canSubmit && (currentPlan?.id !== 'basic' || quotaStatus?.allowed !== false)} 
-  isLoading={isLoading || isSubmitting}
-  t={t} 
-/>
 
-{/* Keyboard hints */}
-<div className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500">
-  <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded mr-2">Ctrl+Enter — отправить</span>
-  <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть список</span>
-</div>
+          {/* Submit Button */}
+          <SubmitButton
+            canSubmit={canSubmit && (currentPlan?.id !== 'basic' || quotaStatus?.allowed !== false)}
+            isLoading={isLoading || isSubmitting}
+            t={t}
+          />
+
+          {/* Keyboard hints */}
+          <div className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500">
+            <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded mr-2">Ctrl+Enter — отправить</span>
+            <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть список</span>
+          </div>
         </form>
       </div>
 
