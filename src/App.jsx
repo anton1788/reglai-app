@@ -72,6 +72,9 @@ import translations from './i18n/translations';
 import { useIsMobile } from './hooks/useIsMobile';
 import AuditView from './components/AuditView';
 import ApplicationList from './components/ApplicationList';
+// 🆕 ОБЪЕКТЫ (Project Hub)
+import ObjectsList from './components/Objects/ObjectsList';
+import ObjectForm from './components/Objects/ObjectForm';
 import WarehouseView from './components/WarehouseView';
 import CalendarView from './components/CalendarView';
 // eslint-disable-next-line no-unused-vars
@@ -1016,6 +1019,8 @@ const App = () => {
   const [language, setLanguage] = useState('ru');
   const [theme, setTheme] = useState('system');
   const [currentView, setCurrentView] = useState('create');
+  // 🆕 Объекты: id открытого объекта (для будущего object-hub)
+const [selectedObjectId, setSelectedObjectId] = useState(null);
   const [applications, setApplications] = useState([]);
   const [allApplications, setAllApplications] = useState([]);
 // 🔧 НОВЫЙ STATE: все заявки компании БЕЗ пагинации (для мерджера и других нужд)
@@ -7553,6 +7558,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           else if (path === '/integration') setCurrentView('integration');
           else if (path === '/applications') setCurrentView('inwork');
           else if (path === '/projects') setCurrentView('projects');
+          else if (path === '/objects') setCurrentView('objects');
           else if (path === '/applications/new') setCurrentView('create');
           else if (path === '/warehouse') setCurrentView('warehouse');
           else if (path === '/clients') setCurrentView('clients');
@@ -8582,6 +8588,29 @@ onClearFilters={handleClearFilters}
     applications={applications}
   />
 )}
+{/* 🆕 ОБЪЕКТЫ (Project Hub) */}
+{currentView === 'objects' && (
+  <ObjectsList
+    companyId={userCompanyId}
+    userId={user?.id}
+    userRole={userRole}
+    t={t}
+    language={language}
+    showNotification={showNotification}
+    onOpenObject={(obj) => {
+      // Пока — просто лог. ObjectHub сделаем в Шаге 4.
+      console.log('🖱️ Открытие объекта:', obj);
+      setSelectedObjectId(obj.id);
+      // TODO: setCurrentView('object-hub');
+      showNotification?.(
+        language === 'ru'
+          ? `📁 Объект "${obj.name}" — папка появится в следующем шаге`
+          : `📁 Object "${obj.name}" — hub coming soon`,
+        'info'
+      );
+    }}
+  />
+)}
 {/* 🛡️ FALLBACK: Если ни одно условие не сработало */}
 {!['create', 'crm-sales', 'managerDashboard', 'dashboard', 'accountantDashboard', 
   'received', 'audit', 'calendar', 'inwork', 'confirmation', 'history', 'readyToIssue', 
@@ -8589,7 +8618,7 @@ onClearFilters={handleClearFilters}
   'superAdmin', 'tariffs', 'clientDashboard', 'clientChat', 'clientDocuments', 
   'clientApplications', 'clientCalendar', 'clientConfirmation', 'clientPhotos', 
   'clientWorkAct', 'companyProfile', 'merge', 'estimates', 'reports', 'integration', 
-  'help', 'settings', 'projects', 'tasks', 'chat', 'approvals', 'api'].includes(currentView) && (
+  'help', 'settings', 'projects', 'objects', 'tasks', 'chat', 'approvals', 'api'].includes(currentView) && (
     <div className="max-w-7xl mx-auto px-4">
         <ApplicationList
             applications={filteredApplications}

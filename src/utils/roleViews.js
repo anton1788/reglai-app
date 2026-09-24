@@ -2,37 +2,57 @@
 export const ROLE_VIEWS = {
   manager: {
     defaultView: 'managerDashboard',
-    allowedViews: ['managerDashboard', 'analytics', 'employees', 'tariffs', 'companyProfile', 'approvals'],
+    allowedViews: [
+      'managerDashboard', 'analytics', 'employees', 'tariffs',
+      'companyProfile', 'approvals',
+      'objects', 'object-hub',
+    ],
     hiddenFromNav: ['create', 'received', 'confirmation'],
     dashboardComponent: 'ManagerMainDashboard'
   },
   director: {
     defaultView: 'managerDashboard',
-    allowedViews: ['managerDashboard', 'analytics', 'employees', 'tariffs', 'companyProfile', 'approvals'],
+    allowedViews: [
+      'managerDashboard', 'analytics', 'employees', 'tariffs',
+      'companyProfile', 'approvals',
+      'objects', 'object-hub',
+    ],
     hiddenFromNav: ['create', 'received', 'confirmation'],
     dashboardComponent: 'ManagerMainDashboard'
   },
   accountant: {
     defaultView: 'accountantDashboard',
-    allowedViews: ['accountantDashboard', 'analytics', 'history', 'documents'],
+    allowedViews: [
+      'accountantDashboard', 'analytics', 'history', 'documents',
+      'objects', 'object-hub',
+    ],
     hiddenFromNav: ['create', 'received', 'warehouse', 'inwork'],
     dashboardComponent: 'AccountantFinanceDashboard'
   },
   supply_admin: {
     defaultView: 'received',
-    allowedViews: ['received', 'warehouse', 'create', 'chat', 'inwork'],
+    allowedViews: [
+      'received', 'warehouse', 'create', 'chat', 'inwork',
+      'objects', 'object-hub',
+    ],
     hiddenFromNav: [],
     dashboardComponent: null
   },
   master: {
     defaultView: 'create',
-    allowedViews: ['create', 'inwork', 'history', 'confirmation'],
+    allowedViews: [
+      'create', 'inwork', 'history', 'confirmation',
+      'objects', 'object-hub',
+    ],
     hiddenFromNav: [],
     dashboardComponent: null
   },
   foreman: {
     defaultView: 'create',
-    allowedViews: ['create', 'inwork', 'history', 'confirmation'],
+    allowedViews: [
+      'create', 'inwork', 'history', 'confirmation',
+      'objects', 'object-hub',
+    ],
     hiddenFromNav: [],
     dashboardComponent: null
   },

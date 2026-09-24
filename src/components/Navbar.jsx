@@ -18,7 +18,8 @@ import {
   FileCheck,
   Scale,
   PackageCheck,
-  Bot
+  Bot,
+  FolderKanban
 } from 'lucide-react';
 import { getCompanyPlan, checkFeatureAccess } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
@@ -377,6 +378,15 @@ const Navbar = ({
 
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/', always: true });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications', always: true });
+    // 🆕 Объекты — доступно всем, кроме клиентов
+if (userRole !== 'client') {
+  items.push({
+    id: 'objects',
+    label: 'Объекты',
+    icon: FolderKanban,
+    path: '/objects'
+  });
+}
 
     if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
       items.push({

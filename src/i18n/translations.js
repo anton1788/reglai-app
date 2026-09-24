@@ -156,6 +156,11 @@ export const translations = {
     statusRejected: 'Отклонено',
     statusCanceled: 'Отменено',
     statusUnknown: 'Неизвестный статус',
+        // ─── Статусы объектов (Project Hub) ───
+    objectStatusPlanning:  'Планирование',
+    objectStatusActive:    'В работе',
+    objectStatusCompleted: 'Завершён',
+    objectStatusArchived:  'В архиве',
 
     // Легаси-алиасы
     statusPartialWarehouse: 'Частично на складе',
@@ -1281,6 +1286,11 @@ export const translations = {
     statusRejected: 'Rejected',
     statusCanceled: 'Canceled',
     statusUnknown: 'Unknown status',
+        // ─── Object statuses (Project Hub) ───
+    objectStatusPlanning:  'Planning',
+    objectStatusActive:    'Active',
+    objectStatusCompleted: 'Completed',
+    objectStatusArchived:  'Archived',
 
     statusPartialWarehouse: 'Partial on Warehouse',
 
