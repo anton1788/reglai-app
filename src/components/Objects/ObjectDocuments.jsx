@@ -1,8 +1,10 @@
 // src/components/Objects/ObjectDocuments.jsx
 // ============================================================
 // Вкладка "Документы" в папке объекта.
-// Показывает все файлы из таблицы projects, привязанные
-// к заявкам данного объекта (через project_application_links).
+// Показывает:
+//   1. Официальные документы (generated_documents) — HTML
+//   2. Прикреплённые файлы (projects) — PDF, DWG, Excel...
+// Обе категории связаны с заявками объекта.
 // ============================================================
 
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
@@ -10,12 +12,29 @@ import {
   FileText, Image as ImageIcon, FileSpreadsheet, File as FileIcon,
   Download, ExternalLink, Search, X, RefreshCw, Loader2,
   FolderOpen, Eye, Star, Tag, Calendar, AlertCircle,
-  ChevronRight, Package
+  ChevronRight, Package, Printer, FileCheck, Receipt,
+  Ruler, Truck, ClipboardList, Filter
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 
 // ────────────────────────────────────────────────────────────
-// Категории (синхронизированы с ProjectManager)
+// Типы документов (синхронизированы с DocumentGenerator)
+// ────────────────────────────────────────────────────────────
+const DOCUMENT_TYPE_MAP = {
+  work_act:          { label: 'Акт выполненных работ',  icon: ClipboardList, color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200' },
+  material_act:      { label: 'Акт приёмки (М-7)',       icon: Package,       color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-200' },
+  work_log:          { label: 'Журнал работ',           icon: Calendar,      color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-200' },
+  invoice:           { label: 'Накладная',              icon: Truck,         color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-200' },
+  ks2:               { label: 'КС-2',                   icon: FileCheck,     color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-200' },
+  ks3:               { label: 'КС-3',                   icon: Receipt,       color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-200' },
+  hidden_works:      { label: 'Акт скрытых работ',      icon: FileText,      color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200' },
+  executive_diagram: { label: 'Исполнительная схема',   icon: Ruler,         color: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-200' },
+  invoice_bill:      { label: 'Счёт',                   icon: Receipt,       color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200' },
+  invoice_vat:       { label: 'Счёт-фактура',           icon: FileText,      color: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200' },
+};
+
+// ────────────────────────────────────────────────────────────
+// Категории файлов (синхронизированы с ProjectManager)
 // ────────────────────────────────────────────────────────────
 const CATEGORY_MAP = {
   construction: { label: '🏗️ Строительные', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200' },
@@ -45,6 +64,16 @@ const formatDate = (dateStr) => {
   } catch { return dateStr; }
 };
 
+const formatDateTime = (dateStr) => {
+  if (!dateStr) return '—';
+  try {
+    return new Date(dateStr).toLocaleString('ru-RU', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch { return dateStr; }
+};
+
 const getFileIcon = (name, type) => {
   const ext = (name || '').split('.').pop()?.toLowerCase();
   if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) return ImageIcon;
@@ -68,27 +97,30 @@ const ObjectDocuments = memo(({
   objectId,
   language = 'ru',
   showNotification,
-  onOpenApplication,   // (app) => void — открыть заявку
+  onOpenApplication,
 }) => {
   const isRu = language === 'ru';
 
   // ─── State ───────────────────────────────────────────────
-  const [documents, setDocuments] = useState([]);
+  const [generatedDocs, setGeneratedDocs] = useState([]);      // official documents
+  const [attachedFiles, setAttachedFiles] = useState([]);      // project files
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [previewFile, setPreviewFile] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('all');      // 'all' | 'generated' | 'attached'
+  const [previewFile, setPreviewFile] = useState(null);         // { type: 'image' | 'pdf', doc }
+  const [previewHtml, setPreviewHtml] = useState(null);         // { doc } для HTML-предпросмотра
 
-  // ─── Загрузка документов ─────────────────────────────────
+  // ─── Загрузка данных ─────────────────────────────────────
   const loadDocuments = useCallback(async (silent = false) => {
     if (!objectId) return;
     if (silent) setIsRefreshing(true);
     else setIsLoading(true);
 
     try {
-      // 1. Находим все заявки объекта
+      // 1. Все заявки объекта
       const { data: apps, error: appsErr } = await supabase
         .from('applications')
         .select('id, object_name, foreman_name, created_at, status')
@@ -100,84 +132,88 @@ const ObjectDocuments = memo(({
       setApplications(apps || []);
 
       if (!apps || apps.length === 0) {
-        setDocuments([]);
+        setGeneratedDocs([]);
+        setAttachedFiles([]);
         setError(null);
         return;
       }
 
       const appIds = apps.map(a => a.id);
+      const appsMap = apps.reduce((acc, a) => { acc[a.id] = a; return acc; }, {});
 
-      // 2. Находим все связи project ↔ application
+      // 2. Официальные документы (generated_documents)
+      const { data: genDocs, error: genErr } = await supabase
+        .from('generated_documents')
+        .select('id, application_id, document_type, generated_by, created_at')
+        .in('application_id', appIds)
+        .order('created_at', { ascending: false });
+
+      if (genErr) {
+        console.warn('[ObjectDocuments] generated_documents error:', genErr);
+        setGeneratedDocs([]);
+      } else {
+        // Обогащаем linkedApplication
+        const enriched = (genDocs || []).map(doc => ({
+          ...doc,
+          linkedApplication: appsMap[doc.application_id],
+        }));
+        setGeneratedDocs(enriched);
+      }
+
+      // 3. Прикреплённые файлы (projects + project_application_links)
       const { data: links, error: linksErr } = await supabase
         .from('project_application_links')
         .select('project_id, application_id')
         .in('application_id', appIds);
 
-      if (linksErr) {
-        // Таблица может отсутствовать — не считаем это критичной ошибкой
-        console.warn('[ObjectDocuments] links error:', linksErr);
-        setDocuments([]);
-        setError(null);
-        return;
-      }
+      if (linksErr || !links || links.length === 0) {
+        setAttachedFiles([]);
+      } else {
+        const projectIds = [...new Set(links.map(l => l.project_id))];
 
-      if (!links || links.length === 0) {
-        setDocuments([]);
-        setError(null);
-        return;
-      }
+        const { data: projects, error: projectsErr } = await supabase
+          .from('projects')
+          .select('*')
+          .in('id', projectIds)
+          .order('created_at', { ascending: false });
 
-      // 3. Забираем сами проекты (файлы)
-      const projectIds = [...new Set(links.map(l => l.project_id))];
+        if (projectsErr) throw projectsErr;
 
-      const { data: projects, error: projectsErr } = await supabase
-        .from('projects')
-        .select('*')
-        .in('id', projectIds)
-        .order('created_at', { ascending: false });
+        const docs = [];
+        (projects || []).forEach(project => {
+          const projectLinks = links.filter(l => l.project_id === project.id);
+          projectLinks.forEach(link => {
+            const app = appsMap[link.application_id];
+            if (!app) return;
 
-      if (projectsErr) throw projectsErr;
+            const { data: { publicUrl } } = supabase.storage
+              .from('projects')
+              .getPublicUrl(project.storage_path);
 
-      // 4. Собираем результат: файл + заявка, к которой он привязан
-      const appsMap = apps.reduce((acc, a) => { acc[a.id] = a; return acc; }, {});
-
-      const docs = [];
-      (projects || []).forEach(project => {
-        // Находим все связи этого проекта с нашими заявками
-        const projectLinks = links.filter(l => l.project_id === project.id);
-
-        projectLinks.forEach(link => {
-          const app = appsMap[link.application_id];
-          if (!app) return;
-
-          // Собираем публичный URL
-          const { data: { publicUrl } } = supabase.storage
-            .from('projects')
-            .getPublicUrl(project.storage_path);
-
-          docs.push({
-            ...project,
-            publicUrl,
-            linkedApplication: app,
+            docs.push({
+              ...project,
+              publicUrl,
+              linkedApplication: app,
+            });
           });
         });
-      });
 
-      // Дедупликация: один проект может быть привязан к нескольким заявкам — но нам нужен один раз
-      const uniqueDocs = docs.reduce((acc, current) => {
-        const exists = acc.find(item => item.id === current.id);
-        if (!exists) {
-          acc.push(current);
-        }
-        return acc;
-      }, []);
+        // Дедупликация
+        const uniqueDocs = docs.reduce((acc, current) => {
+          const exists = acc.find(item => item.id === current.id);
+          if (!exists) acc.push(current);
+          return acc;
+        }, []);
 
-      setDocuments(uniqueDocs);
+        setAttachedFiles(uniqueDocs);
+      }
+
       setError(null);
     } catch (err) {
       console.error('[ObjectDocuments.load] error:', err);
       setError(err.message);
-      setDocuments([]);
+      setGeneratedDocs([]);
+      setAttachedFiles([]);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -198,34 +234,70 @@ const ObjectDocuments = memo(({
   }, [loadDocuments, showNotification, isRu]);
 
   // ─── Фильтрация ──────────────────────────────────────────
-  const filteredDocuments = useMemo(() => {
-    if (!searchTerm.trim()) return documents;
+  const filteredGenerated = useMemo(() => {
+    if (!searchTerm.trim()) return generatedDocs;
     const term = searchTerm.trim().toLowerCase();
-    return documents.filter(d =>
+    return generatedDocs.filter(d =>
+      (DOCUMENT_TYPE_MAP[d.document_type]?.label || d.document_type || '').toLowerCase().includes(term)
+    );
+  }, [generatedDocs, searchTerm]);
+
+  const filteredAttached = useMemo(() => {
+    if (!searchTerm.trim()) return attachedFiles;
+    const term = searchTerm.trim().toLowerCase();
+    return attachedFiles.filter(d =>
       (d.name || '').toLowerCase().includes(term) ||
       (d.description || '').toLowerCase().includes(term) ||
       (d.tags || []).some(t => t.toLowerCase().includes(term))
     );
-  }, [documents, searchTerm]);
+  }, [attachedFiles, searchTerm]);
 
   // ─── Группировка по заявкам ──────────────────────────────
   const groupedByApplication = useMemo(() => {
     const groups = {};
-    filteredDocuments.forEach(doc => {
-      const appId = doc.linkedApplication?.id || 'unknown';
-      if (!groups[appId]) {
-        groups[appId] = {
-          application: doc.linkedApplication,
-          documents: [],
-        };
-      }
-      groups[appId].documents.push(doc);
-    });
-    return Object.values(groups);
-  }, [filteredDocuments]);
 
-  // ─── Скачивание ──────────────────────────────────────────
-  const handleDownload = useCallback((doc) => {
+    // Официальные документы
+    if (activeFilter === 'all' || activeFilter === 'generated') {
+      filteredGenerated.forEach(doc => {
+        const appId = doc.linkedApplication?.id || 'unknown';
+        if (!groups[appId]) {
+          groups[appId] = {
+            application: doc.linkedApplication,
+            generated: [],
+            attached: [],
+          };
+        }
+        groups[appId].generated.push(doc);
+      });
+    }
+
+    // Прикреплённые файлы
+    if (activeFilter === 'all' || activeFilter === 'attached') {
+      filteredAttached.forEach(doc => {
+        const appId = doc.linkedApplication?.id || 'unknown';
+        if (!groups[appId]) {
+          groups[appId] = {
+            application: doc.linkedApplication,
+            generated: [],
+            attached: [],
+          };
+        }
+        groups[appId].attached.push(doc);
+      });
+    }
+
+    return Object.values(groups);
+  }, [filteredGenerated, filteredAttached, activeFilter]);
+
+  // ─── Всего документов (для счётчиков) ────────────────────
+  const counts = useMemo(() => ({
+    all: generatedDocs.length + attachedFiles.length,
+    generated: generatedDocs.length,
+    attached: attachedFiles.length,
+  }), [generatedDocs.length, attachedFiles.length]);
+
+  // ─── Действия: прикреплённые файлы ───────────────────────
+  const handleDownloadFile = useCallback((doc) => {
     if (!doc.publicUrl) {
       showNotification?.('❌ Ссылка на файл недоступна', 'error');
       return;
@@ -240,11 +312,107 @@ const ObjectDocuments = memo(({
     document.body.removeChild(a);
   }, [showNotification]);
 
-  // ─── Просмотр ────────────────────────────────────────────
-  const handlePreview = useCallback((doc) => {
+  const handlePreviewFile = useCallback((doc) => {
     if (!doc.publicUrl) return;
     setPreviewFile(doc);
   }, []);
+
+  // ─── Действия: сгенерированные документы ─────────────────
+  const handlePreviewHtml = useCallback((doc) => {
+    setPreviewHtml(doc);
+  }, []);
+
+  const handlePrintHtml = useCallback((doc) => {
+    if (!doc.content_html) {
+      showNotification?.('❌ Содержимое документа пусто', 'error');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) {
+      showNotification?.('❌ Разрешите всплывающие окна для печати', 'warning');
+      return;
+    }
+
+    const typeLabel = DOCUMENT_TYPE_MAP[doc.document_type]?.label || doc.document_type;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="ru">
+        <head>
+          <meta charset="UTF-8">
+          <title>${typeLabel}</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; background: #fff; }
+            @media print {
+              body { padding: 0; }
+              .no-print { display: none !important; }
+              .page-break { page-break-before: always; }
+              table { page-break-inside: avoid; }
+              tr { page-break-inside: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          ${doc.content_html}
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+                setTimeout(() => window.close(), 500);
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }, [showNotification]);
+
+  const handleDownloadHtml = useCallback((doc) => {
+    if (!doc.content_html) {
+      showNotification?.('❌ Содержимое документа пусто', 'error');
+      return;
+    }
+
+    const typeLabel = DOCUMENT_TYPE_MAP[doc.document_type]?.label || doc.document_type;
+    const fileName = `${typeLabel}_${doc.id.slice(0, 8)}.html`;
+
+    const fullHtml = `<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <title>${typeLabel}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; background: #fff; }
+      @media print {
+        body { padding: 0; }
+        .page-break { page-break-before: always; }
+      }
+    </style>
+  </head>
+  <body>
+    ${doc.content_html}
+  </body>
+</html>`;
+
+    const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showNotification?.(
+      isRu ? '📥 Документ скачан' : '📥 Document downloaded',
+      'success'
+    );
+  }, [showNotification, isRu]);
 
   // ─── Открыть связанную заявку ────────────────────────────
   const handleOpenApplication = useCallback((app) => {
@@ -264,15 +432,15 @@ const ObjectDocuments = memo(({
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
           {isRu
-            ? 'Документы привязываются к заявкам. Как только появятся заявки — сюда можно будет прикрепить файлы через раздел "Проекты".'
-            : 'Documents are linked to applications. Once applications appear, you can attach files here.'}
+            ? 'Документы привязываются к заявкам. Как только появятся заявки — сюда можно будет добавить файлы и сгенерировать документы.'
+            : 'Documents are linked to applications. Once applications appear, you can add files and generate documents here.'}
         </p>
       </div>
     );
   }
 
   // ─── Пусто: нет документов ───────────────────────────────
-  if (!isLoading && documents.length === 0) {
+  if (!isLoading && counts.all === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-12 text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-purple-50 dark:bg-purple-900/20 mb-4">
@@ -282,32 +450,41 @@ const ObjectDocuments = memo(({
           {isRu ? 'Документов пока нет' : 'No documents yet'}
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-4">
-          {isRu
-            ? 'Чтобы прикрепить файл к объекту:'
-            : 'To attach a file to the object:'}
+          {isRu ? 'Два способа добавить документы:' : 'Two ways to add documents:'}
         </p>
-        <ol className="text-sm text-gray-600 dark:text-gray-400 max-w-md mx-auto text-left space-y-2 mb-6">
-          <li className="flex items-start gap-2">
-            <span className="font-bold text-[#4A6572] dark:text-[#F9AA33] flex-shrink-0">1.</span>
-            <span>{isRu ? 'Перейдите в раздел "Проекты"' : 'Go to "Projects" section'}</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="font-bold text-[#4A6572] dark:text-[#F9AA33] flex-shrink-0">2.</span>
-            <span>{isRu ? 'Загрузите файл (PDF, DWG, Excel, картинка)' : 'Upload a file (PDF, DWG, Excel, image)'}</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="font-bold text-[#4A6572] dark:text-[#F9AA33] flex-shrink-0">3.</span>
-            <span>{isRu ? 'Нажмите 🔗 "Привязать к заявке"' : 'Click 🔗 "Link to application"'}</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="font-bold text-[#4A6572] dark:text-[#F9AA33] flex-shrink-0">4.</span>
-            <span>{isRu ? 'Выберите заявку объекта' : 'Choose the object application'}</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="font-bold text-[#4A6572] dark:text-[#F9AA33] flex-shrink-0">5.</span>
-            <span>{isRu ? 'Файл появится здесь автоматически' : 'The file will appear here automatically'}</span>
-          </li>
-        </ol>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto mb-6 text-left">
+          {/* Официальные */}
+          <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-xl">
+            <div className="flex items-center gap-2 mb-2">
+              <FileCheck className="w-5 h-5 text-[#4A6572] dark:text-[#F9AA33]" />
+              <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                {isRu ? '📄 Официальные' : '📄 Official'}
+              </span>
+            </div>
+            <ol className="text-xs text-gray-600 dark:text-gray-400 space-y-1 list-decimal list-inside">
+              <li>{isRu ? 'Раздел "Документы"' : 'Go to "Documents"'}</li>
+              <li>{isRu ? 'Выберите заявку' : 'Select application'}</li>
+              <li>{isRu ? 'Нажмите "Сформировать"' : 'Click "Generate"'}</li>
+            </ol>
+          </div>
+
+          {/* Прикреплённые */}
+          <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-xl">
+            <div className="flex items-center gap-2 mb-2">
+              <FolderOpen className="w-5 h-5 text-[#4A6572] dark:text-[#F9AA33]" />
+              <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                {isRu ? '📎 Прикреплённые' : '📎 Attached'}
+              </span>
+            </div>
+            <ol className="text-xs text-gray-600 dark:text-gray-400 space-y-1 list-decimal list-inside">
+              <li>{isRu ? 'Раздел "Проекты"' : 'Go to "Projects"'}</li>
+              <li>{isRu ? 'Загрузите файл' : 'Upload file'}</li>
+              <li>{isRu ? 'Нажмите 🔗 "Привязать"' : 'Click 🔗 "Link"'}</li>
+            </ol>
+          </div>
+        </div>
+
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
@@ -323,7 +500,7 @@ const ObjectDocuments = memo(({
   // ─── Основной рендер ─────────────────────────────────────
   return (
     <div className="space-y-4">
-      {/* ─── Верхняя панель: поиск + счётчик + обновление ── */}
+      {/* ─── Верхняя панель ── */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
           <div className="flex items-center gap-3">
@@ -336,8 +513,8 @@ const ObjectDocuments = memo(({
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {isRu
-                  ? `${documents.length} ${documents.length === 1 ? 'файл' : documents.length < 5 ? 'файла' : 'файлов'} · ${applications.length} ${applications.length === 1 ? 'заявка' : 'заявок'}`
-                  : `${documents.length} files · ${applications.length} applications`}
+                  ? `${counts.generated} офиц. · ${counts.attached} ${counts.attached === 1 ? 'файл' : 'файлов'} · ${applications.length} ${applications.length === 1 ? 'заявка' : 'заявок'}`
+                  : `${counts.generated} official · ${counts.attached} files · ${applications.length} applications`}
               </p>
             </div>
           </div>
@@ -352,31 +529,71 @@ const ObjectDocuments = memo(({
           </button>
         </div>
 
-        {/* Поиск */}
-        {documents.length > 3 && (
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={isRu ? 'Поиск по названию, описанию, тегам...' : 'Search by name, description, tags...'}
-              className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] text-sm"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
-                aria-label={isRu ? 'Очистить' : 'Clear'}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+        {/* Фильтр + поиск */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          {/* Фильтр-табы */}
+          <div className="flex gap-1 bg-gray-100 dark:bg-gray-700/50 rounded-xl p-1">
+            <button
+              onClick={() => setActiveFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                activeFilter === 'all'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              <Filter className="w-3 h-3" />
+              {isRu ? 'Все' : 'All'} ({counts.all})
+            </button>
+            <button
+              onClick={() => setActiveFilter('generated')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                activeFilter === 'generated'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              <FileCheck className="w-3 h-3" />
+              {isRu ? 'Официальные' : 'Official'} ({counts.generated})
+            </button>
+            <button
+              onClick={() => setActiveFilter('attached')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                activeFilter === 'attached'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              <FolderOpen className="w-3 h-3" />
+              {isRu ? 'Файлы' : 'Files'} ({counts.attached})
+            </button>
           </div>
-        )}
+
+          {/* Поиск */}
+          {(counts.all > 3) && (
+            <div className="flex-1 relative min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder={isRu ? 'Поиск...' : 'Search...'}
+                className="w-full pl-9 pr-9 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] text-sm"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                  aria-label={isRu ? 'Очистить' : 'Clear'}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* ─── Загрузка ── */}
+      {/* ─── Контент ── */}
       {isLoading ? (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-12 flex flex-col items-center justify-center">
           <Loader2 className="w-8 h-8 animate-spin text-[#4A6572] mb-3" />
@@ -399,7 +616,7 @@ const ObjectDocuments = memo(({
             {isRu ? 'Повторить' : 'Retry'}
           </button>
         </div>
-      ) : filteredDocuments.length === 0 && searchTerm ? (
+      ) : groupedByApplication.length === 0 && searchTerm ? (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 text-center">
           <Search className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
           <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -413,7 +630,6 @@ const ObjectDocuments = memo(({
           </button>
         </div>
       ) : (
-        /* ─── Группировка по заявкам ── */
         groupedByApplication.map((group) => (
           <div
             key={group.application?.id || 'unknown'}
@@ -433,6 +649,8 @@ const ObjectDocuments = memo(({
                     <div className="text-[11px] text-gray-500 dark:text-gray-400">
                       {isRu ? 'Заявка от ' : 'Application from '}
                       {formatDate(group.application.created_at)}
+                      {group.generated.length > 0 && ` · ${group.generated.length} док.`}
+                      {group.attached.length > 0 && ` · ${group.attached.length} файл.`}
                     </div>
                   </div>
                 </div>
@@ -449,124 +667,202 @@ const ObjectDocuments = memo(({
               </div>
             )}
 
-            {/* Список файлов группы */}
-            <div className="divide-y divide-gray-100 dark:divide-gray-700">
-              {group.documents.map((doc) => {
-                const Icon = getFileIcon(doc.name, doc.file_type);
-                const category = CATEGORY_MAP[doc.category] || CATEGORY_MAP.other;
-                const canPreview = isImageFile(doc.name) || isPdfFile(doc.name);
-
-                return (
-                  <div
-                    key={doc.id}
-                    className="p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
-                  >
-                    <div className="flex items-start gap-3">
-                      {/* Иконка типа файла */}
-                      <div className="p-2.5 bg-gradient-to-br from-[#4A6572]/10 to-[#344955]/10 dark:from-[#4A6572]/20 dark:to-[#344955]/20 rounded-xl flex-shrink-0">
-                        <Icon className="w-5 h-5 text-[#4A6572] dark:text-[#F9AA33]" />
-                      </div>
-
-                      {/* Основная информация */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {doc.name || '—'}
-                            </h4>
-                            {doc.description && (
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">
-                                {doc.description}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Кнопки действий */}
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {canPreview && (
-                              <button
-                                onClick={() => handlePreview(doc)}
-                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
-                                title={isRu ? 'Просмотр' : 'Preview'}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleDownload(doc)}
-                              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
-                              title={isRu ? 'Скачать' : 'Download'}
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                            <a
-                              href={doc.publicUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
-                              title={isRu ? 'Открыть в новой вкладке' : 'Open in new tab'}
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
-                          </div>
-                        </div>
-
-                        {/* Мета-информация */}
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
-                          {/* Категория */}
-                          {doc.category && (
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${category.color}`}>
-                              {category.label}
-                            </span>
-                          )}
-
-                          {/* Размер */}
-                          <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                            <FileIcon className="w-3 h-3" />
-                            {formatSize(doc.file_size)}
-                          </span>
-
-                          {/* Дата */}
-                          <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {formatDate(doc.created_at)}
-                          </span>
-
-                          {/* Избранное */}
-                          {doc.is_favorite && (
-                            <span className="text-[10px] text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
-                              <Star className="w-3 h-3 fill-current" />
-                              {isRu ? 'Избранное' : 'Favorite'}
-                            </span>
-                          )}
-
-                          {/* Теги */}
-                          {doc.tags && doc.tags.length > 0 && (
-                            <span className="text-[10px] text-gray-400 flex items-center gap-1 flex-wrap">
-                              <Tag className="w-3 h-3" />
-                              {doc.tags.slice(0, 3).map(tag => `#${tag}`).join(' ')}
-                              {doc.tags.length > 3 && ` +${doc.tags.length - 3}`}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+            {/* ─── Секция 1: Официальные документы ── */}
+            {group.generated.length > 0 && (
+              <div>
+                <div className="px-3 sm:px-4 py-2 bg-gradient-to-r from-[#4A6572]/5 to-transparent dark:from-[#4A6572]/10 border-b border-gray-100 dark:border-gray-700">
+                  <div className="text-[11px] font-semibold text-[#4A6572] dark:text-[#F9AA33] uppercase tracking-wider flex items-center gap-1.5">
+                    <FileCheck className="w-3.5 h-3.5" />
+                    {isRu ? 'Официальные документы' : 'Official documents'} ({group.generated.length})
                   </div>
-                );
-              })}
-            </div>
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {group.generated.map((doc) => {
+                    const typeInfo = DOCUMENT_TYPE_MAP[doc.document_type] || {
+                      label: doc.document_type,
+                      icon: FileText,
+                      color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
+                    };
+                    const Icon = typeInfo.icon;
+
+                    return (
+                      <div
+                        key={doc.id}
+                        className="p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="p-2.5 bg-gradient-to-br from-[#4A6572]/10 to-[#344955]/10 dark:from-[#4A6572]/20 dark:to-[#344955]/20 rounded-xl flex-shrink-0">
+                            <Icon className="w-5 h-5 text-[#4A6572] dark:text-[#F9AA33]" />
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div className="min-w-0 flex-1">
+                                <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                  {typeInfo.label}
+                                </h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                  № {doc.id.slice(0, 8).toUpperCase()} · {formatDateTime(doc.created_at)}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <button
+                                  onClick={() => handlePreviewHtml(doc)}
+                                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                                  title={isRu ? 'Просмотр' : 'Preview'}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handlePrintHtml(doc)}
+                                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                                  title={isRu ? 'Печать' : 'Print'}
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDownloadHtml(doc)}
+                                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                                  title={isRu ? 'Скачать HTML' : 'Download HTML'}
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${typeInfo.color}`}>
+                                {typeInfo.label}
+                              </span>
+                              <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                {formatDate(doc.created_at)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ─── Секция 2: Прикреплённые файлы ── */}
+            {group.attached.length > 0 && (
+              <div>
+                <div className="px-3 sm:px-4 py-2 bg-gradient-to-r from-gray-100/50 to-transparent dark:from-gray-700/30 border-b border-gray-100 dark:border-gray-700">
+                  <div className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    {isRu ? 'Прикреплённые файлы' : 'Attached files'} ({group.attached.length})
+                  </div>
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {group.attached.map((doc) => {
+                    const Icon = getFileIcon(doc.name, doc.file_type);
+                    const category = CATEGORY_MAP[doc.category] || CATEGORY_MAP.other;
+                    const canPreview = isImageFile(doc.name) || isPdfFile(doc.name);
+
+                    return (
+                      <div
+                        key={doc.id}
+                        className="p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="p-2.5 bg-gradient-to-br from-[#4A6572]/10 to-[#344955]/10 dark:from-[#4A6572]/20 dark:to-[#344955]/20 rounded-xl flex-shrink-0">
+                            <Icon className="w-5 h-5 text-[#4A6572] dark:text-[#F9AA33]" />
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div className="min-w-0 flex-1">
+                                <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                  {doc.name || '—'}
+                                </h4>
+                                {doc.description && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">
+                                    {doc.description}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {canPreview && (
+                                  <button
+                                    onClick={() => handlePreviewFile(doc)}
+                                    className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                                    title={isRu ? 'Просмотр' : 'Preview'}
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDownloadFile(doc)}
+                                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                                  title={isRu ? 'Скачать' : 'Download'}
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                                <a
+                                  href={doc.publicUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                                  title={isRu ? 'Открыть в новой вкладке' : 'Open in new tab'}
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </a>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
+                              {doc.category && (
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${category.color}`}>
+                                  {category.label}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                                <FileIcon className="w-3 h-3" />
+                                {formatSize(doc.file_size)}
+                              </span>
+                              <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                {formatDate(doc.created_at)}
+                              </span>
+                              {doc.is_favorite && (
+                                <span className="text-[10px] text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
+                                  <Star className="w-3 h-3 fill-current" />
+                                  {isRu ? 'Избранное' : 'Favorite'}
+                                </span>
+                              )}
+                              {doc.tags && doc.tags.length > 0 && (
+                                <span className="text-[10px] text-gray-400 flex items-center gap-1 flex-wrap">
+                                  <Tag className="w-3 h-3" />
+                                  {doc.tags.slice(0, 3).map(tag => `#${tag}`).join(' ')}
+                                  {doc.tags.length > 3 && ` +${doc.tags.length - 3}`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         ))
       )}
 
-      {/* ─── Модалка предпросмотра ── */}
+      {/* ─── Модалка предпросмотра файла (картинка/PDF) ── */}
       {previewFile && (
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] fade-enter"
           onClick={(e) => { if (e.target === e.currentTarget) setPreviewFile(null); }}
         >
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Header */}
             <div className="flex items-center justify-between gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="p-2 bg-gradient-to-br from-[#4A6572]/10 to-[#344955]/10 rounded-xl flex-shrink-0">
@@ -585,7 +881,7 @@ const ObjectDocuments = memo(({
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button
-                  onClick={() => handleDownload(previewFile)}
+                  onClick={() => handleDownloadFile(previewFile)}
                   className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
                   title={isRu ? 'Скачать' : 'Download'}
                 >
@@ -610,7 +906,6 @@ const ObjectDocuments = memo(({
               </div>
             </div>
 
-            {/* Content */}
             <div className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900/50 p-4 flex items-center justify-center">
               {isImageFile(previewFile.name) ? (
                 <img
@@ -641,6 +936,90 @@ const ObjectDocuments = memo(({
                   </a>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Модалка предпросмотра HTML-документа ── */}
+      {previewHtml && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] fade-enter"
+          onClick={(e) => { if (e.target === e.currentTarget) setPreviewHtml(null); }}
+        >
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-6xl w-full h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3 p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                {(() => {
+                  const typeInfo = DOCUMENT_TYPE_MAP[previewHtml.document_type] || {
+                    label: previewHtml.document_type,
+                    icon: FileText,
+                  };
+                  const Icon = typeInfo.icon;
+                  return (
+                    <>
+                      <div className="p-2 bg-gradient-to-br from-[#4A6572]/10 to-[#344955]/10 rounded-xl flex-shrink-0">
+                        <Icon className="w-5 h-5 text-[#4A6572] dark:text-[#F9AA33]" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                          {typeInfo.label}
+                        </h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          № {previewHtml.id.slice(0, 8).toUpperCase()} · {formatDateTime(previewHtml.created_at)}
+                        </p>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={() => handlePrintHtml(previewHtml)}
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                  title={isRu ? 'Печать' : 'Print'}
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDownloadHtml(previewHtml)}
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                  title={isRu ? 'Скачать HTML' : 'Download HTML'}
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setPreviewHtml(null)}
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-red-500 transition-colors"
+                  aria-label={isRu ? 'Закрыть' : 'Close'}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Iframe с документом */}
+            <div className="flex-1 overflow-hidden bg-white">
+              <iframe
+                title="Document preview"
+                srcDoc={`
+                  <!DOCTYPE html>
+                  <html lang="ru">
+                    <head>
+                      <meta charset="UTF-8">
+                      <script src="https://cdn.tailwindcss.com"></script>
+                      <style>
+                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; background: #fff; margin: 0; }
+                        .page-break { page-break-before: always; }
+                      </style>
+                    </head>
+                    <body>${previewHtml.content_html || ''}</body>
+                  </html>
+                `}
+                className="w-full h-full border-0"
+                sandbox="allow-same-origin"
+              />
             </div>
           </div>
         </div>
