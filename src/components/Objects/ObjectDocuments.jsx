@@ -436,82 +436,111 @@ const ObjectDocuments = memo(({
   }), [generatedDocs.length, attachedFiles.length]);
 
   // ─────────────────────────────────────────────────────────
-  // 🔧 ФИКС: скачивание через supabase.storage.download()
-  //    Прямая ссылка `a.download = file.pdf` НЕ работает для
-  //    cross-origin (Supabase — другой домен). Браузер игнорирует
-  //    атрибут download и открывает файл в новой вкладке.
-  //    storage.download() отдаёт Blob, который мы конвертируем в
-  //    blob: URL и триггерим скачивание — работает всегда.
-  // ─────────────────────────────────────────────────────────
-  const handleDownloadFile = useCallback(async (doc) => {
-    if (!doc || isDownloading) return;
+// 🔧 ФИКС: скачивание через createSignedUrl с { download: true }.
+//    Это заставляет Supabase отдать Content-Disposition: attachment,
+//    и браузер гарантированно скачает файл, а не откроет его в новой вкладке.
+// ─────────────────────────────────────────────────────────
+const handleDownloadFile = useCallback(async (doc) => {
+  if (!doc || isDownloading) return;
 
-    // Определяем storage_path (может лежать в разных полях)
-    const storagePath = doc.storage_path || doc.file_path || null;
+  const storagePath = doc.storage_path || doc.file_path || null;
 
-    // ── Основной путь: скачиваем через SDK ──
-    if (storagePath) {
-      setIsDownloading(true);
-      showNotification?.(isRu ? '⏳ Загрузка файла...' : '⏳ Downloading file...', 'info');
-      try {
-        const { data, error } = await supabase.storage
-          .from('projects')
-          .download(storagePath);
+  if (storagePath) {
+    setIsDownloading(true);
+    showNotification?.(isRu ? '⏳ Загрузка файла...' : '⏳ Downloading file...', 'info');
 
-        if (error) throw error;
-        if (!data) throw new Error('Empty response');
+    try {
+      const fileName = doc.name || storagePath.split('/').pop() || 'document';
 
-        // Имя файла: приоритет — doc.name, fallback — из storage_path
-        const fallbackName = storagePath.split('/').pop() || 'document';
-        const fileName = doc.name || fallbackName;
+      // createSignedUrl с download: <name> — Supabase сам поставит
+      // Content-Disposition: attachment; filename="<name>"
+      const { data, error } = await supabase.storage
+        .from('projects')
+        .createSignedUrl(storagePath, 60, {
+          download: fileName,  // ← ключевой момент
+        });
 
-        const blobUrl = URL.createObjectURL(data);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = fileName;
-        a.rel = 'noopener noreferrer';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+      if (error) throw error;
+      if (!data?.signedUrl) throw new Error('No signed URL returned');
 
-        // Освобождаем память через секунду
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      // Signed URL с `download` уже имеет нужные заголовки —
+      // просто открываем его в новой вкладке или триггерим <a>
+      const a = document.createElement('a');
+      a.href = data.signedUrl;
+      a.download = fileName;
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
 
-        showNotification?.(isRu ? '📥 Файл скачан' : '📥 File downloaded', 'success');
-        return;
-      } catch (err) {
-        console.error('[ObjectDocuments] download error:', err);
-        showNotification?.(
-          isRu ? `❌ Не удалось скачать: ${err.message}` : `❌ Download failed: ${err.message}`,
-          'error'
-        );
-        // Не return — пробуем fallback
-      } finally {
-        setIsDownloading(false);
-      }
-    }
-
-    // ── Fallback: прямая ссылка (работает, если у файла contentDisposition: attachment) ──
-    const url = doc.previewUrl || doc.publicUrl;
-    if (!url) {
-      showNotification?.('❌ Ссылка на файл недоступна', 'error');
+      showNotification?.(isRu ? '📥 Файл скачан' : '📥 File downloaded', 'success');
       return;
+    } catch (err) {
+      console.error('[ObjectDocuments] download error:', err);
+      showNotification?.(
+        isRu ? `❌ Не удалось скачать: ${err.message}` : `❌ Download failed: ${err.message}`,
+        'error'
+      );
+      // Не return — пробуем fallback
+    } finally {
+      setIsDownloading(false);
     }
+  }
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = doc.name || 'document';
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }, [showNotification, isRu, isDownloading]);
+  // ── Fallback: прямая ссылка ──
+  const url = doc.previewUrl || doc.publicUrl;
+  if (!url) {
+    showNotification?.('❌ Ссылка на файл недоступна', 'error');
+    return;
+  }
 
-  const handlePreviewFile = useCallback((doc) => {
-    if (!doc.publicUrl) return;
-    setPreviewFile(doc);
-  }, []);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = doc.name || 'document';
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}, [showNotification, isRu, isDownloading]);
+
+  // ─────────────────────────────────────────────────────────
+// 🔧 ФИКС: для просмотра создаём signed URL БЕЗ download:true.
+//    Public URL у Supabase может отдавать Content-Disposition: attachment
+//    (из настроек бакета), из-за этого <iframe> скачивает PDF вместо рендера.
+//    Signed URL без параметра `download` отдаётся с `inline` → PDF рендерится.
+// ─────────────────────────────────────────────────────────
+const handlePreviewFile = useCallback(async (doc) => {
+  if (!doc) return;
+
+  // Показываем модалку сразу с publicUrl — как быстрый placeholder
+  setPreviewFile({ ...doc, _resolvedUrl: null, _loadingUrl: true });
+
+  const storagePath = doc.storage_path || doc.file_path;
+  if (!storagePath) {
+    // Нет storage_path → используем publicUrl как есть
+    setPreviewFile({ ...doc, _resolvedUrl: doc.publicUrl, _loadingUrl: false });
+    return;
+  }
+
+  // Пытаемся создать signed URL БЕЗ download → inline
+  try {
+    const { data, error } = await supabase.storage
+      .from('projects')
+      .createSignedUrl(storagePath, 3600); // 1 час
+
+    if (error) throw error;
+
+    setPreviewFile({
+      ...doc,
+      _resolvedUrl: data?.signedUrl || doc.publicUrl,
+      _loadingUrl: false,
+    });
+  } catch (err) {
+    console.warn('[ObjectDocuments] signed URL for preview failed, fallback to publicUrl:', err);
+    setPreviewFile({ ...doc, _resolvedUrl: doc.publicUrl, _loadingUrl: false });
+  }
+}, []);
 
   // ─── Действия: HTML-документы ────────────────────────────
   const handlePreviewHtml = useCallback((doc) => {
@@ -1115,8 +1144,8 @@ const ObjectDocuments = memo(({
                   )}
                 </button>
                 <a
-                  href={previewFile.previewUrl || previewFile.publicUrl}
-                  target="_blank"
+  href={previewFile._resolvedUrl || previewFile.previewUrl || previewFile.publicUrl}
+  target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
                   title={isRu ? 'Открыть в новой вкладке' : 'Open in new tab'}
@@ -1134,29 +1163,36 @@ const ObjectDocuments = memo(({
             </div>
 
             <div className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900/50 p-4 flex items-center justify-center">
-              {isImageFile(previewFile) ? (
-                <img
-                  src={previewFile.previewUrl || previewFile.publicUrl}
-                  alt={previewFile.name || 'image'}
-                  className="max-w-full max-h-full object-contain rounded-lg"
-                />
-              ) : isPdfFile(previewFile) ? (
-                // 🔧 ФИКС: <iframe> надёжнее <object>/<embed> для cross-origin PDF.
-                //    Chrome использует встроенный PDF-вьюер — не блокирует.
-                <iframe
-                  src={previewFile.previewUrl || previewFile.publicUrl}
-                  title={previewFile.name || 'PDF preview'}
-                  className="w-full h-[70vh] rounded-lg border-0 bg-white"
-                />
-              ) : (
+              {/* 🔧 Используем _resolvedUrl: это либо signed URL (inline), 
+    либо publicUrl как fallback */}
+{previewFile._loadingUrl ? (
+  <div className="flex flex-col items-center justify-center py-12">
+    <Loader2 className="w-10 h-10 animate-spin text-[#4A6572] mb-3" />
+    <p className="text-sm text-gray-500 dark:text-gray-400">
+      {isRu ? 'Подготовка просмотра...' : 'Preparing preview...'}
+    </p>
+  </div>
+) : isImageFile(previewFile) ? (
+  <img
+    src={previewFile._resolvedUrl || previewFile.previewUrl || previewFile.publicUrl}
+    alt={previewFile.name || 'image'}
+    className="max-w-full max-h-full object-contain rounded-lg"
+  />
+) : isPdfFile(previewFile) ? (
+  <iframe
+    src={previewFile._resolvedUrl || previewFile.previewUrl || previewFile.publicUrl}
+    title={previewFile.name || 'PDF preview'}
+    className="w-full h-[70vh] rounded-lg border-0 bg-white"
+  />
+) : (
                 <div className="text-center py-12">
                   <FileIcon className="w-20 h-20 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                     {isRu ? 'Предпросмотр недоступен' : 'Preview not available'}
                   </p>
                   <a
-                    href={previewFile.previewUrl || previewFile.publicUrl}
-                    target="_blank"
+  href={previewFile._resolvedUrl || previewFile.previewUrl || previewFile.publicUrl}
+  target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-[#4A6572] text-white rounded-xl text-sm font-medium hover:bg-[#344955] transition-colors"
                   >
