@@ -48,7 +48,6 @@ const CATEGORY_MAP = {
 
 // ────────────────────────────────────────────────────────────
 // Универсальный фолбэк-CSS для HTML-документов
-// Применяется, если Tailwind CDN не загрузился (офлайн, CSP и т.п.)
 // ────────────────────────────────────────────────────────────
 const FALLBACK_CSS = `
   * { box-sizing: border-box; }
@@ -64,7 +63,6 @@ const FALLBACK_CSS = `
   h1, h2, h3, h4 { margin: 0 0 8px 0; font-weight: 700; color: #111827; }
   h1 { font-size: 22px; } h2 { font-size: 18px; } h3 { font-size: 16px; } h4 { font-size: 14px; }
   p { margin: 0 0 8px 0; }
-  /* Отступы */
   .p-0\\.5 { padding: 2px; } .p-1 { padding: 4px; } .p-2 { padding: 8px; }
   .p-4 { padding: 16px; } .p-6 { padding: 24px; } .p-8 { padding: 32px; }
   .mb-1 { margin-bottom: 4px; } .mb-2 { margin-bottom: 8px; }
@@ -74,13 +72,11 @@ const FALLBACK_CSS = `
   .mt-4 { margin-top: 16px; } .mt-8 { margin-top: 32px; }
   .pl-4 { padding-left: 16px; } .pl-5 { padding-left: 20px; } .pl-6 { padding-left: 24px; } .pl-8 { padding-left: 32px; }
   .pr-2 { padding-right: 8px; } .pr-4 { padding-right: 16px; }
-  /* Фоны */
   .bg-white { background: #fff; }
   .bg-gray-50 { background: #f9fafb; }
   .bg-gray-100 { background: #f3f4f6; }
   .bg-blue-50 { background: #eff6ff; }
   .bg-yellow-50 { background: #fefce8; }
-  /* Текст */
   .text-center { text-align: center; }
   .text-left { text-align: left; }
   .text-right { text-align: right; }
@@ -98,7 +94,6 @@ const FALLBACK_CSS = `
   .text-green-600 { color: #16a34a; }
   .uppercase { text-transform: uppercase; }
   .whitespace-nowrap { white-space: nowrap; }
-  /* Границы */
   .border { border: 1px solid #d1d5db; }
   .border-black { border-color: #000 !important; }
   .border-dotted { border-style: dotted !important; }
@@ -107,7 +102,6 @@ const FALLBACK_CSS = `
   .border-collapse { border-collapse: collapse; }
   .border-2 { border-width: 2px; }
   .border-dashed { border-style: dashed; }
-  /* Размеры и layout */
   .w-full { width: 100%; }
   .w-1\\/2 { width: 50%; } .w-3\\/4 { width: 75%; }
   .h-full { height: 100%; }
@@ -145,10 +139,8 @@ const FALLBACK_CSS = `
   .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); }
   .list-disc { list-style-type: disc; }
   .list-inside { list-style-position: inside; }
-  /* Таблицы */
   table { border-collapse: collapse; }
   td, th { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
-  /* Печать */
   @media print {
     body { padding: 0; }
     .no-print { display: none !important; }
@@ -187,21 +179,56 @@ const formatDateTime = (dateStr) => {
   } catch { return dateStr; }
 };
 
-const getFileIcon = (name, type) => {
-  const ext = (name || '').split('.').pop()?.toLowerCase();
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) return ImageIcon;
+// ────────────────────────────────────────────────────────────
+// 🔧 Универсальный детектор расширения
+//    Проверяет несколько источников имени файла:
+//    name, file_name, storage_path, file_path, file_url, publicUrl
+//    Это решает проблему: у PDF `name` мог быть "Проект дома" без ".pdf",
+//    поэтому старый isPdfFile(name) возвращал false.
+// ────────────────────────────────────────────────────────────
+const getFileExtension = (docOrName) => {
+  if (!docOrName) return '';
+
+  // Если передали строку — оборачиваем в объект
+  const doc = typeof docOrName === 'string' ? { name: docOrName } : docOrName;
+
+  const candidates = [
+    doc.name,
+    doc.file_name,
+    doc.storage_path,
+    doc.file_path,
+    doc.file_url,
+    doc.publicUrl,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const str = String(candidate);
+    const clean = str.split('?')[0].split('#')[0];
+    const lastDot = clean.lastIndexOf('.');
+    if (lastDot !== -1 && lastDot < clean.length - 1) {
+      const ext = clean.slice(lastDot + 1).toLowerCase();
+      if (ext.length <= 5 && /^[a-z0-9]+$/.test(ext)) return ext;
+    }
+  }
+
+  return '';
+};
+
+const getFileIcon = (docOrName, type) => {
+  const ext = getFileExtension(docOrName);
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'avif'].includes(ext)) return ImageIcon;
   if (['xls', 'xlsx', 'csv'].includes(ext)) return FileSpreadsheet;
-  if (['pdf'].includes(ext)) return FileText;
+  if (ext === 'pdf') return FileText;
   if (type?.startsWith('image/')) return ImageIcon;
   return FileIcon;
 };
 
-const isImageFile = (name) => {
-  const ext = (name || '').split('.').pop()?.toLowerCase();
-  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext);
+const isImageFile = (docOrName) => {
+  const ext = getFileExtension(docOrName);
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'avif'].includes(ext);
 };
 
-const isPdfFile = (name) => (name || '').toLowerCase().endsWith('.pdf');
+const isPdfFile = (docOrName) => getFileExtension(docOrName) === 'pdf';
 
 // ────────────────────────────────────────────────────────────
 // Основной компонент
@@ -225,6 +252,7 @@ const ObjectDocuments = memo(({
   const [activeFilter, setActiveFilter] = useState('all');
   const [previewFile, setPreviewFile] = useState(null);
   const [previewHtml, setPreviewHtml] = useState(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // ─── Загрузка данных ─────────────────────────────────────
   const loadDocuments = useCallback(async (silent = false) => {
@@ -253,11 +281,8 @@ const ObjectDocuments = memo(({
       const appIds = apps.map(a => a.id);
       const appsMap = apps.reduce((acc, a) => { acc[a.id] = a; return acc; }, {});
 
-      // ─────────────────────────────────────────────────────
-      // 🔧 ФИКС: добавляем `content_html` в select.
-      // Без него handlePreviewHtml / handlePrintHtml / handleDownloadHtml
-      // молча выходили с ошибкой 'Содержимое документа пусто'.
-      // ─────────────────────────────────────────────────────
+      // 🔧 ФИКС: `content_html` в select — иначе превью/печать/скачивание
+      //    HTML-документов молча падали с 'Содержимое документа пусто'.
       const { data: genDocs, error: genErr } = await supabase
         .from('generated_documents')
         .select('id, application_id, document_type, generated_by, created_at, content_html')
@@ -305,9 +330,14 @@ const ObjectDocuments = memo(({
               .from('projects')
               .getPublicUrl(project.storage_path);
 
+            // 🔧 previewUrl с ?download=false — форсирует Content-Disposition: inline
+            //    на случай, если у файла стоит attachment в metadata.
+            const previewUrl = `${publicUrl}?download=false`;
+
             docs.push({
               ...project,
               publicUrl,
+              previewUrl,
               linkedApplication: app,
             });
           });
@@ -405,21 +435,78 @@ const ObjectDocuments = memo(({
     attached: attachedFiles.length,
   }), [generatedDocs.length, attachedFiles.length]);
 
-  // ─── Действия: файлы ─────────────────────────────────────
-  const handleDownloadFile = useCallback((doc) => {
-    if (!doc.publicUrl) {
+  // ─────────────────────────────────────────────────────────
+  // 🔧 ФИКС: скачивание через supabase.storage.download()
+  //    Прямая ссылка `a.download = file.pdf` НЕ работает для
+  //    cross-origin (Supabase — другой домен). Браузер игнорирует
+  //    атрибут download и открывает файл в новой вкладке.
+  //    storage.download() отдаёт Blob, который мы конвертируем в
+  //    blob: URL и триггерим скачивание — работает всегда.
+  // ─────────────────────────────────────────────────────────
+  const handleDownloadFile = useCallback(async (doc) => {
+    if (!doc || isDownloading) return;
+
+    // Определяем storage_path (может лежать в разных полях)
+    const storagePath = doc.storage_path || doc.file_path || null;
+
+    // ── Основной путь: скачиваем через SDK ──
+    if (storagePath) {
+      setIsDownloading(true);
+      showNotification?.(isRu ? '⏳ Загрузка файла...' : '⏳ Downloading file...', 'info');
+      try {
+        const { data, error } = await supabase.storage
+          .from('projects')
+          .download(storagePath);
+
+        if (error) throw error;
+        if (!data) throw new Error('Empty response');
+
+        // Имя файла: приоритет — doc.name, fallback — из storage_path
+        const fallbackName = storagePath.split('/').pop() || 'document';
+        const fileName = doc.name || fallbackName;
+
+        const blobUrl = URL.createObjectURL(data);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        // Освобождаем память через секунду
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+
+        showNotification?.(isRu ? '📥 Файл скачан' : '📥 File downloaded', 'success');
+        return;
+      } catch (err) {
+        console.error('[ObjectDocuments] download error:', err);
+        showNotification?.(
+          isRu ? `❌ Не удалось скачать: ${err.message}` : `❌ Download failed: ${err.message}`,
+          'error'
+        );
+        // Не return — пробуем fallback
+      } finally {
+        setIsDownloading(false);
+      }
+    }
+
+    // ── Fallback: прямая ссылка (работает, если у файла contentDisposition: attachment) ──
+    const url = doc.previewUrl || doc.publicUrl;
+    if (!url) {
       showNotification?.('❌ Ссылка на файл недоступна', 'error');
       return;
     }
+
     const a = document.createElement('a');
-    a.href = doc.publicUrl;
+    a.href = url;
     a.download = doc.name || 'document';
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  }, [showNotification]);
+  }, [showNotification, isRu, isDownloading]);
 
   const handlePreviewFile = useCallback((doc) => {
     if (!doc.publicUrl) return;
@@ -440,11 +527,7 @@ const ObjectDocuments = memo(({
     setPreviewHtml(doc);
   }, [showNotification, isRu]);
 
-  // ─────────────────────────────────────────────────────────
-  // 🔧 ФИКС: печать через скрытый iframe вместо window.open.
-  // window.open часто блокируется popup-блокировщиком — тогда
-  // пользователь видел ошибку и печать не запускалась.
-  // ─────────────────────────────────────────────────────────
+  // 🔧 Печать через скрытый iframe — обход popup-блокировщика
   const handlePrintHtml = useCallback((doc) => {
     if (!doc.content_html) {
       showNotification?.('❌ Содержимое документа пусто', 'error');
@@ -453,7 +536,6 @@ const ObjectDocuments = memo(({
 
     const typeLabel = DOCUMENT_TYPE_MAP[doc.document_type]?.label || doc.document_type;
 
-    // Создаём невидимый iframe
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
@@ -488,19 +570,17 @@ const ObjectDocuments = memo(({
         console.error('[ObjectDocuments] print error:', err);
         showNotification?.('❌ Не удалось запустить печать', 'error');
       } finally {
-        // Убираем iframe через 1 секунду после закрытия диалога печати
         setTimeout(() => {
           if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
         }, 1000);
       }
     };
 
-    // Ждём, пока Tailwind CDN подгрузится, но не дольше 1.5 сек
     if (iframe.contentWindow.document.readyState === 'complete') {
       setTimeout(doPrint, 500);
     } else {
       iframe.onload = () => setTimeout(doPrint, 500);
-      setTimeout(doPrint, 1500); // страховка
+      setTimeout(doPrint, 1500);
     }
   }, [showNotification]);
 
@@ -828,11 +908,6 @@ const ObjectDocuments = memo(({
                                 </p>
                               </div>
 
-                              {/* ─────────────────────────────────
-                                  🔧 ФИКС: если content_html пуст —
-                                  показываем бейдж и не даём жать
-                                  превью/печать/скачивание.
-                              ───────────────────────────────── */}
                               <div className="flex items-center gap-1 flex-shrink-0">
                                 {!doc.content_html ? (
                                   <span
@@ -900,9 +975,11 @@ const ObjectDocuments = memo(({
                 </div>
                 <div className="divide-y divide-gray-100 dark:divide-gray-700">
                   {group.attached.map((doc) => {
-                    const Icon = getFileIcon(doc.name, doc.file_type);
+                    // 🔧 ФИКС: передаём ВЕСЬ объект doc, чтобы детектор проверил
+                    //    и name, и storage_path, и publicUrl
+                    const Icon = getFileIcon(doc, doc.file_type);
                     const category = CATEGORY_MAP[doc.category] || CATEGORY_MAP.other;
-                    const canPreview = isImageFile(doc.name) || isPdfFile(doc.name);
+                    const canPreview = isImageFile(doc) || isPdfFile(doc);
 
                     return (
                       <div
@@ -939,13 +1016,18 @@ const ObjectDocuments = memo(({
                                 )}
                                 <button
                                   onClick={() => handleDownloadFile(doc)}
-                                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                                  disabled={isDownloading}
+                                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                   title={isRu ? 'Скачать' : 'Download'}
                                 >
-                                  <Download className="w-4 h-4" />
+                                  {isDownloading ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Download className="w-4 h-4" />
+                                  )}
                                 </button>
                                 <a
-                                  href={doc.publicUrl}
+                                  href={doc.previewUrl || doc.publicUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
@@ -1006,7 +1088,7 @@ const ObjectDocuments = memo(({
             <div className="flex items-center justify-between gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="p-2 bg-gradient-to-br from-[#4A6572]/10 to-[#344955]/10 rounded-xl flex-shrink-0">
-                  {React.createElement(getFileIcon(previewFile.name, previewFile.file_type), {
+                  {React.createElement(getFileIcon(previewFile, previewFile.file_type), {
                     className: 'w-5 h-5 text-[#4A6572] dark:text-[#F9AA33]'
                   })}
                 </div>
@@ -1022,13 +1104,18 @@ const ObjectDocuments = memo(({
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                   onClick={() => handleDownloadFile(previewFile)}
-                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                  disabled={isDownloading}
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors disabled:opacity-50"
                   title={isRu ? 'Скачать' : 'Download'}
                 >
-                  <Download className="w-4 h-4" />
+                  {isDownloading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
                 </button>
                 <a
-                  href={previewFile.publicUrl}
+                  href={previewFile.previewUrl || previewFile.publicUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
@@ -1047,39 +1134,20 @@ const ObjectDocuments = memo(({
             </div>
 
             <div className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900/50 p-4 flex items-center justify-center">
-              {isImageFile(previewFile.name) ? (
+              {isImageFile(previewFile) ? (
                 <img
-                  src={previewFile.publicUrl}
-                  alt={previewFile.name}
+                  src={previewFile.previewUrl || previewFile.publicUrl}
+                  alt={previewFile.name || 'image'}
                   className="max-w-full max-h-full object-contain rounded-lg"
                 />
-              ) : isPdfFile(previewFile.name) ? (
-                // 🔧 ФИКС: <object> вместо <embed> — работает с CSP `object-src`.
-                //           Fallback внутри <object> покажет кнопку «Открыть в новой вкладке»,
-                //           если браузер не умеет встроенный PDF.
-                <object
-                  data={previewFile.publicUrl}
-                  type="application/pdf"
-                  className="w-full h-[70vh] rounded-lg"
-                >
-                  <div className="text-center py-12">
-                    <FileIcon className="w-20 h-20 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                      {isRu
-                        ? 'Встроенный просмотр PDF недоступен в этом браузере'
-                        : 'Inline PDF preview is not available in this browser'}
-                    </p>
-                    <a
-                      href={previewFile.publicUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#4A6572] text-white rounded-xl text-sm font-medium hover:bg-[#344955] transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      {isRu ? 'Открыть PDF в новой вкладке' : 'Open PDF in new tab'}
-                    </a>
-                  </div>
-                </object>
+              ) : isPdfFile(previewFile) ? (
+                // 🔧 ФИКС: <iframe> надёжнее <object>/<embed> для cross-origin PDF.
+                //    Chrome использует встроенный PDF-вьюер — не блокирует.
+                <iframe
+                  src={previewFile.previewUrl || previewFile.publicUrl}
+                  title={previewFile.name || 'PDF preview'}
+                  className="w-full h-[70vh] rounded-lg border-0 bg-white"
+                />
               ) : (
                 <div className="text-center py-12">
                   <FileIcon className="w-20 h-20 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
@@ -1087,7 +1155,7 @@ const ObjectDocuments = memo(({
                     {isRu ? 'Предпросмотр недоступен' : 'Preview not available'}
                   </p>
                   <a
-                    href={previewFile.publicUrl}
+                    href={previewFile.previewUrl || previewFile.publicUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-[#4A6572] text-white rounded-xl text-sm font-medium hover:bg-[#344955] transition-colors"
@@ -1109,7 +1177,6 @@ const ObjectDocuments = memo(({
           onClick={(e) => { if (e.target === e.currentTarget) setPreviewHtml(null); }}
         >
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-6xl w-full h-[90vh] overflow-hidden flex flex-col">
-            {/* Header */}
             <div className="flex items-center justify-between gap-3 p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 {(() => {
@@ -1160,13 +1227,7 @@ const ObjectDocuments = memo(({
               </div>
             </div>
 
-            {/* Iframe с документом */}
             <div className="flex-1 overflow-hidden bg-white">
-              {/* 🔧 ФИКС:
-                  - sandbox расширен allow-popups / allow-modals —
-                    нужно для window.print() и внешних ссылок внутри документа;
-                  - srcDoc работает благодаря `frame-src 'self' about: blob:`
-                    в vite.config.js. */}
               <iframe
                 title="Document preview"
                 srcDoc={`
