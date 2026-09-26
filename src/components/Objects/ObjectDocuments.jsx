@@ -253,10 +253,14 @@ const ObjectDocuments = memo(({
       const appIds = apps.map(a => a.id);
       const appsMap = apps.reduce((acc, a) => { acc[a.id] = a; return acc; }, {});
 
-      // Официальные документы
+      // ─────────────────────────────────────────────────────
+      // 🔧 ФИКС: добавляем `content_html` в select.
+      // Без него handlePreviewHtml / handlePrintHtml / handleDownloadHtml
+      // молча выходили с ошибкой 'Содержимое документа пусто'.
+      // ─────────────────────────────────────────────────────
       const { data: genDocs, error: genErr } = await supabase
         .from('generated_documents')
-        .select('id, application_id, document_type, generated_by, created_at')
+        .select('id, application_id, document_type, generated_by, created_at, content_html')
         .in('application_id', appIds)
         .order('created_at', { ascending: false });
 
@@ -424,47 +428,80 @@ const ObjectDocuments = memo(({
 
   // ─── Действия: HTML-документы ────────────────────────────
   const handlePreviewHtml = useCallback((doc) => {
+    if (!doc.content_html) {
+      showNotification?.(
+        isRu
+          ? '❌ Содержимое документа пусто. Пересоздайте его в разделе «Документы».'
+          : '❌ Document content is empty. Re-generate it in the "Documents" section.',
+        'error'
+      );
+      return;
+    }
     setPreviewHtml(doc);
-  }, []);
+  }, [showNotification, isRu]);
 
+  // ─────────────────────────────────────────────────────────
+  // 🔧 ФИКС: печать через скрытый iframe вместо window.open.
+  // window.open часто блокируется popup-блокировщиком — тогда
+  // пользователь видел ошибку и печать не запускалась.
+  // ─────────────────────────────────────────────────────────
   const handlePrintHtml = useCallback((doc) => {
     if (!doc.content_html) {
       showNotification?.('❌ Содержимое документа пусто', 'error');
       return;
     }
 
-    const printWindow = window.open('', '_blank', 'width=900,height=700');
-    if (!printWindow) {
-      showNotification?.('❌ Разрешите всплывающие окна для печати', 'warning');
-      return;
-    }
-
     const typeLabel = DOCUMENT_TYPE_MAP[doc.document_type]?.label || doc.document_type;
 
-    printWindow.document.write(`
+    // Создаём невидимый iframe
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentWindow.document;
+    iframeDoc.open();
+    iframeDoc.write(`
       <!DOCTYPE html>
       <html lang="ru">
         <head>
           <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
           <title>${typeLabel}</title>
           <script src="https://cdn.tailwindcss.com"></script>
           <style>${FALLBACK_CSS}</style>
         </head>
-        <body>
-          ${doc.content_html}
-          <script>
-            window.onload = () => {
-              setTimeout(() => {
-                window.print();
-                setTimeout(() => window.close(), 800);
-              }, 800);
-            };
-          </script>
-        </body>
+        <body>${doc.content_html}</body>
       </html>
     `);
-    printWindow.document.close();
+    iframeDoc.close();
+
+    const doPrint = () => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        console.error('[ObjectDocuments] print error:', err);
+        showNotification?.('❌ Не удалось запустить печать', 'error');
+      } finally {
+        // Убираем iframe через 1 секунду после закрытия диалога печати
+        setTimeout(() => {
+          if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+        }, 1000);
+      }
+    };
+
+    // Ждём, пока Tailwind CDN подгрузится, но не дольше 1.5 сек
+    if (iframe.contentWindow.document.readyState === 'complete') {
+      setTimeout(doPrint, 500);
+    } else {
+      iframe.onload = () => setTimeout(doPrint, 500);
+      setTimeout(doPrint, 1500); // страховка
+    }
   }, [showNotification]);
 
   const handleDownloadHtml = useCallback((doc) => {
@@ -791,28 +828,46 @@ const ObjectDocuments = memo(({
                                 </p>
                               </div>
 
+                              {/* ─────────────────────────────────
+                                  🔧 ФИКС: если content_html пуст —
+                                  показываем бейдж и не даём жать
+                                  превью/печать/скачивание.
+                              ───────────────────────────────── */}
                               <div className="flex items-center gap-1 flex-shrink-0">
-                                <button
-                                  onClick={() => handlePreviewHtml(doc)}
-                                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
-                                  title={isRu ? 'Просмотр' : 'Preview'}
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handlePrintHtml(doc)}
-                                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
-                                  title={isRu ? 'Печать' : 'Print'}
-                                >
-                                  <Printer className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDownloadHtml(doc)}
-                                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
-                                  title={isRu ? 'Скачать HTML' : 'Download HTML'}
-                                >
-                                  <Download className="w-4 h-4" />
-                                </button>
+                                {!doc.content_html ? (
+                                  <span
+                                    className="text-[10px] text-amber-600 dark:text-amber-400 px-2 py-1 bg-amber-50 dark:bg-amber-900/20 rounded-lg whitespace-nowrap"
+                                    title={isRu
+                                      ? 'Содержимое документа пусто. Пересоздайте его в разделе «Документы».'
+                                      : 'Document content is empty. Re-generate it in the "Documents" section.'}
+                                  >
+                                    ⚠️ {isRu ? 'Нет содержимого' : 'No content'}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => handlePreviewHtml(doc)}
+                                      className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                                      title={isRu ? 'Просмотр' : 'Preview'}
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handlePrintHtml(doc)}
+                                      className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                                      title={isRu ? 'Печать' : 'Print'}
+                                    >
+                                      <Printer className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDownloadHtml(doc)}
+                                      className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
+                                      title={isRu ? 'Скачать HTML' : 'Download HTML'}
+                                    >
+                                      <Download className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </div>
 
@@ -999,33 +1054,33 @@ const ObjectDocuments = memo(({
                   className="max-w-full max-h-full object-contain rounded-lg"
                 />
               ) : isPdfFile(previewFile.name) ? (
-  // 🔧 ФИКС: <object> работает с CSP `object-src` надёжнее, чем <embed>.
-  //           Если PDF всё равно не рендерится (некоторые браузеры блокируют
-  //           cross-origin PDF), показываем кнопку «Открыть в новой вкладке».
-  <object
-    data={previewFile.publicUrl}
-    type="application/pdf"
-    className="w-full h-[70vh] rounded-lg"
-  >
-    <div className="text-center py-12">
-      <FileIcon className="w-20 h-20 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        {isRu
-          ? 'Встроенный просмотр PDF недоступен в этом браузере'
-          : 'Inline PDF preview is not available in this browser'}
-      </p>
-      <a
-        href={previewFile.publicUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 px-4 py-2 bg-[#4A6572] text-white rounded-xl text-sm font-medium hover:bg-[#344955] transition-colors"
-      >
-        <ExternalLink className="w-4 h-4" />
-        {isRu ? 'Открыть PDF в новой вкладке' : 'Open PDF in new tab'}
-      </a>
-    </div>
-  </object>
-) : (
+                // 🔧 ФИКС: <object> вместо <embed> — работает с CSP `object-src`.
+                //           Fallback внутри <object> покажет кнопку «Открыть в новой вкладке»,
+                //           если браузер не умеет встроенный PDF.
+                <object
+                  data={previewFile.publicUrl}
+                  type="application/pdf"
+                  className="w-full h-[70vh] rounded-lg"
+                >
+                  <div className="text-center py-12">
+                    <FileIcon className="w-20 h-20 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                      {isRu
+                        ? 'Встроенный просмотр PDF недоступен в этом браузере'
+                        : 'Inline PDF preview is not available in this browser'}
+                    </p>
+                    <a
+                      href={previewFile.publicUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#4A6572] text-white rounded-xl text-sm font-medium hover:bg-[#344955] transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      {isRu ? 'Открыть PDF в новой вкладке' : 'Open PDF in new tab'}
+                    </a>
+                  </div>
+                </object>
+              ) : (
                 <div className="text-center py-12">
                   <FileIcon className="w-20 h-20 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
@@ -1107,29 +1162,28 @@ const ObjectDocuments = memo(({
 
             {/* Iframe с документом */}
             <div className="flex-1 overflow-hidden bg-white">
-              {/* 🔧 ФИКС: 
-    - sandbox расширен allow-popups + allow-popups-to-escape-sandbox
-      (нужно для window.print() и внешних ссылок внутри документа)
-    - srcDoc → Blob URL через useEffect не обязателен, но оставляем srcDoc
-      и полагаемся на CSP `frame-src 'self' about: blob:` — это работает.
-*/}
-<iframe
-  title="Document preview"
-  srcDoc={`
-    <!DOCTYPE html>
-    <html lang="ru">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <script src="https://cdn.tailwindcss.com"></script>
-        <style>${FALLBACK_CSS}</style>
-      </head>
-      <body>${previewHtml.content_html || ''}</body>
-    </html>
-  `}
-  className="w-full h-full border-0 bg-white"
-  sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals"
-/>
+              {/* 🔧 ФИКС:
+                  - sandbox расширен allow-popups / allow-modals —
+                    нужно для window.print() и внешних ссылок внутри документа;
+                  - srcDoc работает благодаря `frame-src 'self' about: blob:`
+                    в vite.config.js. */}
+              <iframe
+                title="Document preview"
+                srcDoc={`
+                  <!DOCTYPE html>
+                  <html lang="ru">
+                    <head>
+                      <meta charset="UTF-8">
+                      <meta name="viewport" content="width=device-width, initial-scale=1">
+                      <script src="https://cdn.tailwindcss.com"></script>
+                      <style>${FALLBACK_CSS}</style>
+                    </head>
+                    <body>${previewHtml.content_html || ''}</body>
+                  </html>
+                `}
+                className="w-full h-full border-0 bg-white"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals"
+              />
             </div>
           </div>
         </div>
