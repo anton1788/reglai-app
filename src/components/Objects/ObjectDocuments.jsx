@@ -259,7 +259,8 @@ function PdfViewer({ url, isRu }) {
   const [pdfLoading, setPdfLoading] = useState(true);
   const containerRef = useRef(null);
 
-  // 🆕 Загружаем PDF как ArrayBuffer
+    // 🆕 Загружаем PDF. Для blob: URL передаём напрямую в pdf.js
+  //    (обходит CSP connect-src), для http(s) — fetch + ArrayBuffer.
   useEffect(() => {
     let cancelled = false;
     setPdfLoading(true);
@@ -268,7 +269,19 @@ function PdfViewer({ url, isRu }) {
 
     (async () => {
       try {
-        console.log('[PdfViewer] Fetching:', url);
+        // 🔧 ФИКС: для blob URL не делаем fetch — передаём в pdf.js напрямую.
+        //    Chrome блокирует fetch(blob:) если connect-src без blob:.
+        //    pdf.js умеет работать с blob URL через свои внутренние механизмы.
+        if (url && url.startsWith('blob:')) {
+          console.log('[PdfViewer] Blob URL detected, passing directly to pdf.js');
+          if (!cancelled) {
+            setPdfData(url); // pdf.js принимает URL-строку
+            setPdfLoading(false);
+          }
+          return;
+        }
+
+        console.log('[PdfViewer] Fetching HTTP URL:', url);
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
@@ -287,12 +300,11 @@ function PdfViewer({ url, isRu }) {
         }
 
         if (!cancelled) {
-          // pdf.js принимает { data: ArrayBuffer }
           setPdfData({ data: buf });
           setPdfLoading(false);
         }
       } catch (err) {
-        console.error('[PdfViewer] fetch error:', err);
+        console.error('[PdfViewer] error:', err);
         if (!cancelled) {
           setLoadError(err.message || 'Fetch failed');
           setPdfLoading(false);

@@ -1,5 +1,5 @@
 // ============================================
-// 0.0.102-beta
+// 0.0.103-beta
 // ============================================
 
 import { defineConfig } from 'vite';
@@ -7,13 +7,14 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // ✅ Единая строка CSP для переиспользования (dev + build)
+// 🔧 ФИКС: blob: добавлен в connect-src — иначе fetch(blobUrl) падает
 const CSP_POLICY = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://*.supabase.co https://cdn.tailwindcss.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https: https://*.supabase.co https://*.supabase.storage",
-  "connect-src 'self' https://*.supabase.co https://*.supabase.rest https://*.supabase.storage https://*.supabase.auth https://cdn.tailwindcss.com wss://*.supabase.co ws://localhost:* http://localhost:*",
+  "connect-src 'self' blob: https://*.supabase.co https://*.supabase.rest https://*.supabase.storage https://*.supabase.auth https://cdn.tailwindcss.com wss://*.supabase.co ws://localhost:* http://localhost:*",
   "manifest-src 'self'",
   "frame-src 'self' about: blob: https://*.supabase.co https://*.supabase.storage",
   "child-src 'self' about: blob: https://*.supabase.co",
@@ -47,7 +48,6 @@ export default defineConfig({
         ],
 
         runtimeCaching: [
-          // 🔧 ФИКС: HTML — NetworkFirst, чтобы index.html всегда брался свежим
           {
             urlPattern: ({ request }) => request.mode === 'navigate',
             handler: 'NetworkFirst',
@@ -73,7 +73,6 @@ export default defineConfig({
             }
           },
           {
-            // 🔧 pdf.js worker
             urlPattern: /\.mjs$/i,
             handler: 'CacheFirst',
             options: {
