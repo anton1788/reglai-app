@@ -1,5 +1,5 @@
 // ============================================
-// 0.0.101-beta
+// 0.0.102-beta
 // ============================================
 
 import { defineConfig } from 'vite';
@@ -37,7 +37,7 @@ export default defineConfig({
       },
 
       workbox: {
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB (pdf.js worker большой)
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [
           /^\/rest\/v1\//,
@@ -47,6 +47,19 @@ export default defineConfig({
         ],
 
         runtimeCaching: [
+          // 🔧 ФИКС: HTML — NetworkFirst, чтобы index.html всегда брался свежим
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-cache',
+              networkTimeoutSeconds: 3,
+              expiration: {
+                maxEntries: 5,
+                maxAgeSeconds: 60 * 60
+              }
+            }
+          },
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|woff2?|ttf|eot)$/i,
             handler: 'CacheFirst',
@@ -60,7 +73,7 @@ export default defineConfig({
             }
           },
           {
-            // 🔧 pdf.js worker (.mjs) — критично для PWA
+            // 🔧 pdf.js worker
             urlPattern: /\.mjs$/i,
             handler: 'CacheFirst',
             options: {
@@ -154,7 +167,6 @@ export default defineConfig({
         categories: ['business', 'productivity', 'utilities']
       },
 
-      // 🔧 КРИТИЧНО: mjs добавлен в globPatterns — иначе pdf.worker не попадёт в SW-кэш
       injectManifest: {
         globPatterns: ['**/*.{js,mjs,css,html,png,svg,ico,woff2}']
       }
@@ -196,7 +208,6 @@ export default defineConfig({
           'vendor-utils': ['xlsx', 'jspdf', 'jspdf-autotable'],
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-icons': ['lucide-react'],
-          // 🔧 pdf.js в отдельный чанк — грузится лениво, экономит основной бандл
           'vendor-pdf': ['react-pdf', 'pdfjs-dist']
         },
         entryFileNames: 'assets/[name]-[hash].js',

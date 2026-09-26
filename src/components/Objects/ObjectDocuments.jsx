@@ -242,6 +242,12 @@ const isPdfFile = (docOrName) => getFileExtension(docOrName) === 'pdf';
 // 📄 PdfViewer — рендер PDF через pdf.js
 //    Работает на ВСЕХ устройствах: desktop, mobile, встроенные браузеры.
 // ────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────
+// 📄 PdfViewer — рендер PDF через pdf.js
+//    🔧 ФИКС: загружаем PDF как ArrayBuffer и передаём в pdf.js
+//    напрямую. Это обходит проблемы с blob URL, SW и CSP.
+//    Проверяем %PDF- header — если файл повреждён, покажем ошибку.
+// ────────────────────────────────────────────────────────────
 function PdfViewer({ url, isRu }) {
   const [numPages, setNumPages] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -249,14 +255,59 @@ function PdfViewer({ url, isRu }) {
   const [rotation, setRotation] = useState(0);
   const [loadError, setLoadError] = useState(null);
   const [containerWidth, setContainerWidth] = useState(null);
+  const [pdfData, setPdfData] = useState(null); // 🆕 raw ArrayBuffer
+  const [pdfLoading, setPdfLoading] = useState(true);
   const containerRef = useRef(null);
 
-  // Отслеживаем ширину контейнера — чтобы PDF вписывался в экран
+  // 🆕 Загружаем PDF как ArrayBuffer
+  useEffect(() => {
+    let cancelled = false;
+    setPdfLoading(true);
+    setPdfData(null);
+    setLoadError(null);
+
+    (async () => {
+      try {
+        console.log('[PdfViewer] Fetching:', url);
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+        const buf = await resp.arrayBuffer();
+        console.log('[PdfViewer] Fetched bytes:', buf.byteLength);
+
+        // 🔍 Проверяем, что это действительно PDF
+        const header = new Uint8Array(buf.slice(0, 5));
+        const headerStr = String.fromCharCode(...header);
+        console.log('[PdfViewer] Header:', JSON.stringify(headerStr));
+
+        if (headerStr !== '%PDF-') {
+          throw new Error(isRu
+            ? `Файл не является PDF (начало: "${headerStr}")`
+            : `File is not a PDF (starts with: "${headerStr}")`);
+        }
+
+        if (!cancelled) {
+          // pdf.js принимает { data: ArrayBuffer }
+          setPdfData({ data: buf });
+          setPdfLoading(false);
+        }
+      } catch (err) {
+        console.error('[PdfViewer] fetch error:', err);
+        if (!cancelled) {
+          setLoadError(err.message || 'Fetch failed');
+          setPdfLoading(false);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [url, isRu]);
+
+  // Отслеживаем ширину контейнера
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
         const w = containerRef.current.clientWidth;
-        // Не больше 900px, чтобы на десктопе не растягивался
         setContainerWidth(Math.min(w - 32, 900));
       }
     };
@@ -271,16 +322,16 @@ function PdfViewer({ url, isRu }) {
     setPageNumber(1);
     setScale(1.0);
     setRotation(0);
-    setLoadError(null);
   }, [url]);
 
   const onDocumentLoadSuccess = ({ numPages: np }) => {
+    console.log('[PdfViewer] Loaded pages:', np);
     setNumPages(np);
     setLoadError(null);
   };
 
   const onDocumentLoadError = (err) => {
-    console.error('[PdfViewer] load error:', err);
+    console.error('[PdfViewer] pdf.js error:', err);
     setLoadError(err?.message || (isRu ? 'Не удалось загрузить PDF' : 'Failed to load PDF'));
   };
 
@@ -303,7 +354,6 @@ function PdfViewer({ url, isRu }) {
             onClick={goToPrevPage}
             disabled={pageNumber <= 1}
             className="p-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
-            title={isRu ? 'Предыдущая страница' : 'Previous page'}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -315,7 +365,6 @@ function PdfViewer({ url, isRu }) {
             onClick={goToNextPage}
             disabled={!numPages || pageNumber >= numPages}
             className="p-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
-            title={isRu ? 'Следующая страница' : 'Next page'}
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -327,7 +376,6 @@ function PdfViewer({ url, isRu }) {
             onClick={zoomOut}
             disabled={scale <= 0.4}
             className="p-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"
-            title={isRu ? 'Уменьшить' : 'Zoom out'}
           >
             <ZoomOut className="w-4 h-4" />
           </button>
@@ -339,7 +387,6 @@ function PdfViewer({ url, isRu }) {
             onClick={zoomIn}
             disabled={scale >= 3.0}
             className="p-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"
-            title={isRu ? 'Увеличить' : 'Zoom in'}
           >
             <ZoomIn className="w-4 h-4" />
           </button>
@@ -347,7 +394,6 @@ function PdfViewer({ url, isRu }) {
             type="button"
             onClick={rotate}
             className="p-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 ml-1"
-            title={isRu ? 'Повернуть' : 'Rotate'}
           >
             <RotateCw className="w-4 h-4" />
           </button>
@@ -362,22 +408,38 @@ function PdfViewer({ url, isRu }) {
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
               {loadError}
             </p>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 mb-4">
               {isRu
                 ? 'Попробуйте открыть файл в новой вкладке'
                 : 'Try opening the file in a new tab'}
             </p>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-[#4A6572] text-white rounded-xl text-sm font-medium hover:bg-[#344955] transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+              {isRu ? 'Открыть в новой вкладке' : 'Open in new tab'}
+            </a>
+          </div>
+        ) : pdfLoading || !pdfData ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="w-10 h-10 animate-spin text-[#4A6572] mb-3" />
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {isRu ? 'Загрузка PDF…' : 'Loading PDF…'}
+            </p>
           </div>
         ) : (
           <Document
-            file={url}
+            file={pdfData}
             onLoadSuccess={onDocumentLoadSuccess}
             onLoadError={onDocumentLoadError}
             loading={
               <div className="flex flex-col items-center justify-center py-12">
                 <Loader2 className="w-10 h-10 animate-spin text-[#4A6572] mb-3" />
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {isRu ? 'Загрузка PDF…' : 'Loading PDF…'}
+                  {isRu ? 'Отрисовка PDF…' : 'Rendering PDF…'}
                 </p>
               </div>
             }
@@ -385,7 +447,7 @@ function PdfViewer({ url, isRu }) {
               <div className="flex flex-col items-center justify-center py-12">
                 <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {isRu ? 'Ошибка загрузки' : 'Load error'}
+                  {isRu ? 'Ошибка отрисовки' : 'Render error'}
                 </p>
               </div>
             }
