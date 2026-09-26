@@ -1,5 +1,5 @@
 // ============================================
-// 0.0.100-beta
+// 0.0.101-beta
 // ============================================
 
 import { defineConfig } from 'vite';
@@ -7,25 +7,16 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // ✅ Единая строка CSP для переиспользования (dev + build)
-//
-// 🔧 ФИКС 1: добавлено `about:` и `blob:` в frame-src
-//           — иначе iframe с srcDoc (about:srcdoc) блокируется,
-//           т.к. about:srcdoc НЕ попадает под 'self'.
-// 🔧 ФИКС 2: добавлена директива object-src
-//           — иначе встроенный PDF-вьюер Chrome/Edge блокируется
-//           fallback'ом на default-src 'self'.
 const CSP_POLICY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co https://cdn.tailwindcss.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://*.supabase.co https://cdn.tailwindcss.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https: https://*.supabase.co https://*.supabase.storage",
   "connect-src 'self' https://*.supabase.co https://*.supabase.rest https://*.supabase.storage https://*.supabase.auth https://cdn.tailwindcss.com wss://*.supabase.co ws://localhost:* http://localhost:*",
   "manifest-src 'self'",
-  // 🔧 ФИКС: about: + blob: для srcDoc-iframe и Blob-URL
   "frame-src 'self' about: blob: https://*.supabase.co https://*.supabase.storage",
   "child-src 'self' about: blob: https://*.supabase.co",
-  // 🔧 ФИКС: object-src для встроенного PDF-вьюера
   "object-src 'self' blob: https://*.supabase.co https://*.supabase.storage",
   "worker-src 'self' blob:",
   "base-uri 'self'",
@@ -45,9 +36,8 @@ export default defineConfig({
         navigateFallback: '/index.html'
       },
 
-      // ✅ Workbox: кэширование и стратегии
       workbox: {
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB (pdf.js worker большой)
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [
           /^\/rest\/v1\//,
@@ -56,7 +46,6 @@ export default defineConfig({
           /^\/admin\//
         ],
 
-        // ✅ Runtime caching стратегии
         runtimeCaching: [
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|woff2?|ttf|eot)$/i,
@@ -65,6 +54,19 @@ export default defineConfig({
               cacheName: 'static-resources',
               expiration: {
                 maxEntries: 100,
+                maxAgeSeconds: 30 * 24 * 60 * 60
+              },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
+            // 🔧 pdf.js worker (.mjs) — критично для PWA
+            urlPattern: /\.mjs$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'mjs-resources',
+              expiration: {
+                maxEntries: 20,
                 maxAgeSeconds: 30 * 24 * 60 * 60
               },
               cacheableResponse: { statuses: [0, 200] }
@@ -124,7 +126,6 @@ export default defineConfig({
         clientsClaim: true
       },
 
-      // ✅ PWA Manifest
       manifest: {
         short_name: 'Снабжение ВиК',
         name: 'Снабжение Вентиляция и Кондиционирование',
@@ -153,18 +154,18 @@ export default defineConfig({
         categories: ['business', 'productivity', 'utilities']
       },
 
+      // 🔧 КРИТИЧНО: mjs добавлен в globPatterns — иначе pdf.worker не попадёт в SW-кэш
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}']
+        globPatterns: ['**/*.{js,mjs,css,html,png,svg,ico,woff2}']
       }
     })
   ],
 
-  // ✅ Dev-сервер: CSP-заголовки для локальной разработки
   server: {
     headers: {
       'Content-Security-Policy': CSP_POLICY,
       'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
+      'X-Frame-Options': 'SAMEORIGIN',
       'X-XSS-Protection': '1; mode=block',
       'Referrer-Policy': 'strict-origin-when-cross-origin'
     },
@@ -178,7 +179,6 @@ export default defineConfig({
     }
   },
 
-  // ✅ Production build настройки
   build: {
     sourcemap: false,
     minify: 'terser',
@@ -195,18 +195,20 @@ export default defineConfig({
           'vendor-charts': ['recharts'],
           'vendor-utils': ['xlsx', 'jspdf', 'jspdf-autotable'],
           'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-icons': ['lucide-react']
+          'vendor-icons': ['lucide-react'],
+          // 🔧 pdf.js в отдельный чанк — грузится лениво, экономит основной бандл
+          'vendor-pdf': ['react-pdf', 'pdfjs-dist']
         },
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     },
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 1500,
     target: 'esnext',
     cssCodeSplit: true,
     commonjsOptions: {
-      include: [/recharts/, /node_modules/]
+      include: [/recharts/, /pdfjs-dist/, /node_modules/]
     }
   },
 
@@ -220,7 +222,9 @@ export default defineConfig({
       'recharts',
       'xlsx',
       'jspdf',
-      'lucide-react'
+      'lucide-react',
+      'react-pdf',
+      'pdfjs-dist'
     ],
     esbuildOptions: { target: 'esnext' },
     force: false

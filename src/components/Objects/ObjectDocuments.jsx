@@ -7,15 +7,28 @@
 // Обе категории связаны с заявками объекта.
 // ============================================================
 
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import {
   FileText, Image as ImageIcon, FileSpreadsheet, File as FileIcon,
   Download, ExternalLink, Search, X, RefreshCw, Loader2,
   FolderOpen, Eye, Star, Tag, Calendar, AlertCircle,
-  ChevronRight, Package, Printer, FileCheck, Receipt,
-  Ruler, Truck, ClipboardList, Filter
+  ChevronRight, ChevronLeft, Package, Printer, FileCheck, Receipt,
+  Ruler, Truck, ClipboardList, Filter,
+  ZoomIn, ZoomOut, RotateCw
 } from 'lucide-react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 import { supabase } from '../../utils/supabaseClient';
+
+// ────────────────────────────────────────────────────────────
+// 🔧 Настраиваем worker для pdf.js
+//    Vite сам подхватит URL воркера через `new URL(..., import.meta.url)`.
+// ────────────────────────────────────────────────────────────
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 
 // ────────────────────────────────────────────────────────────
 // Типы документов (синхронизированы с DocumentGenerator)
@@ -226,6 +239,176 @@ const isImageFile = (docOrName) => {
 const isPdfFile = (docOrName) => getFileExtension(docOrName) === 'pdf';
 
 // ────────────────────────────────────────────────────────────
+// 📄 PdfViewer — рендер PDF через pdf.js
+//    Работает на ВСЕХ устройствах: desktop, mobile, встроенные браузеры.
+// ────────────────────────────────────────────────────────────
+function PdfViewer({ url, isRu }) {
+  const [numPages, setNumPages] = useState(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [scale, setScale] = useState(1.0);
+  const [rotation, setRotation] = useState(0);
+  const [loadError, setLoadError] = useState(null);
+  const [containerWidth, setContainerWidth] = useState(null);
+  const containerRef = useRef(null);
+
+  // Отслеживаем ширину контейнера — чтобы PDF вписывался в экран
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        const w = containerRef.current.clientWidth;
+        // Не больше 900px, чтобы на десктопе не растягивался
+        setContainerWidth(Math.min(w - 32, 900));
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  // Сбрасываем состояние при смене файла
+  useEffect(() => {
+    setNumPages(null);
+    setPageNumber(1);
+    setScale(1.0);
+    setRotation(0);
+    setLoadError(null);
+  }, [url]);
+
+  const onDocumentLoadSuccess = ({ numPages: np }) => {
+    setNumPages(np);
+    setLoadError(null);
+  };
+
+  const onDocumentLoadError = (err) => {
+    console.error('[PdfViewer] load error:', err);
+    setLoadError(err?.message || (isRu ? 'Не удалось загрузить PDF' : 'Failed to load PDF'));
+  };
+
+  const goToPrevPage = () => setPageNumber((p) => Math.max(1, p - 1));
+  const goToNextPage = () => setPageNumber((p) => (numPages ? Math.min(numPages, p + 1) : p));
+  const zoomIn = () => setScale((s) => Math.min(3.0, +(s + 0.2).toFixed(2)));
+  const zoomOut = () => setScale((s) => Math.max(0.4, +(s - 0.2).toFixed(2)));
+  const rotate = () => setRotation((r) => (r + 90) % 360);
+
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-[70vh] rounded-lg bg-gray-100 dark:bg-gray-900 flex flex-col overflow-hidden"
+    >
+      {/* Панель управления */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={goToPrevPage}
+            disabled={pageNumber <= 1}
+            className="p-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+            title={isRu ? 'Предыдущая страница' : 'Previous page'}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-xs text-gray-600 dark:text-gray-400 px-2 min-w-[60px] text-center">
+            {pageNumber} / {numPages || '…'}
+          </span>
+          <button
+            type="button"
+            onClick={goToNextPage}
+            disabled={!numPages || pageNumber >= numPages}
+            className="p-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+            title={isRu ? 'Следующая страница' : 'Next page'}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={zoomOut}
+            disabled={scale <= 0.4}
+            className="p-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"
+            title={isRu ? 'Уменьшить' : 'Zoom out'}
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <span className="text-xs text-gray-600 dark:text-gray-400 px-1 min-w-[40px] text-center">
+            {Math.round(scale * 100)}%
+          </span>
+          <button
+            type="button"
+            onClick={zoomIn}
+            disabled={scale >= 3.0}
+            className="p-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"
+            title={isRu ? 'Увеличить' : 'Zoom in'}
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={rotate}
+            className="p-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 ml-1"
+            title={isRu ? 'Повернуть' : 'Rotate'}
+          >
+            <RotateCw className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* PDF */}
+      <div className="flex-1 overflow-auto bg-gray-200 dark:bg-gray-950 flex items-start justify-center p-4">
+        {loadError ? (
+          <div className="text-center py-12">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              {loadError}
+            </p>
+            <p className="text-xs text-gray-500">
+              {isRu
+                ? 'Попробуйте открыть файл в новой вкладке'
+                : 'Try opening the file in a new tab'}
+            </p>
+          </div>
+        ) : (
+          <Document
+            file={url}
+            onLoadSuccess={onDocumentLoadSuccess}
+            onLoadError={onDocumentLoadError}
+            loading={
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="w-10 h-10 animate-spin text-[#4A6572] mb-3" />
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {isRu ? 'Загрузка PDF…' : 'Loading PDF…'}
+                </p>
+              </div>
+            }
+            error={
+              <div className="flex flex-col items-center justify-center py-12">
+                <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {isRu ? 'Ошибка загрузки' : 'Load error'}
+                </p>
+              </div>
+            }
+          >
+            {containerWidth && (
+              <Page
+                pageNumber={pageNumber}
+                width={containerWidth}
+                scale={scale}
+                rotate={rotation}
+                renderTextLayer={true}
+                renderAnnotationLayer={true}
+                className="shadow-lg"
+              />
+            )}
+          </Document>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
 // Основной компонент
 // ────────────────────────────────────────────────────────────
 const ObjectDocuments = memo(({
@@ -252,7 +435,7 @@ const ObjectDocuments = memo(({
   // ─────────────────────────────────────────────────────────
   // 🔧 Освобождаем blob URL при закрытии модалки
   // ─────────────────────────────────────────────────────────
-    const closePreviewFile = useCallback(() => {
+  const closePreviewFile = useCallback(() => {
     setPreviewFile((current) => {
       if (current?._isBlob && current?._resolvedUrl?.startsWith('blob:')) {
         try { URL.revokeObjectURL(current._resolvedUrl); } catch { /* ignore */ }
@@ -438,7 +621,7 @@ const ObjectDocuments = memo(({
   }), [generatedDocs.length, attachedFiles.length]);
 
   // ─────────────────────────────────────────────────────────
-  // Скачивание: используем blob + <a download>
+  // Скачивание: blob + <a download>
   //    Прямая ссылка `a.download = file.pdf` НЕ работает для cross-origin.
   //    Blob URL работает всегда.
   // ─────────────────────────────────────────────────────────
@@ -503,9 +686,8 @@ const ObjectDocuments = memo(({
   }, [showNotification, isRu, isDownloading]);
 
   // ─────────────────────────────────────────────────────────
-  // 🔧 ПРОСМОТР: используем blob: URL (самый надёжный способ)
-  //    Blob URL НЕ имеет X-Frame-Options, Content-Disposition и т.п.
-  //    iframe с blob URL рендерит PDF всегда, независимо от CSP.
+  // ПРОСМОТР: blob: URL для PDF/картинок
+  //    pdf.js читает blob URL напрямую — надёжно на всех устройствах.
   // ─────────────────────────────────────────────────────────
   const handlePreviewFile = useCallback(async (doc) => {
     if (!doc) return;
@@ -1217,13 +1399,7 @@ const ObjectDocuments = memo(({
                       </div>
                     );
                   }
-                  return (
-                    <iframe
-                      src={url}
-                      title={previewFile.name || 'PDF preview'}
-                      className="w-full h-[70vh] rounded-lg border-0 bg-white"
-                    />
-                  );
+                  return <PdfViewer url={url} isRu={isRu} />;
                 })()
               ) : (
                 <div className="text-center py-12">
