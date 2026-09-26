@@ -181,15 +181,10 @@ const formatDateTime = (dateStr) => {
 
 // ────────────────────────────────────────────────────────────
 // 🔧 Универсальный детектор расширения
-//    Проверяет несколько источников имени файла:
-//    name, file_name, storage_path, file_path, file_url, publicUrl
-//    Это решает проблему: у PDF `name` мог быть "Проект дома" без ".pdf",
-//    поэтому старый isPdfFile(name) возвращал false.
 // ────────────────────────────────────────────────────────────
 const getFileExtension = (docOrName) => {
   if (!docOrName) return '';
 
-  // Если передали строку — оборачиваем в объект
   const doc = typeof docOrName === 'string' ? { name: docOrName } : docOrName;
 
   const candidates = [
@@ -254,6 +249,18 @@ const ObjectDocuments = memo(({
   const [previewHtml, setPreviewHtml] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // ─────────────────────────────────────────────────────────
+  // 🔧 Освобождаем blob URL при закрытии модалки
+  // ─────────────────────────────────────────────────────────
+    const closePreviewFile = useCallback(() => {
+    setPreviewFile((current) => {
+      if (current?._isBlob && current?._resolvedUrl?.startsWith('blob:')) {
+        try { URL.revokeObjectURL(current._resolvedUrl); } catch { /* ignore */ }
+      }
+      return null;
+    });
+  }, []);
+
   // ─── Загрузка данных ─────────────────────────────────────
   const loadDocuments = useCallback(async (silent = false) => {
     if (!objectId) return;
@@ -281,8 +288,8 @@ const ObjectDocuments = memo(({
       const appIds = apps.map(a => a.id);
       const appsMap = apps.reduce((acc, a) => { acc[a.id] = a; return acc; }, {});
 
-      // 🔧 ФИКС: `content_html` в select — иначе превью/печать/скачивание
-      //    HTML-документов молча падали с 'Содержимое документа пусто'.
+      // `content_html` в select — иначе превью/печать/скачивание
+      // HTML-документов молча падали с 'Содержимое документа пусто'.
       const { data: genDocs, error: genErr } = await supabase
         .from('generated_documents')
         .select('id, application_id, document_type, generated_by, created_at, content_html')
@@ -330,14 +337,9 @@ const ObjectDocuments = memo(({
               .from('projects')
               .getPublicUrl(project.storage_path);
 
-            // 🔧 previewUrl с ?download=false — форсирует Content-Disposition: inline
-            //    на случай, если у файла стоит attachment в metadata.
-            const previewUrl = `${publicUrl}?download=false`;
-
             docs.push({
               ...project,
               publicUrl,
-              previewUrl,
               linkedApplication: app,
             });
           });
@@ -436,111 +438,130 @@ const ObjectDocuments = memo(({
   }), [generatedDocs.length, attachedFiles.length]);
 
   // ─────────────────────────────────────────────────────────
-// 🔧 ФИКС: скачивание через createSignedUrl с { download: true }.
-//    Это заставляет Supabase отдать Content-Disposition: attachment,
-//    и браузер гарантированно скачает файл, а не откроет его в новой вкладке.
-// ─────────────────────────────────────────────────────────
-const handleDownloadFile = useCallback(async (doc) => {
-  if (!doc || isDownloading) return;
+  // Скачивание: используем blob + <a download>
+  //    Прямая ссылка `a.download = file.pdf` НЕ работает для cross-origin.
+  //    Blob URL работает всегда.
+  // ─────────────────────────────────────────────────────────
+  const handleDownloadFile = useCallback(async (doc) => {
+    if (!doc || isDownloading) return;
 
-  const storagePath = doc.storage_path || doc.file_path || null;
+    const storagePath = doc.storage_path || doc.file_path || null;
 
-  if (storagePath) {
-    setIsDownloading(true);
-    showNotification?.(isRu ? '⏳ Загрузка файла...' : '⏳ Downloading file...', 'info');
+    if (storagePath) {
+      setIsDownloading(true);
+      showNotification?.(isRu ? '⏳ Загрузка файла...' : '⏳ Downloading file...', 'info');
 
-    try {
-      const fileName = doc.name || storagePath.split('/').pop() || 'document';
+      try {
+        const fileName = doc.name || storagePath.split('/').pop() || 'document';
 
-      // createSignedUrl с download: <name> — Supabase сам поставит
-      // Content-Disposition: attachment; filename="<name>"
-      const { data, error } = await supabase.storage
-        .from('projects')
-        .createSignedUrl(storagePath, 60, {
-          download: fileName,  // ← ключевой момент
-        });
+        const { data, error } = await supabase.storage
+          .from('projects')
+          .download(storagePath);
 
-      if (error) throw error;
-      if (!data?.signedUrl) throw new Error('No signed URL returned');
+        if (error) throw error;
+        if (!data) throw new Error('Пустой ответ от Storage');
 
-      // Signed URL с `download` уже имеет нужные заголовки —
-      // просто открываем его в новой вкладке или триггерим <a>
-      const a = document.createElement('a');
-      a.href = data.signedUrl;
-      a.download = fileName;
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+        const blobUrl = URL.createObjectURL(data);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
 
-      showNotification?.(isRu ? '📥 Файл скачан' : '📥 File downloaded', 'success');
-      return;
-    } catch (err) {
-      console.error('[ObjectDocuments] download error:', err);
-      showNotification?.(
-        isRu ? `❌ Не удалось скачать: ${err.message}` : `❌ Download failed: ${err.message}`,
-        'error'
-      );
-      // Не return — пробуем fallback
-    } finally {
-      setIsDownloading(false);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+
+        showNotification?.(isRu ? '📥 Файл скачан' : '📥 File downloaded', 'success');
+        return;
+      } catch (err) {
+        console.error('[ObjectDocuments] download error:', err);
+        showNotification?.(
+          isRu ? `❌ Не удалось скачать: ${err.message}` : `❌ Download failed: ${err.message}`,
+          'error'
+        );
+      } finally {
+        setIsDownloading(false);
+      }
     }
-  }
 
-  // ── Fallback: прямая ссылка ──
-  const url = doc.previewUrl || doc.publicUrl;
-  if (!url) {
-    showNotification?.('❌ Ссылка на файл недоступна', 'error');
-    return;
-  }
+    // Fallback: прямая ссылка
+    const url = doc.publicUrl;
+    if (!url) {
+      showNotification?.('❌ Ссылка на файл недоступна', 'error');
+      return;
+    }
 
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = doc.name || 'document';
-  a.target = '_blank';
-  a.rel = 'noopener noreferrer';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}, [showNotification, isRu, isDownloading]);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = doc.name || 'document';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [showNotification, isRu, isDownloading]);
 
   // ─────────────────────────────────────────────────────────
-// 🔧 ФИКС: для просмотра создаём signed URL БЕЗ download:true.
-//    Public URL у Supabase может отдавать Content-Disposition: attachment
-//    (из настроек бакета), из-за этого <iframe> скачивает PDF вместо рендера.
-//    Signed URL без параметра `download` отдаётся с `inline` → PDF рендерится.
-// ─────────────────────────────────────────────────────────
-const handlePreviewFile = useCallback(async (doc) => {
-  if (!doc) return;
+  // 🔧 ПРОСМОТР: используем blob: URL (самый надёжный способ)
+  //    Blob URL НЕ имеет X-Frame-Options, Content-Disposition и т.п.
+  //    iframe с blob URL рендерит PDF всегда, независимо от CSP.
+  // ─────────────────────────────────────────────────────────
+  const handlePreviewFile = useCallback(async (doc) => {
+    if (!doc) return;
 
-  // Показываем модалку сразу с publicUrl — как быстрый placeholder
-  setPreviewFile({ ...doc, _resolvedUrl: null, _loadingUrl: true });
+    setPreviewFile({ ...doc, _resolvedUrl: null, _loadingUrl: true });
 
-  const storagePath = doc.storage_path || doc.file_path;
-  if (!storagePath) {
-    // Нет storage_path → используем publicUrl как есть
-    setPreviewFile({ ...doc, _resolvedUrl: doc.publicUrl, _loadingUrl: false });
-    return;
-  }
+    const storagePath = doc.storage_path || doc.file_path;
+    if (!storagePath) {
+      showNotification?.('❌ Не найден путь к файлу', 'error');
+      setPreviewFile({ ...doc, _resolvedUrl: doc.publicUrl, _loadingUrl: false });
+      return;
+    }
 
-  // Пытаемся создать signed URL БЕЗ download → inline
-  try {
-    const { data, error } = await supabase.storage
-      .from('projects')
-      .createSignedUrl(storagePath, 3600); // 1 час
+    const ext = getFileExtension(doc);
+    const isPdf = ext === 'pdf';
+    const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'avif'].includes(ext);
 
-    if (error) throw error;
+    try {
+      if (isPdf || isImg) {
+        // Скачиваем через SDK → получаем Blob
+        const { data: blob, error } = await supabase.storage
+          .from('projects')
+          .download(storagePath);
 
-    setPreviewFile({
-      ...doc,
-      _resolvedUrl: data?.signedUrl || doc.publicUrl,
-      _loadingUrl: false,
-    });
-  } catch (err) {
-    console.warn('[ObjectDocuments] signed URL for preview failed, fallback to publicUrl:', err);
-    setPreviewFile({ ...doc, _resolvedUrl: doc.publicUrl, _loadingUrl: false });
-  }
-}, []);
+        if (error) throw error;
+        if (!blob) throw new Error('Пустой ответ от Storage');
+
+        // Принудительно указываем MIME-тип
+        const mimeType = isPdf ? 'application/pdf' : (blob.type || 'image/*');
+        const typedBlob = new Blob([blob], { type: mimeType });
+        const blobUrl = URL.createObjectURL(typedBlob);
+
+        setPreviewFile({
+          ...doc,
+          _resolvedUrl: blobUrl,
+          _isBlob: true,
+          _loadingUrl: false,
+        });
+      } else {
+        // Не PDF и не картинка → publicUrl
+        setPreviewFile({
+          ...doc,
+          _resolvedUrl: doc.publicUrl,
+          _loadingUrl: false,
+        });
+      }
+    } catch (err) {
+      console.error('[ObjectDocuments] preview error:', err);
+      showNotification?.(
+        isRu ? `❌ Не удалось открыть: ${err.message}` : `❌ Failed to open: ${err.message}`,
+        'error'
+      );
+      // Fallback на publicUrl
+      setPreviewFile({ ...doc, _resolvedUrl: doc.publicUrl, _loadingUrl: false });
+    }
+  }, [showNotification, isRu]);
 
   // ─── Действия: HTML-документы ────────────────────────────
   const handlePreviewHtml = useCallback((doc) => {
@@ -556,7 +577,7 @@ const handlePreviewFile = useCallback(async (doc) => {
     setPreviewHtml(doc);
   }, [showNotification, isRu]);
 
-  // 🔧 Печать через скрытый iframe — обход popup-блокировщика
+  // Печать через скрытый iframe — обход popup-блокировщика
   const handlePrintHtml = useCallback((doc) => {
     if (!doc.content_html) {
       showNotification?.('❌ Содержимое документа пусто', 'error');
@@ -1004,8 +1025,6 @@ const handlePreviewFile = useCallback(async (doc) => {
                 </div>
                 <div className="divide-y divide-gray-100 dark:divide-gray-700">
                   {group.attached.map((doc) => {
-                    // 🔧 ФИКС: передаём ВЕСЬ объект doc, чтобы детектор проверил
-                    //    и name, и storage_path, и publicUrl
                     const Icon = getFileIcon(doc, doc.file_type);
                     const category = CATEGORY_MAP[doc.category] || CATEGORY_MAP.other;
                     const canPreview = isImageFile(doc) || isPdfFile(doc);
@@ -1056,7 +1075,7 @@ const handlePreviewFile = useCallback(async (doc) => {
                                   )}
                                 </button>
                                 <a
-                                  href={doc.previewUrl || doc.publicUrl}
+                                  href={doc.publicUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
@@ -1111,7 +1130,7 @@ const handlePreviewFile = useCallback(async (doc) => {
       {previewFile && (
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] fade-enter"
-          onClick={(e) => { if (e.target === e.currentTarget) setPreviewFile(null); }}
+          onClick={(e) => { if (e.target === e.currentTarget) closePreviewFile(); }}
         >
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
@@ -1144,8 +1163,8 @@ const handlePreviewFile = useCallback(async (doc) => {
                   )}
                 </button>
                 <a
-  href={previewFile._resolvedUrl || previewFile.previewUrl || previewFile.publicUrl}
-  target="_blank"
+                  href={previewFile._resolvedUrl || previewFile.publicUrl}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-[#4A6572] dark:hover:text-[#F9AA33] transition-colors"
                   title={isRu ? 'Открыть в новой вкладке' : 'Open in new tab'}
@@ -1153,7 +1172,7 @@ const handlePreviewFile = useCallback(async (doc) => {
                   <ExternalLink className="w-4 h-4" />
                 </a>
                 <button
-                  onClick={() => setPreviewFile(null)}
+                  onClick={closePreviewFile}
                   className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-red-500 transition-colors"
                   aria-label={isRu ? 'Закрыть' : 'Close'}
                 >
@@ -1163,36 +1182,58 @@ const handlePreviewFile = useCallback(async (doc) => {
             </div>
 
             <div className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900/50 p-4 flex items-center justify-center">
-              {/* 🔧 Используем _resolvedUrl: это либо signed URL (inline), 
-    либо publicUrl как fallback */}
-{previewFile._loadingUrl ? (
-  <div className="flex flex-col items-center justify-center py-12">
-    <Loader2 className="w-10 h-10 animate-spin text-[#4A6572] mb-3" />
-    <p className="text-sm text-gray-500 dark:text-gray-400">
-      {isRu ? 'Подготовка просмотра...' : 'Preparing preview...'}
-    </p>
-  </div>
-) : isImageFile(previewFile) ? (
-  <img
-    src={previewFile._resolvedUrl || previewFile.previewUrl || previewFile.publicUrl}
-    alt={previewFile.name || 'image'}
-    className="max-w-full max-h-full object-contain rounded-lg"
-  />
-) : isPdfFile(previewFile) ? (
-  <iframe
-    src={previewFile._resolvedUrl || previewFile.previewUrl || previewFile.publicUrl}
-    title={previewFile.name || 'PDF preview'}
-    className="w-full h-[70vh] rounded-lg border-0 bg-white"
-  />
-) : (
+              {previewFile._loadingUrl ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-10 h-10 animate-spin text-[#4A6572] mb-3" />
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {isRu ? 'Подготовка просмотра...' : 'Preparing preview...'}
+                  </p>
+                </div>
+              ) : isImageFile(previewFile) ? (
+                (() => {
+                  const url = previewFile._resolvedUrl || previewFile.publicUrl;
+                  if (!url) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-12">
+                        <Loader2 className="w-10 h-10 animate-spin text-[#4A6572] mb-3" />
+                      </div>
+                    );
+                  }
+                  return (
+                    <img
+                      src={url}
+                      alt={previewFile.name || 'image'}
+                      className="max-w-full max-h-full object-contain rounded-lg"
+                    />
+                  );
+                })()
+              ) : isPdfFile(previewFile) ? (
+                (() => {
+                  const url = previewFile._resolvedUrl || previewFile.publicUrl;
+                  if (!url) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-12">
+                        <Loader2 className="w-10 h-10 animate-spin text-[#4A6572] mb-3" />
+                      </div>
+                    );
+                  }
+                  return (
+                    <iframe
+                      src={url}
+                      title={previewFile.name || 'PDF preview'}
+                      className="w-full h-[70vh] rounded-lg border-0 bg-white"
+                    />
+                  );
+                })()
+              ) : (
                 <div className="text-center py-12">
                   <FileIcon className="w-20 h-20 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                     {isRu ? 'Предпросмотр недоступен' : 'Preview not available'}
                   </p>
                   <a
-  href={previewFile._resolvedUrl || previewFile.previewUrl || previewFile.publicUrl}
-  target="_blank"
+                    href={previewFile._resolvedUrl || previewFile.publicUrl}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-[#4A6572] text-white rounded-xl text-sm font-medium hover:bg-[#344955] transition-colors"
                   >
