@@ -1,5 +1,5 @@
 // ============================================
-// 0.0.94-beta
+// 0.0.95-beta
 // ============================================
 
 import { defineConfig } from 'vite';
@@ -7,16 +7,29 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // ✅ Единая строка CSP для переиспользования (dev + build)
+//
+// 🔧 ФИКС 1: добавлено `about:` и `blob:` в frame-src
+//           — иначе iframe с srcDoc (about:srcdoc) блокируется,
+//           т.к. about:srcdoc НЕ попадает под 'self'.
+// 🔧 ФИКС 2: добавлена директива object-src
+//           — иначе встроенный PDF-вьюер Chrome/Edge блокируется
+//           fallback'ом на default-src 'self'.
 const CSP_POLICY = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co https://cdn.tailwindcss.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
-  "font-src 'self' https://fonts.gstatic.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https: https://*.supabase.co https://*.supabase.storage",
   "connect-src 'self' https://*.supabase.co https://*.supabase.rest https://*.supabase.storage https://*.supabase.auth https://cdn.tailwindcss.com wss://*.supabase.co ws://localhost:* http://localhost:*",
   "manifest-src 'self'",
-  "frame-src 'self' https://*.supabase.co",
-  "worker-src 'self' blob:"
+  // 🔧 ФИКС: about: + blob: для srcDoc-iframe и Blob-URL
+  "frame-src 'self' about: blob: https://*.supabase.co https://*.supabase.storage",
+  "child-src 'self' about: blob: https://*.supabase.co",
+  // 🔧 ФИКС: object-src для встроенного PDF-вьюера
+  "object-src 'self' blob: https://*.supabase.co https://*.supabase.storage",
+  "worker-src 'self' blob:",
+  "base-uri 'self'",
+  "form-action 'self'"
 ].join('; ');
 
 export default defineConfig({
@@ -25,13 +38,13 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'script',
-      
+
       devOptions: {
         enabled: true,
         type: 'module',
         navigateFallback: '/index.html'
       },
-      
+
       // ✅ Workbox: кэширование и стратегии
       workbox: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
@@ -42,26 +55,22 @@ export default defineConfig({
           /^\/functions\//,
           /^\/admin\//
         ],
-        
+
         // ✅ Runtime caching стратегии
         runtimeCaching: [
           {
-            // Статические ресурсы: изображения, шрифты, иконки
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|woff2?|ttf|eot)$/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'static-resources',
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 дней
+                maxAgeSeconds: 30 * 24 * 60 * 60
               },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
+              cacheableResponse: { statuses: [0, 200] }
             }
           },
           {
-            // Supabase REST API (GET-запросы)
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*$/i,
             handler: 'NetworkFirst',
             options: {
@@ -69,60 +78,52 @@ export default defineConfig({
               networkTimeoutSeconds: 10,
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 5 * 60 // 5 минут
+                maxAgeSeconds: 5 * 60
               },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
+              cacheableResponse: { statuses: [0, 200] }
             }
           },
           {
-            // Supabase Storage (файлы, изображения)
             urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/.*$/i,
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'supabase-storage',
               expiration: {
                 maxEntries: 30,
-                maxAgeSeconds: 24 * 60 * 60 // 24 часа
+                maxAgeSeconds: 24 * 60 * 60
               }
             }
           },
           {
-            // Google Fonts
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*$/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'google-fonts',
               expiration: {
                 maxEntries: 20,
-                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 дней
+                maxAgeSeconds: 30 * 24 * 60 * 60
               }
             }
           },
           {
-            // ✅ Tailwind CDN (для iframe предпросмотра документов)
             urlPattern: /^https:\/\/cdn\.tailwindcss\.com\/.*$/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'tailwind-cdn',
               expiration: {
                 maxEntries: 5,
-                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 дней
+                maxAgeSeconds: 30 * 24 * 60 * 60
               },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
+              cacheableResponse: { statuses: [0, 200] }
             }
           }
         ],
-        
-        // ✅ Глобальные настройки
+
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true
       },
-      
+
       // ✅ PWA Manifest
       manifest: {
         short_name: 'Снабжение ВиК',
@@ -135,72 +136,29 @@ export default defineConfig({
         theme_color: '#4A6572',
         background_color: '#F5F7FA',
         icons: [
-          {
-            src: '/icon-48.png',
-            sizes: '48x48',
-            type: 'image/png'
-          },
-          {
-            src: '/icon-72.png',
-            sizes: '72x72',
-            type: 'image/png'
-          },
-          {
-            src: '/icon-96.png',
-            sizes: '96x96',
-            type: 'image/png'
-          },
-          {
-            src: '/icon-128.png',
-            sizes: '128x128',
-            type: 'image/png'
-          },
-          {
-            src: '/icon-144.png',
-            sizes: '144x144',
-            type: 'image/png'
-          },
-          {
-            src: '/icon-152.png',
-            sizes: '152x152',
-            type: 'image/png'
-          },
-          {
-            src: '/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable'
-          },
-          {
-            src: '/icon-256.png',
-            sizes: '256x256',
-            type: 'image/png'
-          },
-          {
-            src: '/icon-384.png',
-            sizes: '384x384',
-            type: 'image/png'
-          },
-          {
-            src: '/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          }
+          { src: '/icon-48.png',  sizes: '48x48',   type: 'image/png' },
+          { src: '/icon-72.png',  sizes: '72x72',   type: 'image/png' },
+          { src: '/icon-96.png',  sizes: '96x96',   type: 'image/png' },
+          { src: '/icon-128.png', sizes: '128x128', type: 'image/png' },
+          { src: '/icon-144.png', sizes: '144x144', type: 'image/png' },
+          { src: '/icon-152.png', sizes: '152x152', type: 'image/png' },
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+          { src: '/icon-256.png', sizes: '256x256', type: 'image/png' },
+          { src: '/icon-384.png', sizes: '384x384', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
         ],
         screenshots: [],
         related_applications: [],
         prefer_related_applications: false,
         categories: ['business', 'productivity', 'utilities']
       },
-      
-      // ✅ Отключаем авто-инъекцию CSP в SW (управляем вручную в index.html)
+
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}']
       }
     })
   ],
-  
+
   // ✅ Dev-сервер: CSP-заголовки для локальной разработки
   server: {
     headers: {
@@ -211,7 +169,6 @@ export default defineConfig({
       'Referrer-Policy': 'strict-origin-when-cross-origin'
     },
     allowedHosts: true,
-    // ✅ Оптимизация для PWA в dev-режиме
     warmup: {
       clientFiles: [
         './src/main.jsx',
@@ -220,10 +177,9 @@ export default defineConfig({
       ]
     }
   },
-  
+
   // ✅ Production build настройки
   build: {
-    // ✅ Уменьшаем размер бандла
     sourcemap: false,
     minify: 'terser',
     terserOptions: {
@@ -232,8 +188,6 @@ export default defineConfig({
         drop_debugger: true
       }
     },
-    
-    // ✅ Code splitting для оптимизации загрузки
     rollupOptions: {
       output: {
         manualChunks: {
@@ -248,22 +202,14 @@ export default defineConfig({
         assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     },
-    
     chunkSizeWarningLimit: 1000,
     target: 'esnext',
     cssCodeSplit: true,
-    
-    // ============================================
-    // 🆕 ФИКС ДЛЯ RECHARTS
-    // ============================================
     commonjsOptions: {
       include: [/recharts/, /node_modules/]
     }
   },
-  
-  // ============================================
-  // 🆕 ОПТИМИЗАЦИЯ ЗАВИСИМОСТЕЙ (ФИКС ДЛЯ RECHARTS)
-  // ============================================
+
   optimizeDeps: {
     include: [
       'react',
@@ -276,16 +222,11 @@ export default defineConfig({
       'jspdf',
       'lucide-react'
     ],
-    esbuildOptions: {
-      target: 'esnext'
-    },
+    esbuildOptions: { target: 'esnext' },
     force: false
   },
-  
-  // ✅ Resolve aliases (опционально, если используете @/imports)
+
   resolve: {
-    alias: {
-      // '@': path.resolve(__dirname, './src') // Раскомментируйте при необходимости
-    }
+    alias: {}
   }
 });

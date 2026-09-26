@@ -999,12 +999,33 @@ const ObjectDocuments = memo(({
                   className="max-w-full max-h-full object-contain rounded-lg"
                 />
               ) : isPdfFile(previewFile.name) ? (
-                <embed
-                  src={previewFile.publicUrl}
-                  type="application/pdf"
-                  className="w-full h-[70vh] rounded-lg"
-                />
-              ) : (
+  // 🔧 ФИКС: <object> работает с CSP `object-src` надёжнее, чем <embed>.
+  //           Если PDF всё равно не рендерится (некоторые браузеры блокируют
+  //           cross-origin PDF), показываем кнопку «Открыть в новой вкладке».
+  <object
+    data={previewFile.publicUrl}
+    type="application/pdf"
+    className="w-full h-[70vh] rounded-lg"
+  >
+    <div className="text-center py-12">
+      <FileIcon className="w-20 h-20 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        {isRu
+          ? 'Встроенный просмотр PDF недоступен в этом браузере'
+          : 'Inline PDF preview is not available in this browser'}
+      </p>
+      <a
+        href={previewFile.publicUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-2 px-4 py-2 bg-[#4A6572] text-white rounded-xl text-sm font-medium hover:bg-[#344955] transition-colors"
+      >
+        <ExternalLink className="w-4 h-4" />
+        {isRu ? 'Открыть PDF в новой вкладке' : 'Open PDF in new tab'}
+      </a>
+    </div>
+  </object>
+) : (
                 <div className="text-center py-12">
                   <FileIcon className="w-20 h-20 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
@@ -1086,23 +1107,29 @@ const ObjectDocuments = memo(({
 
             {/* Iframe с документом */}
             <div className="flex-1 overflow-hidden bg-white">
-              <iframe
-                title="Document preview"
-                srcDoc={`
-                  <!DOCTYPE html>
-                  <html lang="ru">
-                    <head>
-                      <meta charset="UTF-8">
-                      <meta name="viewport" content="width=device-width, initial-scale=1">
-                      <script src="https://cdn.tailwindcss.com"></script>
-                      <style>${FALLBACK_CSS}</style>
-                    </head>
-                    <body>${previewHtml.content_html || ''}</body>
-                  </html>
-                `}
-                className="w-full h-full border-0 bg-white"
-                sandbox="allow-scripts allow-same-origin"
-              />
+              {/* 🔧 ФИКС: 
+    - sandbox расширен allow-popups + allow-popups-to-escape-sandbox
+      (нужно для window.print() и внешних ссылок внутри документа)
+    - srcDoc → Blob URL через useEffect не обязателен, но оставляем srcDoc
+      и полагаемся на CSP `frame-src 'self' about: blob:` — это работает.
+*/}
+<iframe
+  title="Document preview"
+  srcDoc={`
+    <!DOCTYPE html>
+    <html lang="ru">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>${FALLBACK_CSS}</style>
+      </head>
+      <body>${previewHtml.content_html || ''}</body>
+    </html>
+  `}
+  className="w-full h-full border-0 bg-white"
+  sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals"
+/>
             </div>
           </div>
         </div>
