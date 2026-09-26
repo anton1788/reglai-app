@@ -47,6 +47,119 @@ const CATEGORY_MAP = {
 };
 
 // ────────────────────────────────────────────────────────────
+// Универсальный фолбэк-CSS для HTML-документов
+// Применяется, если Tailwind CDN не загрузился (офлайн, CSP и т.п.)
+// ────────────────────────────────────────────────────────────
+const FALLBACK_CSS = `
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    padding: 20px;
+    background: #fff;
+    color: #111827;
+    margin: 0;
+    line-height: 1.5;
+    font-size: 14px;
+  }
+  h1, h2, h3, h4 { margin: 0 0 8px 0; font-weight: 700; color: #111827; }
+  h1 { font-size: 22px; } h2 { font-size: 18px; } h3 { font-size: 16px; } h4 { font-size: 14px; }
+  p { margin: 0 0 8px 0; }
+  /* Отступы */
+  .p-0\\.5 { padding: 2px; } .p-1 { padding: 4px; } .p-2 { padding: 8px; }
+  .p-4 { padding: 16px; } .p-6 { padding: 24px; } .p-8 { padding: 32px; }
+  .mb-1 { margin-bottom: 4px; } .mb-2 { margin-bottom: 8px; }
+  .mb-3 { margin-bottom: 12px; } .mb-4 { margin-bottom: 16px; }
+  .mb-6 { margin-bottom: 24px; }
+  .mt-1 { margin-top: 4px; } .mt-2 { margin-top: 8px; }
+  .mt-4 { margin-top: 16px; } .mt-8 { margin-top: 32px; }
+  .pl-4 { padding-left: 16px; } .pl-5 { padding-left: 20px; } .pl-6 { padding-left: 24px; } .pl-8 { padding-left: 32px; }
+  .pr-2 { padding-right: 8px; } .pr-4 { padding-right: 16px; }
+  /* Фоны */
+  .bg-white { background: #fff; }
+  .bg-gray-50 { background: #f9fafb; }
+  .bg-gray-100 { background: #f3f4f6; }
+  .bg-blue-50 { background: #eff6ff; }
+  .bg-yellow-50 { background: #fefce8; }
+  /* Текст */
+  .text-center { text-align: center; }
+  .text-left { text-align: left; }
+  .text-right { text-align: right; }
+  .font-bold { font-weight: 700; }
+  .font-semibold { font-weight: 600; }
+  .font-medium { font-weight: 500; }
+  .text-xs { font-size: 11px; } .text-sm { font-size: 13px; }
+  .text-base { font-size: 14px; } .text-lg { font-size: 16px; }
+  .text-xl { font-size: 18px; } .text-2xl { font-size: 22px; }
+  .text-gray-400 { color: #9ca3af; }
+  .text-gray-500 { color: #6b7280; }
+  .text-gray-600 { color: #4b5563; }
+  .text-gray-700 { color: #374151; }
+  .text-red-600 { color: #dc2626; }
+  .text-green-600 { color: #16a34a; }
+  .uppercase { text-transform: uppercase; }
+  .whitespace-nowrap { white-space: nowrap; }
+  /* Границы */
+  .border { border: 1px solid #d1d5db; }
+  .border-black { border-color: #000 !important; }
+  .border-dotted { border-style: dotted !important; }
+  .border-b { border-bottom: 1px solid #d1d5db; }
+  .border-t { border-top: 1px solid #d1d5db; }
+  .border-collapse { border-collapse: collapse; }
+  .border-2 { border-width: 2px; }
+  .border-dashed { border-style: dashed; }
+  /* Размеры и layout */
+  .w-full { width: 100%; }
+  .w-1\\/2 { width: 50%; } .w-3\\/4 { width: 75%; }
+  .h-full { height: 100%; }
+  .min-w-\\[200px\\] { min-width: 200px; }
+  .max-w-4xl { max-width: 56rem; } .max-w-5xl { max-width: 64rem; }
+  .max-w-6xl { max-width: 72rem; } .max-w-7xl { max-width: 80rem; }
+  .mx-auto { margin-left: auto; margin-right: auto; }
+  .overflow-x-auto { overflow-x: auto; }
+  .overflow-auto { overflow: auto; }
+  .inline-block { display: inline-block; }
+  .inline-flex { display: inline-flex; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .justify-end { justify-content: flex-end; }
+  .justify-center { justify-content: center; }
+  .flex { display: flex; }
+  .grid { display: grid; }
+  .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .col-span-2 { grid-column: span 2 / span 2; }
+  .col-span-3 { grid-column: span 3 / span 3; }
+  .col-span-7 { grid-column: span 7 / span 7; }
+  .col-span-8 { grid-column: span 8 / span 8; }
+  .col-span-9 { grid-column: span 9 / span 9; }
+  .col-span-10 { grid-column: span 10 / span 10; }
+  .col-span-11 { grid-column: span 11 / span 11; }
+  .col-span-12 { grid-column: span 12 / span 12; }
+  .gap-2 { gap: 8px; } .gap-4 { gap: 16px; } .gap-8 { gap: 32px; }
+  .space-y-1 > * + * { margin-top: 4px; }
+  .space-y-2 > * + * { margin-top: 8px; }
+  .space-y-3 > * + * { margin-top: 12px; }
+  .rounded { border-radius: 4px; } .rounded-lg { border-radius: 8px; }
+  .rounded-xl { border-radius: 12px; }
+  .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); }
+  .list-disc { list-style-type: disc; }
+  .list-inside { list-style-position: inside; }
+  /* Таблицы */
+  table { border-collapse: collapse; }
+  td, th { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
+  /* Печать */
+  @media print {
+    body { padding: 0; }
+    .no-print { display: none !important; }
+    .page-break { page-break-before: always; }
+    table { page-break-inside: avoid; }
+    tr { page-break-inside: avoid; }
+  }
+  .page-break { page-break-before: always; }
+`;
+
+// ────────────────────────────────────────────────────────────
 // Хелперы
 // ────────────────────────────────────────────────────────────
 const formatSize = (bytes) => {
@@ -102,16 +215,16 @@ const ObjectDocuments = memo(({
   const isRu = language === 'ru';
 
   // ─── State ───────────────────────────────────────────────
-  const [generatedDocs, setGeneratedDocs] = useState([]);      // official documents
-  const [attachedFiles, setAttachedFiles] = useState([]);      // project files
+  const [generatedDocs, setGeneratedDocs] = useState([]);
+  const [attachedFiles, setAttachedFiles] = useState([]);
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all');      // 'all' | 'generated' | 'attached'
-  const [previewFile, setPreviewFile] = useState(null);         // { type: 'image' | 'pdf', doc }
-  const [previewHtml, setPreviewHtml] = useState(null);         // { doc } для HTML-предпросмотра
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [previewFile, setPreviewFile] = useState(null);
+  const [previewHtml, setPreviewHtml] = useState(null);
 
   // ─── Загрузка данных ─────────────────────────────────────
   const loadDocuments = useCallback(async (silent = false) => {
@@ -120,7 +233,6 @@ const ObjectDocuments = memo(({
     else setIsLoading(true);
 
     try {
-      // 1. Все заявки объекта
       const { data: apps, error: appsErr } = await supabase
         .from('applications')
         .select('id, object_name, foreman_name, created_at, status')
@@ -141,7 +253,7 @@ const ObjectDocuments = memo(({
       const appIds = apps.map(a => a.id);
       const appsMap = apps.reduce((acc, a) => { acc[a.id] = a; return acc; }, {});
 
-      // 2. Официальные документы (generated_documents)
+      // Официальные документы
       const { data: genDocs, error: genErr } = await supabase
         .from('generated_documents')
         .select('id, application_id, document_type, generated_by, created_at')
@@ -152,7 +264,6 @@ const ObjectDocuments = memo(({
         console.warn('[ObjectDocuments] generated_documents error:', genErr);
         setGeneratedDocs([]);
       } else {
-        // Обогащаем linkedApplication
         const enriched = (genDocs || []).map(doc => ({
           ...doc,
           linkedApplication: appsMap[doc.application_id],
@@ -160,7 +271,7 @@ const ObjectDocuments = memo(({
         setGeneratedDocs(enriched);
       }
 
-      // 3. Прикреплённые файлы (projects + project_application_links)
+      // Прикреплённые файлы
       const { data: links, error: linksErr } = await supabase
         .from('project_application_links')
         .select('project_id, application_id')
@@ -198,7 +309,6 @@ const ObjectDocuments = memo(({
           });
         });
 
-        // Дедупликация
         const uniqueDocs = docs.reduce((acc, current) => {
           const exists = acc.find(item => item.id === current.id);
           if (!exists) acc.push(current);
@@ -224,7 +334,6 @@ const ObjectDocuments = memo(({
     loadDocuments();
   }, [loadDocuments]);
 
-  // ─── Обновление ──────────────────────────────────────────
   const handleRefresh = useCallback(async () => {
     await loadDocuments(true);
     showNotification?.(
@@ -252,11 +361,9 @@ const ObjectDocuments = memo(({
     );
   }, [attachedFiles, searchTerm]);
 
-  // ─── Группировка по заявкам ──────────────────────────────
   const groupedByApplication = useMemo(() => {
     const groups = {};
 
-    // Официальные документы
     if (activeFilter === 'all' || activeFilter === 'generated') {
       filteredGenerated.forEach(doc => {
         const appId = doc.linkedApplication?.id || 'unknown';
@@ -271,7 +378,6 @@ const ObjectDocuments = memo(({
       });
     }
 
-    // Прикреплённые файлы
     if (activeFilter === 'all' || activeFilter === 'attached') {
       filteredAttached.forEach(doc => {
         const appId = doc.linkedApplication?.id || 'unknown';
@@ -289,14 +395,13 @@ const ObjectDocuments = memo(({
     return Object.values(groups);
   }, [filteredGenerated, filteredAttached, activeFilter]);
 
-  // ─── Всего документов (для счётчиков) ────────────────────
   const counts = useMemo(() => ({
     all: generatedDocs.length + attachedFiles.length,
     generated: generatedDocs.length,
     attached: attachedFiles.length,
   }), [generatedDocs.length, attachedFiles.length]);
 
-  // ─── Действия: прикреплённые файлы ───────────────────────
+  // ─── Действия: файлы ─────────────────────────────────────
   const handleDownloadFile = useCallback((doc) => {
     if (!doc.publicUrl) {
       showNotification?.('❌ Ссылка на файл недоступна', 'error');
@@ -317,7 +422,7 @@ const ObjectDocuments = memo(({
     setPreviewFile(doc);
   }, []);
 
-  // ─── Действия: сгенерированные документы ─────────────────
+  // ─── Действия: HTML-документы ────────────────────────────
   const handlePreviewHtml = useCallback((doc) => {
     setPreviewHtml(doc);
   }, []);
@@ -341,18 +446,10 @@ const ObjectDocuments = memo(({
       <html lang="ru">
         <head>
           <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
           <title>${typeLabel}</title>
           <script src="https://cdn.tailwindcss.com"></script>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; background: #fff; }
-            @media print {
-              body { padding: 0; }
-              .no-print { display: none !important; }
-              .page-break { page-break-before: always; }
-              table { page-break-inside: avoid; }
-              tr { page-break-inside: avoid; }
-            }
-          </style>
+          <style>${FALLBACK_CSS}</style>
         </head>
         <body>
           ${doc.content_html}
@@ -360,8 +457,8 @@ const ObjectDocuments = memo(({
             window.onload = () => {
               setTimeout(() => {
                 window.print();
-                setTimeout(() => window.close(), 500);
-              }, 500);
+                setTimeout(() => window.close(), 800);
+              }, 800);
             };
           </script>
         </body>
@@ -383,15 +480,10 @@ const ObjectDocuments = memo(({
 <html lang="ru">
   <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${typeLabel}</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; background: #fff; }
-      @media print {
-        body { padding: 0; }
-        .page-break { page-break-before: always; }
-      }
-    </style>
+    <style>${FALLBACK_CSS}</style>
   </head>
   <body>
     ${doc.content_html}
@@ -414,7 +506,6 @@ const ObjectDocuments = memo(({
     );
   }, [showNotification, isRu]);
 
-  // ─── Открыть связанную заявку ────────────────────────────
   const handleOpenApplication = useCallback((app) => {
     if (!app || !onOpenApplication) return;
     onOpenApplication(app);
@@ -454,7 +545,6 @@ const ObjectDocuments = memo(({
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto mb-6 text-left">
-          {/* Официальные */}
           <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-xl">
             <div className="flex items-center gap-2 mb-2">
               <FileCheck className="w-5 h-5 text-[#4A6572] dark:text-[#F9AA33]" />
@@ -469,7 +559,6 @@ const ObjectDocuments = memo(({
             </ol>
           </div>
 
-          {/* Прикреплённые */}
           <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-xl">
             <div className="flex items-center gap-2 mb-2">
               <FolderOpen className="w-5 h-5 text-[#4A6572] dark:text-[#F9AA33]" />
@@ -529,9 +618,7 @@ const ObjectDocuments = memo(({
           </button>
         </div>
 
-        {/* Фильтр + поиск */}
         <div className="flex flex-col sm:flex-row gap-2">
-          {/* Фильтр-табы */}
           <div className="flex gap-1 bg-gray-100 dark:bg-gray-700/50 rounded-xl p-1">
             <button
               onClick={() => setActiveFilter('all')}
@@ -568,7 +655,6 @@ const ObjectDocuments = memo(({
             </button>
           </div>
 
-          {/* Поиск */}
           {(counts.all > 3) && (
             <div className="flex-1 relative min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -635,7 +721,6 @@ const ObjectDocuments = memo(({
             key={group.application?.id || 'unknown'}
             className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
           >
-            {/* Шапка группы — заявка */}
             {group.application && (
               <div className="flex items-center justify-between gap-3 p-3 sm:p-4 bg-gradient-to-r from-gray-50 to-transparent dark:from-gray-700/30 dark:to-transparent border-b border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-3 min-w-0">
@@ -667,7 +752,7 @@ const ObjectDocuments = memo(({
               </div>
             )}
 
-            {/* ─── Секция 1: Официальные документы ── */}
+            {/* ─── Официальные документы ── */}
             {group.generated.length > 0 && (
               <div>
                 <div className="px-3 sm:px-4 py-2 bg-gradient-to-r from-[#4A6572]/5 to-transparent dark:from-[#4A6572]/10 border-b border-gray-100 dark:border-gray-700">
@@ -749,7 +834,7 @@ const ObjectDocuments = memo(({
               </div>
             )}
 
-            {/* ─── Секция 2: Прикреплённые файлы ── */}
+            {/* ─── Прикреплённые файлы ── */}
             {group.attached.length > 0 && (
               <div>
                 <div className="px-3 sm:px-4 py-2 bg-gradient-to-r from-gray-100/50 to-transparent dark:from-gray-700/30 border-b border-gray-100 dark:border-gray-700">
@@ -856,7 +941,7 @@ const ObjectDocuments = memo(({
         ))
       )}
 
-      {/* ─── Модалка предпросмотра файла (картинка/PDF) ── */}
+      {/* ─── Модалка предпросмотра файла ── */}
       {previewFile && (
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] fade-enter"
@@ -1008,17 +1093,15 @@ const ObjectDocuments = memo(({
                   <html lang="ru">
                     <head>
                       <meta charset="UTF-8">
+                      <meta name="viewport" content="width=device-width, initial-scale=1">
                       <script src="https://cdn.tailwindcss.com"></script>
-                      <style>
-                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; background: #fff; margin: 0; }
-                        .page-break { page-break-before: always; }
-                      </style>
+                      <style>${FALLBACK_CSS}</style>
                     </head>
                     <body>${previewHtml.content_html || ''}</body>
                   </html>
                 `}
-                className="w-full h-full border-0"
-                sandbox="allow-same-origin"
+                className="w-full h-full border-0 bg-white"
+                sandbox="allow-scripts allow-same-origin"
               />
             </div>
           </div>

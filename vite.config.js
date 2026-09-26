@@ -1,5 +1,5 @@
 // ============================================
-// 0.0.93-beta
+// 0.0.94-beta
 // ============================================
 
 import { defineConfig } from 'vite';
@@ -9,11 +9,11 @@ import { VitePWA } from 'vite-plugin-pwa';
 // ✅ Единая строка CSP для переиспользования (dev + build)
 const CSP_POLICY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co https://cdn.tailwindcss.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob: https: https://*.supabase.co https://*.supabase.storage",
-  "connect-src 'self' https://*.supabase.co https://*.supabase.rest https://*.supabase.storage https://*.supabase.auth wss://*.supabase.co ws://localhost:* http://localhost:*",
+  "connect-src 'self' https://*.supabase.co https://*.supabase.rest https://*.supabase.storage https://*.supabase.auth https://cdn.tailwindcss.com wss://*.supabase.co ws://localhost:* http://localhost:*",
   "manifest-src 'self'",
   "frame-src 'self' https://*.supabase.co",
   "worker-src 'self' blob:"
@@ -99,6 +99,21 @@ export default defineConfig({
                 maxAgeSeconds: 30 * 24 * 60 * 60 // 30 дней
               }
             }
+          },
+          {
+            // ✅ Tailwind CDN (для iframe предпросмотра документов)
+            urlPattern: /^https:\/\/cdn\.tailwindcss\.com\/.*$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'tailwind-cdn',
+              expiration: {
+                maxEntries: 5,
+                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 дней
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
           }
         ],
         
@@ -173,7 +188,6 @@ export default defineConfig({
             purpose: 'any maskable'
           }
         ],
-        // ✅ Для тёмной темы (опционально, поддерживается в Android 12+)
         screenshots: [],
         related_applications: [],
         prefer_related_applications: false,
@@ -229,17 +243,13 @@ export default defineConfig({
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-icons': ['lucide-react']
         },
-        // ✅ Имена файлов с хешами для кэширования
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     },
     
-    // ✅ Увеличиваем лимит предупреждения о размере чанка
     chunkSizeWarningLimit: 1000,
-    
-    // ✅ Оптимизация для PWA
     target: 'esnext',
     cssCodeSplit: true,
     
@@ -269,7 +279,6 @@ export default defineConfig({
     esbuildOptions: {
       target: 'esnext'
     },
-    // ✅ Принудительная пересборка зависимостей
     force: false
   },
   
