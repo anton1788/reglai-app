@@ -35,28 +35,14 @@ const SORT_OPTIONS = [
 // 🧩 КОМПОНЕНТ
 // ────────────────────────────────────────────────────────────
 
-/**
- * Каталог материалов со сквозным поиском по прайсам всех поставщиков.
- *
- * @param {object} props
- * @param {string} props.companyId
- * @param {(msg: string, type?: 'success'|'error'|'info'|'warning') => void} props.showNotification
- * @param {(item) => void} [props.onAddToRFQ] — добавить позицию в RFQ-корзину (управляет App.jsx)
- * @param {(itemId: string) => void} [props.onRemoveFromRFQ] — убрать позицию из корзины
- * @param {() => void} [props.onClearRFQ] — очистить корзину целиком
- * @param {() => void} [props.onOpenRFQCreate] — открыть форму создания RFQ
- * @param {Array} [props.rfqCart] — текущее содержимое корзины (из App.jsx)
- * @param {string} [props.initialSearchTerm] — предзаполнить поиск
- * @param {string} [props.initialCategory] — предзаполнить категорию
- */
 export default function SupplierCatalog({
   companyId,
   showNotification,
   onAddToRFQ,
-  onRemoveFromRFQ,       // 🆕
-  onClearRFQ,            // 🆕
-  onOpenRFQCreate,       // 🆕
-  rfqCart: externalRfqCart = [], // 🆕
+  onRemoveFromRFQ,
+  onClearRFQ,
+  onOpenRFQCreate,
+  rfqCart: externalRfqCart = [],
   initialSearchTerm = '',
   initialCategory = '',
 }) {
@@ -81,15 +67,12 @@ export default function SupplierCatalog({
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(false);
 
-  // 🆕 RFQ-корзина — единый источник правды из App.jsx.
-  //    Локальный fallback нужен только если компонент используется изолированно.
+  // RFQ-корзина — единый источник правды из App.jsx
   const [localCartFallback, setLocalCartFallback] = useState([]);
   const rfqCart = Array.isArray(externalRfqCart) && externalRfqCart.length >= 0
     ? externalRfqCart
     : localCartFallback;
 
-  // 🆕 Обновление корзины: если управляет родитель — дёргаем колбэки,
-  //    иначе — пишем в локальный fallback.
   const updateCart = useCallback(
     (updater) => {
       if (Array.isArray(externalRfqCart)) {
@@ -152,7 +135,7 @@ export default function SupplierCatalog({
     search();
   }, [search]);
 
-  // ─── Клиентская сортировка ─────────────────────────────
+  // ─── Сортировка ────────────────────────────────────────
   const sortedItems = useMemo(() => {
     const arr = [...items];
     switch (sortBy) {
@@ -170,14 +153,12 @@ export default function SupplierCatalog({
     }
   }, [items, sortBy]);
 
-  // ─── Группировка по нормализованному имени ─────────────
+  // ─── Группировка ───────────────────────────────────────
   const groupedByName = useMemo(() => {
     const map = new Map();
     for (const it of sortedItems) {
       const key = it.normalized_name || it.name?.toLowerCase() || 'unknown';
-      if (!map.has(key)) {
-        map.set(key, []);
-      }
+      if (!map.has(key)) map.set(key, []);
       map.get(key).push(it);
     }
     return Array.from(map.entries()).map(([key, variants]) => ({
@@ -189,12 +170,10 @@ export default function SupplierCatalog({
     }));
   }, [sortedItems]);
 
-  // ─── Список уникальных категорий ───────────────────────
+  // ─── Категории ─────────────────────────────────────────
   const categories = useMemo(() => {
     const s = new Set();
-    for (const it of items) {
-      if (it.category) s.add(it.category);
-    }
+    for (const it of items) if (it.category) s.add(it.category);
     return Array.from(s).sort();
   }, [items]);
 
@@ -204,7 +183,6 @@ export default function SupplierCatalog({
     [rfqCart]
   );
 
-  // 🆕 Добавление в корзину: собираем cartItem и пробрасываем наверх
   const addToRfqCart = useCallback(
     (item) => {
       if (rfqCart.some((p) => p.id === item.id)) {
@@ -242,13 +220,21 @@ export default function SupplierCatalog({
 
   // 🆕 Кнопка «В RFQ →» — открывает форму создания RFQ в App.jsx
   const handleOpenRFQCreate = useCallback(() => {
+    // 🔍 Отладка — смотрим, что видят колбэки
+    console.log('🔍 [SupplierCatalog] handleOpenRFQCreate:', {
+      rfqCartLength: rfqCart.length,
+      hasOnOpenRFQCreate: typeof onOpenRFQCreate === 'function',
+    });
+
     if (rfqCart.length === 0) {
       notify('Сначала добавьте материалы в корзину', 'warning');
       return;
     }
     if (typeof onOpenRFQCreate === 'function') {
+      console.log('✅ [SupplierCatalog] вызываем onOpenRFQCreate()');
       onOpenRFQCreate();
     } else {
+      console.warn('❌ [SupplierCatalog] onOpenRFQCreate не передан!');
       notify('Откройте раздел RFQ для создания запроса', 'info');
     }
   }, [rfqCart.length, onOpenRFQCreate, notify]);
@@ -293,7 +279,6 @@ export default function SupplierCatalog({
 
         {/* Поиск + фильтры */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6 space-y-3">
-          {/* Поисковая строка */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -315,11 +300,9 @@ export default function SupplierCatalog({
             )}
           </div>
 
-          {/* Фильтры в ряд */}
           <div className="flex flex-wrap items-center gap-2">
             <Filter className="w-4 h-4 text-gray-400 shrink-0" />
 
-            {/* Категория */}
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -331,7 +314,6 @@ export default function SupplierCatalog({
               ))}
             </select>
 
-            {/* Только в наличии */}
             <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
               <input
                 type="checkbox"
@@ -343,7 +325,6 @@ export default function SupplierCatalog({
               Только в наличии
             </label>
 
-            {/* Группировка */}
             <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
               <input
                 type="checkbox"
@@ -355,7 +336,6 @@ export default function SupplierCatalog({
               Сравнить цены
             </label>
 
-            {/* Сортировка */}
             <div className="ml-auto flex items-center gap-1">
               <ArrowUpDown className="w-4 h-4 text-gray-400" />
               <select
@@ -417,7 +397,6 @@ export default function SupplierCatalog({
           </div>
         )}
 
-        {/* Итоговая строка */}
         {searched && !loading && sortedItems.length > 0 && (
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-6 text-center">
             Найдено {sortedItems.length} позиц
@@ -431,7 +410,7 @@ export default function SupplierCatalog({
 }
 
 // ────────────────────────────────────────────────────────────
-// 🧩 ПОДКОМПОНЕНТЫ (без изменений)
+// ПОДКОМПОНЕНТЫ
 // ────────────────────────────────────────────────────────────
 
 function EmptyHint() {
@@ -474,7 +453,6 @@ function MaterialCard({ item, inCart, onAdd, onRemove }) {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:border-[#F9AA33]/50 hover:shadow-lg transition-all">
-      {/* Имя + артикул */}
       <div className="mb-2">
         <h3 className="font-semibold text-gray-900 dark:text-white text-sm leading-snug line-clamp-2">
           {item.name}
@@ -498,7 +476,6 @@ function MaterialCard({ item, inCart, onAdd, onRemove }) {
         </div>
       </div>
 
-      {/* Поставщик */}
       <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mb-3">
         <Building2 className="w-3.5 h-3.5 shrink-0" />
         <span className="truncate">{item.supplier_name || 'Поставщик'}</span>
@@ -510,7 +487,6 @@ function MaterialCard({ item, inCart, onAdd, onRemove }) {
         )}
       </div>
 
-      {/* Цена */}
       <div className="flex items-baseline justify-between mb-3">
         <div>
           <span className="text-xl font-bold text-[#344955] dark:text-[#F9AA33]">
@@ -535,7 +511,6 @@ function MaterialCard({ item, inCart, onAdd, onRemove }) {
         )}
       </div>
 
-      {/* Действия */}
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-gray-400">
           {item.min_quantity > 1
@@ -572,7 +547,6 @@ function GroupCard({ group, isInRfqCart, onAddToRfq, onRemoveFromRfq }) {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-      {/* Заголовок группы */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
         <div className="min-w-0">
           <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate">
@@ -599,7 +573,6 @@ function GroupCard({ group, isInRfqCart, onAddToRfq, onRemoveFromRfq }) {
         </div>
       </div>
 
-      {/* Список предложений */}
       <div className="divide-y divide-gray-100 dark:divide-gray-700">
         {variants.map((v, i) => {
           const isBest = i === 0;
@@ -675,10 +648,6 @@ function GroupCard({ group, isInRfqCart, onAddToRfq, onRemoveFromRfq }) {
     </div>
   );
 }
-
-// ────────────────────────────────────────────────────────────
-// 🧰 МЕЛКИЕ УТИЛИТЫ
-// ────────────────────────────────────────────────────────────
 
 function getDeclension(n, one, few, many) {
   const mod10 = n % 10;
