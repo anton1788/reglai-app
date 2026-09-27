@@ -2,10 +2,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Plus, Search, Filter, Loader2, Building2, AlertCircle, RefreshCw, X,
+  UserPlus,
 } from 'lucide-react';
 
 import SupplierCard from './SupplierCard';
 import SupplierForm from './SupplierForm';
+import SupplierInviteModal from './SupplierInviteModal';
 import {
   getSuppliers,
   createSupplier,
@@ -65,6 +67,10 @@ export default function SupplierManager({
   const [formOpen, setFormOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  // 🆕 Состояние для модалки приглашения
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteSupplierId, setInviteSupplierId] = useState(null);
 
   // ─── Дебаунс поиска ────────────────────────────────────
   useEffect(() => {
@@ -141,7 +147,6 @@ export default function SupplierManager({
       } else {
         const created = await createSupplier({ ...payload, company_id: companyId });
 
-        // Лог взаимодействия (не блокирует основной сценарий при ошибке)
         if (created?.id) {
           try {
             await logSupplierInteraction({
@@ -200,6 +205,20 @@ export default function SupplierManager({
     }
   };
 
+  // 🆕 Открытие модалки приглашения
+  const handleOpenInvite = (supplier = null) => {
+    if (!canEdit) return notify('Недостаточно прав', 'error');
+    setInviteSupplierId(supplier?.id || null);
+    setInviteOpen(true);
+  };
+
+  const handleCloseInvite = () => {
+    setInviteOpen(false);
+    setInviteSupplierId(null);
+    // Обновим историю (на случай, если логирование добавило запись)
+    loadSuppliers({ silent: true });
+  };
+
   // ─── Счётчики по фильтрам ──────────────────────────────
   const counts = useMemo(() => {
     const c = { all: suppliers.length };
@@ -225,7 +244,7 @@ export default function SupplierManager({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => loadSuppliers({ silent: true })}
               disabled={refreshing}
@@ -234,6 +253,18 @@ export default function SupplierManager({
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
+
+            {/* 🆕 Кнопка приглашения */}
+            {canEdit && (
+              <button
+                onClick={() => handleOpenInvite(null)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[#4A6572] text-[#4A6572] hover:bg-[#4A6572]/10 text-sm font-medium transition"
+              >
+                <UserPlus className="w-4 h-4" />
+                Пригласить поставщика
+              </button>
+            )}
+
             {canEdit && (
               <button
                 onClick={handleOpenCreate}
@@ -249,7 +280,6 @@ export default function SupplierManager({
         {/* Фильтры */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
           <div className="flex flex-col lg:flex-row gap-4">
-            {/* Статусы */}
             <div className="flex flex-wrap items-center gap-2">
               <Filter className="w-4 h-4 text-gray-400" />
               {STATUS_FILTERS.map((f) => {
@@ -274,7 +304,6 @@ export default function SupplierManager({
               })}
             </div>
 
-            {/* Поиск */}
             <div className="relative flex-1 min-w-[240px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -330,6 +359,7 @@ export default function SupplierManager({
                 key={s.id}
                 supplier={s}
                 onSelect={onSelectSupplier}
+                onInvite={canEdit ? (sup) => handleOpenInvite(sup) : undefined}
                 onEdit={canEdit ? handleOpenEdit : undefined}
                 onArchive={canEdit ? handleArchive : undefined}
                 onDelete={canEdit ? handleDelete : undefined}
@@ -345,6 +375,16 @@ export default function SupplierManager({
           onClose={handleCloseForm}
           onSubmit={handleSubmit}
           saving={saving}
+        />
+
+        {/* 🆕 Модалка приглашения */}
+        <SupplierInviteModal
+          open={inviteOpen}
+          onClose={handleCloseInvite}
+          companyId={companyId}
+          userId={userId}
+          preselectedSupplierId={inviteSupplierId}
+          showNotification={notify}
         />
       </div>
     </div>

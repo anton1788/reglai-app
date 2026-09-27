@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Building2, Mail, Phone, MapPin, Star, CheckCircle2,
   MoreVertical, Pencil, Archive, Trash2, Package2, TrendingUp,
-  Globe, User,
+  Globe, User, UserPlus,
 } from 'lucide-react';
 
 const STATUS_META = {
@@ -25,13 +25,19 @@ const formatRating = (value) => {
   return n.toFixed(1);
 };
 
-export default function SupplierCard({ supplier, onSelect, onEdit, onArchive, onDelete }) {
+export default function SupplierCard({
+  supplier,
+  onSelect,
+  onEdit,
+  onArchive,
+  onDelete,
+  onInvite,
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
-  const hasActions = Boolean(onEdit || onArchive || onDelete);
+  const hasActions = Boolean(onEdit || onArchive || onDelete || onInvite);
 
-  // Закрытие меню по клику снаружи
   useEffect(() => {
     if (!menuOpen) return;
     const handler = (e) => {
@@ -58,7 +64,7 @@ export default function SupplierCard({ supplier, onSelect, onEdit, onArchive, on
         hover:border-[#F9AA33]/50 dark:hover:border-[#F9AA33]/50 hover:shadow-lg transition-all duration-200
         ${onSelect ? 'cursor-pointer' : ''} p-4`}
     >
-      {/* Верхняя строка: логотип + имя + меню */}
+      {/* Верхняя строка */}
       <div className="flex items-start gap-3">
         <div className="w-12 h-12 shrink-0 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
           {supplier.logo_url ? (
@@ -85,7 +91,6 @@ export default function SupplierCard({ supplier, onSelect, onEdit, onArchive, on
           )}
         </div>
 
-        {/* Меню действий — только если есть хотя бы один колбэк */}
         {hasActions && (
           <div ref={menuRef} className="relative">
             <button
@@ -98,6 +103,15 @@ export default function SupplierCard({ supplier, onSelect, onEdit, onArchive, on
 
             {menuOpen && (
               <div className="absolute right-0 top-full mt-1 z-20 w-44 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden">
+                {/* 🆕 Пригласить */}
+                {onInvite && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onInvite(supplier); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    <UserPlus className="w-4 h-4" /> Пригласить
+                  </button>
+                )}
                 {onEdit && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onEdit(supplier); }}
@@ -192,7 +206,7 @@ export default function SupplierCard({ supplier, onSelect, onEdit, onArchive, on
         </div>
       )}
 
-      {/* Футер: заказы + сумма */}
+      {/* Футер */}
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
         <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
           <Package2 className="w-3.5 h-3.5" />
