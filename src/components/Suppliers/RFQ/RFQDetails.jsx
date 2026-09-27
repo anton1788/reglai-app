@@ -3,10 +3,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ArrowLeft, Loader2, AlertCircle, RefreshCw, Users, FileText,
   MessageSquare, Calendar, MapPin, Banknote, CheckCircle2,
-  Ban, Plus, Clock, Trophy, TrendingDown, X,
+  Ban, Plus, Clock, Trophy, TrendingDown, X, BarChart3,
 } from 'lucide-react';
 
 import RFQSupplierSelector from './RFQSupplierSelector';
+import OfferComparison from '../Offers/OfferComparison';
 import {
   getRFQById,
   getRFQInvitations,
@@ -41,7 +42,9 @@ const formatPrice = (v) =>
 
 const formatQty = (v) => {
   const n = Number(v) || 0;
-  return Number.isInteger(n) ? n.toLocaleString('ru-RU') : n.toLocaleString('ru-RU', { maximumFractionDigits: 3 });
+  return Number.isInteger(n)
+    ? n.toLocaleString('ru-RU')
+    : n.toLocaleString('ru-RU', { maximumFractionDigits: 3 });
 };
 
 /**
@@ -83,6 +86,9 @@ export default function RFQDetails({
 
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // 🆕 Модалка сравнения офферов
+  const [comparisonOpen, setComparisonOpen] = useState(false);
 
   // ─── Загрузка ──────────────────────────────────────────
   const loadAll = useCallback(
@@ -220,6 +226,7 @@ export default function RFQDetails({
   }
 
   const items = Array.isArray(rfq.items) ? rfq.items : [];
+  const canSelectNow = canEdit && status !== 'completed' && status !== 'canceled';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
@@ -300,6 +307,7 @@ export default function RFQDetails({
         {/* Основной контент */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-4">
+            {/* Условия */}
             <Card icon={Calendar} title="Условия">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <Field label="Адрес доставки" value={rfq.delivery_address} icon={MapPin} />
@@ -317,6 +325,7 @@ export default function RFQDetails({
               </div>
             </Card>
 
+            {/* Позиции */}
             <Card icon={FileText} title={`Позиции (${items.length})`}>
               {items.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
@@ -360,10 +369,22 @@ export default function RFQDetails({
               )}
             </Card>
 
+            {/* Предложения */}
             <Card
               icon={Trophy}
               title={`Предложения (${offers.length})`}
-              subtitle="Сортировка по возрастанию цены"
+              subtitle={offers.length > 1 ? undefined : 'Сортировка по возрастанию цены'}
+              headerAction={
+                offers.length > 1 ? (
+                  <button
+                    onClick={() => setComparisonOpen(true)}
+                    className="flex items-center gap-1 text-[11px] font-medium text-[#4A6572] hover:text-[#344955] transition"
+                  >
+                    <BarChart3 className="w-3 h-3" />
+                    Сравнить все
+                  </button>
+                ) : null
+              }
             >
               {offers.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
@@ -378,7 +399,7 @@ export default function RFQDetails({
                       key={offer.id}
                       offer={offer}
                       isBest={idx === 0}
-                      canSelect={canEdit && status !== 'completed' && status !== 'canceled'}
+                      canSelect={canSelectNow}
                       onSelect={() => handleSelectOffer(offer)}
                       loading={actionLoading}
                     />
@@ -388,6 +409,7 @@ export default function RFQDetails({
             </Card>
           </div>
 
+          {/* Правая колонка */}
           <div className="space-y-4">
             <Card icon={Users} title={`Приглашения (${invitations.length})`}>
               {invitations.length === 0 ? (
@@ -430,6 +452,7 @@ export default function RFQDetails({
         </div>
       </div>
 
+      {/* Селектор поставщиков */}
       <RFQSupplierSelector
         open={selectorOpen}
         onClose={() => setSelectorOpen(false)}
@@ -437,6 +460,25 @@ export default function RFQDetails({
         excludeSupplierIds={invitations.map((i) => i.supplier_id)}
         onConfirm={handleAddSuppliers}
       />
+
+      {/* 🆕 Модалка сравнения офферов */}
+      {comparisonOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] fade-enter overflow-y-auto">
+          <div className="min-h-full p-4 md:p-6">
+            <OfferComparison
+              rfq={rfq}
+              offers={offers}
+              canSelect={canSelectNow}
+              actionLoading={actionLoading}
+              onSelect={(offer) => {
+                setComparisonOpen(false);
+                handleSelectOffer(offer);
+              }}
+              onBack={() => setComparisonOpen(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -457,7 +499,7 @@ function StatBox({ icon: IconCmp, label, value, color = 'text-[#4A6572]' }) {
   );
 }
 
-function Card({ icon: IconCmp, title, subtitle, children }) {
+function Card({ icon: IconCmp, title, subtitle, headerAction, children }) {
   const Icon = IconCmp;
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 md:p-5">
@@ -468,8 +510,13 @@ function Card({ icon: IconCmp, title, subtitle, children }) {
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
           {title}
         </h3>
-        {subtitle && (
-          <span className="text-[11px] text-gray-400 ml-auto">{subtitle}</span>
+        {(headerAction || subtitle) && (
+          <div className="ml-auto flex items-center gap-2">
+            {headerAction}
+            {subtitle && (
+              <span className="text-[11px] text-gray-400">{subtitle}</span>
+            )}
+          </div>
         )}
       </div>
       {children}

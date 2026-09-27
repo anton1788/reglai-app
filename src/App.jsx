@@ -76,6 +76,16 @@ import ApplicationList from './components/ApplicationList';
 import ObjectsList from './components/Objects/ObjectsList';
 // 🏢 ПОСТАВЩИКИ (B2B)
 import SupplierManager from './components/Suppliers/SupplierManager';
+import SupplierCatalog from './components/Suppliers/SupplierCatalog';
+import SupplierDashboard from './components/Suppliers/SupplierDashboard';
+import ProcurementDashboard from './components/Suppliers/ProcurementDashboard';
+import PriceListManager from './components/Suppliers/PriceList/PriceListManager';
+import RFQList from './components/Suppliers/RFQ/RFQList';
+import RFQCreate from './components/Suppliers/RFQ/RFQCreate';
+import RFQDetails from './components/Suppliers/RFQ/RFQDetails';
+import PurchaseOrderList from './components/Suppliers/Orders/PurchaseOrderList';
+import PurchaseOrderForm from './components/Suppliers/Orders/PurchaseOrderForm';
+import PurchaseOrderDetails from './components/Suppliers/Orders/PurchaseOrderDetails';
 import ObjectForm from './components/Objects/ObjectForm';
 import ObjectHub from './components/Objects/ObjectHub';
 import { normalizeObjectName } from './api/objects';
@@ -1025,6 +1035,13 @@ const App = () => {
   const [currentView, setCurrentView] = useState('create');
   // 🆕 Объекты: id открытого объекта (для будущего object-hub)
 const [selectedObjectId, setSelectedObjectId] = useState(null);
+
+// 🏢 ПОСТАВЩИКИ (B2B): навигация между модулем
+const [selectedSupplierId, setSelectedSupplierId] = useState(null);
+const [selectedRFQId, setSelectedRFQId] = useState(null);
+const [selectedPOId, setSelectedPOId] = useState(null);
+const [poFormMode, setPoFormMode] = useState(null); // { offer, rfq } | { preselectedSupplierId } | null
+const [currentSupplierId, setCurrentSupplierId] = useState(null); // supplier.id для роли поставщика
   const [applications, setApplications] = useState([]);
   const [allApplications, setAllApplications] = useState([]);
 // 🔧 НОВЫЙ STATE: все заявки компании БЕЗ пагинации (для мерджера и других нужд)
@@ -1292,8 +1309,34 @@ useEffect(() => {
       setClientId(id);
     }
   };
-  loadClientId();
+    loadClientId();
 }, [user, userCompanyId, userRole]);
+
+// 🏢 Загрузка supplierId для ролей поставщика
+useEffect(() => {
+  const loadSupplierId = async () => {
+    if (!user?.id) return;
+    if (userRole !== 'supplier_admin' && userRole !== 'supplier_manager') return;
+
+    try {
+      const { data } = await supabase
+        .from('suppliers')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      setCurrentSupplierId(data?.id || null);
+      if (!data?.id) {
+        console.warn('⚠️ Поставщик не привязан к user_id. Проверьте таблицу suppliers.');
+      }
+    } catch (err) {
+      console.error('Ошибка загрузки supplierId:', err);
+      setCurrentSupplierId(null);
+    }
+  };
+
+  loadSupplierId();
+}, [user?.id, userRole, supabase]);
 
 // 📊 Load NPS Responses
 // ✅ СТАЛО
@@ -5731,9 +5774,17 @@ useEffect(() => {
         else if (userRole === 'supply_admin') {
             setCurrentView('warehouse');
         }
-        // Менеджер клиентов
+                // Менеджер клиентов
         else if (userRole === 'client_manager') {
             setCurrentView('clients');
+        }
+        // 🏢 Менеджер по закупкам → дашборд закупок
+        else if (userRole === 'procurement_manager') {
+            setCurrentView('procurementDashboard');
+        }
+        // 🏢 Поставщик → дашборд поставщика
+        else if (userRole === 'supplier_admin' || userRole === 'supplier_manager') {
+            setCurrentView('supplierDashboard');
         }
         // Все остальные → видят заявки
         else {
@@ -7623,9 +7674,16 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
               setCurrentView('inwork');
             }
           }
-          else if (path === '/client') setCurrentView('clientDashboard');
+                    else if (path === '/client') setCurrentView('clientDashboard');
           else if (path === '/client/documents') setCurrentView('clientDocuments');
           else if (path === '/client/chat') setCurrentView('clientChat');
+          // 🏢 ПОСТАВЩИКИ (B2B)
+          else if (path === '/suppliers') setCurrentView('suppliers');
+          else if (path === '/supplier-catalog') setCurrentView('supplierCatalog');
+          else if (path === '/rfq') setCurrentView('rfqList');
+          else if (path === '/purchase-orders') setCurrentView('purchaseOrders');
+          else if (path === '/procurement') setCurrentView('procurementDashboard');
+          else if (path === '/supplier-dashboard') setCurrentView('supplierDashboard');
         }}
         currentPage={currentView}
         onInvite={() => setShowInviteModal(true)}
@@ -8645,10 +8703,182 @@ onClearFilters={handleClearFilters}
     userId={user?.id}
     role={userRole}
     showNotification={showNotification}
-    onSelectSupplier={(supplier) => {
-      // 🚧 Пока просто лог; в Шаге 2.8 откроем SupplierDetails
-      console.log('[App] Открыть поставщика:', supplier);
-      showNotification(`Открытие карточки «${supplier.name}» — в разработке`, 'info');
+    onOpenPriceList={(supplier) => {
+      setSelectedSupplierId(supplier.id);
+      setCurrentView('supplierPriceList');
+    }}
+  />
+)}
+
+{/* 📚 КАТАЛОГ МАТЕРИАЛОВ */}
+{currentView === 'supplierCatalog' && (
+  <SupplierCatalog
+    companyId={userCompanyId}
+    showNotification={showNotification}
+    onAddToRFQ={(item) => {
+      console.log('[App] Позиция добавлена в RFQ-корзину:', item);
+    }}
+  />
+)}
+
+{/* 💰 ПРАЙС-ЛИСТ ПОСТАВЩИКА */}
+{currentView === 'supplierPriceList' && selectedSupplierId && (
+  <PriceListManager
+    supplierId={selectedSupplierId}
+    companyId={userCompanyId}
+    role={userRole}
+    showNotification={showNotification}
+    onBack={() => {
+      setSelectedSupplierId(null);
+      setCurrentView('suppliers');
+    }}
+  />
+)}
+
+{/* 📨 СПИСОК RFQ */}
+{currentView === 'rfqList' && (
+  <RFQList
+    companyId={userCompanyId}
+    role={userRole}
+    onCreate={() => setCurrentView('rfqCreate')}
+    onOpen={(rfq) => {
+      setSelectedRFQId(rfq.id);
+      setCurrentView('rfqDetails');
+    }}
+  />
+)}
+
+{/* 📝 СОЗДАНИЕ RFQ */}
+{currentView === 'rfqCreate' && (
+  <RFQCreate
+    companyId={userCompanyId}
+    userId={user?.id}
+    initialItems={[]}
+    showNotification={showNotification}
+    onCreated={(rfq) => {
+      setSelectedRFQId(rfq.id);
+      setCurrentView('rfqDetails');
+    }}
+    onCancel={() => setCurrentView('rfqList')}
+  />
+)}
+
+{/* 📋 ДЕТАЛИ RFQ */}
+{currentView === 'rfqDetails' && selectedRFQId && (
+  <RFQDetails
+    rfqId={selectedRFQId}
+    companyId={userCompanyId}
+    role={userRole}
+    showNotification={showNotification}
+    onBack={() => {
+      setSelectedRFQId(null);
+      setCurrentView('rfqList');
+    }}
+    onCreatePO={(offer, rfq) => {
+      setPoFormMode({ offer, rfq });
+      setCurrentView('purchaseOrderCreate');
+    }}
+  />
+)}
+
+{/* 📦 СПИСОК ЗАКАЗОВ */}
+{currentView === 'purchaseOrders' && (
+  <PurchaseOrderList
+    companyId={userCompanyId}
+    role={userRole}
+    onCreate={() => {
+      setPoFormMode({});
+      setCurrentView('purchaseOrderCreate');
+    }}
+    onOpen={(po) => {
+      setSelectedPOId(po.id);
+      setCurrentView('purchaseOrderDetails');
+    }}
+  />
+)}
+
+{/* 📝 СОЗДАНИЕ ЗАКАЗА */}
+{currentView === 'purchaseOrderCreate' && (
+  <PurchaseOrderForm
+    companyId={userCompanyId}
+    userId={user?.id}
+    fromOffer={poFormMode?.offer || null}
+    fromRFQ={poFormMode?.rfq || null}
+    preselectedSupplierId={poFormMode?.preselectedSupplierId || null}
+    showNotification={showNotification}
+    onCreated={(order) => {
+      setPoFormMode(null);
+      setSelectedPOId(order.id);
+      setCurrentView('purchaseOrderDetails');
+    }}
+    onCancel={() => {
+      setPoFormMode(null);
+      setCurrentView('purchaseOrders');
+    }}
+  />
+)}
+
+{/* 📋 ДЕТАЛИ ЗАКАЗА */}
+{currentView === 'purchaseOrderDetails' && selectedPOId && (
+  <PurchaseOrderDetails
+    orderId={selectedPOId}
+    role={userRole}
+    showNotification={showNotification}
+    onBack={() => {
+      setSelectedPOId(null);
+      setCurrentView('purchaseOrders');
+    }}
+  />
+)}
+
+{/* 🏢 ДАШБОРД ПОСТАВЩИКА */}
+{currentView === 'supplierDashboard' && (
+  currentSupplierId ? (
+    <SupplierDashboard
+      companyId={userCompanyId}
+      supplierId={currentSupplierId}
+      onNavigate={(view, payload) => {
+        if (view === 'rfqDetails' && payload?.rfqId) {
+          setSelectedRFQId(payload.rfqId);
+          setCurrentView('rfqDetails');
+        } else if (view === 'purchaseOrderDetails' && payload?.orderId) {
+          setSelectedPOId(payload.orderId);
+          setCurrentView('purchaseOrderDetails');
+        } else if (view === 'supplierPriceList') {
+          setSelectedSupplierId(currentSupplierId);
+          setCurrentView('supplierPriceList');
+        } else {
+          setCurrentView(view);
+        }
+      }}
+    />
+  ) : (
+    <div className="max-w-2xl mx-auto p-8 text-center">
+      <div className="text-5xl mb-4">🏭</div>
+      <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
+        Поставщик не привязан
+      </h2>
+      <p className="text-gray-600 dark:text-gray-400">
+        Ваш аккаунт не связан ни с одним поставщиком. Обратитесь к администратору.
+      </p>
+    </div>
+  )
+)}
+
+{/* 📊 ДАШБОРД ЗАКУПЩИКА */}
+{currentView === 'procurementDashboard' && (
+  <ProcurementDashboard
+    companyId={userCompanyId}
+    onNavigate={(view, payload) => {
+      if (view === 'rfqDetails' && payload?.rfqId) {
+        setSelectedRFQId(payload.rfqId);
+        setCurrentView('rfqDetails');
+      } else if (view === 'purchaseOrderDetails' && payload?.orderId) {
+        setSelectedPOId(payload.orderId);
+        setCurrentView('purchaseOrderDetails');
+      } else {
+        setCurrentView(view);
+      }
     }}
   />
 )}
@@ -8679,7 +8909,11 @@ onClearFilters={handleClearFilters}
   'superAdmin', 'tariffs', 'clientDashboard', 'clientChat', 'clientDocuments', 
   'clientApplications', 'clientCalendar', 'clientConfirmation', 'clientPhotos', 
   'clientWorkAct', 'companyProfile', 'merge', 'estimates', 'reports', 'integration', 
-  'help', 'settings', 'projects', 'objects', 'object-hub', 'tasks', 'chat', 'approvals', 'api', 'suppliers'].includes(currentView) && (
+  'help', 'settings', 'projects', 'objects', 'object-hub', 'tasks', 'chat', 'approvals', 'api',
+  // 🏢 ПОСТАВЩИКИ (B2B)
+  'suppliers', 'supplierCatalog', 'supplierPriceList', 'rfqList', 'rfqCreate', 'rfqDetails',
+  'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
+  'supplierDashboard', 'procurementDashboard'].includes(currentView) && (
     <div className="max-w-7xl mx-auto px-4">
         <ApplicationList
             applications={filteredApplications}

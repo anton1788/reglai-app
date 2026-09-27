@@ -19,7 +19,9 @@ import {
   Scale,
   PackageCheck,
   Bot,
-  FolderKanban
+  FolderKanban,
+  // 🏢 ПОСТАВЩИКИ (B2B)
+  Truck, Layers, MessageSquare, ShoppingBag, Gauge,
 } from 'lucide-react';
 import { getCompanyPlan, checkFeatureAccess } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
@@ -41,7 +43,6 @@ const getCleanCompanyId = (companyId) => {
 const getNotificationIcon = (notif) => {
   const title = notif.title || '';
 
-  // Приоритет — эмодзи в заголовке
   if (title.includes('📋')) return '📋';
   if (title.includes('🔧')) return '🔧';
   if (title.includes('📝')) return '📝';
@@ -54,7 +55,6 @@ const getNotificationIcon = (notif) => {
   if (title.includes('📥')) return '📥';
   if (title.includes('⚠️')) return '⚠️';
 
-  // Fallback по типу
   switch (notif.type) {
     case 'success': return '✅';
     case 'error': return '❌';
@@ -337,6 +337,9 @@ const Navbar = ({
     }
   };
 
+  // ============================================================
+  // 🆕 РОЛИ — ДОБАВЛЕНЫ НОВЫЕ
+  // ============================================================
   const getRoleLabel = () => {
     const roles = {
       master: 'Прораб',
@@ -347,7 +350,11 @@ const Navbar = ({
       client: 'Заказчик',
       client_manager: 'Менеджер по клиентам',
       director: 'Директор',
-      super_admin: 'Супер Админ'
+      super_admin: 'Супер Админ',
+      // 🏢 ПОСТАВЩИКИ (B2B)
+      procurement_manager: 'Менеджер по закупкам',
+      supplier_admin: 'Администратор поставщика',
+      supplier_manager: 'Менеджер поставщика',
     };
     return roles[userRole] || userRole;
   };
@@ -371,23 +378,81 @@ const Navbar = ({
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   // ============================================================
-  // 🆕 NAV ITEMS С ФИЛЬТРАЦИЕЙ ПО ТАРИФУ
+  // 🆕 NAV ITEMS С ФИЛЬТРАЦИЕЙ ПО ТАРИФУ И РОЛИ
   // ============================================================
   const getNavItems = () => {
     const items = [];
 
+    // 🏢 ОБЩИЕ ПУНКТЫ
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/', always: true });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications', always: true });
-    // 🆕 Объекты — доступно всем, кроме клиентов
-if (userRole !== 'client') {
-  items.push({
-    id: 'objects',
-    label: 'Объекты',
-    icon: FolderKanban,
-    path: '/objects'
-  });
-}
 
+    // 🆕 Объекты — доступно всем, кроме клиентов
+    if (userRole !== 'client') {
+      items.push({
+        id: 'objects',
+        label: 'Объекты',
+        icon: FolderKanban,
+        path: '/objects'
+      });
+    }
+
+    // ============================================================
+    // 🏢 БЛОК ПОСТАВЩИКОВ (B2B)
+    // ============================================================
+    const canSeeSuppliers = [
+      'procurement_manager', 'supply_admin', 'manager', 'director', 'super_admin',
+    ].includes(userRole) || isCompanyOwner;
+
+    if (canSeeSuppliers) {
+      items.push({
+        id: 'suppliers',
+        label: 'Поставщики',
+        icon: Truck,
+        path: '/suppliers'
+      });
+      items.push({
+        id: 'supplierCatalog',
+        label: 'Каталог',
+        icon: Layers,
+        path: '/supplier-catalog'
+      });
+      items.push({
+        id: 'rfqList',
+        label: 'RFQ',
+        icon: MessageSquare,
+        path: '/rfq'
+      });
+      items.push({
+        id: 'purchaseOrders',
+        label: 'Заказы',
+        icon: ShoppingBag,
+        path: '/purchase-orders'
+      });
+    }
+
+    // 🏢 Дашборд закупок — только для procurement_manager
+    if (userRole === 'procurement_manager') {
+      items.push({
+        id: 'procurementDashboard',
+        label: 'Закупки',
+        icon: Gauge,
+        path: '/procurement'
+      });
+    }
+
+    // 🏢 Дашборд поставщика — только для supplier_admin / supplier_manager
+    if (userRole === 'supplier_admin' || userRole === 'supplier_manager') {
+      items.push({
+        id: 'supplierDashboard',
+        label: 'Мой дашборд',
+        icon: Gauge,
+        path: '/supplier-dashboard'
+      });
+    }
+    // ============================================================
+
+    // Готовы к выдаче
     if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
       items.push({
         id: 'readyToIssue',
@@ -543,13 +608,9 @@ if (userRole !== 'client') {
   // 🎯 ОБРАБОТЧИК КЛИКА ПО УВЕДОМЛЕНИЮ
   // ============================================================
   const handleNotificationClick = useCallback((notif) => {
-    // 1. Помечаем прочитанным
     onMarkNotificationRead?.(notif.id);
-
-    // 2. Закрываем список
     setIsNotificationsOpen(false);
 
-    // 3. Обрабатываем разные типы действий
     const action = notif.related_data?.action;
     const data = notif.related_data || {};
 
@@ -585,14 +646,12 @@ if (userRole !== 'client') {
         return;
 
       default:
-        // Fallback: если есть application_id, но нет action
         if (data.application_id) {
           window.dispatchEvent(new CustomEvent('open-application', {
             detail: { applicationId: data.application_id }
           }));
           return;
         }
-        // Иначе — модалка уведомления
         if (onNotificationClick) {
           onNotificationClick(notif);
         }
@@ -833,7 +892,7 @@ if (userRole !== 'client') {
                   onClick={onOpenAIAssistant}
                   className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
                   aria-label="AI-ассистент"
-                  title="AI-ассистент (Ctrl+/)"
+                  title="AI-ассистент (Ctrl+/"
                 >
                   <Bot className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-[#4A6572] dark:group-hover:text-[#F9AA33] transition-colors" />
                   <span className="absolute top-1 right-1 flex h-2 w-2">
@@ -857,7 +916,7 @@ if (userRole !== 'client') {
               )}
 
               {/* ============================================================ */}
-              {/* 🔔 УВЕДОМЛЕНИЯ — ОБНОВЛЁННЫЙ БЛОК */}
+              {/* 🔔 УВЕДОМЛЕНИЯ */}
               {/* ============================================================ */}
               <div className="relative" ref={notificationsRef}>
                 <button
@@ -906,12 +965,10 @@ if (userRole !== 'client') {
                             }`}
                             onClick={() => handleNotificationClick(notif)}
                           >
-                            {/* Иконка типа */}
                             <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-lg ${getNotificationBgClass(notif)}`}>
                               {getNotificationIcon(notif)}
                             </div>
 
-                            {/* Контент */}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2">
                                 <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -1145,7 +1202,14 @@ if (userRole !== 'client') {
                     (item.id === 'integration' && currentPage === 'integration') ||
                     (item.id === 'api' && currentPage === 'api') ||
                     (item.id === 'merge' && currentPage === 'merge') ||
-                    (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
+                    (item.id === 'readyToIssue' && currentPage === 'readyToIssue') ||
+                    // 🏢 ПОСТАВЩИКИ
+                    (item.id === 'suppliers' && currentPage === 'suppliers') ||
+                    (item.id === 'supplierCatalog' && currentPage === 'supplierCatalog') ||
+                    (item.id === 'rfqList' && (currentPage === 'rfqList' || currentPage === 'rfqCreate' || currentPage === 'rfqDetails')) ||
+                    (item.id === 'purchaseOrders' && (currentPage === 'purchaseOrders' || currentPage === 'purchaseOrderCreate' || currentPage === 'purchaseOrderDetails')) ||
+                    (item.id === 'procurementDashboard' && currentPage === 'procurementDashboard') ||
+                    (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard');
 
                   let badgeCount = 0;
                   let badgeColor = 'bg-amber-500';
@@ -1379,7 +1443,13 @@ if (userRole !== 'client') {
                     (item.id === 'integration' && currentPage === 'integration') ||
                     (item.id === 'api' && currentPage === 'api') ||
                     (item.id === 'merge' && currentPage === 'merge') ||
-                    (item.id === 'readyToIssue' && currentPage === 'readyToIssue');
+                    (item.id === 'readyToIssue' && currentPage === 'readyToIssue') ||
+                    (item.id === 'suppliers' && currentPage === 'suppliers') ||
+                    (item.id === 'supplierCatalog' && currentPage === 'supplierCatalog') ||
+                    (item.id === 'rfqList' && (currentPage === 'rfqList' || currentPage === 'rfqCreate' || currentPage === 'rfqDetails')) ||
+                    (item.id === 'purchaseOrders' && (currentPage === 'purchaseOrders' || currentPage === 'purchaseOrderCreate' || currentPage === 'purchaseOrderDetails')) ||
+                    (item.id === 'procurementDashboard' && currentPage === 'procurementDashboard') ||
+                    (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard');
 
                   let badgeCount = 0;
                   if (item.id === 'readyToIssue') {

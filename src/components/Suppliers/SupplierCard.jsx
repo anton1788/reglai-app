@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Building2, Mail, Phone, MapPin, Star, CheckCircle2,
   MoreVertical, Pencil, Archive, Trash2, Package2, TrendingUp,
-  Globe, User, UserPlus,
+  Globe, User, UserPlus, Layers,
 } from 'lucide-react';
 
 const STATUS_META = {
@@ -32,11 +32,14 @@ export default function SupplierCard({
   onArchive,
   onDelete,
   onInvite,
+  onOpenPriceList,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
-  const hasActions = Boolean(onEdit || onArchive || onDelete || onInvite);
+  const hasActions = Boolean(
+    onEdit || onArchive || onDelete || onInvite || onOpenPriceList
+  );
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -102,8 +105,17 @@ export default function SupplierCard({
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 z-20 w-44 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden">
-                {/* 🆕 Пригласить */}
+              <div className="absolute right-0 top-full mt-1 z-20 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden">
+                {/* 💰 Прайс-лист */}
+                {onOpenPriceList && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onOpenPriceList(supplier); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    <Layers className="w-4 h-4" /> Прайс-лист
+                  </button>
+                )}
+                {/* ✉️ Пригласить */}
                 {onInvite && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onInvite(supplier); }}
@@ -112,6 +124,7 @@ export default function SupplierCard({
                     <UserPlus className="w-4 h-4" /> Пригласить
                   </button>
                 )}
+                {/* ✏️ Редактировать */}
                 {onEdit && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onEdit(supplier); }}
@@ -120,6 +133,7 @@ export default function SupplierCard({
                     <Pencil className="w-4 h-4" /> Редактировать
                   </button>
                 )}
+                {/* 📦 В архив */}
                 {onArchive && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onArchive(supplier); }}
@@ -128,6 +142,7 @@ export default function SupplierCard({
                     <Archive className="w-4 h-4" /> В архив
                   </button>
                 )}
+                {/* 🗑 Удалить */}
                 {onDelete && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(supplier); }}

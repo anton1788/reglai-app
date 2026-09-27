@@ -36,6 +36,7 @@ const STATUS_FILTERS = [
  * @param {string} [props.role]
  * @param {(msg: string, type?: 'success'|'error'|'info') => void} props.showNotification
  * @param {(supplier) => void} [props.onSelectSupplier]
+ * @param {(supplier) => void} [props.onOpenPriceList]
  */
 export default function SupplierManager({
   companyId,
@@ -43,6 +44,7 @@ export default function SupplierManager({
   role,
   showNotification,
   onSelectSupplier,
+  onOpenPriceList,
 }) {
   const canEdit = isProcurement(role);
 
@@ -68,7 +70,6 @@ export default function SupplierManager({
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // 🆕 Состояние для модалки приглашения
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteSupplierId, setInviteSupplierId] = useState(null);
 
@@ -205,7 +206,6 @@ export default function SupplierManager({
     }
   };
 
-  // 🆕 Открытие модалки приглашения
   const handleOpenInvite = (supplier = null) => {
     if (!canEdit) return notify('Недостаточно прав', 'error');
     setInviteSupplierId(supplier?.id || null);
@@ -215,7 +215,6 @@ export default function SupplierManager({
   const handleCloseInvite = () => {
     setInviteOpen(false);
     setInviteSupplierId(null);
-    // Обновим историю (на случай, если логирование добавило запись)
     loadSuppliers({ silent: true });
   };
 
@@ -254,7 +253,6 @@ export default function SupplierManager({
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
 
-            {/* 🆕 Кнопка приглашения */}
             {canEdit && (
               <button
                 onClick={() => handleOpenInvite(null)}
@@ -360,6 +358,7 @@ export default function SupplierManager({
                 supplier={s}
                 onSelect={onSelectSupplier}
                 onInvite={canEdit ? (sup) => handleOpenInvite(sup) : undefined}
+                onOpenPriceList={onOpenPriceList}
                 onEdit={canEdit ? handleOpenEdit : undefined}
                 onArchive={canEdit ? handleArchive : undefined}
                 onDelete={canEdit ? handleDelete : undefined}
@@ -377,7 +376,7 @@ export default function SupplierManager({
           saving={saving}
         />
 
-        {/* 🆕 Модалка приглашения */}
+        {/* Модалка приглашения */}
         <SupplierInviteModal
           open={inviteOpen}
           onClose={handleCloseInvite}
