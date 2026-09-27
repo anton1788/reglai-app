@@ -277,13 +277,44 @@ const FullDashboard = ({
     const totalUsers = companyUsers?.length || 0;
     const activeUsers = companyUsers?.filter(u => u.is_active !== false).length || 0;
     
+    // ✅ ИСПРАВЛЕНО: считаем ТОЛЬКО реально потраченные деньги
+    //   - исключаем удалённые, сводные и отменённые
+    //   - считаем только заявки, где материалы уже получены
+    //   - БЕЗ дефолта 1000 ₽ (иначе появляются «фантомные» суммы)
     const totalExpenses = applications?.reduce((sum, app) => {
-      return sum + (app.materials?.reduce((s, m) => 
-        s + (Number(m.quantity) || 0) * (Number(m.price) || 1000), 0
-      ) || 0);
+      // 1. Пропускаем удалённые и сводные
+      if (app.is_deleted === true) return sum;
+      if (app.is_consolidated === true) return sum;
+      if (['canceled', 'rejected', 'consolidated'].includes(app.status)) return sum;
+
+      // 2. Считаем только принятые / частично принятые
+      const isReceived = ['received', 'partial_received'].includes(app.status);
+      if (!isReceived) return sum;
+
+      // 3. Приоритет — реальная сумма заявки
+      if (app.total_amount && Number(app.total_amount) > 0) {
+        return sum + Number(app.total_amount);
+      }
+
+      // 4. Иначе — по фактически полученным материалам
+      const appSum = (app.materials || []).reduce((s, m) => {
+        const received = Number(m.received) || 0;
+        const price = Number(m.final_price) 
+          || Number(m.supplier_price) 
+          || Number(m.price) 
+          || 0;
+        return s + received * price;
+      }, 0);
+
+      return sum + appSum;
     }, 0) || 0;
     
-    const objects = new Set(applications?.map(a => a.object_name) || []);
+    // Объекты — исключаем удалённые и сводные
+    const objects = new Set(
+      applications
+        ?.filter(a => !a.is_deleted && a.is_consolidated !== true)
+        ?.map(a => a.object_name) || []
+    );
     const myApps = applications?.filter(a => a.user_id === user?.id) || [];
     
     return {
@@ -397,10 +428,15 @@ const FullDashboard = ({
     }
 
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
+      // ✅ Форматируем корректно: если < 1000 ₽ — показываем полностью
+      const expensesDisplay = metrics.totalExpenses < 1000
+        ? `${metrics.totalExpenses.toLocaleString('ru-RU')} ₽`
+        : `${(metrics.totalExpenses / 1000).toFixed(1)}K ₽`;
+
       widgets.push({
         icon: <TrendingUp className="w-5 h-5 text-green-500" />,
         label: 'Расходы',
-        value: `${(metrics.totalExpenses / 1000).toFixed(1)}K ₽`,
+        value: expensesDisplay,
         color: 'border-green-500',
         onClick: () => setCurrentView('analytics'),
         subtitle: `${metrics.objectsCount} объектов`
@@ -734,13 +770,10 @@ const UniversalDashboard = ({
   userCompany,
   setCurrentView,
   isOnline,
-  offlineDraftsCount: _offlineDraftsCount, // eslint-disable-line no-unused-vars
   currentPlan,
   mergeableCount,
   cartItemsCount,
   isCompanyOwner,
-  onNavigate: _onNavigate, // eslint-disable-line no-unused-vars
-  t: _t, // eslint-disable-line no-unused-vars
 }) => {
   const { isMaster } = usePriceVisibility(userRole);
   

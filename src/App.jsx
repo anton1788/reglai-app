@@ -219,6 +219,9 @@ import PublicOfferModal from './components/PublicOfferModal';
 import LegalOfferModal from './components/LegalOfferModal';
 import ConsentModal from './components/ConsentModal';
 import UpdatePassword from './components/UpdatePassword';
+// 💰 РЕДАКТОР ЦЕН
+import PriceEditor from './components/PriceEditor/PriceEditor';
+import { canEditPrices as canEditPricesUtil } from './utils/priceManager';
 
 const getCleanCompanyId = (companyId) => {
   if (!companyId) return null;
@@ -1273,6 +1276,9 @@ const [abTestLoaded, setABTestLoaded] = useState(false);
 // ✅ Approval Workflow States
 const [showApprovalModal, setShowApprovalModal] = useState(false);
 const [selectedForApproval, setSelectedForApproval] = useState(null);
+// 💰 PRICE EDITOR STATES
+const [showPriceEditor, setShowPriceEditor] = useState(false);
+const [priceEditorApp, setPriceEditorApp] = useState(null);
 
 // Хендлер отправки причины оттока
 const handleChurnSubmit = async ({ reason, severity, comment }) => {
@@ -1636,6 +1642,45 @@ const statusCounts = useMemo(() => {
       }, 5000);
     }
   }, []);
+  // 💰 PRICE EDITOR HANDLERS
+const openPriceEditor = useCallback((application) => {
+  console.log('💰 [App] openPriceEditor вызван для:', application?.id);
+
+  if (!application?.id) {
+    showNotification('Ошибка: заявка не найдена', 'error');
+    return;
+  }
+
+  if (!canEditPricesUtil(userRole)) {
+    showNotification('У вас нет прав на редактирование цен', 'error');
+    return;
+  }
+
+  setPriceEditorApp(application);
+  setShowPriceEditor(true);
+}, [userRole, showNotification]);
+
+const closePriceEditor = useCallback(() => {
+  setShowPriceEditor(false);
+  setPriceEditorApp(null);
+}, []);
+
+const handlePriceEditorSave = useCallback((updatedMaterials) => {
+  if (!priceEditorApp?.id) return;
+
+  setApplications(prev => prev.map(a =>
+    a.id === priceEditorApp.id
+      ? { ...a, materials: updatedMaterials }
+      : a
+  ));
+
+  if (userCompanyId) {
+    cacheManager.delete('applications', `applications_${userCompanyId}_page_1`);
+    cacheManager.delete('analytics', `analytics_${userCompanyId}_${isAdminMode}`);
+  }
+
+  showNotification('✅ Цены обновлены', 'success');
+}, [priceEditorApp, userCompanyId, isAdminMode, showNotification]);
 
   // ─────────────────────────────────────────────────────────
   // ⌨️ GLOBAL KEYBOARD SHORTCUTS (Pattern #5)
@@ -3376,9 +3421,10 @@ if (!materialCheck.allowed) {
   }));
   
   let initialStatus = APPLICATION_STATUS.PENDING;
-  const totalAmount = validMaterials.reduce((sum, m) =>
-    sum + (m.quantity * (m.price || 1000)), 0
-  );
+  // ✅ Без фантомных 1000 ₽ — реальная сумма появится после ввода цен
+const totalAmount = validMaterials.reduce((sum, m) =>
+  sum + ((Number(m.quantity) || 0) * (Number(m.price) || 0)), 0
+);
   
   const startTime = Date.now();
 
@@ -8056,6 +8102,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
             showComments={showComments}
             isExportingPDF={isExportingPDF}
             isExportingXLSX={isExportingXLSX}
+            onOpenPriceEditor={openPriceEditor}
           />
         )}
         
@@ -8204,6 +8251,7 @@ onClearFilters={handleClearFilters}
       showComments={showComments}
       isExportingPDF={isExportingPDF}
       isExportingXLSX={isExportingXLSX}
+      onOpenPriceEditor={openPriceEditor}
     />
   </>
 )}
@@ -8263,6 +8311,7 @@ onClearFilters={handleClearFilters}
             showComments={showComments}
             isExportingPDF={isExportingPDF}
             isExportingXLSX={isExportingXLSX}
+            onOpenPriceEditor={openPriceEditor}
           />
         )}
         
@@ -8314,6 +8363,7 @@ onClearFilters={handleClearFilters}
             showComments={showComments}
             isExportingPDF={isExportingPDF}
             isExportingXLSX={isExportingXLSX}
+            onOpenPriceEditor={openPriceEditor}
           />
         )}
 
@@ -8373,6 +8423,7 @@ onClearFilters={handleClearFilters}
     showComments={showComments}
     isExportingPDF={isExportingPDF}
     isExportingXLSX={isExportingXLSX}
+    onOpenPriceEditor={openPriceEditor}
   />
 )}
         
@@ -9029,6 +9080,7 @@ onClearFilters={handleClearFilters}
             showComments={showComments}
             isExportingPDF={isExportingPDF}
             isExportingXLSX={isExportingXLSX}
+            onOpenPriceEditor={openPriceEditor}
         />
     </div>
 )}
@@ -9221,6 +9273,17 @@ onClearFilters={handleClearFilters}
     currentPlan={currentPlan}       // 🆕
     planLimits={planLimits}
     t={t}
+  />
+)}
+{/* 💰 PRICE EDITOR MODAL */}
+{showPriceEditor && priceEditorApp && (
+  <PriceEditor
+    application={priceEditorApp}
+    onSave={handlePriceEditorSave}
+    onClose={closePriceEditor}
+    showNotification={showNotification}
+    user={user}
+    userRole={userRole}
   />
 )}
       
