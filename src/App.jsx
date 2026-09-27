@@ -74,6 +74,8 @@ import AuditView from './components/AuditView';
 import ApplicationList from './components/ApplicationList';
 // 🆕 ОБЪЕКТЫ (Project Hub)
 import ObjectsList from './components/Objects/ObjectsList';
+// 🏢 ПОСТАВЩИКИ (B2B)
+import SupplierManager from './components/Suppliers/SupplierManager';
 import ObjectForm from './components/Objects/ObjectForm';
 import ObjectHub from './components/Objects/ObjectHub';
 import { normalizeObjectName } from './api/objects';
@@ -8636,6 +8638,20 @@ onClearFilters={handleClearFilters}
     }}
   />
 )}
+{/* 🏢 ПОСТАВЩИКИ (B2B) */}
+{currentView === 'suppliers' && (
+  <SupplierManager
+    companyId={userCompanyId}
+    userId={user?.id}
+    role={userRole}
+    showNotification={showNotification}
+    onSelectSupplier={(supplier) => {
+      // 🚧 Пока просто лог; в Шаге 2.8 откроем SupplierDetails
+      console.log('[App] Открыть поставщика:', supplier);
+      showNotification(`Открытие карточки «${supplier.name}» — в разработке`, 'info');
+    }}
+  />
+)}
 {/* 🆕 ПАПКА ОБЪЕКТА (Object Hub) */}
 {currentView === 'object-hub' && selectedObjectId && (
   <ObjectHub
@@ -8663,7 +8679,7 @@ onClearFilters={handleClearFilters}
   'superAdmin', 'tariffs', 'clientDashboard', 'clientChat', 'clientDocuments', 
   'clientApplications', 'clientCalendar', 'clientConfirmation', 'clientPhotos', 
   'clientWorkAct', 'companyProfile', 'merge', 'estimates', 'reports', 'integration', 
-  'help', 'settings', 'projects', 'objects', 'object-hub', 'tasks', 'chat', 'approvals', 'api'].includes(currentView) && (
+  'help', 'settings', 'projects', 'objects', 'object-hub', 'tasks', 'chat', 'approvals', 'api', 'suppliers'].includes(currentView) && (
     <div className="max-w-7xl mx-auto px-4">
         <ApplicationList
             applications={filteredApplications}
