@@ -220,7 +220,7 @@ import LegalOfferModal from './components/LegalOfferModal';
 import ConsentModal from './components/ConsentModal';
 import UpdatePassword from './components/UpdatePassword';
 // 💰 РЕДАКТОР ЦЕН
-import PriceEditor from './components/PriceEditor/PriceEditor';
+import PriceEditor from './components/MaterialPriceView/PriceEditor';
 import { canEditPrices as canEditPricesUtil } from './utils/priceManager';
 
 const getCleanCompanyId = (companyId) => {
