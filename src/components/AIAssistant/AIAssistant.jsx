@@ -15,12 +15,14 @@ import {
   Home, ArrowLeft, Users, MessageCircle, Calendar, ClipboardList,
   DollarSign, Code, FileCheck, Plug, Building, Target, Layers,
   History, Truck, UserPlus, Briefcase, Settings, Bell, Star,
-  Download, Volume2, Lightbulb, Pin, PinOff
+  Download, Volume2, Lightbulb, Pin, PinOff,
+  MessageSquare, ShoppingBag, Gauge, Tag, Boxes, BadgeCheck,
+  Send as SendIcon, Inbox, Filter, Check, PackageCheck,
 } from 'lucide-react';
 import SmartVoiceSearch from '../SmartVoiceSearch';
 
 // ─────────────────────────────────────────────────────────────
-// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ (инжектятся 1 раз)
+// 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ
 // ─────────────────────────────────────────────────────────────
 const AI_ASSISTANT_STYLES = `
 @keyframes aiBounceIn {
@@ -29,34 +31,28 @@ const AI_ASSISTANT_STYLES = `
   70% { transform: scale(0.95); }
   100% { transform: scale(1); opacity: 1; }
 }
-
 @keyframes aiSlideUpFade {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
-
 @keyframes aiSlideInRight {
   from { transform: translateX(30px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
-
 @keyframes aiPulseRing {
   0% { box-shadow: 0 0 0 0 rgba(249, 170, 51, 0.7); }
   70% { box-shadow: 0 0 0 12px rgba(249, 170, 51, 0); }
   100% { box-shadow: 0 0 0 0 rgba(249, 170, 51, 0); }
 }
-
 @keyframes aiWiggle {
   0%, 100% { transform: rotate(0deg); }
   25% { transform: rotate(-10deg); }
   75% { transform: rotate(10deg); }
 }
-
 @keyframes aiFadeOut {
   from { opacity: 1; transform: translateX(0); }
   to { opacity: 0; transform: translateX(30px); }
 }
-
 .ai-bounce-in { animation: aiBounceIn 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
 .ai-slide-up { animation: aiSlideUpFade 0.3s ease-out; }
 .ai-slide-right { animation: aiSlideInRight 0.3s ease-out; }
@@ -64,6 +60,11 @@ const AI_ASSISTANT_STYLES = `
 .ai-wiggle { animation: aiWiggle 0.6s ease-in-out; }
 .ai-fade-out { animation: aiFadeOut 0.3s ease-in forwards; }
 `;
+
+// ─────────────────────────────────────────────────────────────
+// 🕐 КОНСТАНТЫ КЭША
+// ─────────────────────────────────────────────────────────────
+const CACHE_TTL = 60 * 1000; // 1 минута
 
 // ─────────────────────────────────────────────────────────────
 // 🗺️ КАРТА ВСЕХ РАЗДЕЛОВ ПРИЛОЖЕНИЯ
@@ -106,6 +107,17 @@ const ALL_VIEWS = {
   clientConfirmation: { view: 'clientConfirmation', label: 'Согласования', icon: CheckCircle, path: '/client/confirmation', description: 'Согласования' },
   clientPhotos: { view: 'clientPhotos', label: 'Фотоотчёты', icon: FileText, path: '/client/photos', description: 'Фотоотчёты' },
   clientWorkAct: { view: 'clientWorkAct', label: 'Акты работ', icon: FileCheck, path: '/client/work-act', description: 'Акты работ' },
+  suppliers: { view: 'suppliers', label: 'Поставщики', icon: Truck, path: '/suppliers', description: 'Справочник поставщиков' },
+  supplierCatalog: { view: 'supplierCatalog', label: 'Каталог материалов', icon: Layers, path: '/supplier-catalog', description: 'Сквозной поиск по прайс-листам' },
+  supplierPriceList: { view: 'supplierPriceList', label: 'Прайс-лист поставщика', icon: Tag, path: '/supplier-price-list', description: 'Позиции поставщика' },
+  rfqList: { view: 'rfqList', label: 'RFQ (Запросы цен)', icon: MessageSquare, path: '/rfq', description: 'Запросы цен поставщикам' },
+  rfqCreate: { view: 'rfqCreate', label: 'Создать RFQ', icon: Plus, path: '/rfq/new', description: 'Новый запрос цен' },
+  rfqDetails: { view: 'rfqDetails', label: 'Детали RFQ', icon: FileText, path: '/rfq/details', description: 'Предложения поставщиков' },
+  purchaseOrders: { view: 'purchaseOrders', label: 'Заказы', icon: ShoppingBag, path: '/purchase-orders', description: 'Заказы поставщикам' },
+  purchaseOrderCreate: { view: 'purchaseOrderCreate', label: 'Создать заказ', icon: Plus, path: '/purchase-orders/new', description: 'Новый заказ поставщику' },
+  purchaseOrderDetails: { view: 'purchaseOrderDetails', label: 'Детали заказа', icon: FileText, path: '/purchase-orders/details', description: 'Статус заказа' },
+  procurementDashboard: { view: 'procurementDashboard', label: 'Закупки', icon: Gauge, path: '/procurement', description: 'Дашборд закупщика' },
+  supplierDashboard: { view: 'supplierDashboard', label: 'Мой дашборд', icon: Gauge, path: '/supplier-dashboard', description: 'Дашборд поставщика' },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -124,26 +136,33 @@ const ROLE_VIEWS = {
     'dashboard', 'create', 'inwork', 'objects', 'readyToIssue', 'received', 'projects',
     'crm-sales', 'merge', 'warehouse', 'analytics', 'api', 'estimates',
     'reports', 'integration', 'documents', 'chat', 'calendar', 'tasks',
-    'profile', 'help'
+    'profile', 'help',
+    'suppliers', 'supplierCatalog', 'rfqList', 'rfqCreate', 'rfqDetails',
+    'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
   ],
   manager: [
     'dashboard', 'create', 'inwork', 'objects', 'readyToIssue', 'received', 'projects',
     'merge', 'clients', 'crm-sales', 'warehouse', 'analytics', 'api',
     'estimates', 'reports', 'integration', 'documents', 'chat', 'calendar',
     'tasks', 'employees', 'approvals', 'audit', 'companyProfile',
-    'tariffs', 'profile', 'help'
+    'tariffs', 'profile', 'help',
+    'suppliers', 'supplierCatalog', 'rfqList', 'rfqCreate', 'rfqDetails',
+    'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
   ],
   director: [
     'dashboard', 'inwork', 'objects', 'readyToIssue', 'received', 'projects',
     'clients', 'crm-sales', 'warehouse', 'analytics', 'api', 'estimates',
     'reports', 'integration', 'documents', 'chat', 'calendar', 'tasks',
     'employees', 'approvals', 'audit', 'companyProfile', 'tariffs',
-    'profile', 'help'
+    'profile', 'help',
+    'suppliers', 'supplierCatalog', 'rfqList', 'rfqDetails',
+    'purchaseOrders', 'purchaseOrderDetails',
   ],
   accountant: [
     'dashboard', 'inwork', 'objects', 'received', 'history', 'warehouse',
     'analytics', 'reports', 'estimates', 'documents', 'chat',
-    'calendar', 'tasks', 'profile', 'help'
+    'calendar', 'tasks', 'profile', 'help',
+    'purchaseOrders', 'purchaseOrderDetails',
   ],
   client_manager: [
     'dashboard', 'create', 'inwork', 'projects', 'clients',
@@ -154,6 +173,26 @@ const ROLE_VIEWS = {
     'clientDashboard', 'clientChat', 'clientDocuments', 'clientApplications',
     'clientCalendar', 'clientConfirmation', 'clientPhotos', 'clientWorkAct',
     'profile', 'help'
+  ],
+  procurement_manager: [
+    'dashboard', 'inwork', 'objects', 'readyToIssue', 'received', 'projects',
+    'merge', 'warehouse', 'analytics', 'reports', 'integration',
+    'documents', 'chat', 'calendar', 'tasks', 'profile', 'help',
+    'suppliers', 'supplierCatalog', 'rfqList', 'rfqCreate', 'rfqDetails',
+    'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
+    'procurementDashboard',
+  ],
+  supplier_admin: [
+    'dashboard', 'supplierDashboard', 'supplierPriceList',
+    'rfqList', 'rfqDetails',
+    'purchaseOrders', 'purchaseOrderDetails',
+    'chat', 'calendar', 'tasks', 'profile', 'help'
+  ],
+  supplier_manager: [
+    'dashboard', 'supplierDashboard', 'supplierPriceList',
+    'rfqList', 'rfqDetails',
+    'purchaseOrders', 'purchaseOrderDetails',
+    'chat', 'calendar', 'tasks', 'profile', 'help'
   ],
 };
 
@@ -177,6 +216,11 @@ const QUICK_ACTIONS = {
     { id: 'pending_receipt', label: '📥 Ожидают приёмки', icon: Package, group: 'quick' },
     { id: 'ready_to_issue', label: '📤 Готовы к выдаче', icon: CheckCircle, group: 'quick' },
     { id: 'warehouse_stock', label: '🏭 Остатки на складе', icon: Warehouse, group: 'quick' },
+    { id: 'suppliers_list', label: '🏢 Мои поставщики', icon: Truck, group: 'suppliers' },
+    { id: 'rfq_pending', label: '📨 RFQ без ответа', icon: MessageSquare, group: 'suppliers' },
+    { id: 'rfq_with_offers', label: '💰 RFQ с предложениями', icon: TrendingUp, group: 'suppliers' },
+    { id: 'po_pending', label: '📦 Заказы в работе', icon: ShoppingBag, group: 'suppliers' },
+    { id: 'po_received', label: '✅ Полученные заказы', icon: PackageCheck, group: 'suppliers' },
   ],
   manager: [
     { id: 'analytics_summary', label: '📊 Аналитика компании', icon: BarChart3, group: 'quick' },
@@ -184,16 +228,26 @@ const QUICK_ACTIONS = {
     { id: 'team_activity', label: '👥 Активность команды', icon: User, group: 'quick' },
     { id: 'my_objects', label: '🏢 Мои объекты', icon: Building, group: 'quick' },
     { id: 'top_objects', label: '🏗️ Топ объектов', icon: TrendingUp, group: 'quick' },
+    { id: 'suppliers_list', label: '🏢 Поставщики', icon: Truck, group: 'suppliers' },
+    { id: 'rfq_pending', label: '📨 RFQ без ответа', icon: MessageSquare, group: 'suppliers' },
+    { id: 'rfq_with_offers', label: '💰 RFQ с предложениями', icon: TrendingUp, group: 'suppliers' },
+    { id: 'po_pending', label: '📦 Заказы в работе', icon: ShoppingBag, group: 'suppliers' },
+    { id: 'suppliers_stats', label: '📊 Статистика закупок', icon: Gauge, group: 'suppliers' },
   ],
   director: [
     { id: 'analytics_summary', label: '📊 Аналитика компании', icon: BarChart3, group: 'quick' },
     { id: 'problem_apps', label: '⚠️ Проблемные заявки', icon: AlertTriangle, group: 'quick' },
     { id: 'team_activity', label: '👥 Активность команды', icon: User, group: 'quick' },
     { id: 'my_objects', label: '🏢 Мои объекты', icon: Building, group: 'quick' },
+    { id: 'suppliers_list', label: '🏢 Поставщики', icon: Truck, group: 'suppliers' },
+    { id: 'rfq_pending', label: '📨 RFQ без ответа', icon: MessageSquare, group: 'suppliers' },
+    { id: 'suppliers_stats', label: '📊 Статистика закупок', icon: Gauge, group: 'suppliers' },
   ],
   accountant: [
     { id: 'completed_apps', label: '✅ Завершённые заявки', icon: CheckCircle, group: 'quick' },
     { id: 'monthly_report', label: '📄 Отчёт за месяц', icon: FileText, group: 'quick' },
+    { id: 'po_pending', label: '📦 Заказы в работе', icon: ShoppingBag, group: 'suppliers' },
+    { id: 'po_received', label: '✅ Полученные заказы', icon: PackageCheck, group: 'suppliers' },
   ],
   client_manager: [
     { id: 'my_applications', label: '📋 Заявки', icon: Package, group: 'quick' },
@@ -202,6 +256,24 @@ const QUICK_ACTIONS = {
   client: [
     { id: 'client_applications', label: '📋 Мои заявки', icon: Package, group: 'quick' },
   ],
+  procurement_manager: [
+    { id: 'procurement_overview', label: '📊 Обзор закупок', icon: Gauge, group: 'quick' },
+    { id: 'suppliers_list', label: '🏢 Поставщики', icon: Truck, group: 'quick' },
+    { id: 'rfq_pending', label: '📨 RFQ без ответа', icon: MessageSquare, group: 'quick' },
+    { id: 'rfq_with_offers', label: '💰 RFQ с предложениями', icon: TrendingUp, group: 'quick' },
+    { id: 'po_pending', label: '📦 Заказы в работе', icon: ShoppingBag, group: 'quick' },
+    { id: 'catalog_search_prompt', label: '🔍 Поиск в каталоге', icon: Search, group: 'quick' },
+  ],
+  supplier_admin: [
+    { id: 'supplier_incoming_rfq', label: '📨 Входящие RFQ', icon: Inbox, group: 'quick' },
+    { id: 'supplier_incoming_po', label: '📦 Входящие заказы', icon: ShoppingBag, group: 'quick' },
+    { id: 'supplier_pricelist', label: '💰 Мой прайс-лист', icon: Tag, group: 'quick' },
+  ],
+  supplier_manager: [
+    { id: 'supplier_incoming_rfq', label: '📨 Входящие RFQ', icon: Inbox, group: 'quick' },
+    { id: 'supplier_incoming_po', label: '📦 Входящие заказы', icon: ShoppingBag, group: 'quick' },
+    { id: 'supplier_pricelist', label: '💰 Мой прайс-лист', icon: Tag, group: 'quick' },
+  ],
   default: [
     { id: 'my_applications', label: '📋 Мои заявки', icon: Package, group: 'quick' },
     { id: 'help', label: '❓ Что умеет бот', icon: Sparkles, group: 'quick' },
@@ -209,7 +281,7 @@ const QUICK_ACTIONS = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🧠 КОНТЕКСТНЫЕ ДЕЙСТВИЯ (в зависимости от текущего экрана)
+// 🧠 КОНТЕКСТНЫЕ ДЕЙСТВИЯ
 // ─────────────────────────────────────────────────────────────
 const CONTEXTUAL_ACTIONS = {
   inwork: [
@@ -243,7 +315,63 @@ const CONTEXTUAL_ACTIONS = {
   objects: [
     { id: 'my_objects', label: '🏢 Все объекты', icon: Building, isContextual: true },
   ],
+  suppliers: [
+    { id: 'suppliers_list', label: '🏢 Все поставщики', icon: Truck, isContextual: true },
+    { id: 'rfq_create', label: '📨 Создать RFQ', icon: MessageSquare, isContextual: true },
+  ],
+  supplierCatalog: [
+    { id: 'catalog_search_prompt', label: '🔍 Найти материал', icon: Search, isContextual: true },
+    { id: 'rfq_create', label: '📨 В RFQ', icon: MessageSquare, isContextual: true },
+  ],
+  supplierPriceList: [
+    { id: 'suppliers_list', label: '⬅ К поставщикам', icon: Truck, isContextual: true },
+    { id: 'rfq_create', label: '📨 Создать RFQ', icon: MessageSquare, isContextual: true },
+  ],
+  rfqList: [
+    { id: 'rfq_pending', label: '📨 Без ответа', icon: Clock, isContextual: true },
+    { id: 'rfq_with_offers', label: '💰 С предложениями', icon: TrendingUp, isContextual: true },
+    { id: 'rfq_create', label: '➕ Создать RFQ', icon: Plus, isContextual: true },
+  ],
+  rfqCreate: [
+    { id: 'suppliers_list', label: '🏢 Выбрать поставщиков', icon: Truck, isContextual: true },
+  ],
+  rfqDetails: [
+    { id: 'rfq_best_offer', label: '🏆 Лучшее предложение', icon: TrendingUp, isContextual: true },
+    { id: 'po_create_from_rfq', label: '📦 Создать заказ', icon: ShoppingBag, isContextual: true },
+  ],
+  purchaseOrders: [
+    { id: 'po_pending', label: '📦 В работе', icon: Clock, isContextual: true },
+    { id: 'po_received', label: '✅ Полученные', icon: PackageCheck, isContextual: true },
+  ],
+  purchaseOrderDetails: [
+    { id: 'po_pending', label: '📦 Все в работе', icon: ShoppingBag, isContextual: true },
+  ],
+  procurementDashboard: [
+    { id: 'rfq_pending', label: '📨 RFQ без ответа', icon: Clock, isContextual: true },
+    { id: 'po_pending', label: '📦 Заказы в работе', icon: ShoppingBag, isContextual: true },
+    { id: 'suppliers_stats', label: '📊 Статистика', icon: Gauge, isContextual: true },
+  ],
+  supplierDashboard: [
+    { id: 'supplier_incoming_rfq', label: '📨 Входящие RFQ', icon: Inbox, isContextual: true },
+    { id: 'supplier_incoming_po', label: '📦 Входящие заказы', icon: ShoppingBag, isContextual: true },
+  ],
 };
+
+// ─────────────────────────────────────────────────────────────
+// 🎯 СПИСОК ДЕЙСТВИЙ, ТРЕБУЮЩИХ ДОСТУПА К ПОСТАВЩИКАМ
+// ─────────────────────────────────────────────────────────────
+const SUPPLIER_ACTIONS = [
+  'suppliers_list', 'supplier_search', 'open_supplier_details', 'suppliers_stats',
+  'catalog_search', 'catalog_search_prompt', 'best_price_for_material',
+  'rfq_list', 'rfq_pending', 'rfq_with_offers', 'rfq_create', 'open_rfq_details', 'rfq_best_offer',
+  'purchase_orders_list', 'po_pending', 'po_received', 'open_po_details', 'po_create_from_rfq',
+  'supplier_incoming_rfq', 'supplier_incoming_po', 'supplier_pricelist', 'procurement_overview',
+];
+
+const SUPPLIER_VIEWS = [
+  'suppliers', 'supplierCatalog', 'rfqList', 'purchaseOrders',
+  'procurementDashboard', 'supplierDashboard',
+];
 
 // ─────────────────────────────────────────────────────────────
 // 🔧 Хелперы
@@ -254,6 +382,11 @@ const formatDate = (dateString) => {
     day: 'numeric',
     month: 'short',
   });
+};
+
+const formatPrice = (value) => {
+  const n = Number(value) || 0;
+  return n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 const getStatusEmoji = (status) => {
@@ -282,6 +415,64 @@ const getStatusLabel = (status) => {
   return map[status] || status;
 };
 
+const getRFQStatusEmoji = (status) => {
+  const map = {
+    draft: '📝',
+    sent: '📨',
+    collecting: '⏳',
+    collecting_offers: '⏳',
+    offers_received: '💰',
+    comparing: '⚖️',
+    closed: '✅',
+    canceled: '❌',
+    awarded: '🏆',
+  };
+  return map[status] || '📨';
+};
+
+const getRFQStatusLabel = (status) => {
+  const map = {
+    draft: 'Черновик',
+    sent: 'Отправлен',
+    collecting: 'Сбор предложений',
+    collecting_offers: 'Сбор предложений',
+    offers_received: 'Есть предложения',
+    comparing: 'Сравнение',
+    closed: 'Закрыт',
+    canceled: 'Отменён',
+    awarded: 'Выбран победитель',
+  };
+  return map[status] || status;
+};
+
+const getPOStatusEmoji = (status) => {
+  const map = {
+    draft: '📝',
+    sent: '📨',
+    confirmed: '✅',
+    in_transit: '🚚',
+    delivered: '📦',
+    received: '✅',
+    canceled: '❌',
+    rejected: '🚫',
+  };
+  return map[status] || '📦';
+};
+
+const getPOStatusLabel = (status) => {
+  const map = {
+    draft: 'Черновик',
+    sent: 'Отправлен',
+    confirmed: 'Подтверждён',
+    in_transit: 'В пути',
+    delivered: 'Доставлен',
+    received: 'Получен',
+    canceled: 'Отменён',
+    rejected: 'Отклонён',
+  };
+  return map[status] || status;
+};
+
 function getViewGroup(viewId) {
   const groups = {
     'Основные': ['dashboard', 'inwork', 'create', 'received', 'history', 'readyToIssue', 'objects'],
@@ -291,6 +482,10 @@ function getViewGroup(viewId) {
     'Коммуникации': ['chat', 'calendar', 'tasks'],
     'Управление': ['employees', 'approvals', 'audit', 'api', 'integration',
                    'documents', 'settings', 'companyProfile', 'profile', 'help'],
+    'Поставщики и закупки': ['suppliers', 'supplierCatalog', 'supplierPriceList',
+                              'rfqList', 'rfqCreate', 'rfqDetails',
+                              'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
+                              'procurementDashboard', 'supplierDashboard'],
   };
 
   for (const [group, ids] of Object.entries(groups)) {
@@ -319,7 +514,10 @@ const AIAssistant = forwardRef(({
   mergeableCount = 0,
   cartItemsCount = 0,
   chatUnreadCount = 0,
+  rfqCartCount = 0,
   currentView: currentViewProp = '',
+  currentPlan = null,
+  planLimits = null,
   t = (k) => k,
 }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -333,11 +531,18 @@ const AIAssistant = forwardRef(({
   const inputRef = useRef(null);
   const [hasInitialized, setHasInitialized] = useState(false);
 
-  // ✅ НОВОЕ: подсказка при первом входе
+  const cacheRef = useRef({
+    suppliers: null,
+    suppliersFetchedAt: 0,
+    rfqList: null,
+    rfqFetchedAt: 0,
+    poList: null,
+    poFetchedAt: 0,
+  });
+
   const [showHint, setShowHint] = useState(false);
   const [hintHiding, setHintHiding] = useState(false);
 
-  // ✅ НОВОЕ: закреплённые разделы
   const [pinnedViews, setPinnedViews] = useState(() => {
     try {
       const saved = localStorage.getItem(`pinned_views_${userRole}`);
@@ -347,14 +552,11 @@ const AIAssistant = forwardRef(({
     }
   });
 
-  // ✅ НОВОЕ: уведомления от ассистента
   const [notifications, setNotifications] = useState([]);
-
-  // ✅ НОВОЕ: персональные рекомендации (по просмотрам)
   const [recommendation, setRecommendation] = useState(null);
 
   // ─────────────────────────────────────────────────────────
-  // 🎨 Инжект стилей анимаций (1 раз)
+  // 🎨 Инжект стилей
   // ─────────────────────────────────────────────────────────
   useEffect(() => {
     const styleEl = document.createElement('style');
@@ -370,7 +572,7 @@ const AIAssistant = forwardRef(({
   }, []);
 
   // ─────────────────────────────────────────────────────────
-  // 📊 Отслеживание статистики просмотров (для рекомендаций)
+  // 📊 Отслеживание статистики просмотров
   // ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!currentViewProp || !user?.id) return;
@@ -386,20 +588,16 @@ const AIAssistant = forwardRef(({
   }, [currentViewProp, user?.id]);
 
   // ─────────────────────────────────────────────────────────
-  // 🎯 Экспорт методов для внешнего управления
+  // 🎯 Экспорт методов
   // ─────────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
     open: () => setIsOpen(true),
     close: () => setIsOpen(false),
     toggle: () => setIsOpen(prev => !prev),
     isOpen: () => isOpen,
-
-    // ✅ НОВОЕ: метод для проактивных уведомлений
     notify: (notification) => {
       const id = Date.now();
       setNotifications(prev => [...prev, { id, ...notification }]);
-
-      // Автоудаление через 15 секунд
       setTimeout(() => {
         setNotifications(prev => prev.filter(n => n.id !== id));
       }, 15000);
@@ -407,7 +605,7 @@ const AIAssistant = forwardRef(({
   }), [isOpen]);
 
   // ─────────────────────────────────────────────────────────
-  // ✅ НОВОЕ: Показ подсказки при первом входе
+  // ✅ Подсказка при первом входе
   // ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user?.id || isOpen) return;
@@ -415,12 +613,7 @@ const AIAssistant = forwardRef(({
     const hasSeenHint = localStorage.getItem(`ai_hint_${user.id}`);
     if (hasSeenHint) return;
 
-    // Показываем через 5 секунд после входа
-    const timer = setTimeout(() => {
-      setShowHint(true);
-    }, 5000);
-
-    // Скрываем через 20 секунд, если не закрыли
+    const timer = setTimeout(() => setShowHint(true), 5000);
     const hideTimer = setTimeout(() => {
       setHintHiding(true);
       setTimeout(() => {
@@ -448,19 +641,16 @@ const AIAssistant = forwardRef(({
   }, [user?.id]);
 
   // ─────────────────────────────────────────────────────────
-  // ✅ НОВОЕ: Персональные рекомендации
+  // ✅ Персональные рекомендации
   // ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user?.id || !isOpen || !showMainMenu) return;
 
     try {
       const stats = JSON.parse(localStorage.getItem(`view_stats_${user.id}`) || '{}');
-
-      // Проверяем паттерны
       const totalViews = Object.values(stats).reduce((a, b) => a + b, 0);
-      if (totalViews < 10) return; // мало данных
+      if (totalViews < 10) return;
 
-      // Правило 1: Много смотрит аналитику, но не создаёт заявки
       if ((stats.analytics || 0) > 8 && (stats.create || 0) < 2) {
         setRecommendation({
           emoji: '💡',
@@ -470,7 +660,6 @@ const AIAssistant = forwardRef(({
         return;
       }
 
-      // Правило 2: Много времени в складе
       if ((stats.warehouse || 0) > 15) {
         setRecommendation({
           emoji: '📦',
@@ -480,7 +669,15 @@ const AIAssistant = forwardRef(({
         return;
       }
 
-      // Правило 3: Есть проблема - просроченные заявки, но не заходит на inwork
+      if ((stats.suppliers || 0) > 5 && (stats.rfqList || 0) < 2) {
+        setRecommendation({
+          emoji: '📨',
+          text: 'Вы часто работаете с поставщиками! Создать RFQ?',
+          action: { id: 'rfq_create', label: '📨 Создать RFQ' },
+        });
+        return;
+      }
+
       const overdue = applications.filter(a =>
         a.status === 'pending' &&
         (Date.now() - new Date(a.created_at)) > 2 * 86400000
@@ -501,26 +698,23 @@ const AIAssistant = forwardRef(({
   }, [user?.id, isOpen, showMainMenu, applications]);
 
   // ─────────────────────────────────────────────────────────
-  // ✅ НОВОЕ: Проактивные уведомления о проблемах
+  // ✅ Проактивные уведомления
   // ─────────────────────────────────────────────────────────
   const lastNotifiedRef = useRef({});
 
   useEffect(() => {
     if (!user?.id || applications.length === 0) return;
 
-    // Проверяем просроченные (раз в 5 минут)
     const checkProblems = () => {
       const now = Date.now();
       const lastCheck = lastNotifiedRef.current.lastCheck || 0;
       if (now - lastCheck < 5 * 60 * 1000) return;
       lastNotifiedRef.current.lastCheck = now;
 
-      // Просроченные заявки (более 2 дней)
       const overdue = applications.filter(a =>
         a.status === 'pending' &&
         (now - new Date(a.created_at)) > 2 * 86400000
       );
-
       const overdueKey = `overdue_${overdue.length}_${Math.floor(now / 86400000)}`;
       if (overdue.length > 0 && !lastNotifiedRef.current[overdueKey]) {
         lastNotifiedRef.current[overdueKey] = true;
@@ -533,11 +727,7 @@ const AIAssistant = forwardRef(({
         }]);
       }
 
-      // Готовы к выдаче (много накопилось)
-      const ready = applications.filter(a =>
-        a.status === 'ready_for_issue'
-      );
-
+      const ready = applications.filter(a => a.status === 'ready_for_issue');
       const readyKey = `ready_${ready.length}_${Math.floor(now / 86400000)}`;
       if (ready.length >= 5 && !lastNotifiedRef.current[readyKey]) {
         lastNotifiedRef.current[readyKey] = true;
@@ -556,7 +746,6 @@ const AIAssistant = forwardRef(({
     return () => clearInterval(interval);
   }, [user?.id, applications]);
 
-  // Авто-скрытие уведомлений через 15 сек
   useEffect(() => {
     if (notifications.length === 0) return;
 
@@ -586,10 +775,8 @@ const AIAssistant = forwardRef(({
     });
   }, [userRole]);
 
-  // Доступные разделы
   const availableViews = ROLE_VIEWS[userRole] || ROLE_VIEWS.master;
 
-  // Счётчики для бейджей
   const getBadgeCount = useCallback((viewId) => {
     switch (viewId) {
       case 'readyToIssue': return readyToIssueCount;
@@ -597,15 +784,128 @@ const AIAssistant = forwardRef(({
       case 'merge': return mergeableCount;
       case 'chat': return chatUnreadCount;
       case 'cart': return cartItemsCount;
+      case 'rfqList': return rfqCartCount;
       default: return 0;
     }
-  }, [readyToIssueCount, pendingApprovalsCount, mergeableCount, chatUnreadCount, cartItemsCount]);
+  }, [readyToIssueCount, pendingApprovalsCount, mergeableCount, chatUnreadCount, cartItemsCount, rfqCartCount]);
+
+  // ─────────────────────────────────────────────────────────
+  // 🆕 ЗАГРУЗЧИКИ ДАННЫХ ДЛЯ ПОСТАВЩИКОВ
+  // ─────────────────────────────────────────────────────────
+  const loadSuppliers = useCallback(async (force = false) => {
+    if (!userCompanyId || !supabase) return [];
+
+    const now = Date.now();
+    if (!force && cacheRef.current.suppliers && (now - cacheRef.current.suppliersFetchedAt) < CACHE_TTL) {
+      return cacheRef.current.suppliers;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .select('id, name, contact_person, phone, email, rating, is_active, inn')
+        .eq('company_id', userCompanyId)
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+        .limit(100);
+
+      if (error) throw error;
+
+      cacheRef.current.suppliers = data || [];
+      cacheRef.current.suppliersFetchedAt = now;
+      return data || [];
+    } catch (err) {
+      console.error('[AIAssistant] loadSuppliers error:', err);
+      return [];
+    }
+  }, [userCompanyId, supabase]);
+
+  const loadRFQList = useCallback(async (force = false) => {
+    if (!userCompanyId || !supabase) return [];
+
+    const now = Date.now();
+    if (!force && cacheRef.current.rfqList && (now - cacheRef.current.rfqFetchedAt) < CACHE_TTL) {
+      return cacheRef.current.rfqList;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('rfq')
+        .select('id, title, status, created_at, deadline, items_count, offers_count, best_price')
+        .eq('company_id', userCompanyId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      cacheRef.current.rfqList = data || [];
+      cacheRef.current.rfqFetchedAt = now;
+      return data || [];
+    } catch (err) {
+      console.error('[AIAssistant] loadRFQList error:', err);
+      return [];
+    }
+  }, [userCompanyId, supabase]);
+
+  const loadPurchaseOrders = useCallback(async (force = false) => {
+    if (!userCompanyId || !supabase) return [];
+
+    const now = Date.now();
+    if (!force && cacheRef.current.poList && (now - cacheRef.current.poFetchedAt) < CACHE_TTL) {
+      return cacheRef.current.poList;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('purchase_orders')
+        .select('id, order_number, status, total_amount, created_at, expected_delivery_date, supplier_id')
+        .eq('company_id', userCompanyId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      cacheRef.current.poList = data || [];
+      cacheRef.current.poFetchedAt = now;
+      return data || [];
+    } catch (err) {
+      console.error('[AIAssistant] loadPurchaseOrders error:', err);
+      return [];
+    }
+  }, [userCompanyId, supabase]);
 
   // ─────────────────────────────────────────────────────────
   // 🎯 Логика действий
   // ─────────────────────────────────────────────────────────
   const executeAction = useCallback(async (actionId, payload) => {
+    // 🆕 Проверка тарифа и доступа для функций поставщиков
+    if (SUPPLIER_ACTIONS.includes(actionId)) {
+      const hasSuppliersAccess = availableViews.some(v => SUPPLIER_VIEWS.includes(v));
+
+      if (!hasSuppliersAccess) {
+        return {
+          content: '❌ Модуль "Поставщики" недоступен на вашем тарифе или для вашей роли.\n\nОбратитесь к руководителю или обновите тариф.',
+          actions: [
+            { id: 'navigate_to', label: '💎 Тарифы', payload: { viewId: 'tariffs' } },
+          ],
+        };
+      }
+
+      if (planLimits && !planLimits.canCreateApplication && ['rfq_create', 'po_create_from_rfq'].includes(actionId)) {
+        return {
+          content: `⚠️ Лимит заявок исчерпан (${planLimits.applicationsThisMonth}/${planLimits.applicationsLimit}).\n\nОбновите тариф для создания новых RFQ и заказов.`,
+          actions: [
+            { id: 'navigate_to', label: '💎 Обновить тариф', payload: { viewId: 'tariffs' } },
+          ],
+        };
+      }
+    }
+
     switch (actionId) {
+
+      // ═══════════════════════════════════════════════════════
+      // СУЩЕСТВУЮЩИЕ ДЕЙСТВИЯ
+      // ═══════════════════════════════════════════════════════
       case 'my_applications': {
         const myApps = applications.filter(
           a => a.user_id === user?.id &&
@@ -901,7 +1201,6 @@ const AIAssistant = forwardRef(({
         return { content: `🏗️ **Топ объектов:**\n\n${list}` };
       }
 
-      // ✅ НОВОЕ: переход в раздел "Объекты"
       case 'my_objects': {
         onNavigate?.('objects');
         return {
@@ -970,25 +1269,463 @@ const AIAssistant = forwardRef(({
           .join('\n');
 
         return {
-          content: `🤖 **Что я умею:**\n\n**Быстрые действия:**\n${roleActions}\n\n**Навигация:**\nВкладка "Разделы" — переход в любой раздел приложения.\n\n💡 **Совет:** Используйте кнопку 🎤 для голосового поиска!`,
+          content: `🤖 **Что я умею:**\n\n**Быстрые действия:**\n${roleActions}\n\n**Навигация:**\nВкладка "Разделы" — переход в любой раздел приложения.\n\n**Поставщики и закупки:**\n• "поставщики" — список поставщиков\n• "RFQ" — запросы цен\n• "заказы" — заказы поставщикам\n• "найди цемент М500" — поиск в каталоге\n\n💡 **Совет:** Используйте кнопку 🎤 для голосового поиска!`,
         };
       }
 
+      // ═══════════════════════════════════════════════════════
+      // 🆕 ПОСТАВЩИКИ
+      // ═══════════════════════════════════════════════════════
+      case 'suppliers_list': {
+        const suppliers = await loadSuppliers();
+
+        if (suppliers.length === 0) {
+          return {
+            content: '🏢 У вас пока нет поставщиков.\n\nДобавить первого?',
+            actions: [
+              { id: 'navigate_to', label: '➕ Добавить поставщика', payload: { viewId: 'suppliers' } },
+            ],
+          };
+        }
+
+        const list = suppliers.slice(0, 8).map(s => ({
+          id: s.id,
+          emoji: '🏢',
+          title: s.name,
+          subtitle: [
+            s.contact_person && `👤 ${s.contact_person}`,
+            s.phone && `📞 ${s.phone}`,
+            s.rating > 0 && `★ ${Number(s.rating).toFixed(1)}`,
+          ].filter(Boolean).join(' · ') || '—',
+          action: {
+            id: 'open_supplier_details',
+            label: '👁 Открыть',
+            payload: { supplierId: s.id },
+          },
+        }));
+
+        return {
+          content: `🏢 **Поставщики (${suppliers.length}):**`,
+          data: list,
+          actions: [
+            { id: 'navigate_to', label: '🏢 Все поставщики', payload: { viewId: 'suppliers' } },
+            { id: 'rfq_create', label: '📨 Создать RFQ' },
+          ],
+        };
+      }
+
+      case 'supplier_search': {
+        const query = (payload?.query || '').trim().toLowerCase();
+        if (!query) {
+          return { content: '🔍 Укажите название поставщика для поиска' };
+        }
+
+        const suppliers = await loadSuppliers();
+        const matched = suppliers.filter(s =>
+          s.name?.toLowerCase().includes(query) ||
+          s.contact_person?.toLowerCase().includes(query) ||
+          s.inn?.includes(query)
+        );
+
+        if (matched.length === 0) {
+          return {
+            content: `🔍 По запросу "${payload.query}" поставщиков не найдено.`,
+            actions: [
+              { id: 'suppliers_list', label: '🏢 Все поставщики' },
+            ],
+          };
+        }
+
+        const list = matched.slice(0, 8).map(s => ({
+          id: s.id,
+          emoji: '🏢',
+          title: s.name,
+          subtitle: s.contact_person || s.phone || '—',
+          action: {
+            id: 'open_supplier_details',
+            label: '👁 Открыть',
+            payload: { supplierId: s.id },
+          },
+        }));
+
+        return {
+          content: `🔍 **Найдено ${matched.length} поставщиков:**`,
+          data: list,
+        };
+      }
+
+      case 'open_supplier_details': {
+        onNavigate?.('suppliers');
+        return {
+          content: `➡️ Открываю карточку поставщика...`,
+        };
+      }
+
+      case 'suppliers_stats': {
+        const suppliers = await loadSuppliers();
+        const po = await loadPurchaseOrders();
+        const rfq = await loadRFQList();
+
+        const activePO = po.filter(p => !['received', 'canceled', 'rejected'].includes(p.status));
+        const activeRFQ = rfq.filter(r => !['closed', 'canceled', 'awarded'].includes(r.status));
+        const totalSpent = po
+          .filter(p => p.status === 'received')
+          .reduce((sum, p) => sum + (Number(p.total_amount) || 0), 0);
+
+        return {
+          content: `📊 **Статистика закупок:**\n\n• Поставщиков: **${suppliers.length}**\n• Активных RFQ: **${activeRFQ.length}**\n• Активных заказов: **${activePO.length}**\n• Сумма полученных заказов: **${formatPrice(totalSpent)} ₽**`,
+          actions: [
+            { id: 'navigate_to', label: '📊 Дашборд закупок', payload: { viewId: 'procurementDashboard' } },
+          ],
+        };
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // 🆕 КАТАЛОГ МАТЕРИАЛОВ
+      // ═══════════════════════════════════════════════════════
+      case 'catalog_search_prompt': {
+        onNavigate?.('supplierCatalog');
+        return {
+          content: '🔍 Открываю **Каталог материалов**...\n\nВведите название, артикул или бренд, и я найду лучшие цены во всех прайс-листах.',
+        };
+      }
+
+      case 'catalog_search': {
+        const query = (payload?.query || '').trim();
+        if (!query || query.length < 2) {
+          return { content: '🔍 Укажите название материала (минимум 2 символа)' };
+        }
+
+        try {
+          const { searchMaterialsAcrossSuppliers } = await import('../../api/suppliers');
+          const results = await searchMaterialsAcrossSuppliers(userCompanyId, query, {
+            limit: 10,
+          });
+
+          if (!results || results.length === 0) {
+            return {
+              content: `🔍 По запросу "${query}" ничего не найдено.`,
+              actions: [
+                { id: 'navigate_to', label: '🔍 Открыть каталог', payload: { viewId: 'supplierCatalog' } },
+              ],
+            };
+          }
+
+          const list = results.slice(0, 8).map((item, idx) => ({
+            id: item.id || idx,
+            emoji: idx === 0 ? '🏆' : '📦',
+            title: item.name,
+            subtitle: `${formatPrice(item.price)} ₽ / ${item.unit || 'шт'} · ${item.supplier_name || '—'}`,
+          }));
+
+          const cheapest = results[0];
+          return {
+            content: `🔍 **Найдено ${results.length} предложений по "${query}":**\n\n💰 Лучшая цена: **${formatPrice(cheapest.price)} ₽** у ${cheapest.supplier_name || '—'}`,
+            data: list,
+            actions: [
+              { id: 'navigate_to', label: '🔍 Открыть каталог', payload: { viewId: 'supplierCatalog' } },
+              { id: 'rfq_create', label: '📨 Создать RFQ' },
+            ],
+          };
+        } catch (err) {
+          console.error('[AIAssistant] catalog_search error:', err);
+          return {
+            content: '❌ Не удалось выполнить поиск. Открыть каталог?',
+            actions: [
+              { id: 'navigate_to', label: '🔍 Открыть каталог', payload: { viewId: 'supplierCatalog' } },
+            ],
+          };
+        }
+      }
+
+      case 'best_price_for_material': {
+        const query = (payload?.query || '').trim();
+        if (!query) {
+          return { content: '💰 Назовите материал, и я найду лучшую цену.' };
+        }
+        return executeAction('catalog_search', { query });
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // 🆕 RFQ
+      // ═══════════════════════════════════════════════════════
+      case 'rfq_list': {
+        const rfq = await loadRFQList();
+
+        if (rfq.length === 0) {
+          return {
+            content: '📨 У вас пока нет RFQ.\n\nСоздать первый запрос цен?',
+            actions: [
+              { id: 'rfq_create', label: '📨 Создать RFQ' },
+            ],
+          };
+        }
+
+        const list = rfq.slice(0, 8).map(r => ({
+          id: r.id,
+          emoji: getRFQStatusEmoji(r.status),
+          title: r.title || `RFQ #${r.id.slice(0, 6)}`,
+          subtitle: `${getRFQStatusLabel(r.status)} · ${r.items_count || 0} поз. · ${r.offers_count || 0} предл.`,
+          action: {
+            id: 'open_rfq_details',
+            label: '👁 Открыть',
+            payload: { rfqId: r.id },
+          },
+        }));
+
+        return {
+          content: `📨 **Ваши RFQ (${rfq.length}):**`,
+          data: list,
+          actions: [
+            { id: 'navigate_to', label: '📨 Все RFQ', payload: { viewId: 'rfqList' } },
+            { id: 'rfq_create', label: '➕ Создать RFQ' },
+          ],
+        };
+      }
+
+      case 'rfq_pending': {
+        const rfq = await loadRFQList();
+        const pending = rfq.filter(r =>
+          ['sent', 'collecting', 'collecting_offers'].includes(r.status)
+        );
+
+        if (pending.length === 0) {
+          return {
+            content: '✅ Нет RFQ без ответа.',
+            actions: [
+              { id: 'rfq_list', label: '📨 Все RFQ' },
+            ],
+          };
+        }
+
+        const list = pending.slice(0, 8).map(r => {
+          const days = Math.floor((Date.now() - new Date(r.created_at)) / 86400000);
+          return {
+            id: r.id,
+            emoji: '⏳',
+            title: r.title || `RFQ #${r.id.slice(0, 6)}`,
+            subtitle: `${days} дн. · ${r.offers_count || 0} предл.`,
+            action: {
+              id: 'open_rfq_details',
+              label: '👁 Открыть',
+              payload: { rfqId: r.id },
+            },
+          };
+        });
+
+        return {
+          content: `⏳ **RFQ без ответа (${pending.length}):**`,
+          data: list,
+          actions: [
+            { id: 'navigate_to', label: '📨 Все RFQ', payload: { viewId: 'rfqList' } },
+          ],
+        };
+      }
+
+      case 'rfq_with_offers': {
+        const rfq = await loadRFQList();
+        const withOffers = rfq.filter(r =>
+          ['offers_received', 'comparing'].includes(r.status) &&
+          (r.offers_count || 0) > 0
+        );
+
+        if (withOffers.length === 0) {
+          return {
+            content: '💰 RFQ с предложениями пока нет.',
+            actions: [
+              { id: 'rfq_list', label: '📨 Все RFQ' },
+            ],
+          };
+        }
+
+        const list = withOffers.slice(0, 8).map(r => ({
+          id: r.id,
+          emoji: '💰',
+          title: r.title || `RFQ #${r.id.slice(0, 6)}`,
+          subtitle: `${r.offers_count} предложений${r.best_price ? ` · от ${formatPrice(r.best_price)} ₽` : ''}`,
+          action: {
+            id: 'open_rfq_details',
+            label: '👁 Открыть',
+            payload: { rfqId: r.id },
+          },
+        }));
+
+        return {
+          content: `💰 **RFQ с предложениями (${withOffers.length}):**`,
+          data: list,
+          actions: [
+            { id: 'navigate_to', label: '📨 Все RFQ', payload: { viewId: 'rfqList' } },
+          ],
+        };
+      }
+
+      case 'rfq_create': {
+        onNavigate?.('rfqCreate');
+        return {
+          content: rfqCartCount > 0
+            ? `📨 Открываю форму создания RFQ...\n\nВ корзине **${rfqCartCount}** позиций из каталога.`
+            : '📨 Открываю форму создания RFQ...\n\n💡 Совет: сначала добавьте материалы в каталоге.',
+        };
+      }
+
+      case 'open_rfq_details': {
+        const rfqId = payload?.rfqId;
+        if (!rfqId) return { content: '❌ ID RFQ не указан' };
+
+        onNavigate?.('rfqDetails');
+        return {
+          content: `➡️ Открываю детали RFQ...`,
+        };
+      }
+
+      case 'rfq_best_offer': {
+        const rfqId = payload?.rfqId;
+        if (!rfqId) {
+          const rfq = await loadRFQList();
+          const active = rfq.find(r => r.status === 'offers_received');
+          if (!active) {
+            return { content: '💰 Нет RFQ с предложениями.' };
+          }
+          onNavigate?.('rfqDetails');
+          return {
+            content: `➡️ Открываю RFQ "${active.title || active.id.slice(0, 6)}", чтобы показать лучшее предложение...`,
+          };
+        }
+
+        onNavigate?.('rfqDetails');
+        return { content: '➡️ Открываю лучшее предложение...' };
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // 🆕 ЗАКАЗЫ (PURCHASE ORDERS)
+      // ═══════════════════════════════════════════════════════
+      case 'purchase_orders_list': {
+        const po = await loadPurchaseOrders();
+
+        if (po.length === 0) {
+          return {
+            content: '📦 У вас пока нет заказов.\n\nСоздать первый заказ?',
+            actions: [
+              { id: 'navigate_to', label: '📦 Создать заказ', payload: { viewId: 'purchaseOrderCreate' } },
+            ],
+          };
+        }
+
+        const list = po.slice(0, 8).map(p => ({
+          id: p.id,
+          emoji: getPOStatusEmoji(p.status),
+          title: p.order_number || `Заказ #${p.id.slice(0, 6)}`,
+          subtitle: `${getPOStatusLabel(p.status)} · ${formatPrice(p.total_amount)} ₽`,
+          action: {
+            id: 'open_po_details',
+            label: '👁 Открыть',
+            payload: { poId: p.id },
+          },
+        }));
+
+        return {
+          content: `📦 **Ваши заказы (${po.length}):**`,
+          data: list,
+          actions: [
+            { id: 'navigate_to', label: '📦 Все заказы', payload: { viewId: 'purchaseOrders' } },
+          ],
+        };
+      }
+
+      case 'po_pending': {
+        const po = await loadPurchaseOrders();
+        const pending = po.filter(p =>
+          ['sent', 'confirmed', 'in_transit', 'delivered'].includes(p.status)
+        );
+
+        if (pending.length === 0) {
+          return {
+            content: '✅ Нет активных заказов.',
+            actions: [
+              { id: 'purchase_orders_list', label: '📦 Все заказы' },
+            ],
+          };
+        }
+
+        const list = pending.slice(0, 8).map(p => {
+          const days = Math.floor((Date.now() - new Date(p.created_at)) / 86400000);
+          return {
+            id: p.id,
+            emoji: getPOStatusEmoji(p.status),
+            title: p.order_number || `Заказ #${p.id.slice(0, 6)}`,
+            subtitle: `${getPOStatusLabel(p.status)} · ${days} дн. · ${formatPrice(p.total_amount)} ₽`,
+            action: {
+              id: 'open_po_details',
+              label: '👁 Открыть',
+              payload: { poId: p.id },
+            },
+          };
+        });
+
+        return {
+          content: `📦 **Заказы в работе (${pending.length}):**`,
+          data: list,
+          actions: [
+            { id: 'navigate_to', label: '📦 Все заказы', payload: { viewId: 'purchaseOrders' } },
+          ],
+        };
+      }
+
+      case 'po_received': {
+        const po = await loadPurchaseOrders();
+        const received = po.filter(p => p.status === 'received');
+
+        if (received.length === 0) {
+          return { content: '✅ Полученных заказов пока нет.' };
+        }
+
+        const list = received.slice(0, 8).map(p => ({
+          id: p.id,
+          emoji: '✅',
+          title: p.order_number || `Заказ #${p.id.slice(0, 6)}`,
+          subtitle: `${formatDate(p.created_at)} · ${formatPrice(p.total_amount)} ₽`,
+          action: {
+            id: 'open_po_details',
+            label: '👁 Открыть',
+            payload: { poId: p.id },
+          },
+        }));
+
+        return {
+          content: `✅ **Полученные заказы (${received.length}):**`,
+          data: list,
+        };
+      }
+
+      case 'open_po_details': {
+        const poId = payload?.poId;
+        if (!poId) return { content: '❌ ID заказа не указан' };
+
+        onNavigate?.('purchaseOrderDetails');
+        return { content: `➡️ Открываю детали заказа...` };
+      }
+
+      case 'po_create_from_rfq': {
+        onNavigate?.('purchaseOrderCreate');
+        return { content: '📦 Открываю форму создания заказа...' };
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // 🆕 ПАРСИНГ СВОБОДНОГО ТЕКСТА
+      // ═══════════════════════════════════════════════════════
       case 'free_text': {
         const text = payload?.text?.trim();
         if (!text) return { content: '🤔 Введите запрос или используйте кнопки выше.' };
 
         const lowerText = text.toLowerCase();
 
+        // ─── ЗАЯВКИ ───
         if (lowerText.includes('заявк') && (lowerText.includes('мои') || lowerText.includes('актив'))) {
           return executeAction('my_applications');
         }
-
-        // ✅ НОВОЕ: ключевые слова для "Объекты"
-        if (lowerText.includes('объект') || lowerText.includes('папк') || lowerText.includes('жк') || lowerText.includes('проект')) {
+        if (lowerText.includes('объект') || lowerText.includes('папк') || lowerText.includes('жк')) {
           return executeAction('my_objects');
         }
-
         if (lowerText.includes('склад') && (lowerText.includes('остат') || lowerText.includes('товар'))) {
           return executeAction('warehouse_stock');
         }
@@ -1008,6 +1745,65 @@ const AIAssistant = forwardRef(({
           return executeAction('create_app');
         }
 
+        // ─── 🆕 ПОСТАВЩИКИ ───
+        if (lowerText.match(/поставщик|контрагент|vendor/i)) {
+          const searchMatch = lowerText.match(/(?:найди|покажи|найти)\s+(?:поставщика\s+)?["«]?([^"»]+)["»]?/i);
+          if (searchMatch && searchMatch[1]) {
+            return executeAction('supplier_search', { query: searchMatch[1].trim() });
+          }
+          return executeAction('suppliers_list');
+        }
+
+        if (lowerText.includes('статистик') && lowerText.includes('закуп')) {
+          return executeAction('suppliers_stats');
+        }
+
+        // ─── 🆕 КАТАЛОГ ───
+        if (lowerText.match(/(?:найди|найти|поиск|где купить|цена|стоимость)\s+(.+)/i)) {
+          const match = lowerText.match(/(?:найди|найти|поиск|где купить|цена|стоимость|сколько стоит)\s+(.+)/i);
+          if (match && match[1]) {
+            const query = match[1]
+              .replace(/^(материал|товар|позицию)\s+/i, '')
+              .trim();
+            if (query.length >= 2) {
+              return executeAction('catalog_search', { query });
+            }
+          }
+        }
+        if (lowerText.includes('каталог')) {
+          return executeAction('catalog_search_prompt');
+        }
+
+        // ─── 🆕 RFQ ───
+        if (lowerText.match(/rfq|запрос цен|запросы цен|тендер/i)) {
+          if (lowerText.match(/созда|нов/i)) {
+            return executeAction('rfq_create');
+          }
+          if (lowerText.match(/без ответ|висят|ожида|pending/i)) {
+            return executeAction('rfq_pending');
+          }
+          if (lowerText.match(/предлож|оффер|offer/i)) {
+            return executeAction('rfq_with_offers');
+          }
+          return executeAction('rfq_list');
+        }
+
+        // ─── 🆕 ЗАКАЗЫ ───
+        if (lowerText.match(/заказ|po|purchase order/i)) {
+          if (lowerText.match(/созда|нов/i)) {
+            onNavigate?.('purchaseOrderCreate');
+            return { content: '📦 Открываю форму создания заказа...' };
+          }
+          if (lowerText.match(/в работе|в пути|активн|pending/i)) {
+            return executeAction('po_pending');
+          }
+          if (lowerText.match(/получен|доставлен|received/i)) {
+            return executeAction('po_received');
+          }
+          return executeAction('purchase_orders_list');
+        }
+
+        // ─── ПОИСК ПО РАЗДЕЛАМ ───
         const viewMatches = [];
         Object.entries(ALL_VIEWS).forEach(([viewId, viewInfo]) => {
           if (!availableViews.includes(viewId)) return;
@@ -1061,13 +1857,32 @@ const AIAssistant = forwardRef(({
         }
 
         return {
-          content: `🔍 По запросу "${text}" ничего не найдено.\n\nПопробуйте:\n• "объекты"\n• "склад"\n• "аналитика"\n• "мои заявки"\n• "документы"`,
+          content: `🔍 По запросу "${text}" ничего не найдено.\n\nПопробуйте:\n• "поставщики"\n• "RFQ"\n• "заказы"\n• "найди цемент М500"\n• "мои заявки"\n• "склад"`,
           actions: [
-            { id: 'my_objects', label: '🏢 Объекты' },
-            { id: 'my_applications', label: '📋 Мои заявки' },
+            { id: 'suppliers_list', label: '🏢 Поставщики' },
+            { id: 'rfq_list', label: '📨 RFQ' },
+            { id: 'purchase_orders_list', label: '📦 Заказы' },
             { id: 'help', label: '❓ Что я умею' },
           ],
         };
+      }
+
+      // ─── Actions для поставщика ───
+      case 'supplier_incoming_rfq': {
+        onNavigate?.('rfqList');
+        return { content: '📨 Открываю входящие RFQ...' };
+      }
+      case 'supplier_incoming_po': {
+        onNavigate?.('purchaseOrders');
+        return { content: '📦 Открываю входящие заказы...' };
+      }
+      case 'supplier_pricelist': {
+        onNavigate?.('supplierPriceList');
+        return { content: '💰 Открываю мой прайс-лист...' };
+      }
+      case 'procurement_overview': {
+        onNavigate?.('procurementDashboard');
+        return { content: '📊 Открываю дашборд закупок...' };
       }
 
       default:
@@ -1076,7 +1891,9 @@ const AIAssistant = forwardRef(({
   }, [
     applications, companyUsers, supabase, user,
     userCompanyId, userRole, onNavigate, availableViews,
-    onCreateDraft, onOpenApplication, onOpenReceiveModal, showNotification
+    onCreateDraft, onOpenApplication, onOpenReceiveModal, showNotification,
+    rfqCartCount, planLimits,
+    loadSuppliers, loadRFQList, loadPurchaseOrders,
   ]);
 
   const handleAction = useCallback(async (actionId, payload = null, customLabel = null) => {
@@ -1085,14 +1902,16 @@ const AIAssistant = forwardRef(({
 
     const viewInfo = ALL_VIEWS[payload?.viewId];
 
-    // ✅ НОВОЕ: при действии сбрасываем рекомендацию
+    const ctxAction = (CONTEXTUAL_ACTIONS[currentViewProp] || [])
+      .find(a => a.id === actionId);
+
     setRecommendation(null);
     setShowMainMenu(false);
 
     setMessages(prev => [...prev, {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: customLabel || action?.label || viewInfo?.label || actionId,
+      content: customLabel || action?.label || ctxAction?.label || viewInfo?.label || actionId,
       timestamp: Date.now(),
     }]);
 
@@ -1121,7 +1940,7 @@ const AIAssistant = forwardRef(({
     } finally {
       setIsLoading(false);
     }
-  }, [userRole, executeAction]);
+  }, [userRole, executeAction, currentViewProp]);
 
   const handleBackToMenu = useCallback(() => {
     setShowMainMenu(true);
@@ -1152,7 +1971,6 @@ const AIAssistant = forwardRef(({
     }
   }, [handleSendMessage]);
 
-  // ✅ НОВОЕ: Экспорт сообщения
   const exportMessage = useCallback((msg) => {
     const content = `
 AI-Ассистент Реглай
@@ -1175,26 +1993,22 @@ ${msg.content}
     showNotification?.('✅ Ответ сохранён', 'success');
   }, [user?.email, showNotification]);
 
-  // ✅ НОВОЕ: Озвучка (TTS)
   const speakText = useCallback((text) => {
     if (!('speechSynthesis' in window)) {
       showNotification?.('Озвучка не поддерживается браузером', 'warning');
       return;
     }
 
-    // Отменяем предыдущую озвучку
     window.speechSynthesis.cancel();
 
-    // ✅ Безопасная очистка БЕЗ регулярки — используем массив эмодзи
     const EMOJIS_TO_REMOVE = [
       '📋', '📦', '📥', '📤', '✅', '⏳', '🔴', '🟡', '🏭', '📊',
       '⚠️', '👥', '🏗️', '🎤', '💡', '🔍', '📍', '➡️', '❌', '🤔',
       '📭', '📄', '🆕', '🎯', '📌', '⭐', '🔊', '👁', '🕐', '🏢',
+      '💰', '📨', '🚚', '🏆', '★', '⚙️', '🚫', '⚖️', '📝', '🟢',
     ];
 
     let cleanText = text.replace(/\*\*/g, '');
-
-    // Убираем каждое эмодзи через replaceAll
     EMOJIS_TO_REMOVE.forEach((emoji) => {
       cleanText = cleanText.split(emoji).join('');
     });
@@ -1220,26 +2034,34 @@ ${msg.content}
         accountant: 'бухгалтер',
         client_manager: 'менеджер клиентов',
         client: 'заказчик',
+        procurement_manager: 'менеджер по закупкам',
+        supplier_admin: 'администратор поставщика',
+        supplier_manager: 'менеджер поставщика',
       }[userRole] || 'пользователь';
+
+      const hasSuppliers = availableViews.includes('suppliers');
+      const supplierHint = hasSuppliers
+        ? '\n\n🏢 Могу помочь с **поставщиками, каталогом, RFQ и заказами**!'
+        : '';
+
+      const planLabel = currentPlan?.name ? `\n📦 Ваш тариф: **${currentPlan.name}**` : '';
 
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: `Привет! Я ассистент Реглай.\n\nЯ вижу вас как **${roleLabel}**. Чем помочь?\n\n💡 Выбирайте действия на вкладке "Действия" или переходите в разделы на вкладке "Разделы".`,
+        content: `Привет! Я ассистент Реглай.\n\nЯ вижу вас как **${roleLabel}**.${planLabel} Чем помочь?${supplierHint}\n\n💡 Выбирайте действия на вкладке "Действия" или переходите в разделы на вкладке "Разделы".`,
         timestamp: Date.now(),
       }]);
       setHasInitialized(true);
     }
-  }, [isOpen, hasInitialized, userRole]);
+  }, [isOpen, hasInitialized, userRole, availableViews, currentPlan]);
 
-  // Автоскролл
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
 
-  // Фокус
   useEffect(() => {
     if (isOpen && inputRef.current && !showMainMenu) {
       setTimeout(() => inputRef.current?.focus(), 300);
@@ -1251,7 +2073,16 @@ ${msg.content}
   // ─────────────────────────────────────────────────────────
   const quickActions = QUICK_ACTIONS[userRole] || QUICK_ACTIONS.default;
 
-  // ✅ НОВОЕ: контекстные действия
+  const groupedQuickActions = useMemo(() => {
+    const groups = {};
+    quickActions.forEach(action => {
+      const group = action.group || 'quick';
+      if (!groups[group]) groups[group] = [];
+      groups[group].push(action);
+    });
+    return groups;
+  }, [quickActions]);
+
   const contextualActions = useMemo(() => {
     return CONTEXTUAL_ACTIONS[currentViewProp] || [];
   }, [currentViewProp]);
@@ -1263,6 +2094,7 @@ ${msg.content}
       'Клиенты и проекты': [],
       'Аналитика и финансы': [],
       'Коммуникации': [],
+      'Поставщики и закупки': [],
       'Управление': [],
     };
 
@@ -1270,20 +2102,14 @@ ${msg.content}
       const viewInfo = ALL_VIEWS[viewId];
       if (!viewInfo) return;
 
-      const group = viewInfo.group || getViewGroup(viewId);
+      const group = getViewGroup(viewId);
       if (groups[group]) {
         groups[group].push({ id: viewId, ...viewInfo });
       }
     });
 
     return Object.entries(groups)
-      .filter(([groupName, items]) => {
-        if (items.length === 0) {
-          console.debug(`[AIAssistant] Группа "${groupName}" пуста, скрываем`);
-          return false;
-        }
-        return true;
-      })
+      .filter(([, items]) => items.length > 0)
       .map(([groupName, items]) => ({
         groupName,
         items,
@@ -1360,7 +2186,6 @@ ${msg.content}
 
   return (
     <>
-      {/* ✅ ПЛАВАЮЩАЯ ПОДСКАЗКА ПРИ ПЕРВОМ ВХОДЕ */}
       {showHint && !isOpen && (
         <div
           className={`fixed top-20 right-4 lg:top-24 lg:right-24 z-[9997] ${
@@ -1368,9 +2193,7 @@ ${msg.content}
           }`}
         >
           <div className="relative bg-gradient-to-r from-[#4A6572] to-[#344955] text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 max-w-xs ai-pulse-ring">
-            {/* Стрелка к кнопке */}
             <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-[#344955] rotate-45" />
-
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 ai-wiggle">
               <Sparkles className="w-5 h-5 text-[#F9AA33]" />
             </div>
@@ -1391,7 +2214,6 @@ ${msg.content}
         </div>
       )}
 
-      {/* ✅ ПРОАКТИВНЫЕ УВЕДОМЛЕНИЯ */}
       {notifications.length > 0 && !isOpen && (
         <div className="fixed top-20 right-4 lg:top-24 lg:right-24 z-[9996] space-y-2 max-w-xs">
           {notifications.map((notif) => (
@@ -1433,14 +2255,12 @@ ${msg.content}
         </div>
       )}
 
-      {/* Окно чата */}
       {isOpen && (
         <div
           className="fixed top-20 right-4 lg:top-24 lg:right-8 w-[380px] max-w-[calc(100vw-2rem)] h-[600px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col z-[9999] border border-gray-200 dark:border-gray-700 ai-bounce-in"
           role="dialog"
           aria-label="AI-ассистент"
         >
-          {/* Header */}
           <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-[#4A6572]/5 to-[#344955]/5 rounded-t-2xl">
             <div className="flex items-center gap-2">
               {!showMainMenu && (
@@ -1452,7 +2272,6 @@ ${msg.content}
                   <ArrowLeft className="w-4 h-4" />
                 </button>
               )}
-
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
@@ -1485,7 +2304,6 @@ ${msg.content}
             </div>
           </div>
 
-          {/* Вкладки */}
           {showMainMenu && (
             <div className="flex border-b border-gray-200 dark:border-gray-700">
               <button
@@ -1513,10 +2331,8 @@ ${msg.content}
             </div>
           )}
 
-          {/* Главное меню */}
           {showMainMenu ? (
             <div className="flex-1 overflow-y-auto p-3">
-              {/* Приветствие */}
               {messages.length > 0 && messages[0].id === 'welcome' && (
                 <div className="mb-4 p-3 bg-gradient-to-br from-[#4A6572]/5 to-[#344955]/5 rounded-xl ai-slide-up">
                   <div className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
@@ -1525,7 +2341,6 @@ ${msg.content}
                 </div>
               )}
 
-              {/* ✅ ПЕРСОНАЛЬНАЯ РЕКОМЕНДАЦИЯ */}
               {recommendation && activeTab === 'actions' && (
                 <div className="mb-3 p-3 bg-gradient-to-br from-[#F9AA33]/20 to-[#F57C00]/10 rounded-xl border border-[#F9AA33]/30 ai-bounce-in">
                   <div className="flex items-start gap-2">
@@ -1549,10 +2364,8 @@ ${msg.content}
                 </div>
               )}
 
-              {/* Вкладка "Действия" */}
               {activeTab === 'actions' && (
                 <>
-                  {/* ✅ КОНТЕКСТНЫЕ ДЕЙСТВИЯ */}
                   {contextualActions.length > 0 && (
                     <div className="mb-3">
                       <div className="text-[10px] font-medium text-[#F9AA33] uppercase tracking-wide px-1 mb-2 flex items-center gap-1">
@@ -1581,41 +2394,76 @@ ${msg.content}
                     </div>
                   )}
 
-                  <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-2">
-                    Быстрые действия
-                  </div>
-                  <div className="space-y-2">
-                    {quickActions.map((action) => {
-                      const Icon = action.icon;
-                      return (
-                        <button
-                          key={action.id}
-                          onClick={() => handleAction(action.id)}
-                          disabled={isLoading}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 border border-transparent hover:border-[#4A6572]/20 dark:hover:border-[#F9AA33]/20"
-                        >
-                          <div className="w-8 h-8 rounded-lg bg-[#4A6572]/10 dark:bg-[#F9AA33]/10 flex items-center justify-center flex-shrink-0">
-                            <Icon className="w-4 h-4 text-[#4A6572] dark:text-[#F9AA33]" />
-                          </div>
-                          <span className="flex-1 font-medium">{action.label}</span>
-                          <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {groupedQuickActions.quick && (
+                    <>
+                      <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-2">
+                        Основные действия
+                      </div>
+                      <div className="space-y-2">
+                        {groupedQuickActions.quick.map((action) => {
+                          const Icon = action.icon;
+                          return (
+                            <button
+                              key={action.id}
+                              onClick={() => handleAction(action.id)}
+                              disabled={isLoading}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 border border-transparent hover:border-[#4A6572]/20 dark:hover:border-[#F9AA33]/20"
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-[#4A6572]/10 dark:bg-[#F9AA33]/10 flex items-center justify-center flex-shrink-0">
+                                <Icon className="w-4 h-4 text-[#4A6572] dark:text-[#F9AA33]" />
+                              </div>
+                              <span className="flex-1 font-medium">{action.label}</span>
+                              <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+
+                  {groupedQuickActions.suppliers && (
+                    <div className="mt-3">
+                      <div className="text-[10px] font-medium text-[#4A6572] dark:text-[#F9AA33] uppercase tracking-wide px-1 mb-2 flex items-center gap-1">
+                        <Truck className="w-3 h-3" />
+                        Поставщики и закупки
+                      </div>
+                      <div className="space-y-2">
+                        {groupedQuickActions.suppliers.map((action) => {
+                          const Icon = action.icon;
+                          return (
+                            <button
+                              key={action.id}
+                              onClick={() => handleAction(action.id)}
+                              disabled={isLoading}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left rounded-xl bg-gradient-to-r from-[#4A6572]/5 to-[#344955]/5 hover:from-[#4A6572]/10 hover:to-[#344955]/10 text-gray-700 dark:text-gray-200 transition-all disabled:opacity-50 border border-[#4A6572]/20"
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-[#4A6572]/15 flex items-center justify-center flex-shrink-0">
+                                <Icon className="w-4 h-4 text-[#4A6572] dark:text-[#F9AA33]" />
+                              </div>
+                              <span className="flex-1 font-medium">{action.label}</span>
+                              {action.id === 'rfq_pending' && rfqCartCount > 0 && (
+                                <span className="px-1.5 text-[10px] font-bold rounded-full bg-[#F9AA33] text-white">
+                                  {rfqCartCount}
+                                </span>
+                              )}
+                              <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
                     <p className="text-xs text-blue-700 dark:text-blue-300">
-                      💡 <strong>Совет:</strong> Переключитесь на вкладку <strong>"Разделы"</strong>, чтобы перейти в любой раздел приложения.
+                      💡 <strong>Совет:</strong> Напишите <strong>"найди цемент М500"</strong> — найду лучшую цену во всех прайс-листах.
                     </p>
                   </div>
                 </>
               )}
 
-              {/* Вкладка "Разделы" */}
               {activeTab === 'navigation' && (
                 <>
-                  {/* ✅ ЗАКРЕПЛЁННЫЕ */}
                   {pinnedViews.length > 0 && (
                     <div className="mb-3 p-2 bg-gradient-to-br from-[#F9AA33]/10 to-[#F57C00]/10 rounded-xl border border-[#F9AA33]/20">
                       <div className="text-[10px] font-semibold text-[#F57C00] dark:text-[#F9AA33] uppercase tracking-wider px-1 mb-1.5 flex items-center gap-1">
@@ -1663,7 +2511,11 @@ ${msg.content}
                   {groupedViews.map(({ groupName, items, count }) => (
                     <div key={groupName} className="mb-3">
                       <div className="flex items-center justify-between px-1 mb-1.5">
-                        <div className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                        <div className={`text-[10px] font-semibold uppercase tracking-wider ${
+                          groupName === 'Поставщики и закупки'
+                            ? 'text-[#4A6572] dark:text-[#F9AA33]'
+                            : 'text-gray-400 dark:text-gray-500'
+                        }`}>
                           {groupName}
                         </div>
                         <span className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 rounded-full px-1.5 py-0.5">
@@ -1675,6 +2527,7 @@ ${msg.content}
                           const Icon = view.icon;
                           const badge = getBadgeCount(view.id);
                           const isPinned = pinnedViews.includes(view.id);
+                          const isSupplier = groupName === 'Поставщики и закупки';
 
                           return (
                             <div key={view.id} className="relative group">
@@ -1684,6 +2537,8 @@ ${msg.content}
                                 className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-lg transition-all disabled:opacity-50 border ${
                                   isPinned
                                     ? 'bg-[#F9AA33]/10 border-[#F9AA33]/30 hover:bg-[#F9AA33]/20'
+                                    : isSupplier
+                                    ? 'bg-[#4A6572]/5 border-[#4A6572]/20 hover:bg-[#4A6572]/10 text-gray-700 dark:text-gray-200'
                                     : 'bg-gray-50 dark:bg-gray-700/50 hover:bg-[#4A6572]/10 dark:hover:bg-[#F9AA33]/10 text-gray-700 dark:text-gray-200 border-transparent hover:border-[#4A6572]/20 dark:hover:border-[#F9AA33]/20'
                                 }`}
                               >
@@ -1700,7 +2555,6 @@ ${msg.content}
                                 <ChevronRight className="w-3 h-3 text-gray-400" />
                               </button>
 
-                              {/* Кнопка "закрепить" */}
                               <button
                                 onClick={(e) => { e.stopPropagation(); togglePin(view.id); }}
                                 className={`absolute right-8 top-1/2 -translate-y-1/2 p-1 rounded transition-all ${
@@ -1724,7 +2578,6 @@ ${msg.content}
               )}
             </div>
           ) : (
-            /* Чат с результатами */
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {messages.map((msg) => (
                 <div
@@ -1757,7 +2610,6 @@ ${msg.content}
                       </div>
                     )}
 
-                    {/* ✅ Кнопки экспорта и озвучки для ответов бота */}
                     {msg.role === 'assistant' && !msg.isError && msg.id !== 'welcome' && (
                       <div className="mt-1.5 pt-1.5 border-t border-gray-300/30 dark:border-gray-600/30 flex items-center gap-1">
                         <button
@@ -1792,7 +2644,6 @@ ${msg.content}
             </div>
           )}
 
-          {/* Input */}
           <div className="p-3 border-t border-gray-200 dark:border-gray-700">
             <div className="flex gap-2">
               <input
@@ -1801,7 +2652,7 @@ ${msg.content}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Напишите запрос..."
+                placeholder='Например: "найди цемент М500"'
                 className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#4A6572] focus:border-transparent"
               />
 
@@ -1825,7 +2676,6 @@ ${msg.content}
         </div>
       )}
 
-      {/* Модальное окно голосового поиска */}
       {showVoiceSearch && (
         <div className="fixed inset-0 bg-black/50 z-[10001] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-4 ai-bounce-in">
