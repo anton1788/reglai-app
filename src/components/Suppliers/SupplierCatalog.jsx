@@ -41,7 +41,11 @@ const SORT_OPTIONS = [
  * @param {object} props
  * @param {string} props.companyId
  * @param {(msg: string, type?: 'success'|'error'|'info'|'warning') => void} props.showNotification
- * @param {(item) => void} [props.onAddToRFQ] — колбэк для добавления в корзину RFQ (Шаг 2.10)
+ * @param {(item) => void} [props.onAddToRFQ] — добавить позицию в RFQ-корзину (управляет App.jsx)
+ * @param {(itemId: string) => void} [props.onRemoveFromRFQ] — убрать позицию из корзины
+ * @param {() => void} [props.onClearRFQ] — очистить корзину целиком
+ * @param {() => void} [props.onOpenRFQCreate] — открыть форму создания RFQ
+ * @param {Array} [props.rfqCart] — текущее содержимое корзины (из App.jsx)
  * @param {string} [props.initialSearchTerm] — предзаполнить поиск
  * @param {string} [props.initialCategory] — предзаполнить категорию
  */
@@ -49,6 +53,10 @@ export default function SupplierCatalog({
   companyId,
   showNotification,
   onAddToRFQ,
+  onRemoveFromRFQ,       // 🆕
+  onClearRFQ,            // 🆕
+  onOpenRFQCreate,       // 🆕
+  rfqCart: externalRfqCart = [], // 🆕
   initialSearchTerm = '',
   initialCategory = '',
 }) {
@@ -73,8 +81,32 @@ export default function SupplierCatalog({
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(false);
 
-  // 🛒 Локальная корзина для RFQ
-  const [rfqCart, setRfqCart] = useState([]);
+  // 🆕 RFQ-корзина — единый источник правды из App.jsx.
+  //    Локальный fallback нужен только если компонент используется изолированно.
+  const [localCartFallback, setLocalCartFallback] = useState([]);
+  const rfqCart = Array.isArray(externalRfqCart) && externalRfqCart.length >= 0
+    ? externalRfqCart
+    : localCartFallback;
+
+  // 🆕 Обновление корзины: если управляет родитель — дёргаем колбэки,
+  //    иначе — пишем в локальный fallback.
+  const updateCart = useCallback(
+    (updater) => {
+      if (Array.isArray(externalRfqCart)) {
+        const next = typeof updater === 'function' ? updater(externalRfqCart) : updater;
+        const added = next.find((n) => !externalRfqCart.some((e) => e.id === n.id));
+        const removed = externalRfqCart.find((e) => !next.some((n) => n.id === e.id));
+
+        if (added) onAddToRFQ?.(added);
+        if (removed) onRemoveFromRFQ?.(removed.id);
+        if (next.length === 0 && externalRfqCart.length > 0) onClearRFQ?.();
+      } else {
+        setLocalCartFallback(updater);
+      }
+    },
+    [externalRfqCart, onAddToRFQ, onRemoveFromRFQ, onClearRFQ]
+  );
+
   const inputRef = useRef(null);
 
   // ─── Дебаунс ввода ─────────────────────────────────────
@@ -172,43 +204,54 @@ export default function SupplierCatalog({
     [rfqCart]
   );
 
+  // 🆕 Добавление в корзину: собираем cartItem и пробрасываем наверх
   const addToRfqCart = useCallback(
     (item) => {
-      setRfqCart((prev) => {
-        if (prev.some((p) => p.id === item.id)) return prev;
-        return [
-          ...prev,
-          {
-            id: item.id,
-            name: item.name,
-            article: item.article,
-            unit: item.unit,
-            quantity: item.min_quantity || 1,
-            supplier_id: item.supplier_id,
-            supplier_name: item.supplier_name,
-            price_hint: item.price,
-          },
-        ];
-      });
-      if (typeof onAddToRFQ === 'function') onAddToRFQ(item);
+      if (rfqCart.some((p) => p.id === item.id)) {
+        notify(`«${item.name}» уже в корзине`, 'info');
+        return;
+      }
+
+      const cartItem = {
+        id: item.id,
+        name: item.name,
+        article: item.article,
+        unit: item.unit,
+        quantity: item.min_quantity || 1,
+        supplier_id: item.supplier_id,
+        supplier_name: item.supplier_name,
+        price_hint: item.price,
+      };
+
+      updateCart((prev) => [...prev, cartItem]);
     },
-    [onAddToRFQ]
+    [rfqCart, updateCart, notify]
   );
 
-  const removeFromRfqCart = useCallback((id) => {
-    setRfqCart((prev) => prev.filter((p) => p.id !== id));
-  }, []);
+  const removeFromRfqCart = useCallback(
+    (id) => {
+      updateCart((prev) => prev.filter((p) => p.id !== id));
+    },
+    [updateCart]
+  );
 
-  const clearRfqCart = () => setRfqCart([]);
+  const clearRfqCart = useCallback(() => {
+    if (typeof onClearRFQ === 'function') onClearRFQ();
+    else updateCart([]);
+  }, [onClearRFQ, updateCart]);
 
-  const handleExportRfqCart = () => {
-    if (rfqCart.length === 0) return;
-    // TODO (Шаг 2.10): передать в RFQCreate через колбэк/state-менеджер
-    notify(`🛒 ${rfqCart.length} позиций готовы к отправке в RFQ`, 'success');
-    try {
-      navigator.clipboard?.writeText(JSON.stringify(rfqCart, null, 2));
-    } catch { /* ignore */ }
-  };
+  // 🆕 Кнопка «В RFQ →» — открывает форму создания RFQ в App.jsx
+  const handleOpenRFQCreate = useCallback(() => {
+    if (rfqCart.length === 0) {
+      notify('Сначала добавьте материалы в корзину', 'warning');
+      return;
+    }
+    if (typeof onOpenRFQCreate === 'function') {
+      onOpenRFQCreate();
+    } else {
+      notify('Откройте раздел RFQ для создания запроса', 'info');
+    }
+  }, [rfqCart.length, onOpenRFQCreate, notify]);
 
   // ─── Рендер ────────────────────────────────────────────
   return (
@@ -239,10 +282,10 @@ export default function SupplierCatalog({
                 Очистить
               </button>
               <button
-                onClick={handleExportRfqCart}
+                onClick={handleOpenRFQCreate}
                 className="px-3 py-1.5 rounded-lg bg-[#4A6572] hover:bg-[#344955] text-white text-xs font-medium"
               >
-                В RFQ →
+                В RFQ → ({rfqCart.length})
               </button>
             </div>
           )}
@@ -388,7 +431,7 @@ export default function SupplierCatalog({
 }
 
 // ────────────────────────────────────────────────────────────
-// 🧩 ПОДКОМПОНЕНТЫ
+// 🧩 ПОДКОМПОНЕНТЫ (без изменений)
 // ────────────────────────────────────────────────────────────
 
 function EmptyHint() {

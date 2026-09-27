@@ -1039,6 +1039,50 @@ const [selectedObjectId, setSelectedObjectId] = useState(null);
 // 🏢 ПОСТАВЩИКИ (B2B): навигация между модулем
 const [selectedSupplierId, setSelectedSupplierId] = useState(null);
 const [selectedRFQId, setSelectedRFQId] = useState(null);
+// 🆕 RFQ-КОРЗИНА (позиции из каталога)
+const [rfqCart, setRfqCart] = useState([]);
+useEffect(() => {
+  try {
+    const saved = localStorage.getItem('rfq_cart');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) setRfqCart(parsed);
+    }
+  } catch (e) {
+    console.warn('⚠️ Не удалось восстановить RFQ-корзину:', e);
+  }
+}, []);
+
+// 💾 Сохранение корзины при каждом изменении
+useEffect(() => {
+  try {
+    localStorage.setItem('rfq_cart', JSON.stringify(rfqCart));
+  } catch (e) {
+    console.warn('⚠️ Не удалось сохранить RFQ-корзину:', e);
+  }
+}, [rfqCart]);
+
+// 🔄 Восстановление из localStorage
+useEffect(() => {
+  try {
+    const saved = localStorage.getItem('rfq_cart');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) setRfqCart(parsed);
+    }
+  } catch (e) {
+    console.warn('⚠️ Не удалось восстановить RFQ-корзину:', e);
+  }
+}, []);
+
+// 💾 Сохранение при изменении
+useEffect(() => {
+  try {
+    localStorage.setItem('rfq_cart', JSON.stringify(rfqCart));
+  } catch (e) {
+    console.warn('⚠️ Не удалось сохранить RFQ-корзину:', e);
+  }
+}, [rfqCart]);
 const [selectedPOId, setSelectedPOId] = useState(null);
 const [poFormMode, setPoFormMode] = useState(null); // { offer, rfq } | { preselectedSupplierId } | null
 const [currentSupplierId, setCurrentSupplierId] = useState(null); // supplier.id для роли поставщика
@@ -7706,6 +7750,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         chatUnreadCount={chatUnreadCount}
         newFeedbackCount={newFeedbackCount}
         readyToIssueCount={readyToIssueCount}
+        rfqCartCount={rfqCart.length} 
         onOpenAIAssistant={() => aiAssistantRef.current?.toggle()}
                onMarkNotificationRead={async (id) => {
   if (!id) {
@@ -8715,8 +8760,27 @@ onClearFilters={handleClearFilters}
   <SupplierCatalog
     companyId={userCompanyId}
     showNotification={showNotification}
+    rfqCart={rfqCart}                          // ✅ единый источник правды
     onAddToRFQ={(item) => {
-      console.log('[App] Позиция добавлена в RFQ-корзину:', item);
+      setRfqCart(prev => {
+        if (prev.some(i => i.id === item.id)) return prev;
+        showNotification(`✅ "${item.name}" добавлен в RFQ`, 'success');
+        return [...prev, item];
+      });
+    }}
+    onRemoveFromRFQ={(itemId) => {
+      setRfqCart(prev => prev.filter(i => i.id !== itemId));
+    }}
+    onClearRFQ={() => {
+      setRfqCart([]);
+      showNotification('Корзина очищена', 'info');
+    }}
+    onOpenRFQCreate={() => {
+      if (rfqCart.length === 0) {
+        showNotification('Сначала добавьте материалы', 'warning');
+        return;
+      }
+      setCurrentView('rfqCreate');              // ✅ вот сюда ведёт кнопка «В RFQ →»
     }}
   />
 )}
@@ -8740,6 +8804,7 @@ onClearFilters={handleClearFilters}
   <RFQList
     companyId={userCompanyId}
     role={userRole}
+    refreshKey={selectedRFQId}
     onCreate={() => setCurrentView('rfqCreate')}
     onOpen={(rfq) => {
       setSelectedRFQId(rfq.id);
@@ -8753,9 +8818,13 @@ onClearFilters={handleClearFilters}
   <RFQCreate
     companyId={userCompanyId}
     userId={user?.id}
-    initialItems={[]}
+    initialItems={rfqCart}
     showNotification={showNotification}
     onCreated={(rfq) => {
+      // 🧹 Очищаем корзину
+      setRfqCart([]);
+      localStorage.removeItem('rfq_cart');
+
       setSelectedRFQId(rfq.id);
       setCurrentView('rfqDetails');
     }}

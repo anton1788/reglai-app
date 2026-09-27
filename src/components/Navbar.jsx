@@ -20,7 +20,6 @@ import {
   PackageCheck,
   Bot,
   FolderKanban,
-  // 🏢 ПОСТАВЩИКИ (B2B)
   Truck, Layers, MessageSquare, ShoppingBag, Gauge,
 } from 'lucide-react';
 import { getCompanyPlan, checkFeatureAccess } from '../utils/tariffPlans';
@@ -110,6 +109,7 @@ const Navbar = ({
   showNotificationModal,
   onCloseNotificationModal,
   readyToIssueCount = 0,
+  rfqCartCount = 0, // 🆕
   onOpenAIAssistant = null
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -338,7 +338,7 @@ const Navbar = ({
   };
 
   // ============================================================
-  // 🆕 РОЛИ — ДОБАВЛЕНЫ НОВЫЕ
+  // 🆕 РОЛИ
   // ============================================================
   const getRoleLabel = () => {
     const roles = {
@@ -351,7 +351,6 @@ const Navbar = ({
       client_manager: 'Менеджер по клиентам',
       director: 'Директор',
       super_admin: 'Супер Админ',
-      // 🏢 ПОСТАВЩИКИ (B2B)
       procurement_manager: 'Менеджер по закупкам',
       supplier_admin: 'Администратор поставщика',
       supplier_manager: 'Менеджер поставщика',
@@ -378,16 +377,14 @@ const Navbar = ({
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   // ============================================================
-  // 🆕 NAV ITEMS С ФИЛЬТРАЦИЕЙ ПО ТАРИФУ И РОЛИ
+  // 🆕 NAV ITEMS
   // ============================================================
   const getNavItems = () => {
     const items = [];
 
-    // 🏢 ОБЩИЕ ПУНКТЫ
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/', always: true });
     items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications', always: true });
 
-    // 🆕 Объекты — доступно всем, кроме клиентов
     if (userRole !== 'client') {
       items.push({
         id: 'objects',
@@ -419,7 +416,8 @@ const Navbar = ({
       });
       items.push({
         id: 'rfqList',
-        label: 'RFQ',
+        // 🆕 Показываем счётчик корзины в label
+        label: `RFQ${rfqCartCount > 0 ? ` (${rfqCartCount})` : ''}`,
         icon: MessageSquare,
         path: '/rfq'
       });
@@ -431,7 +429,6 @@ const Navbar = ({
       });
     }
 
-    // 🏢 Дашборд закупок — только для procurement_manager
     if (userRole === 'procurement_manager') {
       items.push({
         id: 'procurementDashboard',
@@ -441,7 +438,6 @@ const Navbar = ({
       });
     }
 
-    // 🏢 Дашборд поставщика — только для supplier_admin / supplier_manager
     if (userRole === 'supplier_admin' || userRole === 'supplier_manager') {
       items.push({
         id: 'supplierDashboard',
@@ -450,9 +446,7 @@ const Navbar = ({
         path: '/supplier-dashboard'
       });
     }
-    // ============================================================
 
-    // Готовы к выдаче
     if (userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
       items.push({
         id: 'readyToIssue',
@@ -604,9 +598,6 @@ const Navbar = ({
     return () => document.head.removeChild(style);
   }, []);
 
-  // ============================================================
-  // 🎯 ОБРАБОТЧИК КЛИКА ПО УВЕДОМЛЕНИЮ
-  // ============================================================
   const handleNotificationClick = useCallback((notif) => {
     onMarkNotificationRead?.(notif.id);
     setIsNotificationsOpen(false);
@@ -915,9 +906,7 @@ const Navbar = ({
                 </button>
               )}
 
-              {/* ============================================================ */}
               {/* 🔔 УВЕДОМЛЕНИЯ */}
-              {/* ============================================================ */}
               <div className="relative" ref={notificationsRef}>
                 <button
                   onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
@@ -1132,6 +1121,13 @@ const Navbar = ({
                       </span>
                     )}
 
+                    {/* 🆕 Бейдж RFQ-корзины — планшетный */}
+                    {item.id === 'rfqList' && rfqCartCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                        {rfqCartCount}
+                      </span>
+                    )}
+
                     {item.id === 'approvals' && pendingApprovalsCount > 0 && (
                       <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
                         {pendingApprovalsCount}
@@ -1203,7 +1199,6 @@ const Navbar = ({
                     (item.id === 'api' && currentPage === 'api') ||
                     (item.id === 'merge' && currentPage === 'merge') ||
                     (item.id === 'readyToIssue' && currentPage === 'readyToIssue') ||
-                    // 🏢 ПОСТАВЩИКИ
                     (item.id === 'suppliers' && currentPage === 'suppliers') ||
                     (item.id === 'supplierCatalog' && currentPage === 'supplierCatalog') ||
                     (item.id === 'rfqList' && (currentPage === 'rfqList' || currentPage === 'rfqCreate' || currentPage === 'rfqDetails')) ||
@@ -1237,6 +1232,13 @@ const Navbar = ({
                       {item.id === 'readyToIssue' && badgeCount > 0 && (
                         <span className={`absolute -top-1 -right-1 w-4 h-4 ${badgeColor} text-white text-[10px] rounded-full flex items-center justify-center`}>
                           {badgeCount}
+                        </span>
+                      )}
+
+                      {/* 🆕 Бейдж RFQ-корзины — десктоп */}
+                      {item.id === 'rfqList' && rfqCartCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                          {rfqCartCount}
                         </span>
                       )}
 
@@ -1477,6 +1479,14 @@ const Navbar = ({
                           {badgeCount}
                         </span>
                       )}
+
+                      {/* 🆕 Бейдж RFQ-корзины — мобильный */}
+                      {item.id === 'rfqList' && rfqCartCount > 0 && (
+                        <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
+                          {rfqCartCount}
+                        </span>
+                      )}
+
                       {item.id === 'approvals' && pendingApprovalsCount > 0 && (
                         <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
                           {pendingApprovalsCount}
