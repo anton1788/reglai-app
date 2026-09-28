@@ -1,6 +1,6 @@
 // src/components/PriceEditor/PriceEditor.jsx
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, Save, Plus, Trash2 } from 'lucide-react';
+import { X, Loader2, Save, Plus, Trash2, BookOpen } from 'lucide-react';
 import { 
   saveMaterialPrice, 
   updateApplicationPrices,
@@ -20,16 +20,15 @@ const PriceEditor = ({
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  
+  const [isFilling, setIsFilling] = useState(false);
+
   // Загрузка цен из справочника при открытии
   useEffect(() => {
     const loadPrices = async () => {
       setLoading(true);
       try {
         const appMaterials = application.materials || [];
-        
         const descriptions = [...new Set(appMaterials.map(m => m.description))];
-        
         const priceMap = await getMaterialPricesBatch(application.company_id, descriptions);
         
         const enrichedMaterials = appMaterials.map(m => {
@@ -73,6 +72,57 @@ const PriceEditor = ({
       return updated;
     });
   };
+
+  // ─── Автозаполнение из справочника ────────────────
+  const handleFillFromCatalog = async () => {
+    if (!application.company_id) {
+      showNotification('⚠️ Не удалось определить компанию', 'warning');
+      return;
+    }
+
+    setIsFilling(true);
+    try {
+      const descriptions = [
+        ...new Set(materials.map((m) => (m.description || '').trim()).filter(Boolean)),
+      ];
+
+      if (descriptions.length === 0) {
+        showNotification('⚠️ Нет материалов для заполнения', 'warning');
+        return;
+      }
+
+      const priceMap = await getMaterialPricesBatch(application.company_id, descriptions);
+
+      let filled = 0;
+      const updated = materials.map((m) => {
+        const found = priceMap[(m.description || '').trim()];
+        // Не перетираем уже введённые вручную цены
+        if (!found || (m.supplier_price && Number(m.supplier_price) > 0)) return m;
+
+        filled += 1;
+        return {
+          ...m,
+          supplier_price: found.price ?? m.supplier_price,
+          supplier_name: found.supplier_name || m.supplier_name,
+          supplier_phone: found.supplier_phone || m.supplier_phone,
+          price_status: found.price ? 'quoted' : m.price_status,
+        };
+      });
+
+      setMaterials(updated);
+
+      if (filled === 0) {
+        showNotification('📭 Совпадений в справочнике не найдено', 'info');
+      } else {
+        showNotification(`📚 Заполнено ${filled} из ${descriptions.length} материалов`, 'success');
+      }
+    } catch (err) {
+      console.error('Ошибка автозаполнения:', err);
+      showNotification('❌ Ошибка загрузки справочника', 'error');
+    } finally {
+      setIsFilling(false);
+    }
+  };
   
   const addManualMaterial = () => {
     setMaterials(prev => [...prev, {
@@ -109,7 +159,6 @@ const PriceEditor = ({
         final_price: m.supplier_price > 0 ? m.supplier_price : null
       }));
       
-      // ✅ ИСПРАВЛЕНО: убрали лишние параметры
       const success = await updateApplicationPrices(
         application.id,
         materialsToSave
@@ -172,13 +221,30 @@ const PriceEditor = ({
               {application.foreman_name} • {new Date(application.created_at).toLocaleDateString()}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            disabled={saving}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleFillFromCatalog}
+              disabled={isFilling || loading || materials.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 rounded-lg transition disabled:opacity-50"
+              title="Подставить цены из справочника"
+            >
+              {isFilling ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <BookOpen className="w-3.5 h-3.5" />
+              )}
+              {isFilling ? 'Заполняем...' : '📚 Из справочника'}
+            </button>
+
+            <button
+              onClick={onClose}
+              disabled={saving}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
         </div>
         
         {/* Content */}

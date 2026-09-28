@@ -147,3 +147,116 @@ export const canEditPrices = (userRole) => {
 export const canViewPrices = (userRole) => {
   return ['supply_admin', 'manager', 'director', 'accountant', 'client_manager'].includes(userRole);
 };
+
+/**
+ * Получить ВЕСЬ справочник цен компании (с поиском и пагинацией)
+ */
+export const getAllMaterialPrices = async (companyId, options = {}) => {
+  const {
+    search = '',
+    onlyActive = true,
+    limit = 500,
+    offset = 0,
+    sortBy = 'description',
+    sortAsc = true,
+  } = options;
+
+  try {
+    let query = supabase
+      .from('material_prices')
+      .select('*', { count: 'exact' })
+      .eq('company_id', companyId);
+
+    if (onlyActive) {
+      query = query.eq('is_active', true);
+    }
+
+    if (search.trim()) {
+      query = query.ilike('description', `%${search.trim()}%`);
+    }
+
+    query = query
+      .order(sortBy, { ascending: sortAsc })
+      .range(offset, offset + limit - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) throw error;
+    return { data: data || [], total: count || 0 };
+  } catch (err) {
+    console.error('Ошибка загрузки справочника:', err);
+    return { data: [], total: 0, error: err.message };
+  }
+};
+
+/**
+ * Создать / обновить запись в справочнике (по description + unit)
+ */
+export const upsertMaterialPrice = async (companyId, payload, userId, userEmail) => {
+  try {
+    const record = {
+      company_id: companyId,
+      description: (payload.description || '').trim(),
+      unit: payload.unit || 'шт',
+      price: Number(payload.price) || 0,
+      supplier_name: payload.supplier_name?.trim() || null,
+      supplier_phone: payload.supplier_phone?.trim() || null,
+      is_active: payload.is_active !== false,
+      updated_by: userId || null,
+      updated_by_email: userEmail || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (!record.description) {
+      throw new Error('Название материала не может быть пустым');
+    }
+
+    const { data, error } = await supabase
+      .from('material_prices')
+      .upsert(record, { onConflict: 'company_id,description,unit' })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (err) {
+    console.error('Ошибка сохранения в справочник:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Мягкое удаление (is_active = false) — чтобы не терять историю
+ */
+export const deleteMaterialPrice = async (id) => {
+  try {
+    const { error } = await supabase
+      .from('material_prices')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('Ошибка удаления из справочника:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Жёсткое удаление (на всякий случай, для админа)
+ */
+export const hardDeleteMaterialPrice = async (id) => {
+  try {
+    const { error } = await supabase
+      .from('material_prices')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('Ошибка жёсткого удаления:', err);
+    return { success: false, error: err.message };
+  }
+};

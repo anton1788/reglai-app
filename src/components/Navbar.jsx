@@ -20,13 +20,14 @@ import {
   PackageCheck,
   Bot,
   FolderKanban,
-  Truck, Layers, MessageSquare, ShoppingBag, Gauge,
+  Truck, Layers, MessageSquare, ShoppingBag, Gauge, BookOpen, 
 } from 'lucide-react';
 import { getCompanyPlan, checkFeatureAccess } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
 import PublicOfferModal from './PublicOfferModal';
 import LegalOfferModal from './LegalOfferModal';
 import PrivacyPolicyModal from './PrivacyPolicyModal';
+import { canEditPrices } from '../utils/priceManager';
 
 const getCleanCompanyId = (companyId) => {
   if (!companyId) return null;
@@ -426,6 +427,15 @@ const Navbar = ({
         label: 'Заказы',
         icon: ShoppingBag,
         path: '/purchase-orders'
+      });
+    }
+        // 📚 СПРАВОЧНИК ЦЕН (только для тех, кто может редактировать цены)
+    if (canEditPrices(userRole)) {
+      items.push({
+        id: 'priceCatalog',
+        label: 'Справочник цен',
+        icon: BookOpen,
+        path: '/price-catalog'
       });
     }
 
@@ -1204,7 +1214,8 @@ const Navbar = ({
                     (item.id === 'rfqList' && (currentPage === 'rfqList' || currentPage === 'rfqCreate' || currentPage === 'rfqDetails')) ||
                     (item.id === 'purchaseOrders' && (currentPage === 'purchaseOrders' || currentPage === 'purchaseOrderCreate' || currentPage === 'purchaseOrderDetails')) ||
                     (item.id === 'procurementDashboard' && currentPage === 'procurementDashboard') ||
-                    (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard');
+                    (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard') ||
+                    (item.id === 'priceCatalog' && currentPage === 'priceCatalog')
 
                   let badgeCount = 0;
                   let badgeColor = 'bg-amber-500';
@@ -1451,7 +1462,8 @@ const Navbar = ({
                     (item.id === 'rfqList' && (currentPage === 'rfqList' || currentPage === 'rfqCreate' || currentPage === 'rfqDetails')) ||
                     (item.id === 'purchaseOrders' && (currentPage === 'purchaseOrders' || currentPage === 'purchaseOrderCreate' || currentPage === 'purchaseOrderDetails')) ||
                     (item.id === 'procurementDashboard' && currentPage === 'procurementDashboard') ||
-                    (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard');
+                    (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard') ||
+                    (item.id === 'priceCatalog' && currentPage === 'priceCatalog')
 
                   let badgeCount = 0;
                   if (item.id === 'readyToIssue') {

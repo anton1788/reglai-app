@@ -221,6 +221,7 @@ import ConsentModal from './components/ConsentModal';
 import UpdatePassword from './components/UpdatePassword';
 // 💰 РЕДАКТОР ЦЕН
 import PriceEditor from './components/MaterialPriceView/PriceEditor';
+import MaterialPriceCatalog from './components/MaterialPriceCatalog/MaterialPriceCatalog';
 import { canEditPrices as canEditPricesUtil } from './utils/priceManager';
 
 const getCleanCompanyId = (companyId) => {
@@ -7774,6 +7775,7 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           else if (path === '/purchase-orders') setCurrentView('purchaseOrders');
           else if (path === '/procurement') setCurrentView('procurementDashboard');
           else if (path === '/supplier-dashboard') setCurrentView('supplierDashboard');
+          else if (path === '/price-catalog') setCurrentView('priceCatalog');
         }}
         currentPage={currentView}
         onInvite={() => setShowInviteModal(true)}
@@ -8806,6 +8808,16 @@ onClearFilters={handleClearFilters}
   />
 )}
 
+{/* 📚 СПРАВОЧНИК ЦЕН */}
+{currentView === 'priceCatalog' && (
+  <MaterialPriceCatalog
+    companyId={userCompanyId}
+    user={user}
+    userRole={userRole}
+    showNotification={showNotification}
+  />
+)}
+
 {/* 📚 КАТАЛОГ МАТЕРИАЛОВ */}
 {currentView === 'supplierCatalog' && (
   <SupplierCatalog
@@ -9033,7 +9045,7 @@ onClearFilters={handleClearFilters}
   // 🏢 ПОСТАВЩИКИ (B2B)
   'suppliers', 'supplierCatalog', 'supplierPriceList', 'rfqList', 'rfqCreate', 'rfqDetails',
   'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
-  'supplierDashboard', 'procurementDashboard'].includes(currentView) && (
+  'supplierDashboard', 'procurementDashboard', 'priceCatalog' ].includes(currentView) && (
     <div className="max-w-7xl mx-auto px-4">
         <ApplicationList
             applications={filteredApplications}
