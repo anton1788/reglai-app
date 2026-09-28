@@ -20,7 +20,7 @@ import {
   PackageCheck,
   Bot,
   FolderKanban,
-  Truck, Layers, MessageSquare, ShoppingBag, Gauge, BookOpen, 
+  Truck, Layers, MessageSquare, ShoppingBag, Gauge, BookOpen,
 } from 'lucide-react';
 import { getCompanyPlan, checkFeatureAccess } from '../utils/tariffPlans';
 import SupportModal from './SupportModal';
@@ -110,7 +110,7 @@ const Navbar = ({
   showNotificationModal,
   onCloseNotificationModal,
   readyToIssueCount = 0,
-  rfqCartCount = 0, // 🆕
+  rfqCartCount = 0,
   onOpenAIAssistant = null
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -140,7 +140,6 @@ const Navbar = ({
   const touchEndX = useRef(null);
   const touchEndY = useRef(null);
 
-  // 🆕 Загрузка плана компании для фильтрации меню
   const loadCompanyPlan = useCallback(async () => {
     const cleanId = getCleanCompanyId(companyId);
     if (!cleanId || !supabase) {
@@ -162,7 +161,6 @@ const Navbar = ({
     loadCompanyPlan();
   }, [loadCompanyPlan]);
 
-  // 🔥 Блокировка скролла body при открытом мобильном меню
   useEffect(() => {
     if (isMobileMenuOpen) {
       document.body.style.overflow = 'hidden';
@@ -339,7 +337,7 @@ const Navbar = ({
   };
 
   // ============================================================
-  // 🆕 РОЛИ
+  // 🆕 РОЛИ (включая проектировщика)
   // ============================================================
   const getRoleLabel = () => {
     const roles = {
@@ -355,6 +353,7 @@ const Navbar = ({
       procurement_manager: 'Менеджер по закупкам',
       supplier_admin: 'Администратор поставщика',
       supplier_manager: 'Менеджер поставщика',
+      designer: 'Проектировщик',
     };
     return roles[userRole] || userRole;
   };
@@ -384,7 +383,11 @@ const Navbar = ({
     const items = [];
 
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/', always: true });
-    items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications', always: true });
+
+    // 🆕 Проектировщик НЕ видит пункт "Заявки"
+    if (userRole !== 'designer') {
+      items.push({ id: 'applications', label: 'Заявки', icon: ClipboardList, path: '/applications', always: true });
+    }
 
     if (userRole !== 'client') {
       items.push({
@@ -393,6 +396,14 @@ const Navbar = ({
         icon: FolderKanban,
         path: '/objects'
       });
+    }
+
+    // 🆕 ПРОЕКТИРОВЩИК — отдельный минимальный набор и выход
+    if (userRole === 'designer') {
+      items.push({ id: 'documents', label: 'Документы', icon: FileText, path: '/documents' });
+      items.push({ id: 'chat', label: 'Чат', icon: MessageCircle, path: '/chat' });
+      items.push({ id: 'calendar', label: 'Календарь', icon: Calendar, path: '/calendar' });
+      return items;
     }
 
     // ============================================================
@@ -417,7 +428,6 @@ const Navbar = ({
       });
       items.push({
         id: 'rfqList',
-        // 🆕 Показываем счётчик корзины в label
         label: `RFQ${rfqCartCount > 0 ? ` (${rfqCartCount})` : ''}`,
         icon: MessageSquare,
         path: '/rfq'
@@ -429,7 +439,8 @@ const Navbar = ({
         path: '/purchase-orders'
       });
     }
-        // 📚 СПРАВОЧНИК ЦЕН (только для тех, кто может редактировать цены)
+
+    // 📚 СПРАВОЧНИК ЦЕН
     if (canEditPrices(userRole)) {
       items.push({
         id: 'priceCatalog',
@@ -893,7 +904,7 @@ const Navbar = ({
                   onClick={onOpenAIAssistant}
                   className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
                   aria-label="AI-ассистент"
-                  title="AI-ассистент (Ctrl+/"
+                  title="AI-ассистент (Ctrl+/)"
                 >
                   <Bot className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-[#4A6572] dark:group-hover:text-[#F9AA33] transition-colors" />
                   <span className="absolute top-1 right-1 flex h-2 w-2">
@@ -1131,7 +1142,6 @@ const Navbar = ({
                       </span>
                     )}
 
-                    {/* 🆕 Бейдж RFQ-корзины — планшетный */}
                     {item.id === 'rfqList' && rfqCartCount > 0 && (
                       <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
                         {rfqCartCount}
@@ -1215,7 +1225,7 @@ const Navbar = ({
                     (item.id === 'purchaseOrders' && (currentPage === 'purchaseOrders' || currentPage === 'purchaseOrderCreate' || currentPage === 'purchaseOrderDetails')) ||
                     (item.id === 'procurementDashboard' && currentPage === 'procurementDashboard') ||
                     (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard') ||
-                    (item.id === 'priceCatalog' && currentPage === 'priceCatalog')
+                    (item.id === 'priceCatalog' && currentPage === 'priceCatalog');
 
                   let badgeCount = 0;
                   let badgeColor = 'bg-amber-500';
@@ -1246,7 +1256,6 @@ const Navbar = ({
                         </span>
                       )}
 
-                      {/* 🆕 Бейдж RFQ-корзины — десктоп */}
                       {item.id === 'rfqList' && rfqCartCount > 0 && (
                         <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                           {rfqCartCount}
@@ -1412,13 +1421,15 @@ const Navbar = ({
                       Ассистент
                     </button>
                   )}
-                  <button
-                    onClick={() => { onNavigate?.('/applications/new'); setIsMobileMenuOpen(false); }}
-                    className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Заявка
-                  </button>
+                  {userRole !== 'designer' && (
+                    <button
+                      onClick={() => { onNavigate?.('/applications/new'); setIsMobileMenuOpen(false); }}
+                      className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Заявка
+                    </button>
+                  )}
                   {(userRole === 'manager' || userRole === 'supply_admin') && (
                     <button
                       onClick={() => { onInvite?.(); setIsMobileMenuOpen(false); }}
@@ -1428,13 +1439,15 @@ const Navbar = ({
                       Пригласить
                     </button>
                   )}
-                  <button
-                    onClick={() => { onNavigate?.('/warehouse'); setIsMobileMenuOpen(false); }}
-                    className="flex items-center gap-2 px-3 py-2 text-xs bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-100 transition-colors"
-                  >
-                    <Package className="w-3.5 h-3.5" />
-                    Склад
-                  </button>
+                  {userRole !== 'designer' && (
+                    <button
+                      onClick={() => { onNavigate?.('/warehouse'); setIsMobileMenuOpen(false); }}
+                      className="flex items-center gap-2 px-3 py-2 text-xs bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-100 transition-colors"
+                    >
+                      <Package className="w-3.5 h-3.5" />
+                      Склад
+                    </button>
+                  )}
                   <button
                     onClick={() => { onNavigate?.('/documents'); setIsMobileMenuOpen(false); }}
                     className="flex items-center gap-2 px-3 py-2 text-xs bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-100 transition-colors"
@@ -1463,7 +1476,7 @@ const Navbar = ({
                     (item.id === 'purchaseOrders' && (currentPage === 'purchaseOrders' || currentPage === 'purchaseOrderCreate' || currentPage === 'purchaseOrderDetails')) ||
                     (item.id === 'procurementDashboard' && currentPage === 'procurementDashboard') ||
                     (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard') ||
-                    (item.id === 'priceCatalog' && currentPage === 'priceCatalog')
+                    (item.id === 'priceCatalog' && currentPage === 'priceCatalog');
 
                   let badgeCount = 0;
                   if (item.id === 'readyToIssue') {
@@ -1492,7 +1505,6 @@ const Navbar = ({
                         </span>
                       )}
 
-                      {/* 🆕 Бейдж RFQ-корзины — мобильный */}
                       {item.id === 'rfqList' && rfqCartCount > 0 && (
                         <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
                           {rfqCartCount}

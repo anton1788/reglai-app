@@ -1,3 +1,4 @@
+// src/utils/roleViews.js
 // Конфигурация ролей и доступных view
 
 export const ROLE_VIEWS = {
@@ -7,7 +8,6 @@ export const ROLE_VIEWS = {
       'managerDashboard', 'analytics', 'employees', 'tariffs',
       'companyProfile', 'approvals',
       'objects', 'object-hub',
-      // === МОДУЛЬ ПОСТАВЩИКОВ ===
       'suppliers', 'supplierDetails', 'supplierCatalog',
       'rfqList', 'rfqDetails', 'purchaseOrders', 'purchaseOrderDetails',
       'procurementDashboard',
@@ -22,7 +22,6 @@ export const ROLE_VIEWS = {
       'managerDashboard', 'analytics', 'employees', 'tariffs',
       'companyProfile', 'approvals',
       'objects', 'object-hub',
-      // === МОДУЛЬ ПОСТАВЩИКОВ ===
       'suppliers', 'supplierDetails', 'supplierCatalog',
       'rfqList', 'rfqDetails', 'purchaseOrders', 'purchaseOrderDetails',
       'procurementDashboard',
@@ -36,7 +35,6 @@ export const ROLE_VIEWS = {
     allowedViews: [
       'accountantDashboard', 'analytics', 'history', 'documents',
       'objects', 'object-hub',
-      // === МОДУЛЬ ПОСТАВЩИКОВ (только просмотр) ===
       'purchaseOrders', 'purchaseOrderDetails',
     ],
     hiddenFromNav: ['create', 'received', 'warehouse', 'inwork'],
@@ -48,7 +46,6 @@ export const ROLE_VIEWS = {
     allowedViews: [
       'received', 'warehouse', 'create', 'chat', 'inwork',
       'objects', 'object-hub',
-      // === МОДУЛЬ ПОСТАВЩИКОВ ===
       'suppliers', 'supplierDetails', 'supplierCatalog',
       'rfqList', 'rfqDetails', 'purchaseOrders', 'purchaseOrderDetails',
       'procurementDashboard',
@@ -86,11 +83,37 @@ export const ROLE_VIEWS = {
     dashboardComponent: null
   },
 
+  // 🆕 ПРОЕКТИРОВЩИК — минимальный набор разделов
+  designer: {
+    defaultView: 'designerDashboard',
+    allowedViews: [
+      'designerDashboard',
+      'objects',
+      'object-hub',
+      'documents',
+      'chat',
+      'calendar',
+      'profile',
+      'help',
+      'settings',
+    ],
+    hiddenFromNav: [
+      'create', 'inwork', 'history', 'received', 'warehouse',
+      'analytics', 'employees', 'clients', 'tariffs',
+      'crm-sales', 'merge', 'estimates', 'reports', 'integration',
+      'tasks', 'approvals', 'api', 'audit', 'readyToIssue',
+      'suppliers', 'supplierCatalog', 'supplierPriceList',
+      'rfqList', 'rfqCreate', 'rfqDetails',
+      'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
+      'supplierDashboard', 'procurementDashboard', 'priceCatalog',
+    ],
+    dashboardComponent: 'DesignerDashboard'
+  },
+
   // ============================================================
   // НОВЫЕ РОЛИ ДЛЯ МОДУЛЯ ПОСТАВЩИКОВ
   // ============================================================
 
-  // Менеджер по закупкам (со стороны заказчика)
   procurement_manager: {
     defaultView: 'procurementDashboard',
     allowedViews: [
@@ -105,7 +128,6 @@ export const ROLE_VIEWS = {
     dashboardComponent: 'ProcurementDashboard'
   },
 
-  // Администратор поставщика (со стороны поставщика)
   supplier_admin: {
     defaultView: 'supplierDashboard',
     allowedViews: [
@@ -119,7 +141,6 @@ export const ROLE_VIEWS = {
     dashboardComponent: 'SupplierDashboard'
   },
 
-  // Менеджер поставщика
   supplier_manager: {
     defaultView: 'supplierDashboard',
     allowedViews: [
@@ -158,9 +179,6 @@ export const shouldHideFromNav = (view, role) => {
 // ХЕЛПЕРЫ ДЛЯ МОДУЛЯ ПОСТАВЩИКОВ
 // ============================================================
 
-/**
- * Список всех view модуля поставщиков
- */
 export const SUPPLIER_VIEWS = [
   'suppliers',
   'supplierDetails',
@@ -178,9 +196,6 @@ export const SUPPLIER_VIEWS = [
   'supplierProfile',
 ];
 
-/**
- * Views, доступные закупщику (заказчику)
- */
 export const PROCUREMENT_VIEWS = [
   'procurementDashboard',
   'suppliers',
@@ -193,9 +208,6 @@ export const PROCUREMENT_VIEWS = [
   'purchaseOrderDetails',
 ];
 
-/**
- * Views, доступные поставщику
- */
 export const SUPPLIER_SIDE_VIEWS = [
   'supplierDashboard',
   'supplierPriceList',
@@ -204,17 +216,6 @@ export const SUPPLIER_SIDE_VIEWS = [
   'supplierProfile',
 ];
 
-/**
- * Проверка: относится ли view к модулю поставщиков
- */
 export const isSupplierView = (view) => SUPPLIER_VIEWS.includes(view);
-
-/**
- * Проверка: относится ли view к закупщицкой части
- */
 export const isProcurementView = (view) => PROCUREMENT_VIEWS.includes(view);
-
-/**
- * Проверка: относится ли view к стороне поставщика
- */
 export const isSupplierSideView = (view) => SUPPLIER_SIDE_VIEWS.includes(view);

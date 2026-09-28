@@ -30,6 +30,7 @@ import ObjectMaterialsMerger from './components/ObjectMaterialsMerger';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import { useInView } from 'react-intersection-observer';
 import RoleDashboard from './components/RoleDashboard';
+import DesignerDashboard from './components/DesignerDashboard/DesignerDashboard';
 // После других импортов компонентов
 import AIAssistant from './components/AIAssistant/AIAssistant';
 import {
@@ -3009,11 +3010,15 @@ const handleInviteUser = async () => {
     return;
   }
 
-  // supply_admin может приглашать, но не менеджеров
-  if (userRole === 'supply_admin' && (inviteRole === 'manager' || inviteRole === 'supply_admin')) {
-    showNotification('Администратор снабжения может приглашать только прорабов, мастеров и бухгалтеров', 'error');
-    return;
-  }
+  // supply_admin может приглашать, но не менеджеров, админов и проектировщиков
+if (userRole === 'supply_admin' && (
+  inviteRole === 'manager' ||
+  inviteRole === 'supply_admin' ||
+  inviteRole === 'designer'
+)) {
+  showNotification('Администратор снабжения может приглашать только прорабов, мастеров и бухгалтеров', 'error');
+  return;
+}
 
     // ============================================================
   // 🆕 ПРОВЕРКА ЛИМИТА ПОЛЬЗОВАТЕЛЕЙ ДЛЯ ВСЕХ ТАРИФОВ
@@ -5873,6 +5878,10 @@ useEffect(() => {
         else if (userRole === 'procurement_manager') {
             setCurrentView('procurementDashboard');
         }
+        // 📐 Проектировщик → его дашборд
+else if (userRole === 'designer') {
+    setCurrentView('designerDashboard');
+}
         // 🏢 Поставщик → дашборд поставщика
         else if (userRole === 'supplier_admin' || userRole === 'supplier_manager') {
             setCurrentView('supplierDashboard');
@@ -7424,6 +7433,11 @@ const renderAnalyticsDashboard = () => {
                         👑 Руководитель
                       </span>
                     )}
+                    {emp.role === 'designer' && (
+  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-full">
+    📐 Проектировщик
+  </span>
+)}
                     <span className="text-xs text-gray-400 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
                       {getRoleLabel(emp.role)}
                     </span>
@@ -7714,20 +7728,21 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
         onNavigate={(path) => {
   console.log('🔍 Навигация:', path);
   if (path === '/' || path === '/home' || path === '/dashboard') {
-    // 🆕 ТЕПЕРЬ ГЛАВНАЯ ДОСТУПНА ВСЕМ, НО ОТКРЫВАЕТ СВОЙ ДАШБОРД
     if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
       setCurrentView('dashboard');
     } else if (userRole === 'accountant') {
       setCurrentView('accountantDashboard');
     } else if (userRole === 'client') {
       setCurrentView('clientDashboard');
+    } else if (userRole === 'designer') {
+      setCurrentView('designerDashboard');
     } else if (userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin') {
-      setCurrentView('dashboard'); // ← ИЗМЕНЕНИЕ: открываем Главную для мастера и снабженца
+      setCurrentView('dashboard');
     } else {
       setCurrentView('dashboard');
     }
     return;
-  }
+}
           else if (path === '/estimates') setCurrentView('estimates');
           else if (path === '/reports') setCurrentView('reports');
           else if (path === '/integration') setCurrentView('integration');
@@ -8024,6 +8039,24 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
       else if (path === '/superAdmin') setCurrentView('superAdmin');
     }}
     t={t}
+  />
+)}
+
+{/* 📐 ДАШБОРД ПРОЕКТИРОВЩИКА */}
+{currentView === 'designerDashboard' && userRole === 'designer' && (
+  <DesignerDashboard
+    user={user}
+    userCompanyId={userCompanyId}
+    userCompany={userCompany}
+    userRole={userRole}
+    language={language}
+    showNotification={showNotification}
+    onNavigate={(view, payload) => {
+      if (view === 'object-hub' && payload?.objectId) {
+        setSelectedObjectId(payload.objectId);
+      }
+      setCurrentView(view);
+    }}
   />
 )}
 
@@ -9035,7 +9068,7 @@ onClearFilters={handleClearFilters}
   />
 )}
 {/* 🛡️ FALLBACK: Если ни одно условие не сработало */}
-{!['create', 'crm-sales', 'managerDashboard', 'dashboard', 'accountantDashboard', 
+{!['create', 'crm-sales', 'managerDashboard', 'dashboard', 'accountantDashboard', 'designerDashboard',
   'received', 'audit', 'calendar', 'inwork', 'confirmation', 'history', 'readyToIssue', 
   'analytics', 'employees', 'clients', 'warehouse', 'documents', 'profile', 'cart', 
   'superAdmin', 'tariffs', 'clientDashboard', 'clientChat', 'clientDocuments', 

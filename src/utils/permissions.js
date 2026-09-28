@@ -12,6 +12,8 @@ export const ROLE_OPTIONS = [
   { value: 'foreman', label: 'Прораб' },
   { value: 'accountant', label: 'Бухгалтер' },
   { value: 'client', label: 'Заказчик' },
+  // 🆕 ПРОЕКТИРОВЩИК
+  { value: 'designer', label: '📐 Проектировщик' },
   // === НОВЫЕ РОЛИ ДЛЯ МОДУЛЯ ПОСТАВЩИКОВ ===
   { value: 'procurement_manager', label: '🛒 Менеджер по закупкам' },
   { value: 'supplier_admin', label: '🏭 Администратор поставщика' },
@@ -38,7 +40,6 @@ export const ROLE_PERMISSIONS = {
     canManageBilling: true,
     canExportData: true,
     canManageIntegrations: true,
-    // Поставщики
     canManageSuppliers: true,
     canCreateRFQ: true,
     canCompareOffers: true,
@@ -49,6 +50,11 @@ export const ROLE_PERMISSIONS = {
     canRespondToRFQ: true,
     canViewOrders: true,
     canManageCompany: true,
+    canViewObjects: true,
+    canViewChat: true,
+    canViewDocuments: true,
+    canViewCalendar: true,
+    canViewPrices: true,
   },
 
   // Руководитель (менеджер) - полный доступ к управлению компанией
@@ -69,7 +75,6 @@ export const ROLE_PERMISSIONS = {
     canManageBilling: true,
     canExportData: true,
     canManageIntegrations: true,
-    // Поставщики
     canManageSuppliers: true,
     canCreateRFQ: true,
     canCompareOffers: true,
@@ -80,6 +85,11 @@ export const ROLE_PERMISSIONS = {
     canRespondToRFQ: false,
     canViewOrders: true,
     canManageCompany: true,
+    canViewObjects: true,
+    canViewChat: true,
+    canViewDocuments: true,
+    canViewCalendar: true,
+    canViewPrices: true,
   },
 
   // Администратор снабжения
@@ -100,7 +110,6 @@ export const ROLE_PERMISSIONS = {
     canManageBilling: false,
     canExportData: true,
     canManageIntegrations: false,
-    // Поставщики
     canManageSuppliers: true,
     canCreateRFQ: true,
     canCompareOffers: true,
@@ -111,6 +120,11 @@ export const ROLE_PERMISSIONS = {
     canRespondToRFQ: false,
     canViewOrders: true,
     canManageCompany: false,
+    canViewObjects: true,
+    canViewChat: true,
+    canViewDocuments: true,
+    canViewCalendar: true,
+    canViewPrices: true,
   },
 
   // Прораб (мастер)
@@ -131,7 +145,6 @@ export const ROLE_PERMISSIONS = {
     canManageBilling: false,
     canExportData: false,
     canManageIntegrations: false,
-    // Поставщики — недоступно
     canManageSuppliers: false,
     canCreateRFQ: false,
     canCompareOffers: false,
@@ -142,6 +155,46 @@ export const ROLE_PERMISSIONS = {
     canRespondToRFQ: false,
     canViewOrders: false,
     canManageCompany: false,
+    canViewObjects: true,
+    canViewChat: true,
+    canViewDocuments: true,
+    canViewCalendar: false,
+    canViewPrices: false,
+  },
+
+  // Прораб — те же права, что у мастера
+  foreman: {
+    canCreate: true,
+    canEdit: true,
+    canDelete: false,
+    canViewAll: false,
+    canInvite: false,
+    canManageTariffs: false,
+    canViewAnalytics: false,
+    canManageEmployees: false,
+    canManageWarehouse: false,
+    canViewAudit: false,
+    canManageClients: false,
+    canInviteClients: false,
+    canViewBilling: false,
+    canManageBilling: false,
+    canExportData: false,
+    canManageIntegrations: false,
+    canManageSuppliers: false,
+    canCreateRFQ: false,
+    canCompareOffers: false,
+    canCreatePurchaseOrders: false,
+    canReceiveMaterials: false,
+    canManagePrices: false,
+    canManagePriceList: false,
+    canRespondToRFQ: false,
+    canViewOrders: false,
+    canManageCompany: false,
+    canViewObjects: true,
+    canViewChat: true,
+    canViewDocuments: true,
+    canViewCalendar: false,
+    canViewPrices: false,
   },
 
   // Бухгалтер
@@ -162,7 +215,6 @@ export const ROLE_PERMISSIONS = {
     canManageBilling: false,
     canExportData: true,
     canManageIntegrations: false,
-    // Поставщики — просмотр
     canManageSuppliers: false,
     canCreateRFQ: false,
     canCompareOffers: false,
@@ -173,6 +225,11 @@ export const ROLE_PERMISSIONS = {
     canRespondToRFQ: false,
     canViewOrders: true,
     canManageCompany: false,
+    canViewObjects: true,
+    canViewChat: false,
+    canViewDocuments: true,
+    canViewCalendar: false,
+    canViewPrices: false,
   },
 
   // Заказчик
@@ -193,7 +250,6 @@ export const ROLE_PERMISSIONS = {
     canManageBilling: false,
     canExportData: false,
     canManageIntegrations: false,
-    // Поставщики — недоступно
     canManageSuppliers: false,
     canCreateRFQ: false,
     canCompareOffers: false,
@@ -204,6 +260,11 @@ export const ROLE_PERMISSIONS = {
     canRespondToRFQ: false,
     canViewOrders: false,
     canManageCompany: false,
+    canViewObjects: false,
+    canViewChat: true,
+    canViewDocuments: true,
+    canViewCalendar: false,
+    canViewPrices: false,
   },
 
   // Менеджер по работе с клиентами
@@ -224,7 +285,6 @@ export const ROLE_PERMISSIONS = {
     canManageBilling: false,
     canExportData: false,
     canManageIntegrations: false,
-    // Поставщики — базовое
     canManageSuppliers: false,
     canCreateRFQ: false,
     canCompareOffers: false,
@@ -235,9 +295,47 @@ export const ROLE_PERMISSIONS = {
     canRespondToRFQ: false,
     canViewOrders: false,
     canManageCompany: false,
+    canViewObjects: true,
+    canViewChat: true,
+    canViewDocuments: true,
+    canViewCalendar: true,
+    canViewPrices: false,
   },
 
-  // === НОВЫЕ РОЛИ ДЛЯ МОДУЛЯ ПОСТАВЩИКОВ ===
+  // 🆕 ПРОЕКТИРОВЩИК — минимальные права
+  designer: {
+    canCreate: false,
+    canEdit: false,
+    canDelete: false,
+    canViewAll: false,
+    canInvite: false,
+    canManageTariffs: false,
+    canViewAnalytics: false,
+    canManageEmployees: false,
+    canManageWarehouse: false,
+    canViewAudit: false,
+    canManageClients: false,
+    canInviteClients: false,
+    canViewBilling: false,
+    canManageBilling: false,
+    canExportData: true,
+    canManageIntegrations: false,
+    canManageSuppliers: false,
+    canCreateRFQ: false,
+    canCompareOffers: false,
+    canCreatePurchaseOrders: false,
+    canReceiveMaterials: false,
+    canManagePrices: false,
+    canManagePriceList: false,
+    canRespondToRFQ: false,
+    canViewOrders: false,
+    canManageCompany: false,
+    canViewObjects: true,
+    canViewChat: true,
+    canViewDocuments: true,
+    canViewCalendar: true,
+    canViewPrices: false,
+  },
 
   // Менеджер по закупкам (со стороны заказчика)
   procurement_manager: {
@@ -257,7 +355,6 @@ export const ROLE_PERMISSIONS = {
     canManageBilling: false,
     canExportData: true,
     canManageIntegrations: false,
-    // Поставщики — основная работа
     canManageSuppliers: true,
     canCreateRFQ: true,
     canCompareOffers: true,
@@ -268,6 +365,11 @@ export const ROLE_PERMISSIONS = {
     canRespondToRFQ: false,
     canViewOrders: true,
     canManageCompany: false,
+    canViewObjects: true,
+    canViewChat: true,
+    canViewDocuments: true,
+    canViewCalendar: false,
+    canViewPrices: true,
   },
 
   // Администратор поставщика (со стороны поставщика)
@@ -288,7 +390,6 @@ export const ROLE_PERMISSIONS = {
     canManageBilling: false,
     canExportData: false,
     canManageIntegrations: false,
-    // Поставщики — управляет своим прайсом и предложениями
     canManageSuppliers: false,
     canCreateRFQ: false,
     canCompareOffers: false,
@@ -299,6 +400,11 @@ export const ROLE_PERMISSIONS = {
     canRespondToRFQ: true,
     canViewOrders: true,
     canManageCompany: true,
+    canViewObjects: false,
+    canViewChat: false,
+    canViewDocuments: false,
+    canViewCalendar: false,
+    canViewPrices: false,
   },
 
   // Менеджер поставщика
@@ -319,7 +425,6 @@ export const ROLE_PERMISSIONS = {
     canManageBilling: false,
     canExportData: false,
     canManageIntegrations: false,
-    // Поставщики — работает с прайсом и RFQ
     canManageSuppliers: false,
     canCreateRFQ: false,
     canCompareOffers: false,
@@ -330,6 +435,11 @@ export const ROLE_PERMISSIONS = {
     canRespondToRFQ: true,
     canViewOrders: true,
     canManageCompany: false,
+    canViewObjects: false,
+    canViewChat: false,
+    canViewDocuments: false,
+    canViewCalendar: false,
+    canViewPrices: false,
   },
 };
 
@@ -439,6 +549,9 @@ export const isSuperAdmin = (userRole, userMetadata) => {
 // Проверка, является ли пользователь заказчиком
 export const isClient = (userRole) => userRole === 'client';
 
+// 🆕 Проверка, является ли пользователь проектировщиком
+export const isDesigner = (userRole) => userRole === 'designer';
+
 // Проверка, может ли пользователь управлять клиентами
 export const canManageClients = (userRole) => {
   return hasPermission(userRole, 'canManageClients');
@@ -453,22 +566,18 @@ export const canInviteClients = (userRole) => {
 
 // Проверка, может ли пользователь приглашать определённую роль
 export const canInviteRole = (inviterRole, targetRole, isCompanyOwner = false) => {
-  // Владелец (manager) может приглашать любые роли
-  if (inviterRole === 'manager' || isCompanyOwner) {
+  if (inviterRole === 'manager' || inviterRole === 'director' || isCompanyOwner) {
     return targetRole !== 'super_admin';
   }
 
-  // Администратор снабжения может приглашать только мастеров и бухгалтеров
   if (inviterRole === 'supply_admin') {
     return targetRole === 'master' || targetRole === 'foreman' || targetRole === 'accountant';
   }
 
-  // Менеджер по клиентам может приглашать только клиентов
   if (inviterRole === 'client_manager') {
     return targetRole === 'client';
   }
 
-  // Администратор поставщика может приглашать менеджеров поставщика
   if (inviterRole === 'supplier_admin') {
     return targetRole === 'supplier_manager' || targetRole === 'supplier_admin';
   }
@@ -486,28 +595,24 @@ export const getAvailableRolesForInvite = (inviterRole, isCompanyOwner = false) 
     { value: 'accountant', label: 'Бухгалтер' },
     { value: 'client', label: 'Заказчик' },
     { value: 'client_manager', label: 'Менеджер по работе с клиентами' },
-    // === НОВЫЕ РОЛИ ===
+    { value: 'designer', label: '📐 Проектировщик' }, // 🆕
     { value: 'procurement_manager', label: '🛒 Менеджер по закупкам' },
   ];
 
-  // Владелец может приглашать все роли
-  if (inviterRole === 'manager' || isCompanyOwner) {
+  if (inviterRole === 'manager' || inviterRole === 'director' || isCompanyOwner) {
     return allRoles.filter(role => role.value !== 'super_admin');
   }
 
-  // Администратор снабжения может приглашать только мастеров и бухгалтеров
   if (inviterRole === 'supply_admin') {
     return allRoles.filter(role =>
       role.value === 'master' || role.value === 'foreman' || role.value === 'accountant'
     );
   }
 
-  // Менеджер по клиентам может приглашать только клиентов
   if (inviterRole === 'client_manager') {
     return allRoles.filter(role => role.value === 'client');
   }
 
-  // Администратор поставщика приглашает только своих менеджеров
   if (inviterRole === 'supplier_admin') {
     return getAvailableRolesForSupplierInvite();
   }
@@ -517,14 +622,12 @@ export const getAvailableRolesForInvite = (inviterRole, isCompanyOwner = false) 
 
 // === ФУНКЦИИ ДЛЯ РАБОТЫ С ТАРИФАМИ ===
 
-// Проверка доступа к функции по тарифу
 export const hasTariffFeature = (planId, feature) => {
   const plan = TARIFF_PLANS[planId];
   if (!plan) return false;
   return plan.features[feature] === true || typeof plan.features[feature] === 'string';
 };
 
-// Проверка лимитов по тарифу
 export const checkTariffLimit = (planId, limitType, currentValue) => {
   const plan = TARIFF_PLANS[planId];
   if (!plan) return { allowed: false, limit: 0 };
@@ -547,7 +650,6 @@ export const checkTariffLimit = (planId, limitType, currentValue) => {
   };
 };
 
-// Получение следующего тарифа с улучшениями
 export const getTariffUpgradeBenefits = (currentPlanId) => {
   const tiers = ['basic', 'starter', 'pro', 'business', 'enterprise'];
   const currentIndex = tiers.indexOf(currentPlanId);
@@ -595,38 +697,32 @@ export const getTariffUpgradeBenefits = (currentPlanId) => {
 
 // === ФУНКЦИИ ДЛЯ АУДИТА И ЛОГИРОВАНИЯ ===
 
-// Проверка прав для аудита
 export const canViewAudit = (userRole) => {
   return hasPermission(userRole, 'canViewAudit');
 };
 
-// Проверка прав для экспорта
 export const canExportData = (userRole) => {
   return hasPermission(userRole, 'canExportData');
 };
 
-// Проверка прав для управления биллингом
 export const canManageBilling = (userRole) => {
   return hasPermission(userRole, 'canManageBilling');
 };
 
 // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
 
-// Проверка, является ли роль административной
 export const isAdminRole = (role) => {
   return ['super_admin', 'manager', 'supply_admin', 'client_manager'].includes(role);
 };
 
-// Проверка, является ли роль исполнительской
 export const isExecutionRole = (role) => {
   return ['master', 'foreman'].includes(role);
 };
 
-// Получение всех ролей с группировкой
 export const getRolesByGroup = () => {
   return {
     admin: ['super_admin', 'manager'],
-    management: ['supply_admin', 'client_manager', 'procurement_manager'],
+    management: ['supply_admin', 'client_manager', 'procurement_manager', 'designer'],
     execution: ['master', 'foreman'],
     support: ['accountant'],
     client: ['client'],
@@ -634,13 +730,11 @@ export const getRolesByGroup = () => {
   };
 };
 
-// Проверка прав на управление пользователями
 export const canManageUsers = (userRole) => {
   return hasPermission(userRole, 'canManageEmployees') ||
          hasPermission(userRole, 'canInvite');
 };
 
-// Проверка прав на просмотр всех данных
 export const canViewAllData = (userRole) => {
   return hasPermission(userRole, 'canViewAll');
 };
@@ -649,49 +743,26 @@ export const canViewAllData = (userRole) => {
 // ХЕЛПЕРЫ ДЛЯ МОДУЛЯ ПОСТАВЩИКОВ
 // ============================================================
 
-/**
- * Проверяет, является ли пользователь поставщиком
- * (supplier_admin или supplier_manager)
- */
 export const isSupplier = (role) =>
   ['supplier_admin', 'supplier_manager'].includes(role);
 
-/**
- * Проверяет, является ли пользователь закупщиком
- * (procurement_manager, supply_admin, manager, director)
- */
 export const isProcurement = (role) =>
   ['procurement_manager', 'supply_admin', 'manager', 'director'].includes(role);
 
-/**
- * Возвращает массив ролей, которые может приглашать администратор поставщика
- */
 export const getAvailableRolesForSupplierInvite = () => [
   { value: 'supplier_admin', label: '🏭 Администратор поставщика' },
   { value: 'supplier_manager', label: '💼 Менеджер поставщика' },
 ];
 
-/**
- * Проверка прав на управление поставщиками
- */
 export const canManageSuppliers = (userRole) =>
   hasPermission(userRole, 'canManageSuppliers');
 
-/**
- * Проверка прав на создание RFQ
- */
 export const canCreateRFQ = (userRole) =>
   hasPermission(userRole, 'canCreateRFQ');
 
-/**
- * Проверка прав на управление прайс-листом
- */
 export const canManagePriceList = (userRole) =>
   hasPermission(userRole, 'canManagePriceList');
 
-/**
- * Проверка прав на ответ на RFQ (для поставщика)
- */
 export const canRespondToRFQ = (userRole) =>
   hasPermission(userRole, 'canRespondToRFQ');
 
@@ -707,6 +778,7 @@ export default {
   getRolePermissions,
   isSuperAdmin,
   isClient,
+  isDesigner,
   canManageClients,
   canInviteClients,
   canInviteRole,
@@ -722,7 +794,6 @@ export default {
   getRolesByGroup,
   canManageUsers,
   canViewAllData,
-  // Новые
   isSupplier,
   isProcurement,
   getAvailableRolesForSupplierInvite,
