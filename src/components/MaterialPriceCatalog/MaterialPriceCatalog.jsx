@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Search, Plus, Edit3, Trash2, Loader2, X, Save,
-  BookOpen, Phone, Building, RefreshCw, AlertCircle, CheckCircle
+  BookOpen, Phone, Building, RefreshCw, AlertCircle, CheckCircle,
+  Upload,
 } from 'lucide-react';
 import {
   getAllMaterialPrices,
@@ -10,6 +11,7 @@ import {
   deleteMaterialPrice,
 } from '../../utils/priceManager';
 import { canEditPrices as canEditPricesUtil } from '../../utils/priceManager';
+import ImportPriceListModal from './ImportPriceListModal';
 
 const UNIT_OPTIONS = ['шт', 'м', 'м²', 'м³', 'кг', 'т', 'л', 'упак', 'комплект', 'партия'];
 
@@ -39,6 +41,8 @@ const MaterialPriceCatalog = ({
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [showImport, setShowImport] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   // Debounce поиска
   useEffect(() => {
@@ -135,6 +139,38 @@ const MaterialPriceCatalog = ({
     setDeleteConfirmId(null);
   };
 
+  // ─── Импорт прайса ───────────────────────────────
+  const handleImport = async (rowsToImport) => {
+    setImporting(true);
+    let success = 0;
+    let failed = 0;
+
+    for (const row of rowsToImport) {
+      const result = await upsertMaterialPrice(
+        companyId,
+        row,
+        user?.id,
+        user?.email
+      );
+      if (result.success) success++;
+      else failed++;
+    }
+
+    setImporting(false);
+    setShowImport(false);
+
+    if (failed === 0) {
+      showNotification(`✅ Импортировано ${success} записей`, 'success');
+    } else {
+      showNotification(
+        `⚠️ Импортировано ${success}, ошибок ${failed}`,
+        'warning'
+      );
+    }
+
+    loadItems();
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-4 page-enter">
       {/* Header */}
@@ -148,7 +184,7 @@ const MaterialPriceCatalog = ({
             Единый каталог материалов, цен и поставщиков компании
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={loadItems}
             disabled={loading}
@@ -158,13 +194,23 @@ const MaterialPriceCatalog = ({
             Обновить
           </button>
           {canEdit && (
-            <button
-              onClick={openCreate}
-              className="px-4 py-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white text-sm font-medium rounded-lg hover:shadow-lg transition flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Добавить материал
-            </button>
+            <>
+              <button
+                onClick={() => setShowImport(true)}
+                disabled={importing}
+                className="px-4 py-2 bg-white dark:bg-gray-800 text-[#4A6572] dark:text-[#F9AA33] border border-[#4A6572]/30 text-sm font-medium rounded-lg hover:bg-[#4A6572]/5 transition flex items-center gap-2 disabled:opacity-50"
+              >
+                {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Импорт прайса
+              </button>
+              <button
+                onClick={openCreate}
+                className="px-4 py-2 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white text-sm font-medium rounded-lg hover:shadow-lg transition flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Добавить материал
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -481,6 +527,13 @@ const MaterialPriceCatalog = ({
           </div>
         </div>
       )}
+
+      {/* 📥 Modal: import price list */}
+      <ImportPriceListModal
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        onImport={handleImport}
+      />
 
       {/* Inline CSS for inputs (если у вас нет Tailwind-класса .input) */}
       <style>{`
