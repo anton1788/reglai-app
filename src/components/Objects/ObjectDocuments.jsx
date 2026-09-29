@@ -47,6 +47,18 @@ const DOCUMENT_TYPE_MAP = {
 };
 
 // ────────────────────────────────────────────────────────────
+// 🆕 Типы документов, которые видит проектировщик.
+//    Это "проектные" документы: схемы, журналы, объёмы работ.
+//    Финансовые (счета, счёт-фактуры, накладные, КС-3, акты) — скрыты.
+// ────────────────────────────────────────────────────────────
+const DESIGNER_DOC_TYPES = [
+  'executive_diagram',  // Исполнительная схема
+  'hidden_works',       // Акт скрытых работ
+  'work_log',           // Журнал работ
+  'ks2',                // КС-2 — объёмы работ
+];
+
+// ────────────────────────────────────────────────────────────
 // Категории файлов (синхронизированы с ProjectManager)
 // ────────────────────────────────────────────────────────────
 const CATEGORY_MAP = {
@@ -490,8 +502,10 @@ const ObjectDocuments = memo(({
   language = 'ru',
   showNotification,
   onOpenApplication,
+  userRole = 'master',   // 🆕 для фильтрации документов по роли
 }) => {
   const isRu = language === 'ru';
+  const isDesigner = userRole === 'designer';  // 🆕
 
   // ─── State ───────────────────────────────────────────────
   const [generatedDocs, setGeneratedDocs] = useState([]);
@@ -636,13 +650,18 @@ const ObjectDocuments = memo(({
   }, [loadDocuments, showNotification, isRu]);
 
   // ─── Фильтрация ──────────────────────────────────────────
-  const filteredGenerated = useMemo(() => {
-    if (!searchTerm.trim()) return generatedDocs;
+    const filteredGenerated = useMemo(() => {
+    // 🆕 Проектировщик видит только «проектные» типы документов
+    const baseDocs = isDesigner
+      ? generatedDocs.filter(d => DESIGNER_DOC_TYPES.includes(d.document_type))
+      : generatedDocs;
+
+    if (!searchTerm.trim()) return baseDocs;
     const term = searchTerm.trim().toLowerCase();
-    return generatedDocs.filter(d =>
+    return baseDocs.filter(d =>
       (DOCUMENT_TYPE_MAP[d.document_type]?.label || d.document_type || '').toLowerCase().includes(term)
     );
-  }, [generatedDocs, searchTerm]);
+  }, [generatedDocs, searchTerm, isDesigner]);
 
   const filteredAttached = useMemo(() => {
     if (!searchTerm.trim()) return attachedFiles;
@@ -688,11 +707,16 @@ const ObjectDocuments = memo(({
     return Object.values(groups);
   }, [filteredGenerated, filteredAttached, activeFilter]);
 
-  const counts = useMemo(() => ({
-    all: generatedDocs.length + attachedFiles.length,
-    generated: generatedDocs.length,
-    attached: attachedFiles.length,
-  }), [generatedDocs.length, attachedFiles.length]);
+    const counts = useMemo(() => {
+    const genCount = isDesigner
+      ? generatedDocs.filter(d => DESIGNER_DOC_TYPES.includes(d.document_type)).length
+      : generatedDocs.length;
+    return {
+      all: genCount + attachedFiles.length,
+      generated: genCount,
+      attached: attachedFiles.length,
+    };
+  }, [generatedDocs, attachedFiles.length, isDesigner]);
 
   // ─────────────────────────────────────────────────────────
   // Скачивание: blob + <a download>

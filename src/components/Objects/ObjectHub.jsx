@@ -3,7 +3,7 @@
 // "Папка объекта" — все данные по проекту в одном месте
 // ============================================================
 
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import {
   ArrowLeft, Building2, MapPin, Edit3, RefreshCw, Loader2,
   BarChart3, FileText, DollarSign, Users, History, FolderOpen,
@@ -37,13 +37,53 @@ const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num || 0);
 // ────────────────────────────────────────────────────────────
 // Определение вкладок
 // ────────────────────────────────────────────────────────────
-const TABS = [
-  { id: 'overview',     icon: BarChart3,  labelRu: 'Обзор',       labelEn: 'Overview' },
-  { id: 'applications', icon: FileText,   labelRu: 'Заявки',      labelEn: 'Applications' },
-  { id: 'finance',      icon: DollarSign, labelRu: 'Финансы',     labelEn: 'Finance' },
-  { id: 'documents',    icon: FolderOpen, labelRu: 'Документы',   labelEn: 'Documents' },
-  { id: 'participants', icon: Users,      labelRu: 'Участники',   labelEn: 'Participants' },
-  { id: 'history',      icon: History,    labelRu: 'История',     labelEn: 'History' },
+// 🆕 Каждая вкладка теперь имеет массив `roles` — кому она видна.
+//    Если роли нет в массиве — вкладка скрывается.
+//    Роль 'designer' НЕ видит: applications, finance, history.
+// ────────────────────────────────────────────────────────────
+const ALL_TABS = [
+  {
+    id: 'overview',
+    icon: BarChart3,
+    labelRu: 'Обзор',
+    labelEn: 'Overview',
+    roles: ['super_admin', 'manager', 'director', 'supply_admin', 'master', 'foreman', 'accountant', 'client_manager', 'procurement_manager', 'designer'],
+  },
+  {
+    id: 'applications',
+    icon: FileText,
+    labelRu: 'Заявки',
+    labelEn: 'Applications',
+    roles: ['super_admin', 'manager', 'director', 'supply_admin', 'master', 'foreman', 'accountant', 'procurement_manager'],
+  },
+  {
+    id: 'finance',
+    icon: DollarSign,
+    labelRu: 'Финансы',
+    labelEn: 'Finance',
+    roles: ['super_admin', 'manager', 'director', 'supply_admin', 'accountant'],
+  },
+  {
+    id: 'documents',
+    icon: FolderOpen,
+    labelRu: 'Документы',
+    labelEn: 'Documents',
+    roles: ['super_admin', 'manager', 'director', 'supply_admin', 'master', 'foreman', 'accountant', 'client_manager', 'procurement_manager', 'designer', 'client'],
+  },
+  {
+    id: 'participants',
+    icon: Users,
+    labelRu: 'Участники',
+    labelEn: 'Participants',
+    roles: ['super_admin', 'manager', 'director', 'supply_admin', 'master', 'foreman', 'accountant', 'client_manager', 'procurement_manager', 'designer', 'client'],
+  },
+  {
+    id: 'history',
+    icon: History,
+    labelRu: 'История',
+    labelEn: 'History',
+    roles: ['super_admin', 'manager', 'director', 'supply_admin', 'master', 'foreman', 'accountant', 'procurement_manager'],
+  },
 ];
 
 // ────────────────────────────────────────────────────────────
@@ -188,6 +228,19 @@ const ObjectHub = memo(({
 
   const canManage = ['manager', 'director', 'supply_admin', 'super_admin'].includes(userRole);
 
+  // 🆕 Фильтрация вкладок по роли
+  const tabs = useMemo(
+    () => ALL_TABS.filter(tab => tab.roles.includes(userRole)),
+    [userRole]
+  );
+
+  // 🆕 Если текущая активная вкладка недоступна роли — переключаемся на первую доступную
+  useEffect(() => {
+    if (!tabs.some(t => t.id === activeTab)) {
+      setActiveTab(tabs[0]?.id || 'overview');
+    }
+  }, [tabs, activeTab]);
+
   // ─── Загрузка объекта ────────────────────────────────────
   const loadObject = useCallback(async (silent = false) => {
     if (!objectId) return;
@@ -299,6 +352,7 @@ const ObjectHub = memo(({
             language={language}
             showNotification={showNotification}
             onOpenApplication={onOpenApplication}
+            userRole={userRole}
           />
         );
 
@@ -433,13 +487,15 @@ const ObjectHub = memo(({
           </div>
         </div>
 
-        {/* ═══ Вкладки ═══ */}
+        {/* ═══ Вкладки (только доступные роли) ═══ */}
         <div className="border-t border-gray-100 dark:border-gray-700 -mb-4 sm:-mb-5 pt-3">
           <div className="flex overflow-x-auto gap-1 -mx-1 px-1 pb-1 scrollbar-thin">
-            {TABS.map(tab => {
+            {tabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               const label = isRu ? tab.labelRu : tab.labelEn;
+              // Счётчик заявок показываем только на вкладке "applications"
+              const showBadge = tab.id === 'applications' && applications.length > 0;
               return (
                 <button
                   key={tab.id}
@@ -452,7 +508,7 @@ const ObjectHub = memo(({
                 >
                   <Icon className="w-4 h-4" />
                   <span>{label}</span>
-                  {tab.id === 'applications' && applications.length > 0 && (
+                  {showBadge && (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                       isActive
                         ? 'bg-[#4A6572] text-white'
