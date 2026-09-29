@@ -13,6 +13,7 @@ import { supabase } from '../../utils/supabaseClient';
 import ObjectDashboard from './ObjectDashboard';
 import ObjectForm from './ObjectForm';
 import ObjectDocuments from './ObjectDocuments';
+import ObjectDesignerOverview from './ObjectDesignerOverview'; // 🆕
 import { getObject } from '../../api/objects';
 import {
   OBJECT_STATUS_LABELS,
@@ -37,9 +38,7 @@ const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num || 0);
 // ────────────────────────────────────────────────────────────
 // Определение вкладок
 // ────────────────────────────────────────────────────────────
-// 🆕 Каждая вкладка теперь имеет массив `roles` — кому она видна.
-//    Если роли нет в массиве — вкладка скрывается.
-//    Роль 'designer' НЕ видит: applications, finance, history.
+// 🆕 Роль 'designer' видит только: overview (упрощённый), documents, participants
 // ────────────────────────────────────────────────────────────
 const ALL_TABS = [
   {
@@ -210,11 +209,12 @@ const ObjectHub = memo(({
   userRole,
   language = 'ru',
   showNotification,
-  onBack,              // () => void — вернуться к списку объектов
-  onOpenApplication,   // (app) => void — открыть заявку
+  onBack,
+  onOpenApplication,
   companyUsers = [],
 }) => {
   const isRu = language === 'ru';
+  const isDesigner = userRole === 'designer';  // 🆕
 
   // ─── State ───────────────────────────────────────────────
   const [object, setObject] = useState(null);
@@ -263,8 +263,14 @@ const ObjectHub = memo(({
   }, [objectId, showNotification]);
 
   // ─── Загрузка заявок ─────────────────────────────────────
+  //    🆕 Для проектировщика заявки не нужны — не грузим вовсе
   const loadApplications = useCallback(async (silent = false) => {
     if (!objectId) return;
+    if (isDesigner) {
+      setApplications([]);
+      setIsLoadingApps(false);
+      return;
+    }
     if (!silent) setIsLoadingApps(true);
 
     try {
@@ -283,7 +289,7 @@ const ObjectHub = memo(({
     } finally {
       setIsLoadingApps(false);
     }
-  }, [objectId]);
+  }, [objectId, isDesigner]);
 
   // ─── Первичная загрузка ──────────────────────────────────
   useEffect(() => {
@@ -312,6 +318,16 @@ const ObjectHub = memo(({
 
     switch (activeTab) {
       case 'overview':
+        // 🆕 Для проектировщика — упрощённый обзор без заявок/материалов
+        if (isDesigner) {
+          return (
+            <ObjectDesignerOverview
+              object={object}
+              language={language}
+            />
+          );
+        }
+        // Для остальных — полноценный дашборд
         return (
           <ObjectDashboard
             object={object}
@@ -494,7 +510,6 @@ const ObjectHub = memo(({
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               const label = isRu ? tab.labelRu : tab.labelEn;
-              // Счётчик заявок показываем только на вкладке "applications"
               const showBadge = tab.id === 'applications' && applications.length > 0;
               return (
                 <button
