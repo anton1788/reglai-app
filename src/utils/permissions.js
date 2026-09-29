@@ -578,6 +578,11 @@ export const canInviteRole = (inviterRole, targetRole, isCompanyOwner = false) =
     return targetRole === 'client';
   }
 
+  // 🆕 Менеджер по закупкам может приглашать поставщиков
+  if (inviterRole === 'procurement_manager') {
+    return targetRole === 'supplier_admin' || targetRole === 'supplier_manager';
+  }
+
   if (inviterRole === 'supplier_admin') {
     return targetRole === 'supplier_manager' || targetRole === 'supplier_admin';
   }
@@ -611,6 +616,14 @@ export const getAvailableRolesForInvite = (inviterRole, isCompanyOwner = false) 
 
   if (inviterRole === 'client_manager') {
     return allRoles.filter(role => role.value === 'client');
+  }
+
+  // 🆕 Менеджер по закупкам — только поставщики
+  if (inviterRole === 'procurement_manager') {
+    return [
+      { value: 'supplier_admin', label: '🏭 Администратор поставщика' },
+      { value: 'supplier_manager', label: '💼 Менеджер поставщика' },
+    ];
   }
 
   if (inviterRole === 'supplier_admin') {
