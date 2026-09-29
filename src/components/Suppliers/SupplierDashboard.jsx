@@ -8,8 +8,8 @@ import {
 
 import {
   getSupplierById,
-  getRFQListForSupplier,     // 🆕 изменён
-  getPurchaseOrders,         // 🆕 с флагом forSupplier
+  getRFQList,
+  getPurchaseOrders,
   getPriceLists,
   getPriceListItems,
 } from '../../api/suppliers';
@@ -85,10 +85,8 @@ export default function SupplierDashboard({
           itemsData,
         ] = await Promise.all([
           getSupplierById(supplierId).catch(() => null),
-          // 🆕 RFQ, куда приглашён поставщик (через rfq_invitations)
-          getRFQListForSupplier(supplierId, {}).catch(() => []),
-          // 🆕 Заказы поставщика (без фильтра по company_id)
-          getPurchaseOrders(null, { supplierId, forSupplier: true }).catch(() => []),
+          getRFQList(companyId, {}).catch(() => []),
+          getPurchaseOrders(companyId, { supplierId }).catch(() => []),
           getPriceLists(supplierId).catch(() => []),
           getPriceListItems(supplierId, { limit: 1 }).catch(() => []),
         ]);

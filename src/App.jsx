@@ -11,7 +11,6 @@ import QuotaUsage from './components/QuotaUsage';
 import ClientDashboard from './components/ClientPortal/ClientDashboard';
 import ClientInviteModal from './components/Manager/ClientInviteModal';
 import ClientRegister from './components/pages/ClientRegister';
-import RegisterSupplier from './components/RegisterSupplier';
 import { ClientManager } from './components/ClientManager/ClientManager';
 import ClientChat from './components/ClientPortal/ClientChat';
 import ClientDocuments from './components/ClientPortal/ClientDocuments';
@@ -1365,87 +1364,31 @@ useEffect(() => {
     loadClientId();
 }, [user, userCompanyId, userRole]);
 
-// 🏢 Загрузка supplierId для ролей поставщика + авто-привязка по приглашению
+// 🏢 Загрузка supplierId для ролей поставщика
 useEffect(() => {
-  const loadAndBindSupplier = async () => {
-    if (!user?.id || !user?.email) return;
+  const loadSupplierId = async () => {
+    if (!user?.id) return;
     if (userRole !== 'supplier_admin' && userRole !== 'supplier_manager') return;
-    if (currentSupplierId) return; // уже привязан
-
-    // 🛡️ Защита: если userCompanyId ещё не установлен — ждём
-    if (!userCompanyId) {
-      console.log('⏳ loadAndBindSupplier: ждём userCompanyId...');
-      return;
-    }
 
     try {
-      // 1. Ищем supplier по user_id (прямая привязка)
-      const { data: byUser } = await supabase
+      const { data } = await supabase
         .from('suppliers')
         .select('id')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (byUser?.id) {
-        setCurrentSupplierId(byUser.id);
-        console.log('✅ Supplier найден по user_id:', byUser.id);
-        return;
-      }
-
-      // 2. Если нет — ищем приглашение по email с supplier_id
-      const { data: invite } = await supabase
-        .from('invitations')
-        .select('id, supplier_id')
-        .eq('email', user.email.toLowerCase().trim())
-        .eq('accepted', false)
-        .not('supplier_id', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!invite?.supplier_id) {
-        console.warn('⚠️ Приглашение не найдено для:', user.email);
-        return;
-      }
-
-      // 3. Привязываем через RPC
-      const { data: bindResult, error: bindError } = await supabase.rpc(
-        'bind_supplier_to_user',
-        {
-          p_user_id: user.id,
-          p_user_email: user.email,
-          p_supplier_company_id: userCompanyId,
-        }
-      );
-
-      if (bindError) {
-        console.error('❌ bind_supplier_to_user error:', bindError);
-        return;
-      }
-
-      if (bindResult?.success) {
-        console.log('✅ Поставщик привязан:', bindResult);
-        setCurrentSupplierId(bindResult.supplier_id);
-
-        // Обновляем метаданные
-        await supabase.auth.updateUser({
-          data: {
-            supplier_id: bindResult.supplier_id,
-            supplier_name: bindResult.supplier_name,
-          },
-        });
-
-        showNotification(`✅ Вы привязаны к поставщику: ${bindResult.supplier_name}`, 'success');
-      } else {
-        console.warn('⚠️ bind_supplier_to_user вернул:', bindResult);
+      setCurrentSupplierId(data?.id || null);
+      if (!data?.id) {
+        console.warn('⚠️ Поставщик не привязан к user_id. Проверьте таблицу suppliers.');
       }
     } catch (err) {
-      console.error('❌ loadAndBindSupplier error:', err);
+      console.error('Ошибка загрузки supplierId:', err);
+      setCurrentSupplierId(null);
     }
   };
 
-  loadAndBindSupplier();
-}, [user?.id, user?.email, userRole, currentSupplierId, supabase, userCompanyId, showNotification]);
+  loadSupplierId();
+}, [user?.id, userRole, supabase]);
 
 // 📊 Load NPS Responses
 // ✅ СТАЛО
@@ -2858,11 +2801,11 @@ const checkForUpdates = useCallback(async () => {
 
     try {
       const { data: invitation, error: inviteError } = await supabase
-  .from('invitations')
-  .select('role, id, company_id, supplier_id')  // 🆕 добавлен supplier_id
-  .eq('email', signupEmail.trim().toLowerCase())
-  .eq('accepted', false)
-  .maybeSingle();
+        .from('invitations')
+        .select('role, id, company_id')
+        .eq('email', signupEmail.trim().toLowerCase())
+        .eq('accepted', false)
+        .maybeSingle();
 
       if (invitation && !inviteError) {
         targetCompanyId = invitation.company_id;
@@ -2953,19 +2896,12 @@ if (authData?.user) {
   }
 }
 
-            if (authError) {
+      if (authError) {
         console.error('Ошибка регистрации:', authError);
         if (isCreatingCompany && targetCompanyId) {
           await supabase.from('companies').delete().eq('id', targetCompanyId);
         }
         showNotification(t('signupFailed') + ': ' + authError.message, 'error');
-        return;
-      }
-
-      // 🆕 Дополнительная проверка authData
-      if (!authData?.user) {
-        console.error('❌ handleSignup: authData.user отсутствует после signUp');
-        showNotification('Ошибка: пользователь не создан', 'error');
         return;
       }
 
@@ -2979,100 +2915,11 @@ if (authData?.user) {
         }
       }
 
-                  // 🆕 Определяем: это поставщик или обычный сотрудник
-      const isSupplierSignup =
-        finalRole === 'supplier_admin' || finalRole === 'supplier_manager';
-
-      let finalCompanyId = getSafeCompanyId(targetCompanyId);
-      let supplierCompanyId = null;
-
-      if (isSupplierSignup) {
-        // 🏭 МОДЕЛЬ B: создаём ОТДЕЛЬНУЮ компанию для поставщика
-        const supplierCompanyName = `Поставщик ${signupEmail.trim().toLowerCase()}`;
-        const normalizedSupplierName = normalizeName(supplierCompanyName);
-
-        // 🆕 Проверяем, нет ли уже компании с таким normalized_name
-        const { data: existingSupplierCompany } = await supabase
-          .from('companies')
-          .select('id, name')
-          .eq('normalized_name', normalizedSupplierName)
-          .maybeSingle();
-
-        let newCompany = existingSupplierCompany;
-        let companyCreateError = null;
-
-        if (!existingSupplierCompany?.id) {
-          const { data, error } = await supabase
-            .from('companies')
-            .insert({
-              name: supplierCompanyName,
-              normalized_name: normalizedSupplierName,
-              is_company_owner: authData.user.id,
-              approved: true,
-              company_type: 'supplier',
-            })
-            .select('id, name')
-            .single();
-
-          newCompany = data;
-          companyCreateError = error;
-        } else {
-          console.log('♻️ Используем существующую компанию:', existingSupplierCompany.id);
-        }
-
-        if (companyCreateError || !newCompany?.id) {
-          console.error('Ошибка создания компании поставщика:', companyCreateError);
-          showNotification(
-            'Ошибка создания компании поставщика: ' +
-              (companyCreateError?.message || 'неизвестная'),
-            'error'
-          );
-          return;
-        }
-
-        supplierCompanyId = newCompany.id;
-        finalCompanyId = supplierCompanyId;
-        console.log('🏭 Компания поставщика:', supplierCompanyId);
-
-        // Обновляем метаданные
-        await supabase.auth.updateUser({
-          data: {
-            company_id: supplierCompanyId,
-            company_name: supplierCompanyName,
-            role: finalRole,
-            full_name: signupFullName,
-            phone: signupPhone,
-            is_supplier: true,
-          },
-        });
-
-        // 🆕 Активация PRO-тарифа на 14 дней для компании поставщика
-        const now = new Date().toISOString();
-        const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-
-        const { error: planError } = await supabase
-          .from('companies')
-          .update({
-            plan_tier: 'pro',
-            plan_activated_at: now,
-            plan_expires_at: expiresAt,
-            trial_started_at: now,
-            trial_ended_at: expiresAt,
-          })
-          .eq('id', supplierCompanyId);
-
-        if (planError) {
-          console.warn('⚠️ Не удалось активировать пробный тариф для поставщика:', planError);
-        } else {
-          console.log('✅ PRO-тариф активирован для поставщика');
-        }
-      }
-
-      // 🔥 АКТИВАЦИЯ PRO ТАРИФА НА 14 ДНЕЙ (для закупщика)
+      // 🔥 АКТИВАЦИЯ PRO ТАРИФА НА 14 ДНЕЙ
       if (isCreatingCompany && targetCompanyId) {
         const now = new Date().toISOString();
         const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-
+        
         const { error: planError } = await supabase
           .from('companies')
           .update({
@@ -3080,51 +2927,34 @@ if (authData?.user) {
             plan_activated_at: now,
             plan_expires_at: expiresAt,
             trial_started_at: now,
-            trial_ended_at: expiresAt,
+            trial_ended_at: expiresAt
           })
           .eq('id', targetCompanyId);
-
+        
         if (planError) {
           console.warn('⚠️ Не удалось активировать пробный тариф:', planError);
         }
       }
 
-// ✅ Вставка в company_users
+      // ✅ СТАЛО
+// Добавьте очистку перед вставкой:
+const cleanCompanyId = getSafeCompanyId(targetCompanyId);
+
 const { error: companyUserError } = await supabase
   .from('company_users')
   .insert({
     user_id: authData.user.id,
-    company_id: finalCompanyId,   // 🆕 для поставщика — своя компания
+    company_id: cleanCompanyId,  // ✅ ИСПРАВЛЕНО
     role: finalRole,
     full_name: signupFullName,
     phone: signupPhone,
-    is_active: true,
+    is_active: true
   });
 
-if (companyUserError && companyUserError.code !== '23505') {
-  console.error('Ошибка company_users:', companyUserError);
-  showNotification('Ошибка привязки к компании', 'warning');
-}
-
-// 🆕 Привязка поставщика через RPC (если есть supplier_id в приглашении)
-if (isSupplierSignup && invitation?.supplier_id && supplierCompanyId) {
-  const { data: bindResult, error: bindError } = await supabase.rpc(
-    'bind_supplier_to_user',
-    {
-      p_user_id: authData.user.id,
-      p_user_email: signupEmail.trim().toLowerCase(),
-      p_supplier_company_id: supplierCompanyId,
-    }
-  );
-
-  if (bindError) {
-    console.error('❌ bind_supplier_to_user в signup:', bindError);
-  } else if (bindResult?.success) {
-    console.log('✅ Поставщик привязан при регистрации:', bindResult);
-  } else {
-    console.warn('⚠️ bind result:', bindResult);
-  }
-}
+      if (companyUserError && companyUserError.code !== '23505') {
+        console.error('Ошибка company_users:', companyUserError);
+        showNotification('Ошибка привязки к компании', 'warning');
+      }
 
       if (invitation?.id) {
         await supabase
@@ -6052,14 +5882,10 @@ useEffect(() => {
 else if (userRole === 'designer') {
     setCurrentView('designerDashboard');
 }
-        // 🏢 ПОСТАВЩИК → дашборд поставщика
-else if (userRole === 'supplier_admin' || userRole === 'supplier_manager') {
-    setCurrentView('supplierDashboard');
-}
-// 🛡️ Fallback: если поставщик попал на неизвестный view — вернуть на дашборд
-else if (['supplierRFQ', 'supplierOrders', 'supplierProfile'].includes(currentView)) {
-    setCurrentView('supplierDashboard');
-}
+        // 🏢 Поставщик → дашборд поставщика
+        else if (userRole === 'supplier_admin' || userRole === 'supplier_manager') {
+            setCurrentView('supplierDashboard');
+        }
         // Все остальные → видят заявки
         else {
             setCurrentView('inwork');
@@ -7841,22 +7667,16 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 };
 
 // ─────────────────────────────────────────────────────────
-// 📝 РЕГИСТРАЦИЯ ЗАКАЗЧИКА ПО ПРИГЛАШЕНИЮ
-// ─────────────────────────────────────────────────────────
-const urlParams = new URLSearchParams(window.location.search);
-const inviteParam = urlParams.get('invite');
-const tokenParam = urlParams.get('token');
+  // 📝 РЕГИСТРАЦИЯ ЗАКАЗЧИКА ПО ПРИГЛАШЕНИЮ
+  // ─────────────────────────────────────────────────────────
+    const urlParams = new URLSearchParams(window.location.search);
+  const inviteParam = urlParams.get('invite');
 
-// ✅ РЕГИСТРАЦИЯ ПОСТАВЩИКА ПО ТОКЕНУ (Модель B)
-// Проверяем и pathname, и наличие token — на случай редиректов
-if (window.location.pathname === '/register-supplier' || tokenParam) {
-  return <RegisterSupplier />;
-}
-
-// ✅ Если есть параметр invite - ВСЕГДА показываем регистрацию заказчика
-if (inviteParam) {
-  return <ClientRegister />;
-}
+  // ✅ Если есть параметр invite - ВСЕГДА показываем регистрацию
+  // Это позволяет заказчику перейти по ссылке даже если руководитель уже залогинен
+  if (inviteParam) {
+    return <ClientRegister />;
+  }
 
   // ─────────────────────────────────────────────────────────
   // 🔐 МАРШРУТ ВОССТАНОВЛЕНИЯ ПАРОЛЯ

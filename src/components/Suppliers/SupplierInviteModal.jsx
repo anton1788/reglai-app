@@ -5,7 +5,6 @@ import {
   UserPlus, MessageCircle, Clock, ShieldCheck,
 } from 'lucide-react';
 
-import { supabase } from '../../utils/supabaseClient';
 import { getSuppliers, logSupplierInteraction, getSupplierHistory } from '../../api/suppliers';
 
 // ============================================================
@@ -106,7 +105,7 @@ export default function SupplierInviteModal({
   const [ttlDays, setTtlDays] = useState(DEFAULT_TTL_DAYS);
 
   const [generating, setGenerating] = useState(false);
-  const [generatedInvite, setGeneratedInvite] = useState(null); // { url, token, expiresAt, invitationId }
+  const [generatedInvite, setGeneratedInvite] = useState(null); // { url, token, expiresAt }
   const [copied, setCopied] = useState(false);
 
   const [history, setHistory] = useState([]);
@@ -202,17 +201,6 @@ export default function SupplierInviteModal({
       notify('Не определена компания', 'error');
       return;
     }
-    if (!selectedSupplier) {
-      notify('Поставщик не найден', 'error');
-      return;
-    }
-
-    // Email для приглашения
-    const inviteEmail = channel === 'email' ? emailToSend : (selectedSupplier.email || '');
-    if (!inviteEmail) {
-      notify('У поставщика нет email. Укажите email вручную.', 'error');
-      return;
-    }
     if (channel === 'email' && !emailValid) {
       notify('Введите корректный email', 'error');
       return;
@@ -220,38 +208,6 @@ export default function SupplierInviteModal({
 
     setGenerating(true);
     try {
-      // 🆕 1. Проверяем, нет ли уже активного приглашения (защита от дублей)
-      const { data: existing } = await supabase
-        .from('invitations')
-        .select('id')
-        .eq('email', inviteEmail.toLowerCase().trim())
-        .eq('company_id', companyId)
-        .eq('accepted', false)
-        .maybeSingle();
-
-      let invitationId = existing?.id;
-
-      // 🆕 2. Создаём запись в invitations (если её ещё нет)
-      if (!existing) {
-        const { data: invitation, error: inviteError } = await supabase
-          .from('invitations')
-          .insert([{
-            email: inviteEmail.toLowerCase().trim(),
-            role: 'supplier_admin',
-            company_id: companyId,          // компания закупщика
-            supplier_id: supplierId,        // 🆕 связь с поставщиком
-            invited_by: userId,
-            accepted: false,
-            created_at: new Date().toISOString(),
-          }])
-          .select()
-          .single();
-
-        if (inviteError) throw inviteError;
-        invitationId = invitation.id;
-      }
-
-      // 3. Генерируем токен и URL (для маршрутизации)
       const token = generateInviteToken({
         supplierId,
         companyId,
@@ -261,9 +217,9 @@ export default function SupplierInviteModal({
       const url = buildInviteUrl(token);
       const expiresAt = new Date(Date.now() + ttlDays * 86400_000);
 
-      setGeneratedInvite({ url, token, expiresAt, invitationId });
+      setGeneratedInvite({ url, token, expiresAt });
 
-      // 4. Логирование
+      // Логирование
       try {
         await logSupplierInteraction({
           supplierId,
@@ -272,14 +228,13 @@ export default function SupplierInviteModal({
           type: 'invited',
           description:
             channel === 'email'
-              ? `Приглашение отправлено на ${inviteEmail}`
+              ? `Приглашение отправлено на ${emailToSend}`
               : `Сгенерирована ссылка-приглашение (${ttlDays} дн.)`,
           metadata: {
             channel,
             ttl_days: ttlDays,
-            email: inviteEmail,
+            email: channel === 'email' ? emailToSend : null,
             expires_at: expiresAt.toISOString(),
-            invitation_id: invitationId,
           },
         });
       } catch (logErr) {
@@ -296,7 +251,7 @@ export default function SupplierInviteModal({
           'warning'
         );
       } else {
-        notify('✅ Приглашение создано. Скопируйте ссылку.', 'success');
+        notify('✅ Ссылка-приглашение сгенерирована', 'success');
       }
 
       // Обновляем историю
@@ -306,7 +261,7 @@ export default function SupplierInviteModal({
       }
     } catch (err) {
       console.error('[invite] generate error:', err);
-      notify(err.message || 'Ошибка создания приглашения', 'error');
+      notify(err.message || 'Ошибка генерации приглашения', 'error');
     } finally {
       setGenerating(false);
     }
@@ -396,16 +351,15 @@ export default function SupplierInviteModal({
               >
                 <option value="">— Выберите поставщика —</option>
                 {suppliers.map((s) => (
-                  <option key={s.id} value={s.id} disabled={!!s.user_id}>
+                  <option key={s.id} value={s.id}>
                     {s.name}
                     {s.email ? ` · ${s.email}` : ''}
-                    {s.user_id ? ' ✓ зарегистрирован' : ''}
                   </option>
                 ))}
               </select>
             )}
             {selectedSupplier && (
-              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-3 flex-wrap">
+              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-3">
                 {selectedSupplier.email && (
                   <span className="flex items-center gap-1">
                     <Mail className="w-3.5 h-3.5" />
@@ -416,12 +370,6 @@ export default function SupplierInviteModal({
                   <span className="flex items-center gap-1">
                     <MessageCircle className="w-3.5 h-3.5" />
                     {selectedSupplier.phone}
-                  </span>
-                )}
-                {selectedSupplier.user_id && (
-                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                    <Check className="w-3.5 h-3.5" />
-                    Уже зарегистрирован
                   </span>
                 )}
               </div>
@@ -601,7 +549,7 @@ export default function SupplierInviteModal({
           <button
             type="button"
             onClick={handleGenerate}
-            disabled={generating || !supplierId || !!selectedSupplier?.user_id}
+            disabled={generating || !supplierId}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4A6572] hover:bg-[#344955] text-white text-sm font-medium disabled:opacity-50 transition"
           >
             {generating ? (
