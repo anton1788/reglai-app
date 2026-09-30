@@ -8,7 +8,7 @@ import {
 
 import {
   getSupplierById,
-  getRFQListForSupplier,   // 🆕
+  getRFQList,
   getPurchaseOrders,
   getPriceLists,
   getPriceListItems,
@@ -77,7 +77,7 @@ export default function SupplierDashboard({
       setError(null);
 
       try {
-                const [
+        const [
           supplierData,
           rfqsData,
           ordersData,
@@ -85,8 +85,8 @@ export default function SupplierDashboard({
           itemsData,
         ] = await Promise.all([
           getSupplierById(supplierId).catch(() => null),
-          getRFQListForSupplier(supplierId, {}).catch(() => []),           // 🆕 только свои RFQ
-          getPurchaseOrders(null, { supplierId, forSupplier: true }).catch(() => []),  // 🆕 заказы поставщика
+          getRFQList(companyId, {}).catch(() => []),
+          getPurchaseOrders(companyId, { supplierId }).catch(() => []),
           getPriceLists(supplierId).catch(() => []),
           getPriceListItems(supplierId, { limit: 1 }).catch(() => []),
         ]);
@@ -142,11 +142,9 @@ export default function SupplierDashboard({
   }, [rfqs, orders]);
 
   // ─── RFQ требующие ответа ──────────────────────────────
-    const rfqsToRespond = useMemo(() => {
+  const rfqsToRespond = useMemo(() => {
     return rfqs
-      .filter((r) =>
-        ['sent', 'collecting'].includes(r.status) && !r.my_offer_id  // 🆕 не отвеченные
-      )
+      .filter((r) => ['sent', 'collecting'].includes(r.status))
       .slice(0, 5);
   }, [rfqs]);
 

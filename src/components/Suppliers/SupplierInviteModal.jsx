@@ -5,7 +5,6 @@ import {
   UserPlus, MessageCircle, Clock, ShieldCheck,
 } from 'lucide-react';
 
-import { supabase } from '../../utils/supabaseClient';
 import { getSuppliers, logSupplierInteraction, getSupplierHistory } from '../../api/suppliers';
 
 // ============================================================
@@ -207,53 +206,8 @@ export default function SupplierInviteModal({
       return;
     }
 
-        setGenerating(true);
+    setGenerating(true);
     try {
-      // 🆕 1. Определяем email для приглашения
-      const inviteEmail = (
-        channel === 'email'
-          ? emailToSend
-          : (selectedSupplier?.email || '')
-      ).toLowerCase().trim();
-
-      if (!inviteEmail) {
-        notify('У поставщика нет email. Укажите email вручную.', 'error');
-        setGenerating(false);
-        return;
-      }
-
-      // 🆕 2. Проверяем, нет ли уже активного приглашения
-      const { data: existing } = await supabase
-        .from('invitations')
-        .select('id')
-        .eq('email', inviteEmail)
-        .eq('company_id', companyId)
-        .eq('accepted', false)
-        .maybeSingle();
-
-      let invitationId = existing?.id;
-
-      // 🆕 3. Если нет — создаём новое приглашение
-      if (!existing) {
-        const { data: invitation, error: inviteError } = await supabase
-          .from('invitations')
-          .insert([{
-            email: inviteEmail,
-            role: 'supplier_admin',
-            company_id: companyId,
-            supplier_id: supplierId,
-            invited_by: userId,
-            accepted: false,
-            created_at: new Date().toISOString(),
-          }])
-          .select()
-          .single();
-
-        if (inviteError) throw inviteError;
-        invitationId = invitation.id;
-      }
-
-      // 4. Генерируем токен
       const token = generateInviteToken({
         supplierId,
         companyId,
@@ -263,7 +217,7 @@ export default function SupplierInviteModal({
       const url = buildInviteUrl(token);
       const expiresAt = new Date(Date.now() + ttlDays * 86400_000);
 
-      setGeneratedInvite({ url, token, expiresAt, invitationId });
+      setGeneratedInvite({ url, token, expiresAt });
 
       // Логирование
       try {
@@ -276,12 +230,11 @@ export default function SupplierInviteModal({
             channel === 'email'
               ? `Приглашение отправлено на ${emailToSend}`
               : `Сгенерирована ссылка-приглашение (${ttlDays} дн.)`,
-                    metadata: {
+          metadata: {
             channel,
             ttl_days: ttlDays,
             email: channel === 'email' ? emailToSend : null,
             expires_at: expiresAt.toISOString(),
-            invitation_id: invitationId,  // 🆕
           },
         });
       } catch (logErr) {
