@@ -1,4 +1,5 @@
 // ============================================
+// vite.config.js
 // 0.0.103-beta
 // ============================================
 
@@ -201,9 +202,12 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
+        // 🔧 ФИКС: убран 'vendor-charts': ['recharts'] —
+        //    вызывал циклическую инициализацию
+        //    "Cannot access 'Sn' before initialization" в vendor-charts-*.js
+        //    Теперь recharts попадёт в общий чанк, Rollup сам разберётся с порядком.
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-charts': ['recharts'],
           'vendor-utils': ['xlsx', 'jspdf', 'jspdf-autotable'],
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-icons': ['lucide-react'],
@@ -228,7 +232,7 @@ export default defineConfig({
       'react-dom',
       'react-router-dom',
       '@supabase/supabase-js',
-      'recharts > react-is',
+      // 🔧 ФИКС: удалена строка 'recharts > react-is' — невалидный синтаксис
       'recharts',
       'xlsx',
       'jspdf',
