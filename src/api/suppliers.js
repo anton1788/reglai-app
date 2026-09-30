@@ -807,8 +807,7 @@ export async function createPurchaseOrder(order) {
 }
 
 export async function getPurchaseOrders(companyId, filters = {}) {
-  const safeCompanyId = assertUuid(companyId, 'companyId');
-  const { status, supplierId, search, limit, offset } = filters;
+  const { status, supplierId, search, limit, offset, forSupplier = false } = filters;
 
   let query = supabase
     .from('purchase_orders')
@@ -817,14 +816,21 @@ export async function getPurchaseOrders(companyId, filters = {}) {
        suppliers!purchase_orders_supplier_id_fkey (id, name, email, phone, contact_person)`,
       { count: 'exact' }
     )
-    .eq('company_id', safeCompanyId)
     .order('created_at', { ascending: false });
+
+  // 🆕 Закупщик — фильтр по своей компании
+  if (!forSupplier && companyId) {
+    query = query.eq('company_id', assertUuid(companyId, 'companyId'));
+  }
+  // 🆕 Поставщик — фильтр по supplier_id
+  if (supplierId) {
+    query = query.eq('supplier_id', assertUuid(supplierId, 'supplierId'));
+  }
 
   if (status) {
     assertOneOf(status, ORDER_STATUSES, 'status');
     query = query.eq('status', status);
   }
-  if (supplierId) query = query.eq('supplier_id', assertUuid(supplierId, 'supplierId'));
   if (search && search.trim()) {
     const term = `%${search.trim()}%`;
     query = query.or(`order_number.ilike.${term},tracking_number.ilike.${term}`);
@@ -1033,6 +1039,72 @@ export async function getSupplierStats(supplierId) {
 }
 
 // ============================================================
+// 🆕 SUPPLIER-SIDE HELPERS (Модель B)
+// ============================================================
+
+/**
+ * Получить поставщика, привязанного к текущему пользователю.
+ */
+export async function getMySupplier() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.id) return null;
+  return unwrap(
+    await supabase.from('suppliers').select('*').eq('user_id', user.id).maybeSingle(),
+    'getMySupplier'
+  );
+}
+
+/**
+ * RFQ, куда приглашён данный поставщик.
+ * Идёт через rfq_invitations → rfq_requests.
+ */
+export async function getRFQListForSupplier(supplierId, filters = {}) {
+  const safeId = assertUuid(supplierId, 'supplierId');
+  const { status, limit } = filters;
+
+  const invitations = unwrap(
+    await supabase.from('rfq_invitations').select('rfq_id, status').eq('supplier_id', safeId),
+    'getRFQListForSupplier:invitations'
+  ) || [];
+
+  if (invitations.length === 0) return [];
+
+  const rfqIds = Array.from(new Set(invitations.map(i => i.rfq_id)));
+
+  let query = supabase
+    .from('rfq_requests')
+    .select(`
+      *,
+      rfq_invitations!rfq_invitations_rfq_id_fkey (id, status, supplier_id),
+      supplier_offers!supplier_offers_rfq_id_fkey (id, total, status, supplier_id)
+    `, { count: 'exact' })
+    .in('id', rfqIds)
+    .order('created_at', { ascending: false });
+
+  if (status) {
+    assertOneOf(status, RFQ_STATUSES, 'status');
+    query = query.eq('status', status);
+  }
+  if (Number.isInteger(limit) && limit > 0) query = query.limit(limit);
+
+  const data = unwrap(await query, 'getRFQListForSupplier:rfq') || [];
+
+  return data.map(rfq => {
+    const myInvitation = rfq.rfq_invitations?.find(i => i.supplier_id === safeId);
+    const myOffer = rfq.supplier_offers?.find(o => o.supplier_id === safeId);
+    return {
+      ...rfq,
+      my_invitation_status: myInvitation?.status || null,
+      my_offer_id: myOffer?.id || null,
+      my_offer_status: myOffer?.status || null,
+      my_offer_total: myOffer?.total || null,
+      invitations_count: rfq.rfq_invitations?.length || 0,
+      offers_count: rfq.supplier_offers?.length || 0,
+    };
+  });
+}
+
+// ============================================================
 // 📤 EXPORT DEFAULT
 // ============================================================
 
@@ -1040,6 +1112,7 @@ export default {
   // Suppliers
   getSuppliers,
   getSupplierById,
+  getMySupplier,        // 🆕
   createSupplier,
   updateSupplier,
   archiveSupplier,
@@ -1052,9 +1125,10 @@ export default {
   deletePriceListItem,
   bulkUpsertPriceItems,
   searchMaterialsAcrossSuppliers,
-  // RFQ
+    // RFQ
   createRFQ,
   getRFQList,
+  getRFQListForSupplier,  // 🆕
   getRFQById,
   sendRFQToSuppliers,
   getRFQInvitations,

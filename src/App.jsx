@@ -1364,31 +1364,95 @@ useEffect(() => {
     loadClientId();
 }, [user, userCompanyId, userRole]);
 
-// 🏢 Загрузка supplierId для ролей поставщика
+// 🏢 Загрузка supplierId + авто-привязка по приглашению
 useEffect(() => {
-  const loadSupplierId = async () => {
-    if (!user?.id) return;
+  const loadAndBindSupplier = async () => {
+    if (!user?.id || !user?.email) return;
     if (userRole !== 'supplier_admin' && userRole !== 'supplier_manager') return;
+    if (currentSupplierId) return;
 
     try {
-      const { data } = await supabase
+      // 1. Ищем supplier по user_id
+      const { data: byUser } = await supabase
         .from('suppliers')
         .select('id')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      setCurrentSupplierId(data?.id || null);
-      if (!data?.id) {
-        console.warn('⚠️ Поставщик не привязан к user_id. Проверьте таблицу suppliers.');
+      if (byUser?.id) {
+        setCurrentSupplierId(byUser.id);
+        console.log('✅ Supplier найден по user_id:', byUser.id);
+        return;
+      }
+
+      // 2. Если нет — ищем приглашение по email с supplier_id
+      const { data: invite } = await supabase
+        .from('invitations')
+        .select('id, supplier_id')
+        .eq('email', user.email.toLowerCase().trim())
+        .eq('accepted', false)
+        .not('supplier_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!invite?.supplier_id) {
+        console.warn('⚠️ Приглашение не найдено для:', user.email);
+        return;
+      }
+
+      // 3. Привязываем через RPC
+      const cleanCompanyId = getSafeCompanyId(userCompanyId);
+      if (!cleanCompanyId) {
+        console.warn('⚠️ Нет валидного company_id для привязки');
+        return;
+      }
+
+      const { data: bindResult, error: bindError } = await supabase.rpc(
+        'bind_supplier_to_user',
+        {
+          p_user_id: user.id,
+          p_user_email: user.email,
+          p_supplier_company_id: cleanCompanyId,
+        }
+      );
+
+      if (bindError) {
+        console.error('❌ bind_supplier_to_user error:', bindError);
+        return;
+      }
+
+      if (bindResult?.success) {
+        console.log('✅ Поставщик привязан:', bindResult);
+        setCurrentSupplierId(bindResult.supplier_id);
+        await supabase.auth.updateUser({
+          data: {
+            supplier_id: bindResult.supplier_id,
+            supplier_name: bindResult.supplier_name,
+          },
+        });
+        showNotification(
+          `✅ Вы привязаны к поставщику: ${bindResult.supplier_name}`,
+          'success'
+        );
+      } else {
+        console.warn('⚠️ bind_supplier_to_user:', bindResult);
       }
     } catch (err) {
-      console.error('Ошибка загрузки supplierId:', err);
-      setCurrentSupplierId(null);
+      console.error('❌ loadAndBindSupplier error:', err);
     }
   };
 
-  loadSupplierId();
-}, [user?.id, userRole, supabase]);
+  loadAndBindSupplier();
+}, [
+  user?.id,
+  user?.email,
+  userRole,
+  currentSupplierId,
+  supabase,
+  userCompanyId,
+  showNotification,
+]);
 
 // 📊 Load NPS Responses
 // ✅ СТАЛО
@@ -2800,9 +2864,9 @@ const checkForUpdates = useCallback(async () => {
     let isCreatingCompany = false;
 
     try {
-      const { data: invitation, error: inviteError } = await supabase
+            const { data: invitation, error: inviteError } = await supabase
         .from('invitations')
-        .select('role, id, company_id')
+        .select('role, id, company_id, supplier_id')  // 🆕 supplier_id
         .eq('email', signupEmail.trim().toLowerCase())
         .eq('accepted', false)
         .maybeSingle();
@@ -2936,24 +3000,87 @@ if (authData?.user) {
         }
       }
 
-      // ✅ СТАЛО
-// Добавьте очистку перед вставкой:
-const cleanCompanyId = getSafeCompanyId(targetCompanyId);
+            // 🆕 Определяем: это поставщик или обычный сотрудник
+      const isSupplierSignup =
+        finalRole === 'supplier_admin' || finalRole === 'supplier_manager';
 
-const { error: companyUserError } = await supabase
-  .from('company_users')
-  .insert({
-    user_id: authData.user.id,
-    company_id: cleanCompanyId,  // ✅ ИСПРАВЛЕНО
-    role: finalRole,
-    full_name: signupFullName,
-    phone: signupPhone,
-    is_active: true
-  });
+      let finalCompanyId = getSafeCompanyId(targetCompanyId);
+      let supplierCompanyId = null;
+
+      if (isSupplierSignup) {
+        // 🏭 МОДЕЛЬ B: создаём ОТДЕЛЬНУЮ компанию для поставщика
+        const supplierCompanyName = `Поставщик ${signupEmail.trim().toLowerCase()}`;
+        const normalizedSupplierName = normalizeName(supplierCompanyName);
+
+        const { data: newCompany, error: companyCreateError } = await supabase
+          .from('companies')
+          .insert({
+            name: supplierCompanyName,
+            normalized_name: normalizedSupplierName,
+            is_company_owner: authData.user.id,
+            approved: true,
+            company_type: 'supplier',
+          })
+          .select('id, name')
+          .single();
+
+        if (companyCreateError) {
+          console.error('Ошибка создания компании поставщика:', companyCreateError);
+          showNotification('Ошибка создания компании поставщика', 'error');
+          return;
+        }
+
+        supplierCompanyId = newCompany.id;
+        finalCompanyId = supplierCompanyId;
+        console.log('🏭 Создана компания поставщика:', supplierCompanyId);
+
+        await supabase.auth.updateUser({
+          data: {
+            company_id: supplierCompanyId,
+            company_name: supplierCompanyName,
+            role: finalRole,
+            full_name: signupFullName,
+            phone: signupPhone,
+            is_supplier: true,
+          },
+        });
+      }
+
+      // ✅ Вставка в company_users
+      const { error: companyUserError } = await supabase
+        .from('company_users')
+        .insert({
+          user_id: authData.user.id,
+          company_id: finalCompanyId,   // 🆕 для поставщика — своя компания
+          role: finalRole,
+          full_name: signupFullName,
+          phone: signupPhone,
+          is_active: true,
+        });
 
       if (companyUserError && companyUserError.code !== '23505') {
         console.error('Ошибка company_users:', companyUserError);
         showNotification('Ошибка привязки к компании', 'warning');
+      }
+
+      // 🆕 Привязка поставщика через RPC
+      if (isSupplierSignup && invitation?.supplier_id && supplierCompanyId) {
+        const { data: bindResult, error: bindError } = await supabase.rpc(
+          'bind_supplier_to_user',
+          {
+            p_user_id: authData.user.id,
+            p_user_email: signupEmail.trim().toLowerCase(),
+            p_supplier_company_id: supplierCompanyId,
+          }
+        );
+
+        if (bindError) {
+          console.error('❌ bind_supplier_to_user в signup:', bindError);
+        } else if (bindResult?.success) {
+          console.log('✅ Поставщик привязан при регистрации:', bindResult);
+        } else {
+          console.warn('⚠️ bind result:', bindResult);
+        }
       }
 
       if (invitation?.id) {
