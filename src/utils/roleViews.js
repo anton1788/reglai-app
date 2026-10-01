@@ -8,8 +8,9 @@ export const ROLE_VIEWS = {
       'managerDashboard', 'analytics', 'employees', 'tariffs',
       'companyProfile', 'approvals',
       'objects', 'object-hub',
-      'suppliers', 'supplierDetails', 'supplierCatalog',
-      'rfqList', 'rfqDetails', 'purchaseOrders', 'purchaseOrderDetails',
+      'suppliers', 'supplierCatalog',
+      'rfqList', 'rfqDetails', 'rfqCreate',
+      'purchaseOrders', 'purchaseOrderDetails', 'purchaseOrderCreate',
       'procurementDashboard',
     ],
     hiddenFromNav: ['create', 'received', 'confirmation'],
@@ -22,8 +23,9 @@ export const ROLE_VIEWS = {
       'managerDashboard', 'analytics', 'employees', 'tariffs',
       'companyProfile', 'approvals',
       'objects', 'object-hub',
-      'suppliers', 'supplierDetails', 'supplierCatalog',
-      'rfqList', 'rfqDetails', 'purchaseOrders', 'purchaseOrderDetails',
+      'suppliers', 'supplierCatalog',
+      'rfqList', 'rfqDetails', 'rfqCreate',
+      'purchaseOrders', 'purchaseOrderDetails', 'purchaseOrderCreate',
       'procurementDashboard',
     ],
     hiddenFromNav: ['create', 'received', 'confirmation'],
@@ -46,8 +48,9 @@ export const ROLE_VIEWS = {
     allowedViews: [
       'received', 'warehouse', 'create', 'chat', 'inwork',
       'objects', 'object-hub',
-      'suppliers', 'supplierDetails', 'supplierCatalog',
-      'rfqList', 'rfqDetails', 'purchaseOrders', 'purchaseOrderDetails',
+      'suppliers', 'supplierCatalog',
+      'rfqList', 'rfqDetails', 'rfqCreate',
+      'purchaseOrders', 'purchaseOrderDetails', 'purchaseOrderCreate',
       'procurementDashboard',
     ],
     hiddenFromNav: [],
@@ -83,7 +86,7 @@ export const ROLE_VIEWS = {
     dashboardComponent: null
   },
 
-  // 🆕 ПРОЕКТИРОВЩИК — минимальный набор разделов
+  // 🆕 ПРОЕКТИРОВЩИК
   designer: {
     defaultView: 'designerDashboard',
     allowedViews: [
@@ -111,33 +114,43 @@ export const ROLE_VIEWS = {
   },
 
   // ============================================================
-  // НОВЫЕ РОЛИ ДЛЯ МОДУЛЯ ПОСТАВЩИКОВ
+  // МОДУЛЬ ПОСТАВЩИКОВ
   // ============================================================
 
   procurement_manager: {
     defaultView: 'procurementDashboard',
     allowedViews: [
       'procurementDashboard',
-      'suppliers', 'supplierDetails', 'supplierCatalog',
+      'suppliers', 'supplierCatalog',
       'rfqList', 'rfqDetails', 'rfqCreate',
-      'purchaseOrders', 'purchaseOrderDetails',
-      'warehouse', 'inwork', 'received',
+      'purchaseOrders', 'purchaseOrderDetails', 'purchaseOrderCreate',
       'objects', 'object-hub',
     ],
-    hiddenFromNav: ['create', 'confirmation', 'employees', 'tariffs'],
+    hiddenFromNav: ['create', 'confirmation', 'employees', 'tariffs', 'inwork', 'received'],
     dashboardComponent: 'ProcurementDashboard'
   },
 
+  // 🏭 ПОСТАВЩИК — видит ТОЛЬКО свои разделы
   supplier_admin: {
     defaultView: 'supplierDashboard',
     allowedViews: [
       'supplierDashboard',
       'supplierPriceList',
-      'supplierRFQ',
-      'supplierOrders',
-      'supplierProfile',
+      'rfqList', 'rfqDetails',
+      'purchaseOrders', 'purchaseOrderDetails',
+      'profile', 'settings', 'help',
     ],
-    hiddenFromNav: [],
+    hiddenFromNav: [
+      'create', 'inwork', 'history', 'received', 'warehouse',
+      'analytics', 'employees', 'clients', 'tariffs', 'approvals',
+      'objects', 'object-hub', 'chat', 'calendar', 'documents',
+      'tasks', 'audit', 'api', 'merge', 'crm-sales',
+      'estimates', 'reports', 'integration', 'readyToIssue',
+      'suppliers', 'supplierCatalog', 'priceCatalog',
+      'procurementDashboard', 'clientDashboard', 'clientChat',
+      'clientDocuments', 'designerDashboard', 'dashboard',
+      'managerDashboard', 'accountantDashboard',
+    ],
     dashboardComponent: 'SupplierDashboard'
   },
 
@@ -146,11 +159,21 @@ export const ROLE_VIEWS = {
     allowedViews: [
       'supplierDashboard',
       'supplierPriceList',
-      'supplierRFQ',
-      'supplierOrders',
-      'supplierProfile',
+      'rfqList', 'rfqDetails',
+      'purchaseOrders', 'purchaseOrderDetails',
+      'profile', 'settings', 'help',
     ],
-    hiddenFromNav: [],
+    hiddenFromNav: [
+      'create', 'inwork', 'history', 'received', 'warehouse',
+      'analytics', 'employees', 'clients', 'tariffs', 'approvals',
+      'objects', 'object-hub', 'chat', 'calendar', 'documents',
+      'tasks', 'audit', 'api', 'merge', 'crm-sales',
+      'estimates', 'reports', 'integration', 'readyToIssue',
+      'suppliers', 'supplierCatalog', 'priceCatalog',
+      'procurementDashboard', 'clientDashboard', 'clientChat',
+      'clientDocuments', 'designerDashboard', 'dashboard',
+      'managerDashboard', 'accountantDashboard',
+    ],
     dashboardComponent: 'SupplierDashboard'
   },
 };
@@ -158,7 +181,6 @@ export const ROLE_VIEWS = {
 // ============================================================
 // ХЕЛПЕРЫ
 // ============================================================
-
 export const getDefaultView = (role) => {
   return ROLE_VIEWS[role]?.defaultView || 'create';
 };
@@ -178,42 +200,39 @@ export const shouldHideFromNav = (view, role) => {
 // ============================================================
 // ХЕЛПЕРЫ ДЛЯ МОДУЛЯ ПОСТАВЩИКОВ
 // ============================================================
-
 export const SUPPLIER_VIEWS = [
   'suppliers',
-  'supplierDetails',
   'supplierCatalog',
   'rfqList',
   'rfqCreate',
   'rfqDetails',
   'purchaseOrders',
+  'purchaseOrderCreate',
   'purchaseOrderDetails',
   'procurementDashboard',
   'supplierDashboard',
   'supplierPriceList',
-  'supplierRFQ',
-  'supplierOrders',
-  'supplierProfile',
 ];
 
 export const PROCUREMENT_VIEWS = [
   'procurementDashboard',
   'suppliers',
-  'supplierDetails',
   'supplierCatalog',
   'rfqList',
   'rfqCreate',
   'rfqDetails',
   'purchaseOrders',
+  'purchaseOrderCreate',
   'purchaseOrderDetails',
 ];
 
 export const SUPPLIER_SIDE_VIEWS = [
   'supplierDashboard',
   'supplierPriceList',
-  'supplierRFQ',
-  'supplierOrders',
-  'supplierProfile',
+  'rfqList',
+  'rfqDetails',
+  'purchaseOrders',
+  'purchaseOrderDetails',
 ];
 
 export const isSupplierView = (view) => SUPPLIER_VIEWS.includes(view);

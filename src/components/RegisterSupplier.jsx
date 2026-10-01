@@ -10,7 +10,6 @@ import { supabase } from '../utils/supabaseClient';
 // ============================================================
 // 🛠️ ДЕКОДИРОВАНИЕ ТОКЕНА
 // ============================================================
-
 const base64urlDecode = (str) => {
   try {
     let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
@@ -40,14 +39,6 @@ const parseInviteToken = (token) => {
   }
 };
 
-const normalizeName = (name) =>
-  (name || '')
-    .toLowerCase()
-    .replace(/["'«»]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/^\.+|\.+$/g, '');
-
 const formatPhone = (value) => {
   let digits = (value || '').replace(/\D/g, '');
   if (digits.startsWith('8')) digits = '7' + digits.slice(1);
@@ -65,7 +56,6 @@ const formatPhone = (value) => {
 // ============================================================
 // 🎨 КОМПОНЕНТ
 // ============================================================
-
 export default function RegisterSupplier() {
   // ─── Токен из URL ──────────────────────────────────────
   const tokenPayload = useMemo(() => {
@@ -89,11 +79,12 @@ export default function RegisterSupplier() {
   // ─── Загрузка данных приглашения ───────────────────────
   const [invitation, setInvitation] = useState(null);
   const [supplier, setSupplier] = useState(null);
+  const [buyerCompany, setBuyerCompany] = useState(null);
   const [loadingInvitation, setLoadingInvitation] = useState(true);
 
   useEffect(() => {
     const load = async () => {
-      if (!tokenPayload?.s) {
+      if (!tokenPayload?.s || !tokenPayload?.c) {
         setLoadingInvitation(false);
         return;
       }
@@ -113,17 +104,32 @@ export default function RegisterSupplier() {
           if (sup.name) setCompanyName(sup.name);
         }
 
-        // 2. Загружаем приглашение
-        const { data: inv } = await supabase
-          .from('invitations')
-          .select('id, email, role, accepted, supplier_id')
-          .eq('supplier_id', tokenPayload.s)
-          .eq('accepted', false)
+        // 2. Загружаем компанию-заказчика (buyer company)
+        const { data: buyer } = await supabase
+          .from('companies')
+          .select('id, name')
+          .eq('id', tokenPayload.c)
           .maybeSingle();
 
-        if (inv) {
-          setInvitation(inv);
-          if (inv.email && !email) setEmail(inv.email);
+        if (buyer) {
+          setBuyerCompany(buyer);
+        }
+
+        // 3. Загружаем приглашение (если есть)
+        try {
+          const { data: inv } = await supabase
+            .from('invitations')
+            .select('id, email, role, accepted, supplier_id')
+            .eq('supplier_id', tokenPayload.s)
+            .eq('accepted', false)
+            .maybeSingle();
+
+          if (inv) {
+            setInvitation(inv);
+            if (inv.email) setEmail((prev) => prev || inv.email);
+          }
+        } catch (invErr) {
+          console.warn('[RegisterSupplier] invitations lookup skipped:', invErr?.message);
         }
       } catch (err) {
         console.error('[RegisterSupplier] load error:', err);
@@ -134,7 +140,7 @@ export default function RegisterSupplier() {
 
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokenPayload?.s]);
+  }, [tokenPayload?.s, tokenPayload?.c]);
 
   // ─── Валидация ─────────────────────────────────────────
   const emailValid = useMemo(
@@ -167,7 +173,7 @@ export default function RegisterSupplier() {
       return;
     }
 
-    if (!tokenPayload?.s) {
+    if (!tokenPayload?.s || !tokenPayload?.c) {
       setError('Недействительная ссылка-приглашение');
       return;
     }
@@ -180,7 +186,9 @@ export default function RegisterSupplier() {
     setSubmitting(true);
 
     try {
+      // ============================================================
       // 1. Создаём auth-пользователя
+      // ============================================================
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
@@ -199,43 +207,49 @@ export default function RegisterSupplier() {
 
       const userId = authData.user.id;
 
-            // 2. Создаём компанию поставщика
-      const supplierCompanyName = companyName.trim() || `Поставщик ${email}`;
-      const normalizedName = normalizeName(supplierCompanyName);
+      // ============================================================
+      // 2. Компания поставщика = компания ЗАКАЗЧИКА (из токена)
+      // ============================================================
+      const buyerCompanyId = tokenPayload.c;
 
-      // 🆕 Защита от пустого normalized_name (например, "..." или "«»")
-      if (!normalizedName) {
-        throw new Error('Введите корректное название компании (буквы, цифры)');
-      }
-
-      // Проверяем, нет ли уже такой компании
-      let companyId;
-      const { data: existingCompany } = await supabase
+      const { data: buyerData, error: buyerErr } = await supabase
         .from('companies')
-        .select('id')
-        .eq('normalized_name', normalizedName)
+        .select('id, name')
+        .eq('id', buyerCompanyId)
         .maybeSingle();
 
-      if (existingCompany?.id) {
-        companyId = existingCompany.id;
-      } else {
-        const { data: newCompany, error: companyError } = await supabase
-          .from('companies')
-          .insert({
-            name: supplierCompanyName,
-            normalized_name: normalizedName,
-            is_company_owner: userId,
-            approved: true,
-            company_type: 'supplier',
-          })
-          .select('id')
-          .single();
-
-        if (companyError) throw companyError;
-        companyId = newCompany.id;
+      if (buyerErr || !buyerData) {
+        throw new Error('Компания-заказчик не найдена');
       }
 
-      // 3. Добавляем в company_users
+      const companyId = buyerData.id;
+      console.log('✅ Регистрируем поставщика в компании:', buyerData.name);
+
+      // ============================================================
+      // 3. Обновляем метаданные auth-пользователя
+      //    ⚠️ Может упасть, если включён "Confirm email"
+      // ============================================================
+      try {
+        const { error: metaErr } = await supabase.auth.updateUser({
+          data: {
+            company_id: companyId,
+            company_name: buyerData.name,
+            role: 'supplier_admin',
+            supplier_id: tokenPayload.s,
+          },
+        });
+        if (metaErr) {
+          console.warn('⚠️ updateUser failed (не критично):', metaErr.message);
+        } else {
+          console.log('✅ Метаданные обновлены');
+        }
+      } catch (metaErr) {
+        console.warn('⚠️ updateUser exception (не критично):', metaErr?.message);
+      }
+
+      // ============================================================
+      // 4. Добавляем в company_users
+      // ============================================================
       const { error: cuError } = await supabase
         .from('company_users')
         .insert({
@@ -248,37 +262,33 @@ export default function RegisterSupplier() {
         });
 
       if (cuError && cuError.code !== '23505') {
-        console.warn('company_users insert:', cuError);
+        console.warn('⚠️ company_users insert:', cuError);
       }
 
-      // 4. Обновляем метаданные
-      await supabase.auth.updateUser({
-        data: {
-          company_id: companyId,
-          company_name: supplierCompanyName,
-          role: 'supplier_admin',
-          supplier_id: tokenPayload.s,
-        },
-      });
+      // ============================================================
+      // 5. Привязываем user_id к записи suppliers (ГЛАВНЫЙ ШАГ)
+      // ============================================================
+      const { error: linkError } = await supabase
+        .from('suppliers')
+        .update({
+          user_id: userId,
+          email: email.trim().toLowerCase(),
+          phone: phone || supplier?.phone || null,
+          status: 'active',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', tokenPayload.s);
 
-      // 5. Привязываем supplier к user
-      const { data: bindResult, error: bindError } = await supabase.rpc(
-        'bind_supplier_to_user',
-        {
-          p_user_id: userId,
-          p_user_email: email.trim().toLowerCase(),
-          p_supplier_company_id: companyId,
-        }
-      );
-
-      if (bindError) {
-        console.error('bind_supplier_to_user error:', bindError);
-        // Не критично — привязка произойдёт при первом логине
-      } else if (bindResult?.success) {
-        console.log('✅ Поставщик привязан:', bindResult);
+      if (linkError) {
+        console.error('❌ Не удалось привязать supplier.user_id:', linkError);
+        // Не бросаем — пользователь всё равно создан
+      } else {
+        console.log('✅ supplier.user_id привязан к', userId);
       }
 
+      // ============================================================
       // 6. Помечаем приглашение принятым
+      // ============================================================
       if (invitation?.id) {
         await supabase
           .from('invitations')
@@ -288,7 +298,9 @@ export default function RegisterSupplier() {
 
       setSuccess(true);
 
-      // 7. Через 2 секунды редиректим на главную
+      // ============================================================
+      // 7. Через 2.5 сек редирект на главную
+      // ============================================================
       setTimeout(() => {
         window.location.href = '/';
       }, 2500);
@@ -328,6 +340,17 @@ export default function RegisterSupplier() {
         <ErrorCard
           title="Поставщик не найден"
           message="Запись поставщика удалена или ссылка недействительна."
+        />
+      </Wrapper>
+    );
+  }
+
+  if (!loadingInvitation && !buyerCompany) {
+    return (
+      <Wrapper>
+        <ErrorCard
+          title="Компания-заказчик не найдена"
+          message="Компания, отправившая приглашение, не существует. Обратитесь к менеджеру по закупкам."
         />
       </Wrapper>
     );
@@ -393,7 +416,13 @@ export default function RegisterSupplier() {
           <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
             <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
             <div className="text-xs text-blue-900 dark:text-blue-100">
-              Вы приглашены как <strong>администратор поставщика</strong>.
+              Вы приглашены как <strong>администратор поставщика</strong>
+              {buyerCompany?.name && (
+                <>
+                  {' '}в компанию <strong>{buyerCompany.name}</strong>
+                </>
+              )}
+              .
               {supplier?.inn && (
                 <span className="block mt-0.5">ИНН: {supplier.inn}</span>
               )}

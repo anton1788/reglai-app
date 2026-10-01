@@ -382,6 +382,43 @@ const Navbar = ({
   const getNavItems = () => {
     const items = [];
 
+    // ============================================================
+    // 🏭 ПОСТАВЩИК — отдельное меню, БЕЗ общих пунктов
+    // ============================================================
+    if (userRole === 'supplier_admin' || userRole === 'supplier_manager') {
+      items.push({
+        id: 'supplierDashboard',
+        label: 'Дашборд',
+        icon: Gauge,
+        path: '/supplier-dashboard',
+      });
+      items.push({
+        id: 'rfqList',
+        label: `RFQ${rfqCartCount > 0 ? ` (${rfqCartCount})` : ''}`,
+        icon: MessageSquare,
+        path: '/rfq',
+      });
+      items.push({
+        id: 'purchaseOrders',
+        label: 'Заказы',
+        icon: ShoppingBag,
+        path: '/purchase-orders',
+      });
+      items.push({
+        id: 'supplierPriceList',
+        label: 'Прайс-лист',
+        icon: Layers,
+        path: '/supplier/price-list',
+      });
+      items.push({
+        id: 'profile',
+        label: 'Профиль',
+        icon: User,
+        path: '/profile',
+      });
+      return items;   // ← ВАЖНО: выходим, поставщик не видит чужих разделов
+    }
+
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/', always: true });
 
     // 🆕 Проектировщик НЕ видит пункт "Заявки"
@@ -407,7 +444,7 @@ const Navbar = ({
     }
 
     // ============================================================
-    // 🏢 БЛОК ПОСТАВЩИКОВ (B2B)
+    // 🏢 БЛОК ПОСТАВЩИКОВ (B2B) — только для закупщиков
     // ============================================================
     const canSeeSuppliers = [
       'procurement_manager', 'supply_admin', 'manager', 'director', 'super_admin',
@@ -456,15 +493,6 @@ const Navbar = ({
         label: 'Закупки',
         icon: Gauge,
         path: '/procurement'
-      });
-    }
-
-    if (userRole === 'supplier_admin' || userRole === 'supplier_manager') {
-      items.push({
-        id: 'supplierDashboard',
-        label: 'Мой дашборд',
-        icon: Gauge,
-        path: '/supplier-dashboard'
       });
     }
 
@@ -904,7 +932,7 @@ const Navbar = ({
                   onClick={onOpenAIAssistant}
                   className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
                   aria-label="AI-ассистент"
-                  title="AI-ассистент (Ctrl+/)"
+                  title="AI-ассистент (Ctrl+/"
                 >
                   <Bot className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-[#4A6572] dark:group-hover:text-[#F9AA33] transition-colors" />
                   <span className="absolute top-1 right-1 flex h-2 w-2">
@@ -1114,7 +1142,9 @@ const Navbar = ({
               {navItems.slice(0, 8).map((item) => {
                 const Icon = item.icon;
                 const isActive = currentPage === item.id ||
-                  (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history'));
+                  (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
+                  (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard') ||
+                  (item.id === 'supplierPriceList' && currentPage === 'supplierPriceList');
 
                 let badgeCount = 0;
                 let badgeColor = 'bg-amber-500';
@@ -1225,6 +1255,7 @@ const Navbar = ({
                     (item.id === 'purchaseOrders' && (currentPage === 'purchaseOrders' || currentPage === 'purchaseOrderCreate' || currentPage === 'purchaseOrderDetails')) ||
                     (item.id === 'procurementDashboard' && currentPage === 'procurementDashboard') ||
                     (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard') ||
+                    (item.id === 'supplierPriceList' && currentPage === 'supplierPriceList') ||
                     (item.id === 'priceCatalog' && currentPage === 'priceCatalog');
 
                   let badgeCount = 0;
@@ -1421,7 +1452,7 @@ const Navbar = ({
                       Ассистент
                     </button>
                   )}
-                  {userRole !== 'designer' && (
+                  {userRole !== 'designer' && userRole !== 'supplier_admin' && userRole !== 'supplier_manager' && (
                     <button
                       onClick={() => { onNavigate?.('/applications/new'); setIsMobileMenuOpen(false); }}
                       className="flex items-center gap-2 px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 transition-colors"
@@ -1439,7 +1470,7 @@ const Navbar = ({
                       Пригласить
                     </button>
                   )}
-                  {userRole !== 'designer' && (
+                  {userRole !== 'designer' && userRole !== 'supplier_admin' && userRole !== 'supplier_manager' && (
                     <button
                       onClick={() => { onNavigate?.('/warehouse'); setIsMobileMenuOpen(false); }}
                       className="flex items-center gap-2 px-3 py-2 text-xs bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-100 transition-colors"
@@ -1448,13 +1479,15 @@ const Navbar = ({
                       Склад
                     </button>
                   )}
-                  <button
-                    onClick={() => { onNavigate?.('/documents'); setIsMobileMenuOpen(false); }}
-                    className="flex items-center gap-2 px-3 py-2 text-xs bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-100 transition-colors"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    Документ
-                  </button>
+                  {userRole !== 'supplier_admin' && userRole !== 'supplier_manager' && (
+                    <button
+                      onClick={() => { onNavigate?.('/documents'); setIsMobileMenuOpen(false); }}
+                      className="flex items-center gap-2 px-3 py-2 text-xs bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-100 transition-colors"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      Документ
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1476,6 +1509,7 @@ const Navbar = ({
                     (item.id === 'purchaseOrders' && (currentPage === 'purchaseOrders' || currentPage === 'purchaseOrderCreate' || currentPage === 'purchaseOrderDetails')) ||
                     (item.id === 'procurementDashboard' && currentPage === 'procurementDashboard') ||
                     (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard') ||
+                    (item.id === 'supplierPriceList' && currentPage === 'supplierPriceList') ||
                     (item.id === 'priceCatalog' && currentPage === 'priceCatalog');
 
                   let badgeCount = 0;

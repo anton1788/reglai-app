@@ -31,6 +31,7 @@ import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import { useInView } from 'react-intersection-observer';
 import RoleDashboard from './components/RoleDashboard';
 import DesignerDashboard from './components/DesignerDashboard/DesignerDashboard';
+import RegisterSupplier from './components/RegisterSupplier';
 // После других импортов компонентов
 import AIAssistant from './components/AIAssistant/AIAssistant';
 import {
@@ -1364,31 +1365,74 @@ useEffect(() => {
     loadClientId();
 }, [user, userCompanyId, userRole]);
 
-// 🏢 Загрузка supplierId для ролей поставщика
+// 🏢 Загрузка supplierId для ролей поставщика (с fallback по email и метаданным)
 useEffect(() => {
   const loadSupplierId = async () => {
     if (!user?.id) return;
     if (userRole !== 'supplier_admin' && userRole !== 'supplier_manager') return;
 
+    console.log('🔍 [loadSupplierId] Загрузка для user:', user.id, 'role:', userRole);
+
     try {
-      const { data } = await supabase
+      // 1️⃣ Основной путь — по user_id
+      let { data, error } = await supabase
         .from('suppliers')
-        .select('id')
+        .select('id, name, user_id, email, status')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      setCurrentSupplierId(data?.id || null);
-      if (!data?.id) {
-        console.warn('⚠️ Поставщик не привязан к user_id. Проверьте таблицу suppliers.');
+      if (error && error.code !== 'PGRST116') {
+        console.warn('⚠️ [loadSupplierId] Ошибка поиска по user_id:', error.message);
+      }
+
+      // 2️⃣ Fallback — по email
+      if (!data?.id && user.email) {
+        console.log('🔄 [loadSupplierId] Fallback: ищем по email:', user.email);
+        const { data: byEmail } = await supabase
+          .from('suppliers')
+          .select('id, name, user_id, email, status')
+          .eq('email', user.email.toLowerCase().trim())
+          .maybeSingle();
+
+        if (byEmail?.id) {
+          data = byEmail;
+          // 🔗 Привязываем user_id, чтобы в следующий раз не искать
+          if (!byEmail.user_id) {
+            console.log('🔗 [loadSupplierId] Привязываем supplier.user_id =', user.id);
+            await supabase
+              .from('suppliers')
+              .update({ user_id: user.id })
+              .eq('id', byEmail.id);
+          }
+        }
+      }
+
+      // 3️⃣ Fallback — по метаданным
+      if (!data?.id && user.user_metadata?.supplier_id) {
+        console.log('🔄 [loadSupplierId] Fallback: ищем по supplier_id из метаданных');
+        const { data: byMeta } = await supabase
+          .from('suppliers')
+          .select('id, name, user_id, email, status')
+          .eq('id', user.user_metadata.supplier_id)
+          .maybeSingle();
+        if (byMeta?.id) data = byMeta;
+      }
+
+      if (data?.id) {
+        console.log('✅ [loadSupplierId] Поставщик найден:', data.id, data.name);
+        setCurrentSupplierId(data.id);
+      } else {
+        console.error('❌ [loadSupplierId] Поставщик НЕ найден ни по user_id, ни по email, ни по метаданным');
+        setCurrentSupplierId(null);
       }
     } catch (err) {
-      console.error('Ошибка загрузки supplierId:', err);
+      console.error('💥 [loadSupplierId] Критическая ошибка:', err);
       setCurrentSupplierId(null);
     }
   };
 
   loadSupplierId();
-}, [user?.id, userRole, supabase]);
+}, [user?.id, user?.email, userRole, supabase]);
 
 // 📊 Load NPS Responses
 // ✅ СТАЛО
@@ -7667,16 +7711,21 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
 };
 
 // ─────────────────────────────────────────────────────────
-  // 📝 РЕГИСТРАЦИЯ ЗАКАЗЧИКА ПО ПРИГЛАШЕНИЮ
-  // ─────────────────────────────────────────────────────────
-    const urlParams = new URLSearchParams(window.location.search);
-  const inviteParam = urlParams.get('invite');
+// 📝 РЕГИСТРАЦИЯ ПО ПРИГЛАШЕНИЮ
+// ─────────────────────────────────────────────────────────
+const urlParams = new URLSearchParams(window.location.search);
+const inviteParam = urlParams.get('invite');
+const supplierTokenParam = urlParams.get('token');
 
-  // ✅ Если есть параметр invite - ВСЕГДА показываем регистрацию
-  // Это позволяет заказчику перейти по ссылке даже если руководитель уже залогинен
-  if (inviteParam) {
-    return <ClientRegister />;
-  }
+// 🏭 Поставщик по токену — ЛЮБОЙ URL с ?token=
+if (supplierTokenParam) {
+  return <RegisterSupplier />;
+}
+
+// 👤 Заказчик по ?invite=
+if (inviteParam) {
+  return <ClientRegister />;
+}
 
   // ─────────────────────────────────────────────────────────
   // 🔐 МАРШРУТ ВОССТАНОВЛЕНИЯ ПАРОЛЯ
@@ -7790,6 +7839,10 @@ const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
           else if (path === '/purchase-orders') setCurrentView('purchaseOrders');
           else if (path === '/procurement') setCurrentView('procurementDashboard');
           else if (path === '/supplier-dashboard') setCurrentView('supplierDashboard');
+          else if (path === '/supplier/price-list') {
+  setSelectedSupplierId(currentSupplierId);
+  setCurrentView('supplierPriceList');
+}
           else if (path === '/price-catalog') setCurrentView('priceCatalog');
         }}
         currentPage={currentView}
@@ -9018,14 +9071,49 @@ onClearFilters={handleClearFilters}
       }}
     />
   ) : (
-    <div className="max-w-2xl mx-auto p-8 text-center">
-      <div className="text-5xl mb-4">🏭</div>
-      <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
-        Поставщик не привязан
-      </h2>
-      <p className="text-gray-600 dark:text-gray-400">
-        Ваш аккаунт не связан ни с одним поставщиком. Обратитесь к администратору.
-      </p>
+    <div className="max-w-2xl mx-auto p-8">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 text-center">
+        <div className="text-5xl mb-4">🏭</div>
+        <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
+          Профиль поставщика не найден
+        </h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">
+          Ваш аккаунт не связан ни с одним поставщиком в системе.
+        </p>
+
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-4 text-left text-sm">
+          <p className="font-semibold text-amber-900 dark:text-amber-200 mb-2">
+            Что проверить администратору:
+          </p>
+          <ul className="list-disc list-inside space-y-1 text-amber-800 dark:text-amber-300">
+            <li>
+              Есть ли запись в таблице <code>suppliers</code> с{' '}
+              <code>user_id</code> = <code className="text-xs">{user?.id}</code>
+            </li>
+            <li>
+              Или с <code>email</code> = <code>{user?.email}</code>
+            </li>
+          </ul>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-3">
+            💡 Совет: нажмите «Перезагрузить» — часто помогает, если запись только что создана.
+          </p>
+        </div>
+
+        <div className="flex gap-3 justify-center">
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition"
+          >
+            🔄 Перезагрузить
+          </button>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+          >
+            Выйти
+          </button>
+        </div>
+      </div>
     </div>
   )
 )}
@@ -9047,6 +9135,7 @@ onClearFilters={handleClearFilters}
     }}
   />
 )}
+
 {/* 🆕 ПАПКА ОБЪЕКТА (Object Hub) */}
 {currentView === 'object-hub' && selectedObjectId && (
   <ObjectHub
@@ -9067,6 +9156,7 @@ onClearFilters={handleClearFilters}
     }}
   />
 )}
+
 {/* 🛡️ FALLBACK: Если ни одно условие не сработало */}
 {!['create', 'crm-sales', 'managerDashboard', 'dashboard', 'accountantDashboard', 'designerDashboard',
   'received', 'audit', 'calendar', 'inwork', 'confirmation', 'history', 'readyToIssue', 
