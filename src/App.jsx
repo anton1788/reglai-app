@@ -202,7 +202,7 @@ import {
   Moon, Sun, CheckCircle, Briefcase, Home, Clock, Archive, MessageCircle, Ban, Menu,
   HelpCircle, ArrowRight, Info, Loader2, WifiOff, Wifi, Trash2, ShoppingCart,
   Undo2, Sparkles, RefreshCw, Code, DollarSign, UserPlus, Image, Camera, ScanLine, Warehouse,
-  Scale, FileCheck
+  Scale, FileCheck, Lock, Unlock
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -4981,6 +4981,127 @@ const handleReturnToStock = useCallback(async (localMaterials, application, reas
   }
 }, [user, userCompanyId, supabase, showNotification, setApplications, isAdminMode]);
 
+// ============================================================
+// 🔒 ЗАКРЫТИЕ ЗАЯВКИ ДЛЯ ВОЗВРАТОВ
+// ============================================================
+const handleCloseReturns = useCallback(async (application) => {
+  if (!application?.id) {
+    showNotification('Ошибка: заявка не найдена', 'error');
+    return;
+  }
+
+  if (!window.confirm(t('closeReturnsConfirm') || 'Закрыть заявку для возвратов?')) {
+    return;
+  }
+
+  const cleanCompanyId = getSafeCompanyId(userCompanyId);
+  if (!cleanCompanyId) {
+    showNotification('Ошибка: компания не найдена', 'error');
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('close_application_returns', {
+      p_application_id: application.id,
+      p_company_id: cleanCompanyId,
+      p_user_id: user?.id,
+      p_user_email: user?.email,
+    });
+
+    if (error) {
+      console.error('❌ [CLOSE RETURNS] RPC ошибка:', error);
+      showNotification(`Ошибка: ${error.message}`, 'error');
+      return;
+    }
+
+    if (!data?.success) {
+      showNotification(data?.error || 'Не удалось закрыть заявку', 'error');
+      return;
+    }
+
+    setApplications(prev => prev.map(app =>
+      app.id === application.id
+        ? {
+            ...app,
+            status: APPLICATION_STATUS.CLOSED,
+            returns_closed: true,
+            returns_closed_at: new Date().toISOString(),
+          }
+        : app
+    ));
+
+    cacheManager.delete('applications', `applications_${cleanCompanyId}_page_1`);
+    cacheManager.delete('analytics', `analytics_${cleanCompanyId}_${isAdminMode}`);
+
+    showNotification('🔒 Заявка закрыта', 'success');
+  } catch (err) {
+    console.error('❌ [CLOSE RETURNS] Критическая ошибка:', err);
+    showNotification('Ошибка: ' + err.message, 'error');
+  }
+}, [user, userCompanyId, supabase, showNotification, setApplications, isAdminMode, t]);
+
+// ============================================================
+// 🔓 ПЕРЕОТКРЫТИЕ ЗАЯВКИ (только снабженец/менеджер)
+// ============================================================
+const handleReopenReturns = useCallback(async (application) => {
+  if (!application?.id) {
+    showNotification('Ошибка: заявка не найдена', 'error');
+    return;
+  }
+
+  if (userRole !== 'supply_admin' && userRole !== 'manager' && userRole !== 'director') {
+    showNotification('Только снабженец может переоткрыть заявку', 'error');
+    return;
+  }
+
+  if (!window.confirm(t('returnsReopenConfirm') || 'Переоткрыть заявку для возвратов?')) {
+    return;
+  }
+
+  const cleanCompanyId = getSafeCompanyId(userCompanyId);
+  if (!cleanCompanyId) {
+    showNotification('Ошибка: компания не найдена', 'error');
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('reopen_application_returns', {
+      p_application_id: application.id,
+      p_company_id: cleanCompanyId,
+      p_user_id: user?.id,
+      p_user_email: user?.email,
+    });
+
+    if (error) {
+      console.error('❌ [REOPEN RETURNS] RPC ошибка:', error);
+      showNotification(`Ошибка: ${error.message}`, 'error');
+      return;
+    }
+
+    if (!data?.success) {
+      showNotification(data?.error || 'Не удалось переоткрыть заявку', 'error');
+      return;
+    }
+
+    setApplications(prev => prev.map(app =>
+      app.id === application.id
+        ? {
+            ...app,
+            status: APPLICATION_STATUS.RECEIVED,
+            returns_closed: false,
+            returns_reopened_at: new Date().toISOString(),
+          }
+        : app
+    ));
+
+    cacheManager.delete('applications', `applications_${cleanCompanyId}_page_1`);
+    showNotification('🔓 Заявка переоткрыта', 'success');
+  } catch (err) {
+    console.error('❌ [REOPEN RETURNS] Критическая ошибка:', err);
+    showNotification('Ошибка: ' + err.message, 'error');
+  }
+}, [user, userCompanyId, userRole, supabase, showNotification, setApplications]);
+
   // ─────────────────────────────────────────────────────────
   // 🔐 ADMIN FUNCTIONS
   // ─────────────────────────────────────────────────────────
@@ -8311,6 +8432,8 @@ if (inviteParam) {
             onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
             onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
             onOpenReceiveModal={openReceiveModal}
+            onCloseReturns={handleCloseReturns}
+            onReopenReturns={handleReopenReturns}
             onCancelApplication={cancelApplication}
             onAddComment={addComment}
             onToggleComments={(appId) => setShowComments(prev => ({
@@ -8460,6 +8583,8 @@ if (inviteParam) {
       onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
       onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
       onOpenReceiveModal={openReceiveModal}
+      onCloseReturns={handleCloseReturns}
+      onReopenReturns={handleReopenReturns}
       onCancelApplication={cancelApplication}
       onAddComment={addComment}
       onToggleComments={(appId) => setShowComments(prev => ({
@@ -8520,6 +8645,8 @@ onClearFilters={handleClearFilters}
             onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
             onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
             onOpenReceiveModal={openReceiveModal}
+            onCloseReturns={handleCloseReturns}
+            onReopenReturns={handleReopenReturns}
             onCancelApplication={cancelApplication}
             onAddComment={addComment}
             onToggleComments={(appId) => setShowComments(prev => ({
@@ -8572,6 +8699,8 @@ onClearFilters={handleClearFilters}
             onDownloadPDF={downloadPDF}
             onDownloadXLSX={downloadXLSXFile}
             onOpenReceiveModal={openReceiveModal}
+            onCloseReturns={handleCloseReturns}
+            onReopenReturns={handleReopenReturns}
             onCancelApplication={cancelApplication}
             onAddComment={addComment}
             onToggleComments={(appId) => setShowComments(prev => ({
@@ -8632,6 +8761,8 @@ onClearFilters={handleClearFilters}
     onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
     onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
     onOpenReceiveModal={openReceiveModal}
+    onCloseReturns={handleCloseReturns}
+    onReopenReturns={handleReopenReturns}
     onCancelApplication={cancelApplication}
     onAddComment={addComment}
     onToggleComments={(appId) => setShowComments(prev => ({
@@ -9336,6 +9467,8 @@ onClearFilters={handleClearFilters}
             onDownloadPDF={(app) => downloadPDF(app, t, language, userCompany, showNotification, setIsExportingPDF)}
             onDownloadXLSX={(app) => downloadXLSXFile(app, t, language, showNotification, setIsExportingXLSX)}
             onOpenReceiveModal={openReceiveModal}
+            onCloseReturns={handleCloseReturns}
+            onReopenReturns={handleReopenReturns}
             onCancelApplication={cancelApplication}
             onAddComment={addComment}
             onToggleComments={(appId) => setShowComments(prev => ({

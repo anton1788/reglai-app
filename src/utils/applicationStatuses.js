@@ -13,6 +13,7 @@ export const APPLICATION_STATUS = {
   READY_FOR_ISSUE: 'ready_for_issue',
   PENDING_MASTER_CONFIRMATION: 'pending_master_confirmation',
   RECEIVED: 'received',
+  CLOSED: 'closed',                        // 🆕 закрыта для возвратов
   REJECTED: 'rejected',
   CANCELED: 'canceled',
   CONSOLIDATED: 'consolidated'
@@ -22,7 +23,7 @@ export const ITEM_STATUS = {
   PENDING: 'pending',
   ON_WAREHOUSE: 'on_warehouse',
   SENT_TO_MASTER: 'sent_to_master',
-  PARTIAL_SENT: 'partial_sent',         // 🆕 для частичной отправки
+  PARTIAL_SENT: 'partial_sent',
   PARTIAL_CONFIRMED: 'partial_confirmed',
   CONFIRMED: 'confirmed',
   REJECTED: 'rejected'
@@ -41,6 +42,7 @@ export const STATUS_I18N = {
   [APPLICATION_STATUS.READY_FOR_ISSUE]: 'statusReadyForIssue',
   [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 'statusAwaitingConfirmation',
   [APPLICATION_STATUS.RECEIVED]: 'statusReceived',
+  [APPLICATION_STATUS.CLOSED]: 'statusClosed',              // 🆕
   [APPLICATION_STATUS.REJECTED]: 'statusRejected',
   [APPLICATION_STATUS.CANCELED]: 'statusCanceled',
   [APPLICATION_STATUS.CONSOLIDATED]: 'statusConsolidated',
@@ -66,6 +68,7 @@ export const STATUS_COLORS = {
   [APPLICATION_STATUS.READY_FOR_ISSUE]: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200',
   [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200',
   [APPLICATION_STATUS.RECEIVED]: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200',
+  [APPLICATION_STATUS.CLOSED]: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600', // 🆕
   [APPLICATION_STATUS.REJECTED]: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200',
   [APPLICATION_STATUS.CANCELED]: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200',
   [APPLICATION_STATUS.CONSOLIDATED]: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
@@ -89,6 +92,7 @@ export const STATUS_ICONS = {
   [APPLICATION_STATUS.READY_FOR_ISSUE]: 'PackageCheck',
   [APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION]: 'UserCheck',
   [APPLICATION_STATUS.RECEIVED]: 'CheckCircle',
+  [APPLICATION_STATUS.CLOSED]: 'Lock',                        // 🆕
   [APPLICATION_STATUS.REJECTED]: 'ShieldX',
   [APPLICATION_STATUS.CANCELED]: 'XCircle',
   [APPLICATION_STATUS.CONSOLIDATED]: 'Layers',
@@ -112,9 +116,10 @@ export const STATUS_PRIORITY = {
   [APPLICATION_STATUS.READY_FOR_ISSUE]: 8,
   [APPLICATION_STATUS.APPROVED]: 9,
   [APPLICATION_STATUS.RECEIVED]: 10,
-  [APPLICATION_STATUS.REJECTED]: 11,
-  [APPLICATION_STATUS.CANCELED]: 12,
-  [APPLICATION_STATUS.CONSOLIDATED]: 13
+  [APPLICATION_STATUS.CLOSED]: 11,                           // 🆕
+  [APPLICATION_STATUS.REJECTED]: 12,
+  [APPLICATION_STATUS.CANCELED]: 13,
+  [APPLICATION_STATUS.CONSOLIDATED]: 14
 };
 
 // ============ ПРОВЕРКИ СТАТУСОВ ============
@@ -138,6 +143,7 @@ export const isApplicationActive = (status) => {
 export const isApplicationCompleted = (status) => {
   const completedStatuses = [
     APPLICATION_STATUS.RECEIVED,
+    APPLICATION_STATUS.CLOSED,                 // 🆕
     APPLICATION_STATUS.REJECTED,
     APPLICATION_STATUS.CANCELED,
     APPLICATION_STATUS.CONSOLIDATED
@@ -147,8 +153,6 @@ export const isApplicationCompleted = (status) => {
 
 /**
  * Требует ли заявка подтверждения мастером?
- * ✅ ТЕПЕРЬ включаем PARTIAL_RECEIVED — чтобы мастер мог вернуться
- *    и подтвердить остатки, если снабженец что-то довезёт.
  */
 export const requiresMasterConfirmation = (status) => {
   return status === APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION ||
@@ -229,6 +233,13 @@ export const canTransitionTo = (fromStatus, toStatus) => {
       APPLICATION_STATUS.ADMIN_PROCESSING,
       APPLICATION_STATUS.CANCELED
     ],
+    [APPLICATION_STATUS.RECEIVED]: [                          // 🆕
+      APPLICATION_STATUS.CLOSED,
+      APPLICATION_STATUS.CANCELED
+    ],
+    [APPLICATION_STATUS.CLOSED]: [                            // 🆕
+      APPLICATION_STATUS.RECEIVED
+    ],
     [APPLICATION_STATUS.REJECTED]: [
       APPLICATION_STATUS.PENDING
     ]
@@ -284,6 +295,13 @@ export const getNextAvailableStatuses = (currentStatus) => {
       { status: APPLICATION_STATUS.RECEIVED, label: 'Завершить' },
       { status: APPLICATION_STATUS.ADMIN_PROCESSING, label: 'Вернуть в обработку' },
       { status: APPLICATION_STATUS.CANCELED, label: 'Отменить' }
+    ],
+    [APPLICATION_STATUS.RECEIVED]: [                           // 🆕
+      { status: APPLICATION_STATUS.CLOSED, label: 'Закрыть для возвратов' },
+      { status: APPLICATION_STATUS.CANCELED, label: 'Отменить' }
+    ],
+    [APPLICATION_STATUS.CLOSED]: [                             // 🆕
+      { status: APPLICATION_STATUS.RECEIVED, label: 'Переоткрыть для возвратов' }
     ]
   };
 
@@ -305,6 +323,7 @@ export const getStatusText = (status, language = 'ru') => {
       statusReadyForIssue: 'Готово к выдаче',
       statusAwaitingConfirmation: 'Ожидает подтверждения мастера',
       statusReceived: 'Получено',
+      statusClosed: 'Закрыта',                                 // 🆕
       statusRejected: 'Отклонено',
       statusCanceled: 'Отменено',
       statusConsolidated: 'Объединено',
@@ -326,6 +345,7 @@ export const getStatusText = (status, language = 'ru') => {
       statusReadyForIssue: 'Ready for Issue',
       statusAwaitingConfirmation: 'Awaiting Master Confirmation',
       statusReceived: 'Received',
+      statusClosed: 'Closed',                                  // 🆕
       statusRejected: 'Rejected',
       statusCanceled: 'Canceled',
       statusConsolidated: 'Consolidated',
@@ -360,15 +380,6 @@ export const getStatusPriority = (status) => {
 // 🔧 ФУНКЦИИ ДЛЯ РАБОТЫ С ВЫДАЧЕЙ МАТЕРИАЛОВ
 // ============================================================
 
-/**
- * ✅ ИСПРАВЛЕНО: проверяем только фактическое наличие на складе,
- *    НЕ сравниваем с quantity — иначе недопоставка вечно висит в "готовых к выдаче".
- *
- * Логика:
- *  - материал есть на складе (supplier_received_quantity > 0)
- *  - и ещё не всё отдано мастеру (sent_to_master_quantity < supplier_received_quantity)
- *  - и мастер ещё не подтвердил полностью (received < sent_to_master_quantity)
- */
 export const hasMaterialsReadyToIssue = (application) => {
   if (!application?.materials) return false;
 
@@ -377,20 +388,14 @@ export const hasMaterialsReadyToIssue = (application) => {
     const alreadySent = Number(m.sent_to_master_quantity) || 0;
     const received = Number(m.received) || 0;
 
-    // Есть что выдать?
     if (onWarehouse <= 0) return false;
-    // Уже всё выдали мастеру?
     if (alreadySent >= onWarehouse) return false;
-    // Мастер уже получил всё, что ему отправили?
     if (received >= alreadySent && alreadySent > 0) return false;
 
     return true;
   });
 };
 
-/**
- * ✅ ИСПРАВЛЕНО: убрана проверка received >= quantity
- */
 export const getTotalAvailableForIssue = (application) => {
   if (!application?.materials) return 0;
 
@@ -399,16 +404,12 @@ export const getTotalAvailableForIssue = (application) => {
     const alreadySent = Number(m.sent_to_master_quantity) || 0;
     const received = Number(m.received) || 0;
 
-    // Если мастер уже всё получил, что ему отправили — не считаем
     if (alreadySent > 0 && received >= alreadySent) return total;
 
     return total + Math.max(0, onWarehouse - alreadySent);
   }, 0);
 };
 
-/**
- * ✅ ИСПРАВЛЕНО: убрана проверка received >= quantity
- */
 export const getMaterialsReadyToIssue = (application) => {
   if (!application?.materials) return [];
 
@@ -433,10 +434,6 @@ export const getMaterialsReadyToIssue = (application) => {
     }));
 };
 
-/**
- * ✅ ИСПРАВЛЕНО: заявка считается полностью подтверждённой, если
- *    мастер получил ВСЁ, что ему выдали (не всё, что заказано!)
- */
 export const isFullyConfirmed = (application) => {
   if (!application?.materials) return false;
 
@@ -444,10 +441,7 @@ export const isFullyConfirmed = (application) => {
     const sentToMaster = Number(m.sent_to_master_quantity) || 0;
     const received = Number(m.received) || 0;
 
-    // Мастеру ничего не отправляли — пропускаем
     if (sentToMaster === 0) return true;
-
-    // Мастер получил всё, что было отправлено
     return received >= sentToMaster;
   });
 };
@@ -458,18 +452,13 @@ export const hasPartialConfirmation = (application) => {
   return application.materials.some(m => {
     const sentToMaster = Number(m.sent_to_master_quantity) || 0;
     const received = Number(m.received) || 0;
-    // Частично — если что-то отправили, но мастер получил меньше
     return sentToMaster > 0 && received > 0 && received < sentToMaster;
   });
 };
 
-/**
- * ✅ ИСПРАВЛЕНО: логика определения статуса учитывает "недопоставку"
- */
 export const getNextStatusForApplication = (application) => {
   if (!application?.materials) return application.status;
 
-  // Всё, что мастеру выдали — он подтвердил?
   const masterReceivedAll = application.materials.every(m => {
     const sent = Number(m.sent_to_master_quantity) || 0;
     const received = Number(m.received) || 0;
@@ -485,17 +474,14 @@ export const getNextStatusForApplication = (application) => {
     return (Number(m.supplier_received_quantity) || 0) > 0;
   });
 
-  // Всё, что было отправлено мастеру — подтверждено
   if (masterReceivedAll && anySent) {
     return APPLICATION_STATUS.RECEIVED;
   }
 
-  // Мастер что-то получил, но не всё выданное
   if (anySent) {
     return APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION;
   }
 
-  // Ничего не отправляли — но что-то есть на складе
   if (anyOnWarehouse) {
     return APPLICATION_STATUS.SUPPLIER_RECEIVED;
   }
@@ -517,6 +503,8 @@ export const STATUS_ALIASES = {
   'confirmed': APPLICATION_STATUS.RECEIVED,
   'consolidated': APPLICATION_STATUS.CONSOLIDATED,
   'merged': APPLICATION_STATUS.CONSOLIDATED,
+  'closed': APPLICATION_STATUS.CLOSED,                       // 🆕
+  'returns_closed': APPLICATION_STATUS.CLOSED                // 🆕
 };
 
 export const normalizeStatus = (status) => {

@@ -6,7 +6,8 @@ import {
   CheckCircle, AlertCircle, AlertTriangle, Clock, Archive,
   X, ArrowLeft, Loader2, ShoppingCart, ChevronDown, ChevronUp,
   Sparkles, Undo2, Info, RefreshCw, Mail, XCircle, Warehouse,
-  Send, CheckCircle2, Hourglass, Boxes, Save, Camera, ScanLine
+  Send, CheckCircle2, Hourglass, Boxes, Save, Camera, ScanLine,
+  Lock, Unlock
 } from 'lucide-react';
 import CommentsSection from './CommentsSection';
 import MobileMaterialCard from './MobileMaterialCard';
@@ -59,6 +60,12 @@ const STATUS_CONFIG = {
     labelKey: STATUS_I18N[APPLICATION_STATUS.RECEIVED]?.ru || 'statusReceived',
     icon: STATUS_ICONS[APPLICATION_STATUS.RECEIVED] || CheckCircle2,
     colorClass: STATUS_COLORS[APPLICATION_STATUS.RECEIVED] || 'text-green-800 bg-green-200'
+  },
+  // 🆕 ЗАКРЫТА
+  [APPLICATION_STATUS.CLOSED]: {
+    labelKey: STATUS_I18N[APPLICATION_STATUS.CLOSED]?.ru || 'statusClosed',
+    icon: Lock,
+    colorClass: STATUS_COLORS[APPLICATION_STATUS.CLOSED] || 'text-slate-700 bg-slate-200 dark:bg-slate-700 dark:text-slate-200'
   },
   [APPLICATION_STATUS.PARTIAL_RECEIVED]: {
     labelKey: STATUS_I18N[APPLICATION_STATUS.PARTIAL_RECEIVED]?.ru || 'statusPartialReceived',
@@ -138,7 +145,6 @@ const styles = `
 .application-card:hover { transform: translateY(-2px); box-shadow: 0 12px 35px rgba(0,0,0,0.12); }
 .application-card:active { transform: translateY(0); }
 
-/* МОБИЛЬНЫЕ СТИЛИ */
 @media (max-width: 640px) {
   .touch-target { min-height: 44px; min-width: 44px; }
   .scrollable-content { -webkit-overflow-scrolling: touch; max-height: 200px; overflow-y: auto; }
@@ -151,29 +157,15 @@ const styles = `
   .mobile-material-item { padding: 10px 12px; }
 }
 
-/* ПЛАНШЕТЫ */
 @media (min-width: 641px) and (max-width: 1024px) {
   .application-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 }
 
-/* ДЕСКТОПНАЯ ТАБЛИЦА */
 @media (min-width: 1025px) {
-  .desktop-table-header {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background: rgba(255,255,255,0.9);
-    backdrop-filter: blur(8px);
-  }
-  .dark .desktop-table-header {
-    background: rgba(31,41,55,0.9);
-  }
-  .desktop-row-expanded {
-    background: rgba(59,130,246,0.03);
-  }
-  .dark .desktop-row-expanded {
-    background: rgba(59,130,246,0.06);
-  }
+  .desktop-table-header { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,0.9); backdrop-filter: blur(8px); }
+  .dark .desktop-table-header { background: rgba(31,41,55,0.9); }
+  .desktop-row-expanded { background: rgba(59,130,246,0.03); }
+  .dark .desktop-row-expanded { background: rgba(59,130,246,0.06); }
 }
 `;
 
@@ -213,10 +205,13 @@ const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num);
 
 /**
  * ✅ ЕДИНАЯ ЛОГИКА: есть ли что возвращать на склад
- *    received > returned_to_stock_quantity и received > 0
+ *    + проверка что заявка НЕ закрыта
  */
 const canReturnToStock = (application) => {
   if (!application?.materials?.length) return false;
+  // 🆕 заявка закрыта — возврат запрещён
+  if (application.returns_closed === true) return false;
+  if (application.status === APPLICATION_STATUS.CLOSED) return false;
   return application.materials.some(m => {
     const received = Number(m.received) || 0;
     const returned = Number(m.returned_to_stock_quantity) || 0;
@@ -226,10 +221,43 @@ const canReturnToStock = (application) => {
 
 /**
  * ✅ Кто может вернуть на склад
- *    мастер, прораб или снабженец
  */
 const canUserReturnToStock = (userRole) => {
   return userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin';
+};
+
+/**
+ * 🆕 Можно ли закрыть заявку для возвратов
+ *    - не закрыта
+ *    - есть хотя бы один материал с received > 0
+ *    - больше нечего возвращать (всё, что могли, вернули)
+ */
+const canCloseReturns = (application) => {
+  if (!application?.materials?.length) return false;
+  if (application.returns_closed === true) return false;
+  if (application.status === APPLICATION_STATUS.CLOSED) return false;
+
+  const hasReceived = application.materials.some(m => (Number(m.received) || 0) > 0);
+  if (!hasReceived) return false;
+
+  const hasSomethingToReturn = application.materials.some(m => {
+    const received = Number(m.received) || 0;
+    const returned = Number(m.returned_to_stock_quantity) || 0;
+    return received > returned && received > 0;
+  });
+
+  return !hasSomethingToReturn;
+};
+
+/**
+ * 🆕 Можно ли переоткрыть заявку
+ *    - заявка закрыта
+ *    - роль: снабженец / менеджер / директор
+ */
+const canReopenReturns = (application, userRole) => {
+  if (!application) return false;
+  if (application.returns_closed !== true && application.status !== APPLICATION_STATUS.CLOSED) return false;
+  return userRole === 'supply_admin' || userRole === 'manager' || userRole === 'director';
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -281,6 +309,8 @@ const MobileApplicationCard = memo(({
   clearCommentDraftHandler,
   loadCommentDraft,
   onOpenPriceEditor,
+  onCloseReturns,
+  onReopenReturns,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(false);
@@ -309,7 +339,6 @@ const MobileApplicationCard = memo(({
 
   return (
     <article className="app-card-enter bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden mb-3">
-      {/* Верхняя часть - нажатие раскрывает */}
       <div
         className="p-4 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 transition-colors"
         onClick={() => setExpanded(!expanded)}
@@ -318,7 +347,6 @@ const MobileApplicationCard = memo(({
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded); } }}
         aria-expanded={expanded}
       >
-        {/* Заголовок и статус */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h3 className="text-base font-bold text-gray-900 dark:text-white truncate">
@@ -349,7 +377,6 @@ const MobileApplicationCard = memo(({
           </div>
         </div>
 
-        {/* Прогресс бар */}
         {totalMaterials > 0 && (
           <div className="mt-3 flex items-center gap-2">
             <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -365,7 +392,6 @@ const MobileApplicationCard = memo(({
         )}
       </div>
 
-      {/* Раскрывающаяся часть */}
       {expanded && (
         <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700">
           <div className="grid grid-cols-2 gap-2 text-xs py-3">
@@ -423,7 +449,6 @@ const MobileApplicationCard = memo(({
             </button>
           )}
 
-          {/* Блок действий (выровнен по 2 в ряд) */}
           <div className="grid grid-cols-2 gap-2 mt-4">
             {userRole === 'supply_admin' &&
              (application.status === APPLICATION_STATUS.PENDING ||
@@ -479,7 +504,7 @@ const MobileApplicationCard = memo(({
               </button>
             )}
 
-            {/* 🆕 ВОЗВРАТ НА СКЛАД (мобильная версия) */}
+            {/* ВОЗВРАТ НА СКЛАД */}
             {canUserReturnToStock(userRole) && canReturnToStock(application) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'master_return')}
@@ -487,6 +512,28 @@ const MobileApplicationCard = memo(({
               >
                 <Undo2 className="w-5 h-5" />
                 {t('returnToStock') || 'Вернуть на склад'}
+              </button>
+            )}
+
+            {/* 🆕 ЗАКРЫТЬ ЗАЯВКУ */}
+            {canCloseReturns(application) && (
+              <button
+                onClick={() => onCloseReturns?.(application)}
+                className="col-span-2 py-3 bg-slate-600 hover:bg-slate-700 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md shadow-slate-500/20"
+              >
+                <Lock className="w-5 h-5" />
+                {t('closeReturns') || 'Закрыть заявку'}
+              </button>
+            )}
+
+            {/* 🆕 ПЕРЕОТКРЫТЬ ЗАЯВКУ */}
+            {canReopenReturns(application, userRole) && (
+              <button
+                onClick={() => onReopenReturns?.(application)}
+                className="col-span-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md shadow-emerald-500/20"
+              >
+                <Unlock className="w-5 h-5" />
+                {t('returnsReopen') || 'Переоткрыть заявку'}
               </button>
             )}
 
@@ -510,7 +557,6 @@ const MobileApplicationCard = memo(({
               💬 {comments[application.id]?.length || 0}
             </button>
 
-            {/* Кнопки экспорта - компактные иконки внизу */}
             <div className="col-span-2 flex gap-2">
               <button
                 onClick={() => onDownloadHTML(application)}
@@ -576,7 +622,9 @@ const DesktopApplicationRow = memo(({
   handleCommentChange,
   clearCommentDraftHandler,
   loadCommentDraft,
-  onOpenPriceEditor
+  onOpenPriceEditor,
+  onCloseReturns,
+  onReopenReturns,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
@@ -596,7 +644,6 @@ const DesktopApplicationRow = memo(({
     ) || false;
   }, [application.materials]);
 
-  // ✅ ИСПРАВЛЕННАЯ ЛОГИКА visibleMaterials
   const visibleMaterials = useMemo(() => {
     if (!application.materials) return [];
 
@@ -604,7 +651,6 @@ const DesktopApplicationRow = memo(({
       m?.description?.trim() && (Number(m.quantity) || 0) > 0
     );
 
-    // 🔥 Для снабженца и менеджера — показываем ВСЕ материалы
     if (userRole === 'supply_admin' || userRole === 'manager') {
       return filtered;
     }
@@ -616,7 +662,6 @@ const DesktopApplicationRow = memo(({
     }
 
     if (viewMode === 'inwork' || viewMode === 'confirmation') {
-      // 🔥 Для мастера показываем ВСЕ материалы заявки
       return filtered;
     }
 
@@ -746,7 +791,7 @@ const DesktopApplicationRow = memo(({
             </button>
           )}
 
-          {/* 🆕 ВОЗВРАТ НА СКЛАД (десктопная версия) */}
+          {/* ВОЗВРАТ НА СКЛАД */}
           {canUserReturnToStock(userRole) && canReturnToStock(application) && (
             <button
               onClick={() => onOpenReceiveModal(application, 'master_return')}
@@ -755,6 +800,30 @@ const DesktopApplicationRow = memo(({
             >
               <Undo2 className="w-3.5 h-3.5" />
               {t('return') || 'Вернуть'}
+            </button>
+          )}
+
+          {/* 🆕 ЗАКРЫТЬ ЗАЯВКУ */}
+          {canCloseReturns(application) && (
+            <button
+              onClick={() => onCloseReturns?.(application)}
+              className="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
+              title={t('closeReturns') || 'Закрыть заявку'}
+            >
+              <Lock className="w-3.5 h-3.5" />
+              {t('closeReturns') || 'Закрыть'}
+            </button>
+          )}
+
+          {/* 🆕 ПЕРЕОТКРЫТЬ */}
+          {canReopenReturns(application, userRole) && (
+            <button
+              onClick={() => onReopenReturns?.(application)}
+              className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
+              title={t('returnsReopen') || 'Переоткрыть'}
+            >
+              <Unlock className="w-3.5 h-3.5" />
+              {t('returnsReopen') || 'Открыть'}
             </button>
           )}
 
@@ -1007,6 +1076,8 @@ const ApplicationList = memo(({
   onViewedFilterChange,
   onClearFilters,
   onOpenPriceEditor,
+  onCloseReturns,
+  onReopenReturns,
   comments = {},
   showComments = {},
   isLoading = false,
@@ -1085,12 +1156,10 @@ const ApplicationList = memo(({
   }, [t]);
 
   const statusCounts = useMemo(() => {
-    // ✅ Если счётчики пришли из App.jsx — используем их
     if (statusCountsProp) {
       return statusCountsProp;
     }
 
-    // Fallback: считаем локально (по текущей странице)
     const counts = {
       pending: 0,
       admin_processing: 0,
@@ -1119,11 +1188,7 @@ const ApplicationList = memo(({
 
   const hasActiveFilters = searchTerm || statusFilter !== 'all' || dateFilter || viewedFilter !== 'all';
 
-  // ============================================================
-  // 🔥 ИСПРАВЛЕННАЯ ФИЛЬТРАЦИЯ - ПОКАЗЫВАЕМ ВСЕ ЗАЯВКИ ДЛЯ СНАБЖЕНЦА
-  // ============================================================
   const filteredApplications = useMemo(() => {
-    // 🔥 Для снабженца, менеджера, бухгалтера — показываем ВСЕ заявки без фильтрации
     if (userRole === 'supply_admin' ||
         userRole === 'manager' ||
         userRole === 'director' ||
@@ -1131,16 +1196,11 @@ const ApplicationList = memo(({
       return applications;
     }
 
-    // Для мастера/прораба — показываем свои + заявки на подтверждение
     if (userRole === 'foreman' || userRole === 'master') {
       return applications.filter(app => {
-        // Свои заявки
         if (app.user_id === user?.id) return true;
-
-        // Заявки, требующие подтверждения мастера
         if (requiresMasterConfirmation(app.status)) return true;
 
-        // Поиск по имени прораба
         const foremanName = app.foreman_name?.trim().toLowerCase() || '';
         const userName = user?.user_metadata?.full_name?.trim().toLowerCase() || '';
         const userEmail = user?.email?.split('@')[0]?.toLowerCase() || '';
@@ -1159,9 +1219,6 @@ const ApplicationList = memo(({
     return applications;
   }, [applications, userRole, user]);
 
-  // ─────────────────────────────────────────────────────────────
-  // 📱 МОБИЛЬНЫЙ РЕНДЕРИНГ
-  // ─────────────────────────────────────────────────────────────
   const renderMobileView = () => (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 pb-24 app-card-enter">
       <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-6 border border-gray-200/50 dark:border-gray-700/50">
@@ -1298,6 +1355,8 @@ const ApplicationList = memo(({
                 clearCommentDraftHandler={clearCommentDraftHandler}
                 loadCommentDraft={loadCommentDraft}
                 onOpenPriceEditor={onOpenPriceEditor}
+                onCloseReturns={onCloseReturns}
+                onReopenReturns={onReopenReturns}
               />
             ))}
           </div>
@@ -1318,9 +1377,6 @@ const ApplicationList = memo(({
     </div>
   );
 
-  // ─────────────────────────────────────────────────────────────
-  // 🖥️ ДЕСКТОПНЫЙ РЕНДЕРИНГ
-  // ─────────────────────────────────────────────────────────────
   const renderDesktopView = () => (
     <div className="max-w-7xl mx-auto p-4 app-card-enter">
       <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
@@ -1388,6 +1444,7 @@ const ApplicationList = memo(({
                 <option value={APPLICATION_STATUS.SUPPLIER_RECEIVED}>{t('statusSupplierReceived') || 'На складе'}</option>
                 <option value={APPLICATION_STATUS.PENDING_MASTER_CONFIRMATION}>{t('statusPendingConfirmation') || 'Ожидает подтверждения'}</option>
                 <option value={APPLICATION_STATUS.RECEIVED}>{t('statusReceived')}</option>
+                <option value={APPLICATION_STATUS.CLOSED}>{t('statusClosed') || 'Закрыта'}</option>
                 <option value={APPLICATION_STATUS.PARTIAL_RECEIVED}>{t('statusPartialReceived') || 'Частично получено'}</option>
                 <option value={APPLICATION_STATUS.REJECTED}>{t('statusRejected') || 'Отклонено'}</option>
                 <option value={APPLICATION_STATUS.CANCELED}>{t('statusCanceled')}</option>
@@ -1511,6 +1568,8 @@ const ApplicationList = memo(({
                   clearCommentDraftHandler={clearCommentDraftHandler}
                   loadCommentDraft={loadCommentDraft}
                   onOpenPriceEditor={onOpenPriceEditor}
+                  onCloseReturns={onCloseReturns}
+                  onReopenReturns={onReopenReturns}
                 />
               ))}
             </div>

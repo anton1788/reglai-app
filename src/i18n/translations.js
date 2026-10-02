@@ -153,6 +153,7 @@ export const translations = {
     statusAwaitingConfirmation: 'Ожидает подтверждения мастера',
     statusPendingEmployeeConfirmation: 'Ожидает подтверждения мастером',
     statusReceived: 'Получено',
+    statusClosed: 'Закрыта',                       // 🆕
     statusRejected: 'Отклонено',
     statusCanceled: 'Отменено',
     statusUnknown: 'Неизвестный статус',
@@ -625,9 +626,17 @@ export const translations = {
     // ──────────────────────────────────────────────────────────────────────
     // 📝 ФОРМА
     // ──────────────────────────────────────────────────────────────────────
-    decreaseQuantity: 'Уменьшить количество',
+        decreaseQuantity: 'Уменьшить количество',
     returnToStock: 'Возврат на склад',
+    return: 'Вернуть',                              // 🆕
     quantityToReturn: 'Количество к возврату',
+    closeReturns: 'Закрыть заявку',                 // 🆕
+    closeReturnsConfirm: 'Закрыть заявку для возвратов? Больше нельзя будет вернуть материалы.', // 🆕
+    returnsClosed: 'Заявка закрыта для возвратов',  // 🆕
+    returnsReopen: 'Переоткрыть заявку',            // 🆕
+    returnsReopenConfirm: 'Переоткрыть заявку для возвратов?', // 🆕
+    returnsReopened: 'Заявка переоткрыта для возвратов',       // 🆕
+    returnsClosedBadge: '🔒 Закрыта',               // 🆕
     increaseQuantity: 'Увеличить количество',
     confirmQuantity: 'Количество для подтверждения',
     confirmedQuantityHelp: 'Введите количество подтверждённых единиц',
@@ -1285,6 +1294,7 @@ export const translations = {
     statusAwaitingConfirmation: 'Awaiting Master Confirmation',
     statusPendingEmployeeConfirmation: 'Awaiting Master Confirmation',
     statusReceived: 'Received',
+    statusClosed: 'Closed',                        // 🆕
     statusRejected: 'Rejected',
     statusCanceled: 'Canceled',
     statusUnknown: 'Unknown status',
@@ -1758,7 +1768,15 @@ export const translations = {
     // ──────────────────────────────────────────────────────────────────────
     decreaseQuantity: 'Decrease quantity',
     returnToStock: 'Return to stock',
+    return: 'Return',                              // 🆕
     quantityToReturn: 'Quantity to return',
+    closeReturns: 'Close application',             // 🆕
+    closeReturnsConfirm: 'Close application for returns? No more returns will be possible.', // 🆕
+    returnsClosed: 'Application closed for returns', // 🆕
+    returnsReopen: 'Reopen application',           // 🆕
+    returnsReopenConfirm: 'Reopen application for returns?', // 🆕
+    returnsReopened: 'Application reopened for returns',     // 🆕
+    returnsClosedBadge: '🔒 Closed',               // 🆕
     increaseQuantity: 'Increase quantity',
     confirmQuantity: 'Quantity to confirm',
     confirmedQuantityHelp: 'Enter confirmed quantity',
