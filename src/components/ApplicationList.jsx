@@ -211,6 +211,27 @@ const formatDate = (dateString) => {
 
 const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num);
 
+/**
+ * ✅ ЕДИНАЯ ЛОГИКА: есть ли что возвращать на склад
+ *    received > returned_to_stock_quantity и received > 0
+ */
+const canReturnToStock = (application) => {
+  if (!application?.materials?.length) return false;
+  return application.materials.some(m => {
+    const received = Number(m.received) || 0;
+    const returned = Number(m.returned_to_stock_quantity) || 0;
+    return received > returned && received > 0;
+  });
+};
+
+/**
+ * ✅ Кто может вернуть на склад
+ *    мастер, прораб или снабженец
+ */
+const canUserReturnToStock = (userRole) => {
+  return userRole === 'master' || userRole === 'foreman' || userRole === 'supply_admin';
+};
+
 // ─────────────────────────────────────────────────────────────
 // 🎨 UI КОМПОНЕНТЫ
 // ─────────────────────────────────────────────────────────────
@@ -239,12 +260,10 @@ StatusBadge.displayName = 'StatusBadge';
 // ─────────────────────────────────────────────────────────────
 // 🧩 МОБИЛЬНАЯ КАРТОЧКА ЗАЯВКИ
 // ─────────────────────────────────────────────────────────────
-// ⬇️ ЗАМЕНИТЕ ВЕСЬ КОМПОНЕНТ MobileApplicationCard (от начала до строки "MobileApplicationCard.displayName = 'MobileApplicationCard';") НА ЭТОТ КОД:
-
-const MobileApplicationCard = memo(({ 
-  application, 
-  t, 
-  onOpenReceiveModal, 
+const MobileApplicationCard = memo(({
+  application,
+  t,
+  onOpenReceiveModal,
   onToggleComments,
   comments,
   showComments,
@@ -265,12 +284,12 @@ const MobileApplicationCard = memo(({
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(false);
-  
+
   const totalMaterials = application.materials?.length || 0;
-  const completedMaterials = application.materials?.filter(m => 
+  const completedMaterials = application.materials?.filter(m =>
     (Number(m.received) || 0) >= (Number(m.quantity) || 0)
   ).length || 0;
-  
+
   const isCompleted = application.status === APPLICATION_STATUS.RECEIVED;
   const completionPercent = totalMaterials > 0 ? Math.round((completedMaterials / totalMaterials) * 100) : 0;
 
@@ -291,7 +310,7 @@ const MobileApplicationCard = memo(({
   return (
     <article className="app-card-enter bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden mb-3">
       {/* Верхняя часть - нажатие раскрывает */}
-      <div 
+      <div
         className="p-4 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700/50 transition-colors"
         onClick={() => setExpanded(!expanded)}
         role="button"
@@ -309,32 +328,32 @@ const MobileApplicationCard = memo(({
               <span className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-[140px]">
                 👷 {application.foreman_name}
               </span>
-              <StatusBadge 
-                status={application.status} 
+              <StatusBadge
+                status={application.status}
                 createdAt={application.created_at}
                 t={t}
                 className="text-[10px] px-2 py-0.5"
               />
             </div>
           </div>
-          
+
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
             <div className="flex items-center gap-1">
               <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
                 {totalMaterials} поз.
               </span>
-              <ChevronDown 
-                className={`w-5 h-5 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} 
+              <ChevronDown
+                className={`w-5 h-5 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
               />
             </div>
           </div>
         </div>
-        
+
         {/* Прогресс бар */}
         {totalMaterials > 0 && (
           <div className="mt-3 flex items-center gap-2">
             <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div 
+              <div
                 className={`h-full rounded-full transition-all duration-500 ${isCompleted ? 'bg-green-500' : 'bg-blue-500'}`}
                 style={{ width: `${completionPercent}%` }}
               />
@@ -345,7 +364,7 @@ const MobileApplicationCard = memo(({
           </div>
         )}
       </div>
-      
+
       {/* Раскрывающаяся часть */}
       {expanded && (
         <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700">
@@ -361,7 +380,7 @@ const MobileApplicationCard = memo(({
               </span>
             </div>
           </div>
-          
+
           {visibleMaterials.length > 0 && (
             <div className="mt-1">
               <button
@@ -372,7 +391,7 @@ const MobileApplicationCard = memo(({
                 {t('materials')} ({visibleMaterials.length})
                 <ChevronDown className={`w-4 h-4 transition-transform ${materialsExpanded ? 'rotate-180' : ''}`} />
               </button>
-              
+
               {materialsExpanded && (
                 <div className="space-y-2 max-h-52 overflow-y-auto scrollable-content bg-gray-50 dark:bg-gray-700/30 rounded-xl p-2">
                   {visibleMaterials.slice(0, 10).map((m, idx) => (
@@ -403,13 +422,13 @@ const MobileApplicationCard = memo(({
               💰 {t('prices') || 'Цены'}
             </button>
           )}
-          
+
           {/* Блок действий (выровнен по 2 в ряд) */}
           <div className="grid grid-cols-2 gap-2 mt-4">
-            {userRole === 'supply_admin' && 
-             (application.status === APPLICATION_STATUS.PENDING || 
+            {userRole === 'supply_admin' &&
+             (application.status === APPLICATION_STATUS.PENDING ||
               application.status === APPLICATION_STATUS.ADMIN_PROCESSING ||
-              application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) && 
+              application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) &&
              hasUnreceivedMaterials && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'admin_receive')}
@@ -419,11 +438,11 @@ const MobileApplicationCard = memo(({
                 {t('receiveToWarehouse') || 'Принять на склад'}
               </button>
             )}
-            
-            {userRole === 'supply_admin' && 
+
+            {userRole === 'supply_admin' &&
              (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
               application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED ||
-              application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) && 
+              application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) &&
              hasMaterialsReadyToIssue(application) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'admin_ready_to_issue')}
@@ -433,10 +452,10 @@ const MobileApplicationCard = memo(({
                 {t('issueFromWarehouse') || 'Выдать со склада'}
               </button>
             )}
-            
-            {userRole === 'supply_admin' && 
-             application.status === APPLICATION_STATUS.ADMIN_PROCESSING && 
-             application.materials?.some(m => 
+
+            {userRole === 'supply_admin' &&
+             application.status === APPLICATION_STATUS.ADMIN_PROCESSING &&
+             application.materials?.some(m =>
                (Number(m.supplier_received_quantity) || 0) > 0 &&
                (Number(m.received) || 0) < (Number(m.quantity) || 0)
              ) && (
@@ -448,8 +467,8 @@ const MobileApplicationCard = memo(({
                 {t('sendToMaster') || 'Отправить мастеру'}
               </button>
             )}
-            
-            {(userRole === 'foreman' || userRole === 'master') && 
+
+            {(userRole === 'foreman' || userRole === 'master') &&
              requiresMasterConfirmation(application.status) && (
               <button
                 onClick={() => onOpenReceiveModal(application, 'master_confirm')}
@@ -459,10 +478,21 @@ const MobileApplicationCard = memo(({
                 {t('confirmReceipt') || 'Подтвердить получение'}
               </button>
             )}
-            
-            {userRole === 'foreman' && 
-             isApplicationActive(application.status) && 
-             application.status === APPLICATION_STATUS.PENDING && 
+
+            {/* 🆕 ВОЗВРАТ НА СКЛАД (мобильная версия) */}
+            {canUserReturnToStock(userRole) && canReturnToStock(application) && (
+              <button
+                onClick={() => onOpenReceiveModal(application, 'master_return')}
+                className="col-span-2 py-3 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md shadow-orange-500/20"
+              >
+                <Undo2 className="w-5 h-5" />
+                {t('returnToStock') || 'Вернуть на склад'}
+              </button>
+            )}
+
+            {userRole === 'foreman' &&
+             isApplicationActive(application.status) &&
+             application.status === APPLICATION_STATUS.PENDING &&
              application.user_id === user?.id && (
               <button
                 onClick={() => onCancelApplication(application.id)}
@@ -472,14 +502,14 @@ const MobileApplicationCard = memo(({
                 {t('cancelApplication')}
               </button>
             )}
-            
+
             <button
               onClick={() => onToggleComments(application.id)}
               className="py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
             >
               💬 {comments[application.id]?.length || 0}
             </button>
-            
+
             {/* Кнопки экспорта - компактные иконки внизу */}
             <div className="col-span-2 flex gap-2">
               <button
@@ -498,7 +528,7 @@ const MobileApplicationCard = memo(({
               </button>
             </div>
           </div>
-          
+
           <CommentsSection
             application={application}
             comments={comments}
@@ -526,10 +556,10 @@ MobileApplicationCard.displayName = 'MobileApplicationCard';
 // ─────────────────────────────────────────────────────────────
 // 🧩 ДЕСКТОПНАЯ СТРОКА ЗАЯВКИ
 // ─────────────────────────────────────────────────────────────
-const DesktopApplicationRow = memo(({ 
-  application, 
-  t, 
-  onOpenReceiveModal, 
+const DesktopApplicationRow = memo(({
+  application,
+  t,
+  onOpenReceiveModal,
   onToggleComments,
   comments,
   showComments,
@@ -550,14 +580,14 @@ const DesktopApplicationRow = memo(({
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
-  
+
   const totalMaterials = application.materials?.length || 0;
-  const completedMaterials = application.materials?.filter(m => 
+  const completedMaterials = application.materials?.filter(m =>
     (Number(m.received) || 0) >= (Number(m.quantity) || 0)
   ).length || 0;
-  
+
   const completionPercent = totalMaterials > 0 ? Math.round((completedMaterials / totalMaterials) * 100) : 0;
-  
+
   const isOverdue = application.status === APPLICATION_STATUS.PENDING && getDaysSince(application.created_at) > 2;
 
   const hasUnreceivedMaterials = useMemo(() => {
@@ -568,30 +598,30 @@ const DesktopApplicationRow = memo(({
 
   // ✅ ИСПРАВЛЕННАЯ ЛОГИКА visibleMaterials
   const visibleMaterials = useMemo(() => {
-  if (!application.materials) return [];
-  
-  const filtered = application.materials.filter(m => 
-    m?.description?.trim() && (Number(m.quantity) || 0) > 0
-  );
-  
-  // 🔥 Для снабженца и менеджера — показываем ВСЕ материалы
-  if (userRole === 'supply_admin' || userRole === 'manager') {
-    return filtered;
-  }
-  
-  if (viewMode === 'received') {
-    return filtered.filter(m => 
-      (Number(m.received) || 0) >= (Number(m.quantity) || 0)
+    if (!application.materials) return [];
+
+    const filtered = application.materials.filter(m =>
+      m?.description?.trim() && (Number(m.quantity) || 0) > 0
     );
-  }
-  
-  if (viewMode === 'inwork' || viewMode === 'confirmation') {
-  // 🔥 Для мастера показываем ВСЕ материалы заявки
-  return filtered;
-}
-  
-  return filtered;
-}, [application.materials, viewMode, userRole]); // ← Добавлен userRole
+
+    // 🔥 Для снабженца и менеджера — показываем ВСЕ материалы
+    if (userRole === 'supply_admin' || userRole === 'manager') {
+      return filtered;
+    }
+
+    if (viewMode === 'received') {
+      return filtered.filter(m =>
+        (Number(m.received) || 0) >= (Number(m.quantity) || 0)
+      );
+    }
+
+    if (viewMode === 'inwork' || viewMode === 'confirmation') {
+      // 🔥 Для мастера показываем ВСЕ материалы заявки
+      return filtered;
+    }
+
+    return filtered;
+  }, [application.materials, viewMode, userRole]);
 
   return (
     <div className={`border-b border-gray-200 dark:border-gray-700 transition-all ${isOverdue ? 'bg-red-50/30 dark:bg-red-900/10' : ''} ${expanded ? 'desktop-row-expanded' : ''}`}>
@@ -617,8 +647,8 @@ const DesktopApplicationRow = memo(({
         </div>
 
         <div className="col-span-2">
-          <StatusBadge 
-            status={application.status} 
+          <StatusBadge
+            status={application.status}
             createdAt={application.created_at}
             t={t}
           />
@@ -627,7 +657,7 @@ const DesktopApplicationRow = memo(({
         <div className="col-span-2">
           <div className="flex items-center gap-2">
             <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div 
+              <div
                 className={`h-full rounded-full transition-all ${completionPercent === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
                 style={{ width: `${completionPercent}%` }}
               />
@@ -649,10 +679,10 @@ const DesktopApplicationRow = memo(({
         </div>
 
         <div className="col-span-3 flex items-center justify-end gap-1.5 flex-wrap">
-          {userRole === 'supply_admin' && 
-           (application.status === APPLICATION_STATUS.PENDING || 
+          {userRole === 'supply_admin' &&
+           (application.status === APPLICATION_STATUS.PENDING ||
             application.status === APPLICATION_STATUS.ADMIN_PROCESSING ||
-            application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) && 
+            application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) &&
            hasUnreceivedMaterials && (
             <button
               onClick={() => onOpenReceiveModal(application, 'admin_receive')}
@@ -663,12 +693,12 @@ const DesktopApplicationRow = memo(({
               {t('receive') || 'Принять'}
             </button>
           )}
-          
-          {userRole === 'supply_admin' && 
- (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
-  application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED ||
-  application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) && 
- hasMaterialsReadyToIssue(application) && (
+
+          {userRole === 'supply_admin' &&
+           (application.status === APPLICATION_STATUS.READY_FOR_ISSUE ||
+            application.status === APPLICATION_STATUS.SUPPLIER_RECEIVED ||
+            application.status === APPLICATION_STATUS.PARTIAL_RECEIVED) &&
+           hasMaterialsReadyToIssue(application) && (
             <button
               onClick={() => onOpenReceiveModal(application, 'admin_ready_to_issue')}
               className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
@@ -678,10 +708,10 @@ const DesktopApplicationRow = memo(({
               {t('issue') || 'Выдать'}
             </button>
           )}
-          
-          {userRole === 'supply_admin' && 
-           application.status === APPLICATION_STATUS.ADMIN_PROCESSING && 
-           application.materials?.some(m => 
+
+          {userRole === 'supply_admin' &&
+           application.status === APPLICATION_STATUS.ADMIN_PROCESSING &&
+           application.materials?.some(m =>
              (Number(m.supplier_received_quantity) || 0) > 0 &&
              (Number(m.received) || 0) < (Number(m.quantity) || 0)
            ) && (
@@ -696,15 +726,16 @@ const DesktopApplicationRow = memo(({
           )}
 
           {canEditPrices(userRole) && (
-            <button              onClick={() => onOpenPriceEditor?.(application)}
+            <button
+              onClick={() => onOpenPriceEditor?.(application)}
               className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
               title={t('editPrices') || 'Редактировать цены'}
             >
               💰 {t('prices') || 'Цены'}
             </button>
           )}
-          
-          {(userRole === 'foreman' || userRole === 'master') && 
+
+          {(userRole === 'foreman' || userRole === 'master') &&
            requiresMasterConfirmation(application.status) && (
             <button
               onClick={() => onOpenReceiveModal(application, 'master_confirm')}
@@ -714,10 +745,22 @@ const DesktopApplicationRow = memo(({
               {t('confirm') || 'Подтвердить'}
             </button>
           )}
-          
-          {userRole === 'foreman' && 
-           isApplicationActive(application.status) && 
-           application.status === APPLICATION_STATUS.PENDING && 
+
+          {/* 🆕 ВОЗВРАТ НА СКЛАД (десктопная версия) */}
+          {canUserReturnToStock(userRole) && canReturnToStock(application) && (
+            <button
+              onClick={() => onOpenReceiveModal(application, 'master_return')}
+              className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
+              title={t('returnToStock') || 'Вернуть на склад'}
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+              {t('return') || 'Вернуть'}
+            </button>
+          )}
+
+          {userRole === 'foreman' &&
+           isApplicationActive(application.status) &&
+           application.status === APPLICATION_STATUS.PENDING &&
            application.user_id === user?.id && (
             <button
               onClick={() => onCancelApplication(application.id)}
@@ -727,7 +770,7 @@ const DesktopApplicationRow = memo(({
               {t('cancel') || 'Отменить'}
             </button>
           )}
-          
+
           <button
             onClick={() => onToggleComments(application.id)}
             className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
@@ -735,7 +778,7 @@ const DesktopApplicationRow = memo(({
           >
             💬 {comments[application.id]?.length || 0}
           </button>
-          
+
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => onDownloadHTML(application)}
@@ -786,7 +829,7 @@ const DesktopApplicationRow = memo(({
                   {materialsExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 </button>
               </div>
-              
+
               {materialsExpanded && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -809,13 +852,13 @@ const DesktopApplicationRow = memo(({
                           <td className="px-3 py-1.5 text-gray-500">{m.unit || 'шт'}</td>
                           <td className="px-3 py-1.5">
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              (Number(m.received) || 0) >= (Number(m.quantity) || 0) 
+                              (Number(m.received) || 0) >= (Number(m.quantity) || 0)
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
                                 : (Number(m.supplier_received_quantity) || 0) > 0
                                   ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
                                   : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
                             }`}>
-                              {(Number(m.received) || 0) >= (Number(m.quantity) || 0) 
+                              {(Number(m.received) || 0) >= (Number(m.quantity) || 0)
                                 ? '✅ ' + (t('received') || 'Получено')
                                 : (Number(m.supplier_received_quantity) || 0) > 0
                                   ? '📦 ' + (t('onWarehouse') || 'На складе')
@@ -900,29 +943,29 @@ const MobileStatusTabs = memo(({ active, onChange, counts, t }) => {
   return (
     <div className="mobile-status-tabs -mx-1 px-1">
       {tabs.map((tab) => (
-       <button
-  key={tab.key}
-  onClick={() => onChange(tab.key)}
-  className={`mobile-status-tab touch-target ${
-    active === tab.key
-      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
-      : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
-  }`}
->
-  <span className="flex items-center gap-1.5 font-semibold text-sm">
-    {tab.icon}
-    {tab.label}
-    {tab.count !== undefined && tab.count > 0 && (
-      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-        active === tab.key 
-          ? 'bg-white/20 text-white' 
-          : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
-      }`}>
-        {tab.count}
-      </span>
-    )}
-  </span>
-</button>
+        <button
+          key={tab.key}
+          onClick={() => onChange(tab.key)}
+          className={`mobile-status-tab touch-target ${
+            active === tab.key
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
+              : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
+          }`}
+        >
+          <span className="flex items-center gap-1.5 font-semibold text-sm">
+            {tab.icon}
+            {tab.label}
+            {tab.count !== undefined && tab.count > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                active === tab.key
+                  ? 'bg-white/20 text-white'
+                  : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
+              }`}>
+                {tab.count}
+              </span>
+            )}
+          </span>
+        </button>
       ))}
     </div>
   );
@@ -1042,33 +1085,33 @@ const ApplicationList = memo(({
   }, [t]);
 
   const statusCounts = useMemo(() => {
-  // ✅ Если счётчики пришли из App.jsx — используем их
-  if (statusCountsProp) {
-    return statusCountsProp;
-  }
-  
-  // Fallback: считаем локально (по текущей странице)
-  const counts = { 
-    pending: 0, 
-    admin_processing: 0, 
-    partial_on_warehouse: 0,
-    supplier_received: 0,
-    pending_master_confirmation: 0,
-    partial_received: 0,
-    ready_for_issue: 0,
-    received: 0, 
-    canceled: 0 
-  };
-  
-  applications.forEach(app => {
-    const status = app.status;
-    if (counts[status] !== undefined) {
-      counts[status]++;
+    // ✅ Если счётчики пришли из App.jsx — используем их
+    if (statusCountsProp) {
+      return statusCountsProp;
     }
-  });
-  
-  return counts;
-}, [applications, statusCountsProp]);
+
+    // Fallback: считаем локально (по текущей странице)
+    const counts = {
+      pending: 0,
+      admin_processing: 0,
+      partial_on_warehouse: 0,
+      supplier_received: 0,
+      pending_master_confirmation: 0,
+      partial_received: 0,
+      ready_for_issue: 0,
+      received: 0,
+      canceled: 0
+    };
+
+    applications.forEach(app => {
+      const status = app.status;
+      if (counts[status] !== undefined) {
+        counts[status]++;
+      }
+    });
+
+    return counts;
+  }, [applications, statusCountsProp]);
 
   const handleTabChange = useCallback((tabKey) => {
     onStatusFilterChange(tabKey);
@@ -1081,51 +1124,48 @@ const ApplicationList = memo(({
   // ============================================================
   const filteredApplications = useMemo(() => {
     // 🔥 Для снабженца, менеджера, бухгалтера — показываем ВСЕ заявки без фильтрации
-    if (userRole === 'supply_admin' || 
-        userRole === 'manager' || 
-        userRole === 'director' || 
+    if (userRole === 'supply_admin' ||
+        userRole === 'manager' ||
+        userRole === 'director' ||
         userRole === 'accountant') {
       return applications;
     }
-    
+
     // Для мастера/прораба — показываем свои + заявки на подтверждение
     if (userRole === 'foreman' || userRole === 'master') {
       return applications.filter(app => {
         // Свои заявки
         if (app.user_id === user?.id) return true;
-        
+
         // Заявки, требующие подтверждения мастера
         if (requiresMasterConfirmation(app.status)) return true;
-        
+
         // Поиск по имени прораба
         const foremanName = app.foreman_name?.trim().toLowerCase() || '';
         const userName = user?.user_metadata?.full_name?.trim().toLowerCase() || '';
         const userEmail = user?.email?.split('@')[0]?.toLowerCase() || '';
-        
+
         if (foremanName) {
           if (userName && foremanName.includes(userName)) return true;
           if (userEmail && foremanName.includes(userEmail)) return true;
         }
-        
+
         if (app.foreman_id && app.foreman_id === user?.id) return true;
-        
+
         return false;
       });
     }
-    
+
     return applications;
   }, [applications, userRole, user]);
 
   // ─────────────────────────────────────────────────────────────
   // 📱 МОБИЛЬНЫЙ РЕНДЕРИНГ
   // ─────────────────────────────────────────────────────────────
-    // ─────────────────────────────────────────────────────────────
-  // 📱 МОБИЛЬНЫЙ РЕНДЕРИНГ (ОБНОВЛЕННЫЙ)
-  // ─────────────────────────────────────────────────────────────
   const renderMobileView = () => (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 pb-24 app-card-enter">
       <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-6 border border-gray-200/50 dark:border-gray-700/50">
-        
+
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/20">
@@ -1193,7 +1233,7 @@ const ApplicationList = memo(({
               </button>
             )}
           </div>
-          
+
           <div className="mt-2 flex flex-wrap gap-2 text-[10px] sm:text-xs text-gray-400 dark:text-gray-500">
             <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — сбросить</span>
             <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded">Ctrl+Enter — экспорт</span>
@@ -1284,7 +1324,7 @@ const ApplicationList = memo(({
   const renderDesktopView = () => (
     <div className="max-w-7xl mx-auto p-4 app-card-enter">
       <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-        
+
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 sm:p-6 border-b border-gray-200/50 dark:border-gray-700/50">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/20">
@@ -1392,7 +1432,7 @@ const ApplicationList = memo(({
               </button>
             )}
           </div>
-          
+
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-400 dark:text-gray-500">
             <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — сбросить</span>
             <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded">Ctrl+Enter — экспорт</span>
@@ -1470,7 +1510,7 @@ const ApplicationList = memo(({
                   handleCommentChange={handleCommentChange}
                   clearCommentDraftHandler={clearCommentDraftHandler}
                   loadCommentDraft={loadCommentDraft}
-                  onOpenPriceEditor={onOpenPriceEditor} 
+                  onOpenPriceEditor={onOpenPriceEditor}
                 />
               ))}
             </div>
@@ -1482,7 +1522,7 @@ const ApplicationList = memo(({
             {t('showing') || 'Показано'} {filteredApplications.length} {t('applications') || 'заявок'}
             {totalPages > 1 && ` • ${t('page') || 'Страница'} ${page} ${t('of') || 'из'} ${totalPages}`}
           </span>
-          
+
           {totalPages > 1 && (
             <div className="flex items-center gap-2">
               <button
@@ -1494,11 +1534,11 @@ const ApplicationList = memo(({
                 <ArrowLeft className="w-4 h-4" aria-hidden="true" />
                 {t('prev')}
               </button>
-              
+
               <span className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg">
                 {page} / {totalPages}
               </span>
-              
+
               <button
                 onClick={() => onPageChange(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
