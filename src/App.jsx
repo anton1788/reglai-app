@@ -6141,6 +6141,17 @@ useEffect(() => {
   window.addEventListener('open-chat', handler);
   return () => window.removeEventListener('open-chat', handler);
 }, []);
+// 🆕 Обработчик открытия RFQ из AI-ассистента
+useEffect(() => {
+  const handler = (e) => {
+    const rfqId = e.detail?.rfqId;
+    if (!rfqId) return;
+    setSelectedRFQId(rfqId);
+    setCurrentView('rfqDetails');
+  };
+  window.addEventListener('ai-open-rfq', handler);
+  return () => window.removeEventListener('ai-open-rfq', handler);
+}, []);
   // 🎯 Onboarding Tour Logic
 useEffect(() => {
   const checkOnboarding = async () => {
@@ -9398,14 +9409,36 @@ onClearFilters={handleClearFilters}
       setShowReceiveModal(true);
     }}
     onOpenReceiveModal={openReceiveModal}
-    // ✅ НОВЫЕ ПРОПСЫ: счётчики для бейджей
+
+    // 🆕 НОВЫЙ ПРОП: добавление позиций в RFQ-корзину из AI-ассистента
+    onAddToRFQCart={(items) => {
+      setRfqCart(prev => {
+        const existing = new Set(prev.map(p => (p.name || '').toLowerCase().trim()));
+        const newItems = (items || [])
+          .filter(it => it && it.name && !existing.has(it.name.toLowerCase().trim()))
+          .map((it, idx) => ({
+            id: `ai_${Date.now()}_${idx}`,
+            name: it.name,
+            article: it.article || '',
+            unit: it.unit || 'шт',
+            quantity: Number(it.quantity) || 1,
+            supplier_id: null,
+            supplier_name: 'AI-ассистент',
+            price_hint: null,
+          }));
+        return [...prev, ...newItems];
+      });
+      setCurrentView('rfqCreate');
+    }}
+
     pendingApprovalsCount={pendingApprovals?.length || 0}
     readyToIssueCount={readyToIssueCount}
     mergeableCount={mergeableCount}
     cartItemsCount={formData.cart?.length || 0}
     chatUnreadCount={chatUnreadCount}
-    currentView={currentView} 
-    currentPlan={currentPlan}       // 🆕
+    rfqCartCount={rfqCart.length}
+    currentView={currentView}
+    currentPlan={currentPlan}
     planLimits={planLimits}
     t={t}
   />

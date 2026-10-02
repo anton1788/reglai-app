@@ -17,9 +17,20 @@ import {
   History, Truck, UserPlus, Briefcase, Settings, Bell, Star,
   Download, Volume2, Lightbulb, Pin, PinOff,
   MessageSquare, ShoppingBag, Gauge, Tag, Boxes, BadgeCheck,
-  Send as SendIcon, Inbox, Filter, Check, PackageCheck,
+  Inbox, Filter, Check, PackageCheck, Trophy,
 } from 'lucide-react';
 import SmartVoiceSearch from '../SmartVoiceSearch';
+// 🆕 ИМПОРТ ГЛОБАЛЬНЫХ ROLE_VIEWS
+import { ROLE_VIEWS } from '../../utils/roleViews';
+// 🆕 ИМПОРТ ФУНКЦИЙ ПРАВ
+import { isProcurement, isSupplier } from '../../utils/permissions';
+// 🆕 ИМПОРТ API
+import {
+  getSuppliers,
+  getRFQList,
+  getPurchaseOrders,
+  searchMaterialsAcrossSuppliers,
+} from '../../api/suppliers';
 
 // ─────────────────────────────────────────────────────────────
 // 🎨 ГЛОБАЛЬНЫЕ АНИМАЦИИ
@@ -121,82 +132,6 @@ const ALL_VIEWS = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🗺️ КАРТА ДОСТУПНЫХ РАЗДЕЛОВ ПО РОЛЯМ
-// ─────────────────────────────────────────────────────────────
-const ROLE_VIEWS = {
-  master: [
-    'dashboard', 'create', 'inwork', 'objects', 'projects', 'history',
-    'warehouse', 'documents', 'chat', 'calendar', 'tasks', 'profile', 'help'
-  ],
-  foreman: [
-    'dashboard', 'create', 'inwork', 'objects', 'projects', 'history',
-    'warehouse', 'documents', 'chat', 'calendar', 'tasks', 'profile', 'help'
-  ],
-  supply_admin: [
-    'dashboard', 'create', 'inwork', 'objects', 'readyToIssue', 'received', 'projects',
-    'crm-sales', 'merge', 'warehouse', 'analytics', 'api', 'estimates',
-    'reports', 'integration', 'documents', 'chat', 'calendar', 'tasks',
-    'profile', 'help',
-    'suppliers', 'supplierCatalog', 'rfqList', 'rfqCreate', 'rfqDetails',
-    'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
-  ],
-  manager: [
-    'dashboard', 'create', 'inwork', 'objects', 'readyToIssue', 'received', 'projects',
-    'merge', 'clients', 'crm-sales', 'warehouse', 'analytics', 'api',
-    'estimates', 'reports', 'integration', 'documents', 'chat', 'calendar',
-    'tasks', 'employees', 'approvals', 'audit', 'companyProfile',
-    'tariffs', 'profile', 'help',
-    'suppliers', 'supplierCatalog', 'rfqList', 'rfqCreate', 'rfqDetails',
-    'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
-  ],
-  director: [
-    'dashboard', 'inwork', 'objects', 'readyToIssue', 'received', 'projects',
-    'clients', 'crm-sales', 'warehouse', 'analytics', 'api', 'estimates',
-    'reports', 'integration', 'documents', 'chat', 'calendar', 'tasks',
-    'employees', 'approvals', 'audit', 'companyProfile', 'tariffs',
-    'profile', 'help',
-    'suppliers', 'supplierCatalog', 'rfqList', 'rfqDetails',
-    'purchaseOrders', 'purchaseOrderDetails',
-  ],
-  accountant: [
-    'dashboard', 'inwork', 'objects', 'received', 'history', 'warehouse',
-    'analytics', 'reports', 'estimates', 'documents', 'chat',
-    'calendar', 'tasks', 'profile', 'help',
-    'purchaseOrders', 'purchaseOrderDetails',
-  ],
-  client_manager: [
-    'dashboard', 'create', 'inwork', 'projects', 'clients',
-    'crm-sales', 'warehouse', 'analytics', 'documents', 'chat',
-    'calendar', 'tasks', 'profile', 'help'
-  ],
-  client: [
-    'clientDashboard', 'clientChat', 'clientDocuments', 'clientApplications',
-    'clientCalendar', 'clientConfirmation', 'clientPhotos', 'clientWorkAct',
-    'profile', 'help'
-  ],
-  procurement_manager: [
-    'dashboard', 'inwork', 'objects', 'readyToIssue', 'received', 'projects',
-    'merge', 'warehouse', 'analytics', 'reports', 'integration',
-    'documents', 'chat', 'calendar', 'tasks', 'profile', 'help',
-    'suppliers', 'supplierCatalog', 'rfqList', 'rfqCreate', 'rfqDetails',
-    'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
-    'procurementDashboard',
-  ],
-  supplier_admin: [
-    'dashboard', 'supplierDashboard', 'supplierPriceList',
-    'rfqList', 'rfqDetails',
-    'purchaseOrders', 'purchaseOrderDetails',
-    'chat', 'calendar', 'tasks', 'profile', 'help'
-  ],
-  supplier_manager: [
-    'dashboard', 'supplierDashboard', 'supplierPriceList',
-    'rfqList', 'rfqDetails',
-    'purchaseOrders', 'purchaseOrderDetails',
-    'chat', 'calendar', 'tasks', 'profile', 'help'
-  ],
-};
-
-// ─────────────────────────────────────────────────────────────
 // 🎯 Быстрые действия по ролям
 // ─────────────────────────────────────────────────────────────
 const QUICK_ACTIONS = {
@@ -263,6 +198,7 @@ const QUICK_ACTIONS = {
     { id: 'rfq_with_offers', label: '💰 RFQ с предложениями', icon: TrendingUp, group: 'quick' },
     { id: 'po_pending', label: '📦 Заказы в работе', icon: ShoppingBag, group: 'quick' },
     { id: 'catalog_search_prompt', label: '🔍 Поиск в каталоге', icon: Search, group: 'quick' },
+    { id: 'top_suppliers_by_price', label: '🏆 Топ поставщиков', icon: Trophy, group: 'quick' },
   ],
   supplier_admin: [
     { id: 'supplier_incoming_rfq', label: '📨 Входящие RFQ', icon: Inbox, group: 'quick' },
@@ -358,7 +294,7 @@ const CONTEXTUAL_ACTIONS = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 🎯 СПИСОК ДЕЙСТВИЙ, ТРЕБУЮЩИХ ДОСТУПА К ПОСТАВЩИКАМ
+// 🎯 ДЕЙСТВИЯ, ТРЕБУЮЩИЕ ДОСТУПА К ПОСТАВЩИКАМ
 // ─────────────────────────────────────────────────────────────
 const SUPPLIER_ACTIONS = [
   'suppliers_list', 'supplier_search', 'open_supplier_details', 'suppliers_stats',
@@ -366,10 +302,12 @@ const SUPPLIER_ACTIONS = [
   'rfq_list', 'rfq_pending', 'rfq_with_offers', 'rfq_create', 'open_rfq_details', 'rfq_best_offer',
   'purchase_orders_list', 'po_pending', 'po_received', 'open_po_details', 'po_create_from_rfq',
   'supplier_incoming_rfq', 'supplier_incoming_po', 'supplier_pricelist', 'procurement_overview',
+  'rfq_create_with_materials', 'compare_rfq_offers', 'top_suppliers_by_price', 'who_supplies_material',
 ];
 
 const SUPPLIER_VIEWS = [
-  'suppliers', 'supplierCatalog', 'rfqList', 'purchaseOrders',
+  'suppliers', 'supplierCatalog', 'supplierPriceList', 'rfqList', 'rfqCreate', 'rfqDetails',
+  'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
   'procurementDashboard', 'supplierDashboard',
 ];
 
@@ -415,17 +353,15 @@ const getStatusLabel = (status) => {
   return map[status] || status;
 };
 
+// 🆕 RFQ статусы (по реальному enum из БД)
 const getRFQStatusEmoji = (status) => {
   const map = {
     draft: '📝',
     sent: '📨',
     collecting: '⏳',
-    collecting_offers: '⏳',
-    offers_received: '💰',
-    comparing: '⚖️',
-    closed: '✅',
+    analyzing: '⚖️',
+    completed: '✅',
     canceled: '❌',
-    awarded: '🏆',
   };
   return map[status] || '📨';
 };
@@ -435,48 +371,53 @@ const getRFQStatusLabel = (status) => {
     draft: 'Черновик',
     sent: 'Отправлен',
     collecting: 'Сбор предложений',
-    collecting_offers: 'Сбор предложений',
-    offers_received: 'Есть предложения',
-    comparing: 'Сравнение',
-    closed: 'Закрыт',
+    analyzing: 'Анализ',
+    completed: 'Завершён',
     canceled: 'Отменён',
-    awarded: 'Выбран победитель',
   };
   return map[status] || status;
 };
 
+// 🆕 PO статусы (по реальному enum из БД)
 const getPOStatusEmoji = (status) => {
   const map = {
-    draft: '📝',
-    sent: '📨',
+    created: '📝',
     confirmed: '✅',
-    in_transit: '🚚',
+    paid: '💰',
+    shipped: '🚚',
     delivered: '📦',
     received: '✅',
     canceled: '❌',
-    rejected: '🚫',
   };
   return map[status] || '📦';
 };
 
 const getPOStatusLabel = (status) => {
   const map = {
-    draft: 'Черновик',
-    sent: 'Отправлен',
+    created: 'Создан',
     confirmed: 'Подтверждён',
-    in_transit: 'В пути',
+    paid: 'Оплачен',
+    shipped: 'Отправлен',
     delivered: 'Доставлен',
     received: 'Получен',
     canceled: 'Отменён',
-    rejected: 'Отклонён',
+  };
+  return map[status] || status;
+};
+
+const getPaymentStatusLabel = (status) => {
+  const map = {
+    unpaid: 'Не оплачен',
+    partial: 'Частично',
+    paid: 'Оплачен',
   };
   return map[status] || status;
 };
 
 function getViewGroup(viewId) {
   const groups = {
-    'Основные': ['dashboard', 'inwork', 'create', 'received', 'history', 'readyToIssue', 'objects'],
-    'Работа с материалами': ['warehouse', 'merge'],
+    'Основные': ['dashboard', 'inwork', 'create', 'received', 'history', 'readyToIssue', 'objects', 'object-hub'],
+    'Работа с материалами': ['warehouse', 'merge', 'priceCatalog'],
     'Клиенты и проекты': ['clients', 'crm-sales', 'projects'],
     'Аналитика и финансы': ['analytics', 'reports', 'estimates', 'tariffs'],
     'Коммуникации': ['chat', 'calendar', 'tasks'],
@@ -509,6 +450,8 @@ const AIAssistant = forwardRef(({
   onCreateDraft,
   onOpenApplication,
   onOpenReceiveModal,
+  // 🆕 НОВЫЙ ПРОП
+  onAddToRFQCart,
   pendingApprovalsCount = 0,
   readyToIssueCount = 0,
   mergeableCount = 0,
@@ -775,8 +718,18 @@ const AIAssistant = forwardRef(({
     });
   }, [userRole]);
 
-  const availableViews = ROLE_VIEWS[userRole] || ROLE_VIEWS.master;
+  // 🆕 ИСПРАВЛЕНО: ROLE_VIEWS[role] — это объект, берём .allowedViews
+  const availableViews = useMemo(() => {
+    const config = ROLE_VIEWS[userRole] || ROLE_VIEWS.master;
+    return config?.allowedViews || [];
+  }, [userRole]);
 
+  // 🆕 Проверка доступа к поставщикам (через флаги прав)
+  const hasSuppliersAccess = useMemo(() => {
+    return isProcurement(userRole) || isSupplier(userRole);
+  }, [userRole]);
+
+  // 🆕 getBadgeCount — теперь использует реальные данные из кэша
   const getBadgeCount = useCallback((viewId) => {
     switch (viewId) {
       case 'readyToIssue': return readyToIssueCount;
@@ -784,13 +737,17 @@ const AIAssistant = forwardRef(({
       case 'merge': return mergeableCount;
       case 'chat': return chatUnreadCount;
       case 'cart': return cartItemsCount;
-      case 'rfqList': return rfqCartCount;
+      case 'rfqList': {
+        // 🆕 Активные RFQ: sent, collecting, analyzing
+        const list = cacheRef.current.rfqList || [];
+        return list.filter(r => ['sent', 'collecting', 'analyzing'].includes(r.status)).length;
+      }
       default: return 0;
     }
-  }, [readyToIssueCount, pendingApprovalsCount, mergeableCount, chatUnreadCount, cartItemsCount, rfqCartCount]);
+  }, [readyToIssueCount, pendingApprovalsCount, mergeableCount, chatUnreadCount, cartItemsCount]);
 
   // ─────────────────────────────────────────────────────────
-  // 🆕 ЗАГРУЗЧИКИ ДАННЫХ ДЛЯ ПОСТАВЩИКОВ
+  // 🆕 ЗАГРУЗЧИКИ ДАННЫХ (через реальные API)
   // ─────────────────────────────────────────────────────────
   const loadSuppliers = useCallback(async (force = false) => {
     if (!userCompanyId || !supabase) return [];
@@ -801,16 +758,8 @@ const AIAssistant = forwardRef(({
     }
 
     try {
-      const { data, error } = await supabase
-        .from('suppliers')
-        .select('id, name, contact_person, phone, email, rating, is_active, inn')
-        .eq('company_id', userCompanyId)
-        .eq('is_active', true)
-        .order('name', { ascending: true })
-        .limit(100);
-
-      if (error) throw error;
-
+      // 🆕 Используем getSuppliers с фильтром status='active'
+      const data = await getSuppliers(userCompanyId, { status: 'active', limit: 100 });
       cacheRef.current.suppliers = data || [];
       cacheRef.current.suppliersFetchedAt = now;
       return data || [];
@@ -829,15 +778,8 @@ const AIAssistant = forwardRef(({
     }
 
     try {
-      const { data, error } = await supabase
-        .from('rfq')
-        .select('id, title, status, created_at, deadline, items_count, offers_count, best_price')
-        .eq('company_id', userCompanyId)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) throw error;
-
+      // 🆕 Используем getRFQList (реальная таблица rfq_requests)
+      const data = await getRFQList(userCompanyId, { limit: 100 });
       cacheRef.current.rfqList = data || [];
       cacheRef.current.rfqFetchedAt = now;
       return data || [];
@@ -856,15 +798,8 @@ const AIAssistant = forwardRef(({
     }
 
     try {
-      const { data, error } = await supabase
-        .from('purchase_orders')
-        .select('id, order_number, status, total_amount, created_at, expected_delivery_date, supplier_id')
-        .eq('company_id', userCompanyId)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) throw error;
-
+      // 🆕 Используем getPurchaseOrders (реальные поля: total, expected_delivery)
+      const data = await getPurchaseOrders(userCompanyId, { limit: 100 });
       cacheRef.current.poList = data || [];
       cacheRef.current.poFetchedAt = now;
       return data || [];
@@ -880,8 +815,6 @@ const AIAssistant = forwardRef(({
   const executeAction = useCallback(async (actionId, payload) => {
     // 🆕 Проверка тарифа и доступа для функций поставщиков
     if (SUPPLIER_ACTIONS.includes(actionId)) {
-      const hasSuppliersAccess = availableViews.some(v => SUPPLIER_VIEWS.includes(v));
-
       if (!hasSuppliersAccess) {
         return {
           content: '❌ Модуль "Поставщики" недоступен на вашем тарифе или для вашей роли.\n\nОбратитесь к руководителю или обновите тариф.',
@@ -891,7 +824,7 @@ const AIAssistant = forwardRef(({
         };
       }
 
-      if (planLimits && !planLimits.canCreateApplication && ['rfq_create', 'po_create_from_rfq'].includes(actionId)) {
+      if (planLimits && !planLimits.canCreateApplication && ['rfq_create', 'po_create_from_rfq', 'rfq_create_with_materials'].includes(actionId)) {
         return {
           content: `⚠️ Лимит заявок исчерпан (${planLimits.applicationsThisMonth}/${planLimits.applicationsLimit}).\n\nОбновите тариф для создания новых RFQ и заказов.`,
           actions: [
@@ -1014,15 +947,16 @@ const AIAssistant = forwardRef(({
         return { content: '✨ Открываю форму создания заявки...' };
       }
 
+      // 🆕 СКЛАД: реальная таблица warehouse_stock, поле description
       case 'warehouse_stock': {
         if (!userCompanyId) return { content: '❌ Компания не найдена' };
 
         const { data, error } = await supabase
-          .from('warehouse_balance')
-          .select('item_name, quantity, unit, updated_at')
+          .from('warehouse_stock')
+          .select('id, description, quantity, unit, updated_at')
           .eq('company_id', userCompanyId)
           .gt('quantity', 0)
-          .order('item_name', { ascending: true })
+          .order('description', { ascending: true })
           .limit(20);
 
         if (error) {
@@ -1038,9 +972,9 @@ const AIAssistant = forwardRef(({
         }
 
         const list = data.map(item => ({
-          id: item.item_name,
+          id: item.id,
           emoji: '📦',
-          title: item.item_name,
+          title: item.description,
           subtitle: `${item.quantity} ${item.unit}`,
         }));
 
@@ -1269,7 +1203,7 @@ const AIAssistant = forwardRef(({
           .join('\n');
 
         return {
-          content: `🤖 **Что я умею:**\n\n**Быстрые действия:**\n${roleActions}\n\n**Навигация:**\nВкладка "Разделы" — переход в любой раздел приложения.\n\n**Поставщики и закупки:**\n• "поставщики" — список поставщиков\n• "RFQ" — запросы цен\n• "заказы" — заказы поставщикам\n• "найди цемент М500" — поиск в каталоге\n\n💡 **Совет:** Используйте кнопку 🎤 для голосового поиска!`,
+          content: `🤖 **Что я умею:**\n\n**Быстрые действия:**\n${roleActions}\n\n**Навигация:**\nВкладка "Разделы" — переход в любой раздел приложения.\n\n**Поставщики и закупки:**\n• "поставщики" — список поставщиков\n• "RFQ" — запросы цен\n• "заказы" — заказы поставщикам\n• "найди цемент М500" — поиск в каталоге\n• "создай RFQ на цемент 100 мешков"\n• "сравни предложения по RFQ #123"\n• "топ-5 поставщиков по цене"\n• "кто поставляет цемент"\n\n💡 **Совет:** Используйте кнопку 🎤 для голосового поиска!`,
         };
       }
 
@@ -1366,11 +1300,11 @@ const AIAssistant = forwardRef(({
         const po = await loadPurchaseOrders();
         const rfq = await loadRFQList();
 
-        const activePO = po.filter(p => !['received', 'canceled', 'rejected'].includes(p.status));
-        const activeRFQ = rfq.filter(r => !['closed', 'canceled', 'awarded'].includes(r.status));
+        const activePO = po.filter(p => !['received', 'canceled'].includes(p.status));
+        const activeRFQ = rfq.filter(r => !['completed', 'canceled'].includes(r.status));
         const totalSpent = po
           .filter(p => p.status === 'received')
-          .reduce((sum, p) => sum + (Number(p.total_amount) || 0), 0);
+          .reduce((sum, p) => sum + (Number(p.total) || 0), 0);
 
         return {
           content: `📊 **Статистика закупок:**\n\n• Поставщиков: **${suppliers.length}**\n• Активных RFQ: **${activeRFQ.length}**\n• Активных заказов: **${activePO.length}**\n• Сумма полученных заказов: **${formatPrice(totalSpent)} ₽**`,
@@ -1380,7 +1314,7 @@ const AIAssistant = forwardRef(({
         };
       }
 
-      // ═══════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════
       // 🆕 КАТАЛОГ МАТЕРИАЛОВ
       // ═══════════════════════════════════════════════════════
       case 'catalog_search_prompt': {
@@ -1397,9 +1331,10 @@ const AIAssistant = forwardRef(({
         }
 
         try {
-          const { searchMaterialsAcrossSuppliers } = await import('../../api/suppliers');
+          // 🆕 Реальная сигнатура: searchMaterialsAcrossSuppliers(companyId, searchTerm, options)
           const results = await searchMaterialsAcrossSuppliers(userCompanyId, query, {
             limit: 10,
+            availableOnly: false,
           });
 
           if (!results || results.length === 0) {
@@ -1411,11 +1346,16 @@ const AIAssistant = forwardRef(({
             };
           }
 
+          // 🆕 Реальные поля: name, article, unit, price, supplier_name, stock_quantity, min_quantity
           const list = results.slice(0, 8).map((item, idx) => ({
             id: item.id || idx,
             emoji: idx === 0 ? '🏆' : '📦',
             title: item.name,
-            subtitle: `${formatPrice(item.price)} ₽ / ${item.unit || 'шт'} · ${item.supplier_name || '—'}`,
+            subtitle: [
+              item.article && `арт. ${item.article}`,
+              `${formatPrice(item.price)} ₽ / ${item.unit || 'шт'}`,
+              item.supplier_name,
+            ].filter(Boolean).join(' · '),
           }));
 
           const cheapest = results[0];
@@ -1465,7 +1405,7 @@ const AIAssistant = forwardRef(({
           id: r.id,
           emoji: getRFQStatusEmoji(r.status),
           title: r.title || `RFQ #${r.id.slice(0, 6)}`,
-          subtitle: `${getRFQStatusLabel(r.status)} · ${r.items_count || 0} поз. · ${r.offers_count || 0} предл.`,
+          subtitle: `${getRFQStatusLabel(r.status)} · ${r.items?.length || 0} поз. · ${r.offers_count || 0} предл.`,
           action: {
             id: 'open_rfq_details',
             label: '👁 Открыть',
@@ -1486,7 +1426,7 @@ const AIAssistant = forwardRef(({
       case 'rfq_pending': {
         const rfq = await loadRFQList();
         const pending = rfq.filter(r =>
-          ['sent', 'collecting', 'collecting_offers'].includes(r.status)
+          ['sent', 'collecting'].includes(r.status)
         );
 
         if (pending.length === 0) {
@@ -1525,7 +1465,7 @@ const AIAssistant = forwardRef(({
       case 'rfq_with_offers': {
         const rfq = await loadRFQList();
         const withOffers = rfq.filter(r =>
-          ['offers_received', 'comparing'].includes(r.status) &&
+          ['collecting', 'analyzing'].includes(r.status) &&
           (r.offers_count || 0) > 0
         );
 
@@ -1542,7 +1482,7 @@ const AIAssistant = forwardRef(({
           id: r.id,
           emoji: '💰',
           title: r.title || `RFQ #${r.id.slice(0, 6)}`,
-          subtitle: `${r.offers_count} предложений${r.best_price ? ` · от ${formatPrice(r.best_price)} ₽` : ''}`,
+          subtitle: `${r.offers_count} предложений${r.best_offer_total ? ` · от ${formatPrice(r.best_offer_total)} ₽` : ''}`,
           action: {
             id: 'open_rfq_details',
             label: '👁 Открыть',
@@ -1582,7 +1522,7 @@ const AIAssistant = forwardRef(({
         const rfqId = payload?.rfqId;
         if (!rfqId) {
           const rfq = await loadRFQList();
-          const active = rfq.find(r => r.status === 'offers_received');
+          const active = rfq.find(r => (r.offers_count || 0) > 0);
           if (!active) {
             return { content: '💰 Нет RFQ с предложениями.' };
           }
@@ -1597,7 +1537,7 @@ const AIAssistant = forwardRef(({
       }
 
       // ═══════════════════════════════════════════════════════
-      // 🆕 ЗАКАЗЫ (PURCHASE ORDERS)
+      // 🆕 ЗАКАЗЫ
       // ═══════════════════════════════════════════════════════
       case 'purchase_orders_list': {
         const po = await loadPurchaseOrders();
@@ -1615,7 +1555,7 @@ const AIAssistant = forwardRef(({
           id: p.id,
           emoji: getPOStatusEmoji(p.status),
           title: p.order_number || `Заказ #${p.id.slice(0, 6)}`,
-          subtitle: `${getPOStatusLabel(p.status)} · ${formatPrice(p.total_amount)} ₽`,
+          subtitle: `${getPOStatusLabel(p.status)} · ${getPaymentStatusLabel(p.payment_status)} · ${formatPrice(p.total)} ₽`,
           action: {
             id: 'open_po_details',
             label: '👁 Открыть',
@@ -1635,7 +1575,7 @@ const AIAssistant = forwardRef(({
       case 'po_pending': {
         const po = await loadPurchaseOrders();
         const pending = po.filter(p =>
-          ['sent', 'confirmed', 'in_transit', 'delivered'].includes(p.status)
+          ['created', 'confirmed', 'paid', 'shipped', 'delivered'].includes(p.status)
         );
 
         if (pending.length === 0) {
@@ -1653,7 +1593,7 @@ const AIAssistant = forwardRef(({
             id: p.id,
             emoji: getPOStatusEmoji(p.status),
             title: p.order_number || `Заказ #${p.id.slice(0, 6)}`,
-            subtitle: `${getPOStatusLabel(p.status)} · ${days} дн. · ${formatPrice(p.total_amount)} ₽`,
+            subtitle: `${getPOStatusLabel(p.status)} · ${days} дн. · ${formatPrice(p.total)} ₽`,
             action: {
               id: 'open_po_details',
               label: '👁 Открыть',
@@ -1683,7 +1623,7 @@ const AIAssistant = forwardRef(({
           id: p.id,
           emoji: '✅',
           title: p.order_number || `Заказ #${p.id.slice(0, 6)}`,
-          subtitle: `${formatDate(p.created_at)} · ${formatPrice(p.total_amount)} ₽`,
+          subtitle: `${formatDate(p.created_at)} · ${formatPrice(p.total)} ₽`,
           action: {
             id: 'open_po_details',
             label: '👁 Открыть',
@@ -1708,6 +1648,229 @@ const AIAssistant = forwardRef(({
       case 'po_create_from_rfq': {
         onNavigate?.('purchaseOrderCreate');
         return { content: '📦 Открываю форму создания заказа...' };
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // 🆕 НОВЫЕ СЦЕНАРИИ
+      // ═══════════════════════════════════════════════════════
+
+      // 🆕 "создай RFQ на цемент 100 мешков"
+      case 'rfq_create_with_materials': {
+        const text = payload?.text || '';
+        if (!onAddToRFQCart) {
+          return { content: '⚠️ Функция добавления в RFQ недоступна. Открываю форму RFQ...\n\nДобавьте материалы вручную.' };
+        }
+
+        // Парсим: "создай RFQ на цемент 100 мешков"
+        // Также варианты: "создай запрос цен на цемент 100 мешков", "создай rfq цемент 100 мешков"
+        const match = text.match(
+          /(?:созда[йть]|нов[ый]+)\s+(?:rfq|запрос\s+цен)\s+(?:на\s+)?(.+?)(?:\s+(\d+(?:[.,]\d+)?)\s*([а-яa-z]+)?)?$/i
+        );
+
+        if (!match) {
+          return { content: '📨 Не удалось распознать материал. Попробуйте: «создай RFQ на цемент 100 мешков»' };
+        }
+
+        const [, materialRaw, qtyRaw, unitRaw] = match;
+        const materialName = materialRaw?.trim() || '';
+        const quantity = qtyRaw ? Number(qtyRaw.replace(',', '.')) : 1;
+        const unit = unitRaw?.trim() || 'шт';
+
+        if (!materialName) {
+          return { content: '📨 Укажите название материала. Пример: «создай RFQ на цемент 100 мешков»' };
+        }
+
+        const items = [{
+          name: materialName,
+          quantity: quantity > 0 ? quantity : 1,
+          unit,
+        }];
+
+        onAddToRFQCart(items);
+
+        return {
+          content: `📨 Создаю RFQ на **${materialName}** — **${quantity} ${unit}**...\n\nФорма открыта с предзаполненными данными.`,
+        };
+      }
+
+      // 🆕 "сравни предложения по RFQ #123"
+      case 'compare_rfq_offers': {
+        const text = payload?.text || '';
+        const numMatch = text.match(/#?(\d+)/);
+        if (!numMatch) {
+          return { content: '⚖️ Укажите номер RFQ. Например: «сравни предложения по RFQ #123»' };
+        }
+
+        const rfqNumber = numMatch[1];
+        const rfqList = await loadRFQList();
+
+        const targetRFQ = rfqList.find(r => {
+          if (!r) return false;
+          // Если id короткий — сравниваем по вхождению номера
+          if (r.id?.includes(rfqNumber)) return true;
+          if (r.title && new RegExp(`#?${rfqNumber}\\b`).test(r.title)) return true;
+          return false;
+        });
+
+        if (!targetRFQ) {
+          return { content: `⚖️ RFQ #${rfqNumber} не найден среди ваших запросов.` };
+        }
+
+        if ((targetRFQ.offers_count || 0) < 2) {
+          return {
+            content: `⚖️ У RFQ «${targetRFQ.title || rfqNumber}» пока меньше двух предложений — сравнить нечего.\n\nОткрыть детали RFQ?`,
+            actions: [
+              { id: 'open_rfq_details', label: '👁 Открыть RFQ', payload: { rfqId: targetRFQ.id } },
+            ],
+          };
+        }
+
+        // 🆕 Сохраняем флаг — RFQDetails сам откроет сравнение
+        try {
+          localStorage.setItem('rfq_focus_compare', targetRFQ.id);
+        } catch (e) {
+          console.warn('[AIAssistant] Не удалось сохранить rfq_focus_compare:', e);
+        }
+
+        onNavigate?.('rfqDetails');
+
+        // Также нужно выставить selectedRFQId в App.jsx — сделаем это через спец. событие
+        try {
+          window.dispatchEvent(new CustomEvent('ai-open-rfq', {
+            detail: { rfqId: targetRFQ.id, focusCompare: true },
+          }));
+        } catch (e) {
+          console.warn('[AIAssistant] dispatch ai-open-rfq failed:', e);
+        }
+
+        return {
+          content: `⚖️ Открываю RFQ **#${rfqNumber}** «${targetRFQ.title || ''}» для сравнения предложений...`,
+        };
+      }
+
+      // 🆕 "топ-5 поставщиков по цене" (по сумме полученных заказов)
+      case 'top_suppliers_by_price': {
+        const suppliers = await loadSuppliers();
+        const po = await loadPurchaseOrders();
+
+        // Считаем сумму по каждому поставщику
+        const totals = {};
+        po.forEach(p => {
+          if (!p.supplier_id) return;
+          if (p.status === 'canceled') return;
+          totals[p.supplier_id] = (totals[p.supplier_id] || 0) + (Number(p.total) || 0);
+        });
+
+        const sorted = Object.entries(totals)
+          .map(([supplierId, total]) => {
+            const supplier = suppliers.find(s => s.id === supplierId);
+            return supplier ? { supplier, total } : null;
+          })
+          .filter(Boolean)
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 5);
+
+        if (sorted.length === 0) {
+          return {
+            content: '📊 Пока нет данных о заказах для анализа.\n\nСоздайте первый заказ поставщику.',
+            actions: [
+              { id: 'navigate_to', label: '📦 К заказам', payload: { viewId: 'purchaseOrders' } },
+            ],
+          };
+        }
+
+        const list = sorted.map((item, idx) => ({
+          id: item.supplier.id,
+          emoji: idx === 0 ? '🏆' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🏢',
+          title: item.supplier.name,
+          subtitle: `Сумма: ${formatPrice(item.total)} ₽${item.supplier.rating > 0 ? ` · ★ ${Number(item.supplier.rating).toFixed(1)}` : ''}`,
+          action: {
+            id: 'open_supplier_details',
+            label: '👁 Открыть',
+            payload: { supplierId: item.supplier.id },
+          },
+        }));
+
+        return {
+          content: `🏆 **Топ-5 поставщиков по сумме заказов:**`,
+          data: list,
+          actions: [
+            { id: 'navigate_to', label: '📊 Дашборд закупок', payload: { viewId: 'procurementDashboard' } },
+          ],
+        };
+      }
+
+      // 🆕 "кто поставляет цемент"
+      case 'who_supplies_material': {
+        const text = payload?.text || '';
+        const match = text.match(/(?:кто\s+поставляет|поставщики|поставщик)\s+(.+)/i);
+        if (!match) {
+          return { content: '🔍 Укажите материал. Например: «кто поставляет цемент»' };
+        }
+
+        const materialQuery = match[1].trim().replace(/[?.,!]+$/, '');
+        if (materialQuery.length < 2) {
+          return { content: '🔍 Уточните название материала.' };
+        }
+
+        try {
+          const results = await searchMaterialsAcrossSuppliers(userCompanyId, materialQuery, {
+            limit: 50,
+            availableOnly: false,
+          });
+
+          if (!results || results.length === 0) {
+            return {
+              content: `🔍 По материалу "${materialQuery}" поставщиков не найдено.`,
+              actions: [
+                { id: 'navigate_to', label: '🔍 Открыть каталог', payload: { viewId: 'supplierCatalog' } },
+              ],
+            };
+          }
+
+          // Группируем по поставщику
+          const bySupplier = new Map();
+          for (const item of results) {
+            const key = item.supplier_id || item.supplier_name || 'unknown';
+            if (!bySupplier.has(key)) {
+              bySupplier.set(key, {
+                supplier_id: item.supplier_id,
+                supplier_name: item.supplier_name || 'Поставщик',
+                supplier_rating: item.supplier_rating,
+                items: [],
+              });
+            }
+            bySupplier.get(key).items.push(item);
+          }
+
+          const grouped = Array.from(bySupplier.values()).map(g => {
+            const prices = g.items.map(i => Number(i.price) || 0).filter(p => p > 0);
+            return {
+              ...g,
+              minPrice: prices.length ? Math.min(...prices) : 0,
+              maxPrice: prices.length ? Math.max(...prices) : 0,
+              count: g.items.length,
+            };
+          }).sort((a, b) => a.minPrice - b.minPrice);
+
+          const list = grouped.slice(0, 8).map((g, idx) => ({
+            id: g.supplier_id || g.supplier_name,
+            emoji: idx === 0 ? '🏆' : '🏢',
+            title: g.supplier_name,
+            subtitle: `${g.count} предложений · от ${formatPrice(g.minPrice)} ₽${g.supplier_rating > 0 ? ` · ★ ${Number(g.supplier_rating).toFixed(1)}` : ''}`,
+          }));
+
+          return {
+            content: `🔍 **Поставщики материала "${materialQuery}" (${grouped.length}):**`,
+            data: list,
+            actions: [
+              { id: 'navigate_to', label: '🔍 Открыть каталог', payload: { viewId: 'supplierCatalog' } },
+            ],
+          };
+        } catch (err) {
+          console.error('[AIAssistant] who_supplies_material error:', err);
+          return { content: '❌ Не удалось выполнить поиск.' };
+        }
       }
 
       // ═══════════════════════════════════════════════════════
@@ -1743,6 +1906,28 @@ const AIAssistant = forwardRef(({
         }
         if (lowerText.includes('созда') && lowerText.includes('заяв')) {
           return executeAction('create_app');
+        }
+
+        // ─── 🆕 НОВЫЕ СЦЕНАРИИ (проверяем раньше общих) ───
+
+        // "создай RFQ на ..."
+        if (/(?:созда[йть]|нов[ый]+)\s+(?:rfq|запрос\s+цен)/i.test(text)) {
+          return executeAction('rfq_create_with_materials', { text });
+        }
+
+        // "сравни предложения по RFQ #..."
+        if (/сравн/i.test(text) && /(rfq|предложен)/i.test(text)) {
+          return executeAction('compare_rfq_offers', { text });
+        }
+
+        // "топ-N поставщиков по цене"
+        if (/топ[-\s]?\d*\s*поставщик/i.test(text)) {
+          return executeAction('top_suppliers_by_price');
+        }
+
+        // "кто поставляет ..."
+        if (/кто\s+поставляет/i.test(text)) {
+          return executeAction('who_supplies_material', { text });
         }
 
         // ─── 🆕 ПОСТАВЩИКИ ───
@@ -1789,7 +1974,7 @@ const AIAssistant = forwardRef(({
         }
 
         // ─── 🆕 ЗАКАЗЫ ───
-        if (lowerText.match(/заказ|po|purchase order/i)) {
+        if (lowerText.match(/заказ|purchase order/i)) {
           if (lowerText.match(/созда|нов/i)) {
             onNavigate?.('purchaseOrderCreate');
             return { content: '📦 Открываю форму создания заказа...' };
@@ -1857,7 +2042,7 @@ const AIAssistant = forwardRef(({
         }
 
         return {
-          content: `🔍 По запросу "${text}" ничего не найдено.\n\nПопробуйте:\n• "поставщики"\n• "RFQ"\n• "заказы"\n• "найди цемент М500"\n• "мои заявки"\n• "склад"`,
+          content: `🔍 По запросу "${text}" ничего не найдено.\n\nПопробуйте:\n• "поставщики"\n• "RFQ"\n• "заказы"\n• "найди цемент М500"\n• "создай RFQ на цемент 100 мешков"\n• "сравни предложения по RFQ #123"\n• "топ-5 поставщиков по цене"\n• "кто поставляет цемент"\n• "мои заявки"\n• "склад"`,
           actions: [
             { id: 'suppliers_list', label: '🏢 Поставщики' },
             { id: 'rfq_list', label: '📨 RFQ' },
@@ -1894,6 +2079,7 @@ const AIAssistant = forwardRef(({
     onCreateDraft, onOpenApplication, onOpenReceiveModal, showNotification,
     rfqCartCount, planLimits,
     loadSuppliers, loadRFQList, loadPurchaseOrders,
+    hasSuppliersAccess, onAddToRFQCart,
   ]);
 
   const handleAction = useCallback(async (actionId, payload = null, customLabel = null) => {
@@ -2006,6 +2192,7 @@ ${msg.content}
       '⚠️', '👥', '🏗️', '🎤', '💡', '🔍', '📍', '➡️', '❌', '🤔',
       '📭', '📄', '🆕', '🎯', '📌', '⭐', '🔊', '👁', '🕐', '🏢',
       '💰', '📨', '🚚', '🏆', '★', '⚙️', '🚫', '⚖️', '📝', '🟢',
+      '🥈', '🥉',
     ];
 
     let cleanText = text.replace(/\*\*/g, '');
@@ -2037,10 +2224,10 @@ ${msg.content}
         procurement_manager: 'менеджер по закупкам',
         supplier_admin: 'администратор поставщика',
         supplier_manager: 'менеджер поставщика',
+        designer: 'проектировщик',
       }[userRole] || 'пользователь';
 
-      const hasSuppliers = availableViews.includes('suppliers');
-      const supplierHint = hasSuppliers
+      const supplierHint = hasSuppliersAccess
         ? '\n\n🏢 Могу помочь с **поставщиками, каталогом, RFQ и заказами**!'
         : '';
 
@@ -2054,7 +2241,7 @@ ${msg.content}
       }]);
       setHasInitialized(true);
     }
-  }, [isOpen, hasInitialized, userRole, availableViews, currentPlan]);
+  }, [isOpen, hasInitialized, userRole, hasSuppliersAccess, currentPlan]);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -2456,7 +2643,7 @@ ${msg.content}
 
                   <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
                     <p className="text-xs text-blue-700 dark:text-blue-300">
-                      💡 <strong>Совет:</strong> Напишите <strong>"найди цемент М500"</strong> — найду лучшую цену во всех прайс-листах.
+                      💡 <strong>Совет:</strong> Напишите <strong>"найди цемент М500"</strong> — найду лучшую цену. Или <strong>"создай RFQ на цемент 100 мешков"</strong>.
                     </p>
                   </div>
                 </>

@@ -90,6 +90,15 @@ export default function RFQDetails({
   // 🆕 Модалка сравнения офферов
   const [comparisonOpen, setComparisonOpen] = useState(false);
 
+    // 🆕 АВТОФОКУС НА СРАВНЕНИЕ ИЗ AI-АССИСТЕНТА
+  useEffect(() => {
+    const focusRfqId = localStorage.getItem('rfq_focus_compare');
+    if (focusRfqId === rfqId && offers.length > 1) {
+      setComparisonOpen(true);
+      localStorage.removeItem('rfq_focus_compare');
+    }
+  }, [rfqId, offers.length]);
+
   // ─── Загрузка ──────────────────────────────────────────
   const loadAll = useCallback(
     async ({ silent = false } = {}) => {
