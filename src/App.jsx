@@ -4210,6 +4210,23 @@ const openReceiveModal = useCallback((application, mode = 'admin_receive') => {
     return;
   }
 
+    // ✅ Возврат остатков на склад — мастер и снабженец
+  if (mode === 'master_return') {
+    if (userRole !== 'master' && userRole !== 'foreman' && userRole !== 'supply_admin') {
+      showNotification('Нет прав на возврат материалов', 'error');
+      return;
+    }
+    const hasSomethingToReturn = application.materials?.some(m => {
+      const received = Number(m.received) || 0;
+      const returned = Number(m.returned_to_stock_quantity) || 0;
+      return received > returned && received > 0;
+    });
+    if (!hasSomethingToReturn) {
+      showNotification('Нет материалов для возврата', 'warning');
+      return;
+    }
+  }
+
   // ✅ ИСПРАВЛЕНО: режим "Выдача со склада"
   //    Сравниваем с ФАКТИЧЕСКИ принятым, а не с заказанным
   if (mode === 'admin_ready_to_issue') {
@@ -4845,6 +4862,124 @@ return { success: true };
     return { success: false };
   }
 }, [user, supabase, showNotification, setApplications]);
+
+// ============================================================
+// 🔹 ВОЗВРАТ НА СКЛАД (мастер возвращает остатки с объекта)
+// ============================================================
+const handleReturnToStock = useCallback(async (localMaterials, application, reason = '') => {
+  console.log('↩️ [RETURN TO STOCK] вызван', {
+    applicationId: application?.id,
+    materialsCount: localMaterials?.length || 0,
+  });
+
+  if (!application?.id) {
+    showNotification('Ошибка: заявка не найдена', 'error');
+    return { success: false };
+  }
+
+  const cleanCompanyId = getSafeCompanyId(userCompanyId);
+  if (!cleanCompanyId) {
+    showNotification('Ошибка: компания не найдена', 'error');
+    return { success: false };
+  }
+
+  // Фильтруем только позиции с quantityToReturn > 0
+  const itemsToReturn = (localMaterials || [])
+    .filter(m => (Number(m.quantityToReturn) || 0) > 0)
+    .map(m => ({
+      description: (m.description || m.item_name || '').trim(),
+      unit: m.unit || 'шт',
+      quantity: Number(m.quantityToReturn) || 0,
+    }));
+
+  if (itemsToReturn.length === 0) {
+    showNotification('Укажите количество для возврата', 'warning');
+    return { success: false };
+  }
+
+  try {
+    // 1. Вызываем RPC
+    const { data, error } = await supabase.rpc('return_materials_to_stock', {
+      p_application_id: application.id,
+      p_company_id: cleanCompanyId,
+      p_user_id: user?.id,
+      p_user_email: user?.email,
+      p_items: itemsToReturn,
+      p_recipient_id: application.user_id || null,
+      p_reason: reason?.trim() || null,
+    });
+
+    if (error) {
+      console.error('❌ [RETURN TO STOCK] RPC ошибка:', error);
+      showNotification(`Ошибка возврата: ${error.message}`, 'error');
+      return { success: false };
+    }
+
+    if (!data?.success) {
+      console.error('❌ [RETURN TO STOCK] RPC вернул success=false:', data);
+      showNotification(
+        `Не удалось вернуть на склад: ${data?.error || 'неизвестная ошибка'}`,
+        'error'
+      );
+      return { success: false };
+    }
+
+    // 2. Обновляем materials в локальном стейте:
+    //    увеличиваем returned_to_stock_quantity
+    const updatedMaterials = application.materials.map(original => {
+      const returnItem = itemsToReturn.find(
+        i => (i.description || '') === (original.description || original.item_name)
+      );
+      if (returnItem) {
+        return {
+          ...original,
+          returned_to_stock_quantity:
+            (Number(original.returned_to_stock_quantity) || 0) + returnItem.quantity,
+          returned_at: new Date().toISOString(),
+          returned_by_user_id: user?.id,
+        };
+      }
+      return original;
+    });
+
+    // 3. Обновляем заявку в БД (только materials, статус НЕ трогаем)
+    const { error: updateError } = await supabase
+      .from('applications')
+      .update({
+        materials: updatedMaterials,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', application.id);
+
+    if (updateError) {
+      console.warn('⚠️ [RETURN TO STOCK] Не удалось обновить materials в БД:', updateError);
+    }
+
+    // 4. Обновляем локальный стейт приложения
+    setApplications(prev => prev.map(app =>
+      app.id === application.id
+        ? { ...app, materials: updatedMaterials }
+        : app
+    ));
+
+    // 5. Инвалидируем кэш (склад и заявки)
+    cacheManager.delete('applications', `applications_${cleanCompanyId}_page_1`);
+    cacheManager.delete('analytics', `analytics_${cleanCompanyId}_${isAdminMode}`);
+
+    const totalQty = itemsToReturn.reduce((sum, i) => sum + i.quantity, 0);
+    showNotification(
+      `↩️ Возвращено на склад: ${itemsToReturn.length} поз. (${totalQty} ед.)`,
+      'success'
+    );
+    setShowReceiveModal(false);
+
+    return { success: true };
+  } catch (err) {
+    console.error('❌ [RETURN TO STOCK] Критическая ошибка:', err);
+    showNotification('Ошибка возврата: ' + err.message, 'error');
+    return { success: false };
+  }
+}, [user, userCompanyId, supabase, showNotification, setApplications, isAdminMode]);
 
   // ─────────────────────────────────────────────────────────
   // 🔐 ADMIN FUNCTIONS
@@ -9240,6 +9375,10 @@ onClearFilters={handleClearFilters}
   onAdminReceive={handleAdminReceive}
   onSendToMaster={handleSendToMaster}
   onMasterConfirm={handleMasterConfirm}  // ← Теперь принимает (localMaterials, application)
+  onReturnToStock={handleReturnToStock}
+  onRequestReturnMode={(app) => {
+  setSelectedApplication({ ...app, modalMode: 'master_return' });
+  }}
   language={language}
   escapeHtml={escapeHtml}
   userRole={userRole}

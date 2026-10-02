@@ -626,6 +626,8 @@ export const translations = {
     // 📝 ФОРМА
     // ──────────────────────────────────────────────────────────────────────
     decreaseQuantity: 'Уменьшить количество',
+    returnToStock: 'Возврат на склад',
+    quantityToReturn: 'Количество к возврату',
     increaseQuantity: 'Увеличить количество',
     confirmQuantity: 'Количество для подтверждения',
     confirmedQuantityHelp: 'Введите количество подтверждённых единиц',
@@ -1755,6 +1757,8 @@ export const translations = {
     // 📝 FORM
     // ──────────────────────────────────────────────────────────────────────
     decreaseQuantity: 'Decrease quantity',
+    returnToStock: 'Return to stock',
+    quantityToReturn: 'Quantity to return',
     increaseQuantity: 'Increase quantity',
     confirmQuantity: 'Quantity to confirm',
     confirmedQuantityHelp: 'Enter confirmed quantity',

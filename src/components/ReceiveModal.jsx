@@ -98,6 +98,20 @@ const getAvailableToIssue = (m) => {
  */
 const canIssueFromWarehouse = (m) => getAvailableToIssue(m) > 0;
 
+/**
+ * ✅ ЕДИНАЯ ЛОГИКА: сколько доступно для возврата на склад
+ */
+const getAvailableToReturn = (m) => {
+  const received = Number(m.received) || 0;
+  const alreadyReturned = Number(m.returned_to_stock_quantity) || 0;
+  return Math.max(0, received - alreadyReturned);
+};
+
+/**
+ * ✅ ЕДИНАЯ ЛОГИКА: можно ли вернуть что-то по материалу
+ */
+const canReturnToStock = (m) => getAvailableToReturn(m) > 0;
+
 // ─────────────────────────────────────────────────────────────
 // 🎨 UI КОМПОНЕНТЫ
 // ─────────────────────────────────────────────────────────────
@@ -565,6 +579,8 @@ const ReceiveModal = memo(function({
   onAdminReceive,
   onSendToMaster,
   onMasterConfirm,
+  onReturnToStock,          // 🆕 возврат на склад
+  onRequestReturnMode,      // 🆕 переключение из master_confirm в master_return
   language,
   escapeHtml,
   onTakeToWork,
@@ -608,6 +624,9 @@ const ReceiveModal = memo(function({
   const [selectedRecipientId, setSelectedRecipientId] = useState('');
   const modalContentRef = useRef(null);
 
+  // 🆕 Состояние для возврата на склад
+  const [returnReason, setReturnReason] = useState('');
+
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [_photos, _setPhotos] = useState([]);
@@ -631,16 +650,22 @@ const ReceiveModal = memo(function({
   }, [isOpen]);
 
   // ─────────────────────────────────────────────────────────
-  // ✅ INIT LOCAL MATERIALS — исправлена логика для admin_ready_to_issue
+  // ✅ INIT LOCAL MATERIALS
   // ─────────────────────────────────────────────────────────
   useEffect(function() {
     if (selectedApplication && selectedApplication.materials) {
       let materials = selectedApplication.materials;
 
-      if (modalMode === 'master_confirm') {
+      // В режимах "подтверждение мастером" и "возврат" показываем только то,
+      // что реально уходило мастеру
+      if (modalMode === 'master_confirm' || modalMode === 'master_return') {
         materials = materials.filter(function(m) {
           const sentToMaster = Number(m.sent_to_master_quantity) || 0;
-          return sentToMaster > 0;
+          const received = Number(m.received) || 0;
+          if (modalMode === 'master_confirm') return sentToMaster > 0;
+          // для возврата — только то, что мастер получил и ещё не вернул
+          const returned = Number(m.returned_to_stock_quantity) || 0;
+          return received > returned;
         });
       }
 
@@ -654,15 +679,16 @@ const ReceiveModal = memo(function({
             received: Number(m.received) || 0,
             supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
             sent_to_master_quantity: Number(m.sent_to_master_quantity) || 0,
-            quantity: Number(m.quantity) || 0
+            quantity: Number(m.quantity) || 0,
+            // 🆕 поля для возврата
+            returned_to_stock_quantity: Number(m.returned_to_stock_quantity) || 0,
+            quantityToReturn: 0
           };
         });
 
       setLocalMaterials(validMaterials);
 
       if (modalMode === 'admin_ready_to_issue') {
-        // ✅ Показываем ВСЕ материалы, у которых есть остаток на складе,
-        //    даже если что-то уже отправлено (можно доложить остаток)
         const availableItems = validMaterials
           .filter(canIssueFromWarehouse)
           .map(function(m) {
@@ -694,7 +720,6 @@ const ReceiveModal = memo(function({
       let result;
 
       if (modalMode === 'admin_receive' && typeof onAdminReceive === 'function') {
-        // ✅ Отправляем ВСЕ материалы — RPC посчитает дельты от старого значения
         const allMaterials = selectedApplication.materials.map(original => {
           const fromModal = localMaterials.find(m =>
             (m.description || m.item_name) === (original.description || original.item_name)
@@ -711,7 +736,6 @@ const ReceiveModal = memo(function({
         result = await onAdminReceive(allMaterials, selectedApplication);
       }
       else if ((modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue') && typeof onSendToMaster === 'function') {
-        // ✅ Нормализуем items к единому формату
         const items = itemsToSend
           .filter(i => (Number(i.quantityToSend) || 0) > 0)
           .map(i => ({
@@ -721,7 +745,6 @@ const ReceiveModal = memo(function({
           }));
 
         console.log('🚀 [handleSave] items к отправке:', items);
-        console.log('🚀 [handleSave] itemsToSend (raw):', itemsToSend);
 
         if (items.length === 0) {
           if (showNotification) {
@@ -734,7 +757,6 @@ const ReceiveModal = memo(function({
           return;
         }
 
-        // ✅ Определяем получателя
         let recipientId = selectedApplication.user_id;
         let recipientName = selectedApplication.foreman_name;
 
@@ -746,8 +768,6 @@ const ReceiveModal = memo(function({
           }
         }
 
-        console.log('🚀 [handleSave] recipientId:', recipientId, 'recipientName:', recipientName);
-
         result = await onSendToMaster(
           items,
           selectedApplication,
@@ -757,7 +777,6 @@ const ReceiveModal = memo(function({
         );
       }
       else if (modalMode === 'master_confirm' && typeof onMasterConfirm === 'function') {
-        // ✅ Отправляем ПОЛНЫЙ список материалов заявки (включая неотправленные)
         const fullMaterials = selectedApplication.materials.map((originalMaterial) => {
           const updatedMaterial = localMaterials.find(m =>
             (m.description || m.item_name) === (originalMaterial.description || originalMaterial.item_name)
@@ -777,6 +796,27 @@ const ReceiveModal = memo(function({
         console.log('🔔 [MASTER CONFIRM] Полный список материалов:', fullMaterials);
         result = await onMasterConfirm(fullMaterials, selectedApplication);
       }
+      // 🆕 ВОЗВРАТ НА СКЛАД
+      else if (modalMode === 'master_return' && typeof onReturnToStock === 'function') {
+        const materialsForReturn = localMaterials.filter(
+          m => (Number(m.quantityToReturn) || 0) > 0
+        );
+
+        if (materialsForReturn.length === 0) {
+          if (showNotification) {
+            showNotification('Укажите количество для возврата', 'warning');
+          }
+          setIsSaving(false);
+          return;
+        }
+
+        console.log('↩️ [master_return] Материалы к возврату:', materialsForReturn);
+        result = await onReturnToStock(
+          materialsForReturn,
+          selectedApplication,
+          returnReason
+        );
+      }
 
       if (result && result.success) {
         if (showNotification) {
@@ -784,6 +824,8 @@ const ReceiveModal = memo(function({
             showNotification('✅ Материалы выданы мастеру со склада', 'success');
           } else if (modalMode === 'master_confirm') {
             showNotification('✅ Подтверждение сохранено', 'success');
+          } else if (modalMode === 'master_return') {
+            showNotification('↩️ Материалы возвращены на склад', 'success');
           } else {
             showNotification(t('materialsAcceptedToWarehouse') || '✅ Успешно сохранено', 'success');
           }
@@ -796,7 +838,7 @@ const ReceiveModal = memo(function({
     } finally {
       setIsSaving(false);
     }
-  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, localMaterials, itemsToSend, selectedApplication, onClose, t, showNotification, isSaving, selectedRecipientId, employees, transferComment]);
+  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, onReturnToStock, localMaterials, itemsToSend, selectedApplication, onClose, t, showNotification, isSaving, selectedRecipientId, employees, transferComment, returnReason]);
 
   useEffect(function() {
     const handleKeyDown = function(e) {
@@ -868,6 +910,20 @@ const ReceiveModal = memo(function({
       });
     });
   }, [userId]);
+
+  // 🆕 Обновление quantityToReturn
+  const handleReturnQuantityChange = useCallback(function(index, value) {
+    setLocalMaterials(function(prev) {
+      return prev.map(function(m, idx) {
+        if (idx === index) {
+          const maxReturnable = getAvailableToReturn(m);
+          const newVal = clamp(value, 0, maxReturnable);
+          return { ...m, quantityToReturn: newVal };
+        }
+        return m;
+      });
+    });
+  }, []);
 
   const handleQRScan = useCallback(function(qrData) {
     if (!safeCompanyId) {
@@ -958,6 +1014,13 @@ const ReceiveModal = memo(function({
       });
     }
 
+    // 🆕 возврат
+    if (modalMode === 'master_return') {
+      return localMaterials.some(function(m) {
+        return (Number(m.quantityToReturn) || 0) > 0;
+      });
+    }
+
     return false;
   }, [modalMode, localMaterials, itemsToSend, selectedApplication]);
 
@@ -972,6 +1035,12 @@ const ReceiveModal = memo(function({
       return sum + (Number(i.quantityToSend) || 0);
     }, 0);
   }, [itemsToSend]);
+
+  const totalToReturn = useMemo(function() {
+    return localMaterials.reduce(function(sum, m) {
+      return sum + (Number(m.quantityToReturn) || 0);
+    }, 0);
+  }, [localMaterials]);
 
   const confirmedCount = useMemo(function() {
     return localMaterials.filter(function(m) {
@@ -988,17 +1057,15 @@ const ReceiveModal = memo(function({
   }, [localMaterials]);
 
   // ============================================================
-  // ✅ РЕЖИМ: ВЫДАЧА СО СКЛАДА — используем единый helper
+  // ✅ РЕЖИМ: ВЫДАЧА СО СКЛАДА
   // ============================================================
   const renderReadyToIssue = function() {
-    // ✅ Используем общий helper canIssueFromWarehouse
     const availableMaterials = localMaterials.filter(canIssueFromWarehouse);
 
     console.log('🔍 [renderReadyToIssue] localMaterials:', localMaterials);
     console.log('🔍 [renderReadyToIssue] availableMaterials:', availableMaterials);
 
     if (availableMaterials.length === 0) {
-      // ✅ Показываем разную подсказку в зависимости от ситуации
       const hasAnyMaterials = localMaterials.length > 0;
       const hasAnyOnWarehouse = localMaterials.some(
         m => (Number(m.supplier_received_quantity) || 0) > 0
@@ -1032,7 +1099,6 @@ const ReceiveModal = memo(function({
       );
     }
 
-    // 🆕 Фильтруем сотрудников для выбора получателя
     const availableRecipients = employees.filter(e =>
       e.role === 'master' || e.role === 'foreman'
     );
@@ -1213,14 +1279,16 @@ const ReceiveModal = memo(function({
     admin_receive: t('acceptToWarehouse') || 'Приёмка на склад',
     admin_send_to_master: t('sendToMaster') || 'Отправка мастеру',
     master_confirm: t('confirmReceipt') || 'Подтверждение получения',
-    admin_ready_to_issue: t('readyToIssue') || 'Выдача со склада'
+    admin_ready_to_issue: t('readyToIssue') || 'Выдача со склада',
+    master_return: t('returnToStock') || 'Возврат на склад'
   };
 
   const modalIcons = {
     admin_receive: Warehouse,
     admin_send_to_master: Send,
     master_confirm: CheckCircle2,
-    admin_ready_to_issue: Package
+    admin_ready_to_issue: Package,
+    master_return: Undo2
   };
 
   const ModalIcon = modalIcons[modalMode] || Warehouse;
@@ -1511,9 +1579,27 @@ const ReceiveModal = memo(function({
           {/* 🔹 МАСТЕР: Подтверждение получения */}
           {modalMode === 'master_confirm' && (
             <>
-              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
-                {t('confirmReceiptHint') || 'Подтвердите получение материалов или укажите причину отклонения'}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+                  {t('confirmReceiptHint') || 'Подтвердите получение материалов или укажите причину отклонения'}
+                </div>
+
+                {/* 🆕 Кнопка перехода к возврату на склад */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof onRequestReturnMode === 'function') {
+                      onRequestReturnMode(selectedApplication);
+                    } else if (showNotification) {
+                      showNotification('Возврат доступен через детали заявки', 'info');
+                    }
+                  }}
+                  className="px-3 py-2 text-xs font-medium text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg flex items-center gap-1.5 transition-colors shrink-0"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                  Вернуть остатки
+                </button>
               </div>
 
               {showMasterProgress && (
@@ -1563,6 +1649,131 @@ const ReceiveModal = memo(function({
               )}
             </>
           )}
+
+          {/* 🆕 МАСТЕР: Возврат на склад */}
+          {modalMode === 'master_return' && (
+            <>
+              <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
+                <Undo2 className="w-4 h-4" aria-hidden="true" />
+                Укажите, сколько материалов вернуть на склад
+              </div>
+
+              {localMaterials.filter(canReturnToStock).length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p className="font-medium">Нет материалов для возврата</p>
+                  <p className="text-sm">Все полученные материалы уже возвращены</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {localMaterials.map(function(material, index) {
+                    const received = Number(material.received) || 0;
+                    const alreadyReturned = Number(material.returned_to_stock_quantity) || 0;
+                    const maxReturnable = getAvailableToReturn(material);
+                    const returnQty = Number(material.quantityToReturn) || 0;
+
+                    if (maxReturnable <= 0) return null;
+
+                    return (
+                      <article
+                        key={index}
+                        className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60"
+                      >
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+                              {material.description || '—'}
+                            </h4>
+                            <div className="text-xs text-gray-500 space-y-0.5">
+                              <div>Получено мастером: <strong>{formatNumber(received)}</strong> {material.unit || 'шт'}</div>
+                              {alreadyReturned > 0 && (
+                                <div>Уже возвращено: <strong>{formatNumber(alreadyReturned)}</strong> {material.unit || 'шт'}</div>
+                              )}
+                              <div className="text-orange-600 dark:text-orange-400">
+                                Доступно для возврата: <strong>{formatNumber(maxReturnable)}</strong> {material.unit || 'шт'}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <div className="quantity-stepper flex items-center gap-1.5 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-1">
+                              <button
+                                type="button"
+                                onClick={function() { handleReturnQuantityChange(index, returnQty - 1); }}
+                                disabled={returnQty <= 0}
+                                className="w-9 h-9 flex items-center justify-center rounded-lg text-orange-600 dark:text-orange-400 hover:bg-white dark:hover:bg-orange-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                aria-label={t('decreaseQuantity')}
+                              >
+                                <ChevronDown className="w-4 h-4" aria-hidden="true" />
+                              </button>
+
+                              <input
+                                type="number"
+                                min="0"
+                                max={maxReturnable}
+                                value={returnQty === 0 ? '' : returnQty}
+                                onChange={function(e) {
+                                  const val = parseInt(e.target.value, 10);
+                                  handleReturnQuantityChange(index, isNaN(val) ? 0 : val);
+                                }}
+                                className="w-16 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium text-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                aria-label={t('quantityToReturn') || 'Количество к возврату'}
+                              />
+
+                              <button
+                                type="button"
+                                onClick={function() { handleReturnQuantityChange(index, returnQty + 1); }}
+                                disabled={returnQty >= maxReturnable}
+                                className="w-9 h-9 flex items-center justify-center rounded-lg text-orange-600 dark:text-orange-400 hover:bg-white dark:hover:bg-orange-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                aria-label={t('increaseQuantity')}
+                              >
+                                <ChevronUp className="w-4 h-4" aria-hidden="true" />
+                              </button>
+                            </div>
+
+                            <button
+                              onClick={function() { handleReturnQuantityChange(index, maxReturnable); }}
+                              disabled={returnQty >= maxReturnable}
+                              className="px-2 py-1 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors disabled:opacity-40"
+                            >
+                              Все
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Причина возврата */}
+              <div>
+                <label htmlFor="return-reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Причина возврата (опционально)
+                </label>
+                <textarea
+                  id="return-reason"
+                  value={returnReason}
+                  onChange={function(e) { setReturnReason(e.target.value); }}
+                  placeholder="Например: излишек, окончание работ, замена материала..."
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 resize-none text-sm"
+                  rows="2"
+                />
+              </div>
+
+              {/* Итог */}
+              {totalToReturn > 0 && (
+                <div className="flex items-center justify-between p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-800">
+                  <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                    <Undo2 className="w-5 h-5" aria-hidden="true" />
+                    <span className="font-medium">
+                      Всего к возврату: <strong>{formatNumber(totalToReturn)}</strong> ед.
+                    </span>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Подсказка перед Footer */}
@@ -1591,7 +1802,7 @@ const ReceiveModal = memo(function({
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть</span>
             </div>
 
-            {(modalMode === 'admin_receive' || modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue' || modalMode === 'master_confirm') && (
+            {(modalMode === 'admin_receive' || modalMode === 'admin_send_to_master' || modalMode === 'admin_ready_to_issue' || modalMode === 'master_confirm' || modalMode === 'master_return') && (
               <button
                 onClick={handleSave}
                 disabled={!hasChanges || isSaving}
@@ -1601,7 +1812,9 @@ const ReceiveModal = memo(function({
                       ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white hover:shadow-xl'
                       : modalMode === 'master_confirm'
                         ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white hover:shadow-xl'
-                        : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
+                        : modalMode === 'master_return'
+                          ? 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white hover:shadow-xl'
+                          : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
                 }`}
               >
@@ -1621,6 +1834,11 @@ const ReceiveModal = memo(function({
                       <>
                         <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
                         <span>{t('confirm') || 'Подтвердить'}</span>
+                      </>
+                    ) : modalMode === 'master_return' ? (
+                      <>
+                        <Undo2 className="w-4 h-4" aria-hidden="true" />
+                        <span>{t('returnToStock') || 'Вернуть на склад'}</span>
                       </>
                     ) : (
                       <>
