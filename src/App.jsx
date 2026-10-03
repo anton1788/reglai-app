@@ -4924,45 +4924,47 @@ const handleReturnToStock = useCallback(async (localMaterials, application, reas
       return { success: false };
     }
 
-    // 2. Обновляем materials в локальном стейте:
-    //    увеличиваем returned_to_stock_quantity
-    const updatedMaterials = application.materials.map(original => {
-      const returnItem = itemsToReturn.find(
-        i => (i.description || '') === (original.description || original.item_name)
-      );
-      if (returnItem) {
-        return {
-          ...original,
-          returned_to_stock_quantity:
-            (Number(original.returned_to_stock_quantity) || 0) + returnItem.quantity,
-          returned_at: new Date().toISOString(),
-          returned_by_user_id: user?.id,
-        };
-      }
-      return original;
-    });
-
-    // 3. Обновляем заявку в БД (только materials, статус НЕ трогаем)
-    const { error: updateError } = await supabase
+        // 2. 🔧 ПЕРЕЗАГРУЖАЕМ заявку из БД — RPC уже обновил materials
+    const { data: freshApp, error: reloadError } = await supabase
       .from('applications')
-      .update({
-        materials: updatedMaterials,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', application.id);
+      .select('*')
+      .eq('id', application.id)
+      .single();
 
-    if (updateError) {
-      console.warn('⚠️ [RETURN TO STOCK] Не удалось обновить materials в БД:', updateError);
+    if (reloadError) {
+      console.warn('⚠️ [RETURN TO STOCK] Не удалось перечитать заявку:', reloadError);
     }
 
-    // 4. Обновляем локальный стейт приложения
-    setApplications(prev => prev.map(app =>
-      app.id === application.id
-        ? { ...app, materials: updatedMaterials }
-        : app
-    ));
+    // 3. Обновляем локальный стейт актуальными данными из БД
+    if (freshApp) {
+      setApplications(prev => prev.map(app =>
+        app.id === application.id ? freshApp : app
+      ));
+    } else {
+      // Fallback: обновляем вручную, если перечитать не удалось
+      const updatedMaterials = application.materials.map(original => {
+        const returnItem = itemsToReturn.find(
+          i => (i.description || '') === (original.description || original.item_name)
+        );
+        if (returnItem) {
+          return {
+            ...original,
+            returned_to_stock_quantity:
+              (Number(original.returned_to_stock_quantity) || 0) + returnItem.quantity,
+            returned_at: new Date().toISOString(),
+            returned_by_user_id: user?.id,
+          };
+        }
+        return original;
+      });
+      setApplications(prev => prev.map(app =>
+        app.id === application.id
+          ? { ...app, materials: updatedMaterials }
+          : app
+      ));
+    }
 
-    // 5. Инвалидируем кэш (склад и заявки)
+    // 4. Инвалидируем кэш (склад и заявки)
     cacheManager.delete('applications', `applications_${cleanCompanyId}_page_1`);
     cacheManager.delete('analytics', `analytics_${cleanCompanyId}_${isAdminMode}`);
 
