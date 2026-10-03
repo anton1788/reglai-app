@@ -5,7 +5,7 @@ import SuperAdminFeedbackDashboard from './SuperAdminFeedbackDashboard';
 import { 
   Shield, Users, Ban, CheckCircle, BarChart3, Search, ChevronDown, 
   Filter, RefreshCw, Edit3, Trash2, AlertTriangle, X, ArrowLeft, Building2,
-  DollarSign, TrendingUp, Gift, Target, MessageCircle
+  DollarSign, TrendingUp, Gift, Target, MessageCircle, Headphones, Crown
 } from 'lucide-react';
 
 // ============================================================================
@@ -15,6 +15,7 @@ import SuperAdminCompanyTariffs from './SuperAdminCompanyTariffs';
 import GlobalSearch from './GlobalSearch';
 import PromoModal from './PromoModal';
 import PromoManager from './PromoManager';
+import SupportAgentsManager from './SupportCenter/SupportAgentsManager';
 import KPIDashboard from './KPIDashboard';
 import { runCleanup } from '../utils/autoCleanup';
 import { TARIFF_PLANS } from '../utils/tariffPlans';
@@ -469,7 +470,6 @@ const SuperAdminPanel = ({ supabase, currentUser, t, showNotification }) => {
  const [showPromoModal, setShowPromoModal] = useState(false);
 const [showPromoManager, setShowPromoManager] = useState(false);
 const [activatingPromo, setActivatingPromo] = useState(false);
-// eslint-disable-next-line no-unused-vars
 const [tariffStats, setTariffStats] = useState(null);
   
   const mainRef = useRef(null);
@@ -517,15 +517,29 @@ useEffect(() => {
   });
 
   const analytics = useMemo(() => {
-    const total = employees.length;
-    const active = employees.filter(e => e.is_active).length;
-    const roles = employees.reduce((acc, e) => {
-      acc[e.role] = (acc[e.role] || 0) + 1;
-      return acc;
-    }, {});
-    
-    return { total, active, blocked: total - active, roles, companiesCount: companies.length };
-  }, [employees, companies]);
+  const total = employees.length;
+  const active = employees.filter(e => e.is_active).length;
+  const roles = employees.reduce((acc, e) => {
+    acc[e.role] = (acc[e.role] || 0) + 1;
+    return acc;
+  }, {});
+  
+  return { total, active, blocked: total - active, roles, companiesCount: companies.length };
+}, [employees, companies]);
+
+// Загрузка статистики по тарифам
+useEffect(() => {
+  if (!companies.length) {
+    setTariffStats(null);
+    return;
+  }
+  const byPlan = companies.reduce((acc, c) => {
+    const plan = c.plan_tier || 'basic';
+    acc[plan] = (acc[plan] || 0) + 1;
+    return acc;
+  }, {});
+  setTariffStats({ total: companies.length, byPlan });
+}, [companies]);
 
   const handleActivatePromo = useCallback(async (promoCode) => {
   console.log('🔍 Введённый промокод:', promoCode);
@@ -686,7 +700,8 @@ const renderNavigation = () => {
     { id: 'tariffs', label: 'Тарифы', icon: DollarSign },
     { id: 'analytics', label: t('analytics'), icon: TrendingUp },
     { id: 'kpi', label: 'KPI Дашборд', icon: Target },
-    { id: 'feedback', label: '📋 Отзывы', icon: MessageCircle }
+    { id: 'feedback', label: '📋 Отзывы', icon: MessageCircle },
+    { id: 'support_agents', label: '🎧 Операторы', icon: Headphones }
   ];
 
   return (
@@ -708,6 +723,7 @@ const renderNavigation = () => {
               else if (item.id === 'analytics') navigateTo('analytics', t('analytics'));
               else if (item.id === 'kpi') navigateTo('kpi', 'KPI Дашборд');
               else if (item.id === 'feedback') navigateTo('feedback', '📋 Отзывы');
+              else if (item.id === 'support_agents') navigateTo('support_agents', '🎧 Операторы поддержки');
             }}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               isActive
@@ -1446,6 +1462,80 @@ if (activeView === 'feedback') {
           />
         </div>
       </div>
+    </>
+  );
+}
+// ============================================================================
+// RENDER: SUPPORT AGENTS VIEW
+// ============================================================================
+
+if (activeView === 'support_agents') {
+  return (
+    <>
+      <div ref={mainRef} className="max-w-7xl mx-auto p-4" aria-live="polite">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
+          {/* Header with Back Button */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={goToOverview}
+                className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 
+                         hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                {t('back')}
+              </button>
+              <div className="p-2.5 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
+                <Headphones className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">🎧 Операторы поддержки</h1>
+            </div>
+
+            {/* Global Search */}
+            <div className="w-64 lg:w-96">
+              <GlobalSearch
+                supabase={supabase}
+                userCompanyId={userCompanyId}
+                onResultSelect={(result) => {
+                  if (result.type === 'user') navigateTo('all-users', t('allUsers'));
+                  else if (result.type === 'company') navigateTo('companies', t('companies'));
+                }}
+                t={t}
+                showNotification={showNotification}
+              />
+            </div>
+          </div>
+
+          {/* Navigation */}
+          {renderNavigation()}
+
+          {/* Support Agents Manager */}
+          <SupportAgentsManager
+            supabase={supabase}
+            showNotification={showNotification}
+            t={t}
+          />
+        </div>
+      </div>
+
+      {/* Promo Modals (для консистентности) */}
+      <PromoModal
+        isOpen={showPromoModal}
+        onClose={() => setShowPromoModal(false)}
+        onActivate={handleActivatePromo}
+        isLoading={activatingPromo}
+        t={t}
+      />
+
+      {showPromoManager && (
+        <PromoManager
+          isOpen={showPromoManager}
+          onClose={() => setShowPromoManager(false)}
+          supabase={supabase}
+          showNotification={showNotification}
+          t={t}
+        />
+      )}
     </>
   );
 }

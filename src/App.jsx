@@ -57,6 +57,9 @@ import SmartVoiceSearch from './components/SmartVoiceSearch';
 // Добавить в renderNavigation новый пункт 'tasks'
 import SuperAdminCompanyTariffs from './components/SuperAdminCompanyTariffs';
 import SupportModal from './components/SupportModal';
+// 🎧 КОЛ-ЦЕНТР
+import SupportWidget from './components/SupportCenter/SupportWidget';
+import SupportDashboard from './components/SupportCenter/SupportDashboard';
 import HelpPage from './components/HelpPage'; // ← СЮДА
 import GlobalSearch from './components/GlobalSearch';
 import SuperAdminPanel from './components/SuperAdminPanel';
@@ -6219,9 +6222,13 @@ useEffect(() => {
 else if (userRole === 'designer') {
     setCurrentView('designerDashboard');
 }
-        // 🏢 Поставщик → дашборд поставщика
+                // 🏢 Поставщик → дашборд поставщика
         else if (userRole === 'supplier_admin' || userRole === 'supplier_manager') {
             setCurrentView('supplierDashboard');
+        }
+        // 🎧 Оператор поддержки → на дашборд поддержки
+        else if (userRole === 'support_agent') {
+            setCurrentView('support');
         }
         // Все остальные → видят заявки
         else {
@@ -8119,6 +8126,7 @@ if (inviteParam) {
           else if (path === '/employees') setCurrentView('employees');
           else if (path === '/api') setCurrentView('api');
           else if (path === '/audit') setCurrentView('audit');
+          else if (path === '/support') setCurrentView('support');
           else if (path === '/tasks') setCurrentView('tasks');
           else if (path === '/help') setCurrentView('help');
           else if (path === '/superAdmin') setCurrentView('superAdmin');
@@ -8500,17 +8508,25 @@ if (inviteParam) {
           />
         )}
         
-        {currentView === 'audit' && (
-          <AuditView
-            supabase={supabase}
-            userCompanyId={userCompanyId}
-            userCompany={userCompany}
-            t={t}
-            showNotification={showNotification}
-            language={language}
-            userRole={userRole}
-          />
-        )}
+        {/* 🎧 ДАШБОРД ОПЕРАТОРА ПОДДЕРЖКИ */}
+{currentView === 'support' && (
+  <SupportDashboard
+    user={user}
+    showNotification={showNotification}
+  />
+)}
+
+{currentView === 'audit' && (
+  <AuditView
+    supabase={supabase}
+    userCompanyId={userCompanyId}
+    userCompany={userCompany}
+    t={t}
+    showNotification={showNotification}
+    language={language}
+    userRole={userRole}
+  />
+)}
         
         {currentView === 'calendar' && (
   checkFeatureAccess(currentPlan, 'calendar') ? (
@@ -9472,7 +9488,7 @@ onClearFilters={handleClearFilters}
 )}
 
 {/* 🛡️ FALLBACK: Если ни одно условие не сработало */}
-{!['create', 'crm-sales', 'managerDashboard', 'dashboard', 'accountantDashboard', 'designerDashboard',
+{!['support', 'create', 'crm-sales', 'managerDashboard', 'dashboard', 'accountantDashboard', 'designerDashboard',
   'received', 'audit', 'calendar', 'inwork', 'confirmation', 'history', 'readyToIssue', 
   'analytics', 'employees', 'clients', 'warehouse', 'documents', 'profile', 'cart', 
   'superAdmin', 'tariffs', 'clientDashboard', 'clientChat', 'clientDocuments', 
@@ -9956,14 +9972,28 @@ onClearFilters={handleClearFilters}
 />
 
 {/* 🆕 Кнопка отзыва для всех пользователей */}
-    {user && !isSuperAdmin(userRole, user?.user_metadata) && (
-      <FeedbackButton
-        user={user}
-        userCompanyId={userCompanyId}
-        showNotification={showNotification}
-        t={t}
-      />
-    )}
+{user && !isSuperAdmin(userRole, user?.user_metadata) && (
+  <FeedbackButton
+    user={user}
+    userCompanyId={userCompanyId}
+    showNotification={showNotification}
+    t={t}
+  />
+)}
+
+{/* 🎧 Плавающая кнопка поддержки — для всех, кроме операторов, менеджеров и супер-админов */}
+{user && userCompanyId &&
+ !isSuperAdmin(userRole, user?.user_metadata) &&
+ !['support_agent', 'manager', 'director'].includes(userRole) && (
+  <SupportWidget
+    user={user}
+    userCompanyId={userCompanyId}
+    userRole={userRole}
+    userName={profileDataForHeader.fullName}
+    showNotification={showNotification}
+    t={t}
+  />
+)}
 {showFeedbackForm && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[10000] fade-enter">
     <TesterFeedbackForm
@@ -10051,7 +10081,7 @@ onClearFilters={handleClearFilters}
         </footer>
       )}
 
-      {/* 📱 МОБИЛЬНАЯ НИЖНЯЯ НАВИГАЦИЯ — ФИКСИРОВАННАЯ ВНИЗУ */}
+            {/* 📱 МОБИЛЬНАЯ НИЖНЯЯ НАВИГАЦИЯ — ФИКСИРОВАННАЯ ВНИЗУ */}
       {isMobile && user && (
         <div 
           className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50" 
