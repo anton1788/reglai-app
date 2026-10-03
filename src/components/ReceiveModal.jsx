@@ -4,7 +4,8 @@ import {
   X, CheckCircle, XCircle, Package, Warehouse, Send, AlertCircle,
   Loader2, Info, ChevronDown, ChevronUp, Undo2, ShoppingCart,
   ArrowRight, FileText, Download, Mail, CheckCircle2, AlertTriangle,
-  Camera, QrCode, Shield, UserCheck, Users
+  Camera, QrCode, Shield, UserCheck, Users,
+  Lock  // 🆕 добавлено для ConfirmModal
 } from 'lucide-react';
 import {
   APPLICATION_STATUS,
@@ -18,6 +19,7 @@ import {
 // Импорты компонентов
 import QRScanner from './Mobile/QRScanner';
 import PhotoCapture from './Mobile/PhotoCapture';
+import ConfirmModal from './ConfirmModal';  // 🆕 кастомное модальное окно
 import { usePriceVisibility } from '../hooks/usePriceVisibility';
 import { sanitizeMaterialForMaster } from '../utils/materialSanitizer';
 
@@ -341,7 +343,6 @@ const MasterConfirmRow = memo(function({
   const isPartial = sentToMaster > 0 && sentToMaster < requestedQty;
   const isFullySent = sentToMaster >= requestedQty && requestedQty > 0;
 
-  // ✅ Синхронизация при изменении пропсов (например, после перезагрузки заявки)
   useEffect(function() {
     setLocalConfirmed(currentReceived);
   }, [currentReceived]);
@@ -627,6 +628,10 @@ const ReceiveModal = memo(function({
   // 🆕 Состояние для возврата на склад
   const [returnReason, setReturnReason] = useState('');
 
+  // 🆕 Состояние для кастомного модального окна «Закрыть заявку?»
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [pendingCloseApp, setPendingCloseApp] = useState(null);
+
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [_photos, _setPhotos] = useState([]);
@@ -656,14 +661,11 @@ const ReceiveModal = memo(function({
     if (selectedApplication && selectedApplication.materials) {
       let materials = selectedApplication.materials;
 
-      // В режимах "подтверждение мастером" и "возврат" показываем только то,
-      // что реально уходило мастеру
       if (modalMode === 'master_confirm' || modalMode === 'master_return') {
         materials = materials.filter(function(m) {
           const sentToMaster = Number(m.sent_to_master_quantity) || 0;
           const received = Number(m.received) || 0;
           if (modalMode === 'master_confirm') return sentToMaster > 0;
-          // для возврата — только то, что мастер получил и ещё не вернул
           const returned = Number(m.returned_to_stock_quantity) || 0;
           return received > returned;
         });
@@ -680,7 +682,6 @@ const ReceiveModal = memo(function({
             supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
             sent_to_master_quantity: Number(m.sent_to_master_quantity) || 0,
             quantity: Number(m.quantity) || 0,
-            // 🆕 поля для возврата
             returned_to_stock_quantity: Number(m.returned_to_stock_quantity) || 0,
             quantityToReturn: 0
           };
@@ -699,8 +700,6 @@ const ReceiveModal = memo(function({
             };
           });
 
-        console.log('🔍 [READY-TO-ISSUE] validMaterials:', validMaterials);
-        console.log('🔍 [READY-TO-ISSUE] availableItems:', availableItems);
         setItemsToSend(availableItems);
       }
     }
@@ -743,8 +742,6 @@ const ReceiveModal = memo(function({
             quantityToSend: Number(i.quantityToSend) || 0,
             unit: i.unit || 'шт',
           }));
-
-        console.log('🚀 [handleSave] items к отправке:', items);
 
         if (items.length === 0) {
           if (showNotification) {
@@ -793,7 +790,6 @@ const ReceiveModal = memo(function({
           return originalMaterial;
         }).filter(m => m._index !== undefined || m.description);
 
-        console.log('🔔 [MASTER CONFIRM] Полный список материалов:', fullMaterials);
         result = await onMasterConfirm(fullMaterials, selectedApplication);
       }
       // 🆕 ВОЗВРАТ НА СКЛАД
@@ -810,7 +806,6 @@ const ReceiveModal = memo(function({
           return;
         }
 
-        console.log('↩️ [master_return] Материалы к возврату:', materialsForReturn);
         result = await onReturnToStock(
           materialsForReturn,
           selectedApplication,
@@ -834,19 +829,11 @@ const ReceiveModal = memo(function({
         // 🆕 Закрываем модалку
         if (onClose) onClose();
 
-        // 🆕 ПОСЛЕ ВОЗВРАТА — ПРЕДЛОЖИТЬ ЗАКРЫТЬ ЗАЯВКУ
+        // 🆕 ПОСЛЕ ВОЗВРАТА — ПОКАЗАТЬ КАСТОМНОЕ МОДАЛЬНОЕ ОКНО «ЗАКРЫТЬ?»
         if (modalMode === 'master_return' && typeof onRequestCloseReturns === 'function') {
-          setTimeout(function() {
-            const wantToClose = window.confirm(
-              '↩️ Материалы возвращены на склад.\n\n' +
-              'Закрыть заявку для возвратов?\n' +
-              'После закрытия вы больше не сможете возвращать материалы по этой заявке.\n\n' +
-              'OK — закрыть заявку\n' +
-              'Отмена — оставить открытой'
-            );
-            if (wantToClose) {
-              onRequestCloseReturns(selectedApplication);
-            }
+          setTimeout(() => {
+            setPendingCloseApp(selectedApplication);
+            setShowCloseConfirm(true);
           }, 400);
         }
       }
@@ -1032,7 +1019,6 @@ const ReceiveModal = memo(function({
       });
     }
 
-    // 🆕 возврат
     if (modalMode === 'master_return') {
       return localMaterials.some(function(m) {
         return (Number(m.quantityToReturn) || 0) > 0;
@@ -1079,9 +1065,6 @@ const ReceiveModal = memo(function({
   // ============================================================
   const renderReadyToIssue = function() {
     const availableMaterials = localMaterials.filter(canIssueFromWarehouse);
-
-    console.log('🔍 [renderReadyToIssue] localMaterials:', localMaterials);
-    console.log('🔍 [renderReadyToIssue] availableMaterials:', availableMaterials);
 
     if (availableMaterials.length === 0) {
       const hasAnyMaterials = localMaterials.length > 0;
@@ -1133,7 +1116,6 @@ const ReceiveModal = memo(function({
           </div>
         </div>
 
-        {/* 🆕 ВЫБОР ПОЛУЧАТЕЛЯ */}
         <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             <Users className="w-4 h-4 inline mr-1" />
@@ -1603,7 +1585,6 @@ const ReceiveModal = memo(function({
                   {t('confirmReceiptHint') || 'Подтвердите получение материалов или укажите причину отклонения'}
                 </div>
 
-                {/* 🆕 Кнопка перехода к возврату на склад */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1671,9 +1652,35 @@ const ReceiveModal = memo(function({
           {/* 🆕 МАСТЕР: Возврат на склад */}
           {modalMode === 'master_return' && (
             <>
-              <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
-                <Undo2 className="w-4 h-4" aria-hidden="true" />
-                Укажите, сколько материалов вернуть на склад
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
+                  <Undo2 className="w-4 h-4" aria-hidden="true" />
+                  Укажите, сколько материалов вернуть на склад
+                </div>
+
+                {/* 🆕 Кнопка «Вернуть всё» */}
+                {localMaterials.filter(canReturnToStock).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocalMaterials(prev =>
+                        prev.map(m => {
+                          const maxReturnable = getAvailableToReturn(m);
+                          return maxReturnable > 0
+                            ? { ...m, quantityToReturn: maxReturnable }
+                            : m;
+                        })
+                      );
+                      if (showNotification) {
+                        showNotification('↩️ Указано вернуть всё, что осталось', 'info');
+                      }
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 rounded-lg flex items-center gap-1.5 transition-all shadow-md shadow-orange-500/20"
+                  >
+                    <Undo2 className="w-3.5 h-3.5" />
+                    Вернуть всё
+                  </button>
+                )}
               </div>
 
               {localMaterials.filter(canReturnToStock).length === 0 ? (
@@ -1898,6 +1905,32 @@ const ReceiveModal = memo(function({
           showNotification={showNotification}
         />
       )}
+
+      {/* 🆕 Кастомное модальное окно «Закрыть заявку?» */}
+      <ConfirmModal
+        isOpen={showCloseConfirm}
+        onClose={() => {
+          setShowCloseConfirm(false);
+          setPendingCloseApp(null);
+        }}
+        onConfirm={() => {
+          if (pendingCloseApp && typeof onRequestCloseReturns === 'function') {
+            onRequestCloseReturns(pendingCloseApp);
+          }
+          setShowCloseConfirm(false);
+          setPendingCloseApp(null);
+        }}
+        title="Закрыть заявку для возвратов?"
+        message={
+          '↩️ Материалы возвращены на склад.\n\n' +
+          'После закрытия вы больше не сможете возвращать материалы по этой заявке.\n\n' +
+          'Если позже понадобится что-то вернуть — снабженец сможет переоткрыть заявку.'
+        }
+        confirmText="Закрыть заявку"
+        cancelText="Оставить открытой"
+        variant="warning"
+        icon={Lock}
+      />
     </div>
   );
 });

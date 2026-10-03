@@ -4992,9 +4992,6 @@ const handleCloseReturns = useCallback(async (application) => {
     return;
   }
 
-  if (!window.confirm(t('closeReturnsConfirm') || 'Закрыть заявку для возвратов?')) {
-    return;
-  }
 
   const cleanCompanyId = getSafeCompanyId(userCompanyId);
   if (!cleanCompanyId) {
@@ -5021,6 +5018,7 @@ const handleCloseReturns = useCallback(async (application) => {
       return;
     }
 
+        // 🆕 Авто-синхронизация: обновляем стейт + перезагружаем из БД
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? {
@@ -5034,6 +5032,24 @@ const handleCloseReturns = useCallback(async (application) => {
 
     cacheManager.delete('applications', `applications_${cleanCompanyId}_page_1`);
     cacheManager.delete('analytics', `analytics_${cleanCompanyId}_${isAdminMode}`);
+
+    // 🆕 Перечитываем заявку из БД, чтобы данные были актуальны
+    const { data: freshApp } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('id', application.id)
+      .single();
+
+    if (freshApp) {
+      setApplications(prev => prev.map(app =>
+        app.id === application.id ? freshApp : app
+      ));
+
+      // 🆕 Обновляем также allCompanyApplications (для мерджера)
+      setAllCompanyApplications(prev => prev.map(app =>
+        app.id === application.id ? freshApp : app
+      ));
+    }
 
     showNotification('🔒 Заявка закрыта', 'success');
   } catch (err) {
@@ -5085,6 +5101,7 @@ const handleReopenReturns = useCallback(async (application) => {
       return;
     }
 
+        // 🆕 Авто-синхронизация
     setApplications(prev => prev.map(app =>
       app.id === application.id
         ? {
@@ -5097,6 +5114,24 @@ const handleReopenReturns = useCallback(async (application) => {
     ));
 
     cacheManager.delete('applications', `applications_${cleanCompanyId}_page_1`);
+    cacheManager.delete('analytics', `analytics_${cleanCompanyId}_${isAdminMode}`);
+
+    // 🆕 Перечитываем заявку из БД
+    const { data: freshApp } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('id', application.id)
+      .single();
+
+    if (freshApp) {
+      setApplications(prev => prev.map(app =>
+        app.id === application.id ? freshApp : app
+      ));
+      setAllCompanyApplications(prev => prev.map(app =>
+        app.id === application.id ? freshApp : app
+      ));
+    }
+
     showNotification('🔓 Заявка переоткрыта', 'success');
   } catch (err) {
     console.error('❌ [REOPEN RETURNS] Критическая ошибка:', err);
