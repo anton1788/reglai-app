@@ -9509,10 +9509,15 @@ onClearFilters={handleClearFilters}
   selectedApplication={selectedApplication}
   onAdminReceive={handleAdminReceive}
   onSendToMaster={handleSendToMaster}
-  onMasterConfirm={handleMasterConfirm}  // ← Теперь принимает (localMaterials, application)
+  onMasterConfirm={handleMasterConfirm}
   onReturnToStock={handleReturnToStock}
   onRequestReturnMode={(app) => {
-  setSelectedApplication({ ...app, modalMode: 'master_return' });
+    setSelectedApplication({ ...app, modalMode: 'master_return' });
+  }}
+  // 🆕 ДОБАВЬ ЭТУ СТРОКУ:
+  onRequestCloseReturns={(app) => {
+    setShowReceiveModal(false);
+    handleCloseReturns(app);
   }}
   language={language}
   escapeHtml={escapeHtml}

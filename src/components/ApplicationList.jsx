@@ -61,7 +61,6 @@ const STATUS_CONFIG = {
     icon: STATUS_ICONS[APPLICATION_STATUS.RECEIVED] || CheckCircle2,
     colorClass: STATUS_COLORS[APPLICATION_STATUS.RECEIVED] || 'text-green-800 bg-green-200'
   },
-  // 🆕 ЗАКРЫТА
   [APPLICATION_STATUS.CLOSED]: {
     labelKey: STATUS_I18N[APPLICATION_STATUS.CLOSED]?.ru || 'statusClosed',
     icon: Lock,
@@ -209,7 +208,6 @@ const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num);
  */
 const canReturnToStock = (application) => {
   if (!application?.materials?.length) return false;
-  // 🆕 заявка закрыта — возврат запрещён
   if (application.returns_closed === true) return false;
   if (application.status === APPLICATION_STATUS.CLOSED) return false;
   return application.materials.some(m => {
@@ -227,26 +225,21 @@ const canUserReturnToStock = (userRole) => {
 };
 
 /**
- * 🆕 Можно ли закрыть заявку для возвратов
- *    - не закрыта
- *    - есть хотя бы один материал с received > 0
- *    - больше нечего возвращать (всё, что могли, вернули)
+ * 🆕 Можно ли закрыть заявку для возвратов (УПРОЩЕНО)
+ *    Логика: закрывать можно, если заявка ещё открыта
+ *    и у мастера есть хотя бы один полученный материал.
+ *    Мастер сам решает — «у меня больше нет остатков → закрыть».
  */
 const canCloseReturns = (application) => {
   if (!application?.materials?.length) return false;
   if (application.returns_closed === true) return false;
   if (application.status === APPLICATION_STATUS.CLOSED) return false;
 
-  const hasReceived = application.materials.some(m => (Number(m.received) || 0) > 0);
-  if (!hasReceived) return false;
-
-  const hasSomethingToReturn = application.materials.some(m => {
-    const received = Number(m.received) || 0;
-    const returned = Number(m.returned_to_stock_quantity) || 0;
-    return received > returned && received > 0;
-  });
-
-  return !hasSomethingToReturn;
+  // Есть ли у мастера хоть что-то полученное — если да, может закрыть
+  const hasReceived = application.materials.some(
+    m => (Number(m.received) || 0) > 0
+  );
+  return hasReceived;
 };
 
 /**

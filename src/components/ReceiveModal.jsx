@@ -84,7 +84,6 @@ const clamp = function(value, min = 0, max = 10000) {
 
 /**
  * ✅ ЕДИНАЯ ЛОГИКА: сколько доступно для выдачи со склада
- *    Используется и для фильтра, и для получения количества
  */
 const getAvailableToIssue = (m) => {
   const onWarehouse = Number(m.supplier_received_quantity) || 0;
@@ -94,7 +93,6 @@ const getAvailableToIssue = (m) => {
 
 /**
  * ✅ ЕДИНАЯ ЛОГИКА: можно ли ещё что-то выдать со склада мастеру
- *    (обёртка над getAvailableToIssue для читаемости)
  */
 const canIssueFromWarehouse = (m) => getAvailableToIssue(m) > 0;
 
@@ -579,8 +577,10 @@ const ReceiveModal = memo(function({
   onAdminReceive,
   onSendToMaster,
   onMasterConfirm,
-  onReturnToStock,          // 🆕 возврат на склад
-  onRequestReturnMode,      // 🆕 переключение из master_confirm в master_return
+  onReturnToStock,
+  onRequestReturnMode,
+  // 🆕 Запрос на закрытие заявки после возврата
+  onRequestCloseReturns,
   language,
   escapeHtml,
   onTakeToWork,
@@ -830,7 +830,25 @@ const ReceiveModal = memo(function({
             showNotification(t('materialsAcceptedToWarehouse') || '✅ Успешно сохранено', 'success');
           }
         }
+
+        // 🆕 Закрываем модалку
         if (onClose) onClose();
+
+        // 🆕 ПОСЛЕ ВОЗВРАТА — ПРЕДЛОЖИТЬ ЗАКРЫТЬ ЗАЯВКУ
+        if (modalMode === 'master_return' && typeof onRequestCloseReturns === 'function') {
+          setTimeout(function() {
+            const wantToClose = window.confirm(
+              '↩️ Материалы возвращены на склад.\n\n' +
+              'Закрыть заявку для возвратов?\n' +
+              'После закрытия вы больше не сможете возвращать материалы по этой заявке.\n\n' +
+              'OK — закрыть заявку\n' +
+              'Отмена — оставить открытой'
+            );
+            if (wantToClose) {
+              onRequestCloseReturns(selectedApplication);
+            }
+          }, 400);
+        }
       }
     } catch (err) {
       console.error('❌ Ошибка сохранения:', err);
@@ -838,7 +856,7 @@ const ReceiveModal = memo(function({
     } finally {
       setIsSaving(false);
     }
-  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, onReturnToStock, localMaterials, itemsToSend, selectedApplication, onClose, t, showNotification, isSaving, selectedRecipientId, employees, transferComment, returnReason]);
+  }, [modalMode, onAdminReceive, onSendToMaster, onMasterConfirm, onReturnToStock, onRequestCloseReturns, localMaterials, itemsToSend, selectedApplication, onClose, t, showNotification, isSaving, selectedRecipientId, employees, transferComment, returnReason]);
 
   useEffect(function() {
     const handleKeyDown = function(e) {
