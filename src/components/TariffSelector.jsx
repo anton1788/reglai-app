@@ -361,21 +361,20 @@ const TariffSelector = ({
       )}
 
       {/* ============================================================
-          ЗАГОЛОВОК И ПЕРЕКЛЮЧАТЕЛЬ ПЕРИОДА
+          ПОДЗАГОЛОВОК И ПЕРЕКЛЮЧАТЕЛЬ ПЕРИОДА
+          (заголовок «Управление тарифом» рендерится в App.jsx)
           ============================================================ */}
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-          {translate('tariffSelector.title', 'Выберите подходящий тариф')}
-        </h2>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
           {translate('tariffSelector.subtitle', 'От старта до корпоративного уровня — найдите идеальный план для вашего бизнеса')}
         </p>
 
-        <div className="flex items-center justify-center gap-4 flex-wrap">
-          <div className="inline-flex items-center gap-4 bg-gray-100 dark:bg-gray-800 rounded-xl p-2">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+          {/* Переключатель периодов */}
+          <div className="inline-flex items-center gap-1 sm:gap-2 bg-gray-100 dark:bg-gray-800 rounded-xl p-1.5 sm:p-2 max-w-full">
             <button
               onClick={() => setBillingPeriod('monthly')}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
+              className={`px-3 sm:px-6 py-2 rounded-lg font-medium transition-all text-sm sm:text-base whitespace-nowrap ${
                 billingPeriod === 'monthly'
                   ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
                   : 'text-gray-600 dark:text-gray-400'
@@ -385,14 +384,14 @@ const TariffSelector = ({
             </button>
             <button
               onClick={() => setBillingPeriod('annual')}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
+              className={`px-3 sm:px-6 py-2 rounded-lg font-medium transition-all text-sm sm:text-base whitespace-nowrap flex items-center gap-1.5 ${
                 billingPeriod === 'annual'
                   ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
                   : 'text-gray-600 dark:text-gray-400'
               }`}
             >
               {translate('tariffSelector.annual', 'Ежегодно')}
-              <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+              <span className="px-1.5 sm:px-2 py-0.5 bg-green-100 text-green-700 text-[10px] sm:text-xs rounded-full">
                 -17%
               </span>
             </button>
@@ -401,10 +400,10 @@ const TariffSelector = ({
           {/* 🆕 Кнопка "Сравнить тарифы" */}
           <button
             onClick={() => setShowComparison(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#4A6572]/10 to-[#F9AA33]/10 text-[#4A6572] dark:text-[#F9AA33] rounded-xl font-medium hover:from-[#4A6572]/20 hover:to-[#F9AA33]/20 transition-all border border-[#4A6572]/20"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#4A6572]/10 to-[#F9AA33]/10 text-[#4A6572] dark:text-[#F9AA33] rounded-xl font-medium hover:from-[#4A6572]/20 hover:to-[#F9AA33]/20 transition-all border border-[#4A6572]/20 whitespace-nowrap text-sm sm:text-base"
           >
-            <GitCompareArrows className="w-4 h-4" />
-            Сравнить тарифы
+            <GitCompareArrows className="w-4 h-4 flex-shrink-0" />
+            <span>Сравнить тарифы</span>
           </button>
         </div>
       </div>
@@ -597,6 +596,8 @@ const TariffSelector = ({
                             ? 'text-gray-500'
                             : catKey === 'advanced'
                             ? 'text-blue-500'
+                            : catKey === 'suppliers'
+                            ? 'text-emerald-500'
                             : 'text-purple-500'
                         }`}>
                           {category.label}
@@ -657,20 +658,20 @@ const TariffSelector = ({
                 </button>
 
                 {/* Сравнение с соседними */}
-{showUpgradePrompt && !isCurrent && !isExpanded && (
-  <div className="mt-3 text-center space-y-1">
-    {nextPlan && planId !== 'enterprise' && (
-      <p className="text-[11px] text-gray-400">
-        ⬆ Следующий: {getPlanIcon(nextPlan.id)} {getPlanDisplayName(nextPlan.id)}
-      </p>
-    )}
-    {prevPlan && planId !== 'basic' && (
-      <p className="text-[11px] text-gray-400">
-        ⬇ Предыдущий: {getPlanIcon(prevPlan.id)} {getPlanDisplayName(prevPlan.id)}
-      </p>
-    )}
-  </div>
-)}
+                {showUpgradePrompt && !isCurrent && !isExpanded && (
+                  <div className="mt-3 text-center space-y-1">
+                    {nextPlan && planId !== 'enterprise' && (
+                      <p className="text-[11px] text-gray-400">
+                        ⬆ Следующий: {getPlanIcon(nextPlan.id)} {getPlanDisplayName(nextPlan.id)}
+                      </p>
+                    )}
+                    {prevPlan && planId !== 'basic' && (
+                      <p className="text-[11px] text-gray-400">
+                        ⬇ Предыдущий: {getPlanIcon(prevPlan.id)} {getPlanDisplayName(prevPlan.id)}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );
