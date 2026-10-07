@@ -7613,41 +7613,110 @@ const renderAnalyticsDashboard = () => {
 
             {/* ========== СОГЛАСИЕ С ПОЛИТИКОЙ КОНФИДЕНЦИАЛЬНОСТИ ========== */}
 <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/30 p-3">
-  <div className="flex items-start gap-2">
+  <label
+    htmlFor="signup-consent"
+    style={{
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '8px',
+      cursor: 'pointer',
+      userSelect: 'none',
+      WebkitUserSelect: 'none',
+      margin: 0,
+    }}
+  >
+    {/* Скрытый нативный чекбокс (для required и доступности) */}
     <input
       id="signup-consent"
       type="checkbox"
       checked={consent}
       onChange={(e) => setConsent(e.target.checked)}
-      style={{ 
-        width: '16px', 
-        height: '16px', 
-        minWidth: '16px',
-        minHeight: '16px',
-        marginTop: '2px',
-        cursor: 'pointer',
-        accentColor: '#4A6572',
-        flexShrink: 0
+      style={{
+        position: 'absolute',
+        opacity: 0,
+        width: 0,
+        height: 0,
+        margin: 0,
+        padding: 0,
+        pointerEvents: 'none',
       }}
       required
     />
-    <label htmlFor="signup-consent" className="text-xs text-gray-700 dark:text-gray-300 leading-tight cursor-pointer">
+
+    {/* Кастомный визуальный чекбокс — инлайн-стили, ничего их не перебьёт */}
+    <span
+      aria-hidden="true"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '18px',
+        height: '18px',
+        minWidth: '18px',
+        minHeight: '18px',
+        marginTop: '1px',
+        border: consent ? '2px solid #4A6572' : '2px solid #9CA3AF',
+        borderRadius: '4px',
+        backgroundColor: consent ? '#4A6572' : '#FFFFFF',
+        transition: 'all 0.15s ease',
+        flexShrink: 0,
+        boxSizing: 'border-box',
+      }}
+    >
+      {consent && (
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ display: 'block' }}
+        >
+          <path
+            d="M2 6L5 9L10 3"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+    </span>
+
+    {/* Текст */}
+    <span
+      style={{
+        fontSize: '12px',
+        lineHeight: '1.3',
+        color: '#374151',
+      }}
+    >
       Я принимаю условия{' '}
       <button
         type="button"
-        onClick={() => {
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
           setShowPrivacyPolicyModal(true);
         }}
-        className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium inline-flex items-center gap-0.5"
+        style={{
+          color: '#4A6572',
+          textDecoration: 'underline',
+          background: 'none',
+          border: 'none',
+          padding: 0,
+          cursor: 'pointer',
+          font: 'inherit',
+        }}
       >
         Политики конфиденциальности
       </button>
       {' '}и даю согласие на обработку персональных данных
-    </label>
-  </div>
-  
+    </span>
+  </label>
+
   <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 leading-tight">
-    📄 Нажимая «Зарегистрироваться», вы подтверждаете, что ознакомились с полным текстом 
+    📄 Нажимая «Зарегистрироваться», вы подтверждаете, что ознакомились с полным текстом
     Политики конфиденциальности.
   </p>
 </div>
