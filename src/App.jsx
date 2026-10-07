@@ -7612,36 +7612,45 @@ const renderAnalyticsDashboard = () => {
             </div>
 
             {/* ========== СОГЛАСИЕ С ПОЛИТИКОЙ КОНФИДЕНЦИАЛЬНОСТИ ========== */}
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/30 p-3">
-              <div className="flex items-start gap-2">
-                <input
-                  id="signup-consent"
-                  type="checkbox"
-                  checked={consent}
-                  onChange={(e) => setConsent(e.target.checked)}
-                  className="mt-0.5 w-3.5 h-3.5 text-[#4A6572] border-gray-300 rounded focus:ring-[#4A6572] flex-shrink-0"
-                  required
-                />
-                <label htmlFor="signup-consent" className="text-xs text-gray-700 dark:text-gray-300 leading-tight">
-                  Я принимаю условия{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowPrivacyPolicyModal(true);
-                    }}
-                    className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium inline-flex items-center gap-0.5"
-                  >
-                    Политики конфиденциальности
-                  </button>
-                  {' '}и даю согласие на обработку персональных данных
-                </label>
-              </div>
-              
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 leading-tight">
-                📄 Нажимая «Зарегистрироваться», вы подтверждаете, что ознакомились с полным текстом 
-                Политики конфиденциальности.
-              </p>
-            </div>
+<div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/30 p-3">
+  <div className="flex items-start gap-2">
+    <input
+      id="signup-consent"
+      type="checkbox"
+      checked={consent}
+      onChange={(e) => setConsent(e.target.checked)}
+      style={{ 
+        width: '16px', 
+        height: '16px', 
+        minWidth: '16px',
+        minHeight: '16px',
+        marginTop: '2px',
+        cursor: 'pointer',
+        accentColor: '#4A6572',
+        flexShrink: 0
+      }}
+      required
+    />
+    <label htmlFor="signup-consent" className="text-xs text-gray-700 dark:text-gray-300 leading-tight cursor-pointer">
+      Я принимаю условия{' '}
+      <button
+        type="button"
+        onClick={() => {
+          setShowPrivacyPolicyModal(true);
+        }}
+        className="text-[#4A6572] hover:underline dark:text-[#F9AA33] font-medium inline-flex items-center gap-0.5"
+      >
+        Политики конфиденциальности
+      </button>
+      {' '}и даю согласие на обработку персональных данных
+    </label>
+  </div>
+  
+  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 leading-tight">
+    📄 Нажимая «Зарегистрироваться», вы подтверждаете, что ознакомились с полным текстом 
+    Политики конфиденциальности.
+  </p>
+</div>
 
             {/* Кнопка регистрации */}
             <button
