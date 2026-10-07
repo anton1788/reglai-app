@@ -238,6 +238,39 @@ const getCleanCompanyId = (companyId) => {
   return null;
 };
 
+// ============================================================
+// 🔒 ЗАГЛУШКА: ФУНКЦИЯ НЕДОСТУПНА НА ТЕКУЩЕМ ТАРИФЕ
+// ============================================================
+const FeatureLockedView = ({ featureName, onUpgrade, t }) => {
+  const lockedTitle = typeof t === 'function'
+    ? t('suppliersFeature.lockedTitle').replace('{{feature}}', featureName)
+    : `${featureName} доступен на тарифе Профессиональный`;
+  const lockedMessage = typeof t === 'function'
+    ? t('suppliersFeature.lockedMessage')
+    : 'Обновите тариф, чтобы получить доступ к модулю закупок и другим продвинутым функциям.';
+  const upgradeButton = typeof t === 'function'
+    ? t('suppliersFeature.upgradeButton')
+    : 'Посмотреть тарифы';
+
+  return (
+    <div className="max-w-2xl mx-auto p-8 text-center page-enter">
+      <div className="text-6xl mb-4">🔒</div>
+      <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">
+        {lockedTitle}
+      </h2>
+      <p className="text-gray-600 dark:text-gray-400 mb-6">
+        {lockedMessage}
+      </p>
+      <button
+        onClick={onUpgrade}
+        className="px-6 py-3 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-xl hover:shadow-lg transition-all"
+      >
+        {upgradeButton}
+      </button>
+    </div>
+  );
+};
+
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
 const NOTIFICATIONS_ENABLED = false;
@@ -9291,179 +9324,332 @@ onClearFilters={handleClearFilters}
 )}
 {/* 🏢 ПОСТАВЩИКИ (B2B) */}
 {currentView === 'suppliers' && (
-  <SupplierManager
-    companyId={userCompanyId}
-    userId={user?.id}
-    role={userRole}
-    showNotification={showNotification}
-    onOpenPriceList={(supplier) => {
-      setSelectedSupplierId(supplier.id);
-      setCurrentView('supplierPriceList');
-    }}
-  />
+  checkFeatureAccess(currentPlan, 'suppliers_manage') ? (
+    <SupplierManager
+      companyId={userCompanyId}
+      userId={user?.id}
+      role={userRole}
+      showNotification={showNotification}
+      onOpenPriceList={(supplier) => {
+        setSelectedSupplierId(supplier.id);
+        setCurrentView('supplierPriceList');
+      }}
+    />
+  ) : (
+    <FeatureLockedView
+      featureName="Управление поставщиками"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
+  )
 )}
-
 {/* 📚 СПРАВОЧНИК ЦЕН */}
 {currentView === 'priceCatalog' && (
-  <MaterialPriceCatalog
-    companyId={userCompanyId}
-    user={user}
-    userRole={userRole}
-    showNotification={showNotification}
-  />
+  checkFeatureAccess(currentPlan, 'price_catalog') ? (
+    <MaterialPriceCatalog
+      companyId={userCompanyId}
+      user={user}
+      userRole={userRole}
+      showNotification={showNotification}
+    />
+  ) : (
+    <FeatureLockedView
+      featureName="Справочник цен"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
+  )
 )}
 
 {/* 📚 КАТАЛОГ МАТЕРИАЛОВ */}
 {currentView === 'supplierCatalog' && (
-  <SupplierCatalog
-    companyId={userCompanyId}
-    showNotification={showNotification}
-    rfqCart={rfqCart}                          // ✅ единый источник правды
-    onAddToRFQ={(item) => {
-      setRfqCart(prev => {
-        if (prev.some(i => i.id === item.id)) return prev;
-        showNotification(`✅ "${item.name}" добавлен в RFQ`, 'success');
-        return [...prev, item];
-      });
-    }}
-    onRemoveFromRFQ={(itemId) => {
-      setRfqCart(prev => prev.filter(i => i.id !== itemId));
-    }}
-    onClearRFQ={() => {
-      setRfqCart([]);
-      showNotification('Корзина очищена', 'info');
-    }}
-    onOpenRFQCreate={() => {
-      if (rfqCart.length === 0) {
-        showNotification('Сначала добавьте материалы', 'warning');
-        return;
-      }
-      setCurrentView('rfqCreate');              // ✅ вот сюда ведёт кнопка «В RFQ →»
-    }}
-  />
+  checkFeatureAccess(currentPlan, 'supplier_catalog') ? (
+    <SupplierCatalog
+      companyId={userCompanyId}
+      showNotification={showNotification}
+      rfqCart={rfqCart}
+      onAddToRFQ={(item) => {
+        setRfqCart(prev => {
+          if (prev.some(i => i.id === item.id)) return prev;
+          showNotification(`✅ "${item.name}" добавлен в RFQ`, 'success');
+          return [...prev, item];
+        });
+      }}
+      onRemoveFromRFQ={(itemId) => {
+        setRfqCart(prev => prev.filter(i => i.id !== itemId));
+      }}
+      onClearRFQ={() => {
+        setRfqCart([]);
+        showNotification('Корзина очищена', 'info');
+      }}
+      onOpenRFQCreate={() => {
+        if (rfqCart.length === 0) {
+          showNotification('Сначала добавьте материалы', 'warning');
+          return;
+        }
+        setCurrentView('rfqCreate');
+      }}
+    />
+  ) : (
+    <FeatureLockedView
+      featureName="Каталог материалов"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
+  )
 )}
 
 {/* 💰 ПРАЙС-ЛИСТ ПОСТАВЩИКА */}
 {currentView === 'supplierPriceList' && selectedSupplierId && (
-  <PriceListManager
-    supplierId={selectedSupplierId}
-    companyId={userCompanyId}
-    role={userRole}
-    showNotification={showNotification}
-    onBack={() => {
-      setSelectedSupplierId(null);
-      setCurrentView('suppliers');
-    }}
-  />
+  checkFeatureAccess(currentPlan, 'supplier_price_list') ? (
+    <PriceListManager
+      supplierId={selectedSupplierId}
+      companyId={userCompanyId}
+      role={userRole}
+      showNotification={showNotification}
+      onBack={() => {
+        setSelectedSupplierId(null);
+        setCurrentView('suppliers');
+      }}
+    />
+  ) : (
+    <FeatureLockedView
+      featureName="Прайс-листы поставщиков"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
+  )
 )}
 
 {/* 📨 СПИСОК RFQ */}
 {currentView === 'rfqList' && (
-  <RFQList
-    companyId={userCompanyId}
-    role={userRole}
-    refreshKey={selectedRFQId}
-    onCreate={() => setCurrentView('rfqCreate')}
-    onOpen={(rfq) => {
-      setSelectedRFQId(rfq.id);
-      setCurrentView('rfqDetails');
-    }}
-  />
+  checkFeatureAccess(currentPlan, 'rfq') ? (
+    <RFQList
+      companyId={userCompanyId}
+      role={userRole}
+      refreshKey={selectedRFQId}
+      onCreate={() => setCurrentView('rfqCreate')}
+      onOpen={(rfq) => {
+        setSelectedRFQId(rfq.id);
+        setCurrentView('rfqDetails');
+      }}
+    />
+  ) : (
+    <FeatureLockedView
+      featureName="RFQ (запросы КП)"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
+  )
 )}
 
 {/* 📝 СОЗДАНИЕ RFQ */}
 {currentView === 'rfqCreate' && (
-  <RFQCreate
-    companyId={userCompanyId}
-    userId={user?.id}
-    initialItems={rfqCart}
-    showNotification={showNotification}
-    onCreated={(rfq) => {
-      // 🧹 Очищаем корзину
-      setRfqCart([]);
-      localStorage.removeItem('rfq_cart');
-
-      setSelectedRFQId(rfq.id);
-      setCurrentView('rfqDetails');
-    }}
-    onCancel={() => setCurrentView('rfqList')}
-  />
+  checkFeatureAccess(currentPlan, 'rfq') ? (
+    <RFQCreate
+      companyId={userCompanyId}
+      userId={user?.id}
+      initialItems={rfqCart}
+      showNotification={showNotification}
+      onCreated={(rfq) => {
+        setRfqCart([]);
+        localStorage.removeItem('rfq_cart');
+        setSelectedRFQId(rfq.id);
+        setCurrentView('rfqDetails');
+      }}
+      onCancel={() => setCurrentView('rfqList')}
+    />
+  ) : (
+    <FeatureLockedView
+      featureName="RFQ (запросы КП)"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
+  )
 )}
 
 {/* 📋 ДЕТАЛИ RFQ */}
 {currentView === 'rfqDetails' && selectedRFQId && (
-  <RFQDetails
-    rfqId={selectedRFQId}
-    companyId={userCompanyId}
-    role={userRole}
-    showNotification={showNotification}
-    onBack={() => {
-      setSelectedRFQId(null);
-      setCurrentView('rfqList');
-    }}
-    onCreatePO={(offer, rfq) => {
-      setPoFormMode({ offer, rfq });
-      setCurrentView('purchaseOrderCreate');
-    }}
-  />
+  checkFeatureAccess(currentPlan, 'rfq') ? (
+    <RFQDetails
+      rfqId={selectedRFQId}
+      companyId={userCompanyId}
+      role={userRole}
+      showNotification={showNotification}
+      onBack={() => {
+        setSelectedRFQId(null);
+        setCurrentView('rfqList');
+      }}
+      onCreatePO={(offer, rfq) => {
+        setPoFormMode({ offer, rfq });
+        setCurrentView('purchaseOrderCreate');
+      }}
+    />
+  ) : (
+    <FeatureLockedView
+      featureName="RFQ (запросы КП)"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
+  )
 )}
 
 {/* 📦 СПИСОК ЗАКАЗОВ */}
 {currentView === 'purchaseOrders' && (
-  <PurchaseOrderList
-    companyId={userCompanyId}
-    role={userRole}
-    onCreate={() => {
-      setPoFormMode({});
-      setCurrentView('purchaseOrderCreate');
-    }}
-    onOpen={(po) => {
-      setSelectedPOId(po.id);
-      setCurrentView('purchaseOrderDetails');
-    }}
-  />
+  checkFeatureAccess(currentPlan, 'purchase_orders') ? (
+    <PurchaseOrderList
+      companyId={userCompanyId}
+      role={userRole}
+      onCreate={() => {
+        setPoFormMode({});
+        setCurrentView('purchaseOrderCreate');
+      }}
+      onOpen={(po) => {
+        setSelectedPOId(po.id);
+        setCurrentView('purchaseOrderDetails');
+      }}
+    />
+  ) : (
+    <FeatureLockedView
+      featureName="Заказы поставщикам"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
+  )
 )}
 
 {/* 📝 СОЗДАНИЕ ЗАКАЗА */}
 {currentView === 'purchaseOrderCreate' && (
-  <PurchaseOrderForm
-    companyId={userCompanyId}
-    userId={user?.id}
-    fromOffer={poFormMode?.offer || null}
-    fromRFQ={poFormMode?.rfq || null}
-    preselectedSupplierId={poFormMode?.preselectedSupplierId || null}
-    showNotification={showNotification}
-    onCreated={(order) => {
-      setPoFormMode(null);
-      setSelectedPOId(order.id);
-      setCurrentView('purchaseOrderDetails');
-    }}
-    onCancel={() => {
-      setPoFormMode(null);
-      setCurrentView('purchaseOrders');
-    }}
-  />
+  checkFeatureAccess(currentPlan, 'purchase_orders') ? (
+    <PurchaseOrderForm
+      companyId={userCompanyId}
+      userId={user?.id}
+      fromOffer={poFormMode?.offer || null}
+      fromRFQ={poFormMode?.rfq || null}
+      preselectedSupplierId={poFormMode?.preselectedSupplierId || null}
+      showNotification={showNotification}
+      onCreated={(order) => {
+        setPoFormMode(null);
+        setSelectedPOId(order.id);
+        setCurrentView('purchaseOrderDetails');
+      }}
+      onCancel={() => {
+        setPoFormMode(null);
+        setCurrentView('purchaseOrders');
+      }}
+    />
+  ) : (
+    <FeatureLockedView
+      featureName="Заказы поставщикам"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
+  )
 )}
 
 {/* 📋 ДЕТАЛИ ЗАКАЗА */}
 {currentView === 'purchaseOrderDetails' && selectedPOId && (
-  <PurchaseOrderDetails
-    orderId={selectedPOId}
-    role={userRole}
-    showNotification={showNotification}
-    onBack={() => {
-      setSelectedPOId(null);
-      setCurrentView('purchaseOrders');
-    }}
-  />
+  checkFeatureAccess(currentPlan, 'purchase_orders') ? (
+    <PurchaseOrderDetails
+      orderId={selectedPOId}
+      role={userRole}
+      showNotification={showNotification}
+      onBack={() => {
+        setSelectedPOId(null);
+        setCurrentView('purchaseOrders');
+      }}
+    />
+  ) : (
+    <FeatureLockedView
+      featureName="Заказы поставщикам"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
+  )
 )}
 
 {/* 🏢 ДАШБОРД ПОСТАВЩИКА */}
 {currentView === 'supplierDashboard' && (
-  currentSupplierId ? (
-    <SupplierDashboard
+  checkFeatureAccess(currentPlan, 'supplier_portal') ? (
+    currentSupplierId ? (
+      <SupplierDashboard
+        companyId={userCompanyId}
+        supplierId={currentSupplierId}
+        onNavigate={(view, payload) => {
+          if (view === 'rfqDetails' && payload?.rfqId) {
+            setSelectedRFQId(payload.rfqId);
+            setCurrentView('rfqDetails');
+          } else if (view === 'purchaseOrderDetails' && payload?.orderId) {
+            setSelectedPOId(payload.orderId);
+            setCurrentView('purchaseOrderDetails');
+          } else if (view === 'supplierPriceList') {
+            setSelectedSupplierId(currentSupplierId);
+            setCurrentView('supplierPriceList');
+          } else {
+            setCurrentView(view);
+          }
+        }}
+      />
+    ) : (
+      <div className="max-w-2xl mx-auto p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 text-center">
+          <div className="text-5xl mb-4">🏭</div>
+          <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
+            Профиль поставщика не найден
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Ваш аккаунт не связан ни с одним поставщиком в системе.
+          </p>
+
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-4 text-left text-sm">
+            <p className="font-semibold text-amber-900 dark:text-amber-200 mb-2">
+              Что проверить администратору:
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-amber-800 dark:text-amber-300">
+              <li>
+                Есть ли запись в таблице <code>suppliers</code> с{' '}
+                <code>user_id</code> = <code className="text-xs">{user?.id}</code>
+              </li>
+              <li>
+                Или с <code>email</code> = <code>{user?.email}</code>
+              </li>
+            </ul>
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-3">
+              💡 Совет: нажмите «Перезагрузить» — часто помогает, если запись только что создана.
+            </p>
+          </div>
+
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition"
+            >
+              🔄 Перезагрузить
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+            >
+              Выйти
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  ) : (
+    <FeatureLockedView
+      featureName="Кабинет поставщика"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
+  )
+)}
+
+{/* 📊 ДАШБОРД ЗАКУПЩИКА */}
+{currentView === 'procurementDashboard' && (
+  checkFeatureAccess(currentPlan, 'procurement_dashboard') ? (
+    <ProcurementDashboard
       companyId={userCompanyId}
-      supplierId={currentSupplierId}
       onNavigate={(view, payload) => {
         if (view === 'rfqDetails' && payload?.rfqId) {
           setSelectedRFQId(payload.rfqId);
@@ -9471,78 +9657,18 @@ onClearFilters={handleClearFilters}
         } else if (view === 'purchaseOrderDetails' && payload?.orderId) {
           setSelectedPOId(payload.orderId);
           setCurrentView('purchaseOrderDetails');
-        } else if (view === 'supplierPriceList') {
-          setSelectedSupplierId(currentSupplierId);
-          setCurrentView('supplierPriceList');
         } else {
           setCurrentView(view);
         }
       }}
     />
   ) : (
-    <div className="max-w-2xl mx-auto p-8">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 text-center">
-        <div className="text-5xl mb-4">🏭</div>
-        <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
-          Профиль поставщика не найден
-        </h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Ваш аккаунт не связан ни с одним поставщиком в системе.
-        </p>
-
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-4 text-left text-sm">
-          <p className="font-semibold text-amber-900 dark:text-amber-200 mb-2">
-            Что проверить администратору:
-          </p>
-          <ul className="list-disc list-inside space-y-1 text-amber-800 dark:text-amber-300">
-            <li>
-              Есть ли запись в таблице <code>suppliers</code> с{' '}
-              <code>user_id</code> = <code className="text-xs">{user?.id}</code>
-            </li>
-            <li>
-              Или с <code>email</code> = <code>{user?.email}</code>
-            </li>
-          </ul>
-          <p className="text-xs text-amber-700 dark:text-amber-400 mt-3">
-            💡 Совет: нажмите «Перезагрузить» — часто помогает, если запись только что создана.
-          </p>
-        </div>
-
-        <div className="flex gap-3 justify-center">
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition"
-          >
-            🔄 Перезагрузить
-          </button>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-          >
-            Выйти
-          </button>
-        </div>
-      </div>
-    </div>
+    <FeatureLockedView
+      featureName="Дашборд закупщика"
+      onUpgrade={() => setCurrentView('tariffs')}
+      t={t}
+    />
   )
-)}
-
-{/* 📊 ДАШБОРД ЗАКУПЩИКА */}
-{currentView === 'procurementDashboard' && (
-  <ProcurementDashboard
-    companyId={userCompanyId}
-    onNavigate={(view, payload) => {
-      if (view === 'rfqDetails' && payload?.rfqId) {
-        setSelectedRFQId(payload.rfqId);
-        setCurrentView('rfqDetails');
-      } else if (view === 'purchaseOrderDetails' && payload?.orderId) {
-        setSelectedPOId(payload.orderId);
-        setCurrentView('purchaseOrderDetails');
-      } else {
-        setCurrentView(view);
-      }
-    }}
-  />
 )}
 
 {/* 🆕 ПАПКА ОБЪЕКТА (Object Hub) */}

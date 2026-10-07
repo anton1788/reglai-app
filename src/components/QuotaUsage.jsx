@@ -1,14 +1,14 @@
 // src/components/QuotaUsage.jsx
 import React, { useEffect, useState, useCallback } from 'react';
-import { 
-  Activity, 
-  AlertTriangle, 
-  CheckCircle, 
-  Package, 
-  TrendingUp, 
-  Calendar, 
-  Users, 
-  Key, 
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle,
+  Package,
+  TrendingUp,
+  Calendar,
+  Users,
+  Key,
   Database,
   BarChart3,
   Clock,
@@ -16,18 +16,25 @@ import {
   Shield,
   Crown,
   ArrowUp,
-  Info
+  Info,
+  Truck,        // 🆕
+  MessageSquare,// 🆕
+  ShoppingBag,  // 🆕
 } from 'lucide-react';
-import { 
-  checkQuota, 
-  getUsageStats, 
+import {
+  checkQuota,
+  getUsageStats,
   getCompanyPlan,
   TARIFF_PLANS,
   getTariffUpgradeBenefits
 } from '../utils/tariffPlans';
 
-const QuotaUsage = ({ 
-  userCompanyId, 
+// ============================================================
+// 📊 КОМПОНЕНТ QUOTA USAGE
+// ============================================================
+
+const QuotaUsage = ({
+  userCompanyId,
   supabase,
   currentPlan,
   onUpgradeClick,
@@ -43,39 +50,37 @@ const QuotaUsage = ({
   const [upgradeBenefits, setUpgradeBenefits] = useState(null);
 
   const loadQuotaData = useCallback(async () => {
-    // ✅ ФИКС: Проверяем, что userCompanyId - строка
     if (!userCompanyId || !supabase) return;
-    
-    // ✅ Преобразуем в строку, если это объект
-    const companyId = typeof userCompanyId === 'string' 
-      ? userCompanyId 
+
+    const companyId = typeof userCompanyId === 'string'
+      ? userCompanyId
       : userCompanyId?.toString?.() || null;
-    
+
     if (!companyId || companyId === '[object Object]') {
       console.warn('QuotaUsage: некорректный companyId:', userCompanyId);
       setLoading(false);
       return;
     }
-    
+
     try {
       setLoading(true);
       setError(null);
-      
+
       const [quotaData, statsData, planData] = await Promise.all([
         checkQuota(supabase, companyId),
-        getUsageStats(supabase, companyId),
+        getUsageStats(companyId),
         getCompanyPlan(supabase, companyId)
       ]);
-      
+
       setQuota(quotaData);
       setStats(statsData);
       setPlan(planData);
-      
+
       if (planData?.id) {
         const benefits = getTariffUpgradeBenefits(planData.id);
         setUpgradeBenefits(benefits);
       }
-      
+
     } catch (err) {
       console.error('Failed to load quota:', err);
       setError(err.message);
@@ -94,14 +99,14 @@ const QuotaUsage = ({
   };
 
   const getPlanLevel = (planId) => {
-    const levels = ['basic', 'starter', 'pro', 'business', 'enterprise'];
+    const levels = ['basic', 'micro', 'pro', 'business', 'enterprise'];
     return levels.indexOf(planId) + 1;
   };
 
   const getPlanIcon = (planId) => {
     const icons = {
       basic: '🆓',
-      starter: '🚀',
+      micro: '🚀',
       pro: '💼',
       business: '🏢',
       enterprise: '👑'
@@ -112,7 +117,7 @@ const QuotaUsage = ({
   const getPlanColor = (planId) => {
     const colors = {
       basic: 'gray',
-      starter: 'blue',
+      micro: 'blue',
       pro: 'yellow',
       business: 'indigo',
       enterprise: 'purple'
@@ -125,6 +130,12 @@ const QuotaUsage = ({
     if (percent >= 80) return 'bg-orange-500';
     if (percent >= 60) return 'bg-yellow-500';
     return 'bg-green-500';
+  };
+
+  // 🆕 Форматирование лимита
+  const formatLimit = (value) => {
+    if (value === -1 || value === undefined || value === null) return '∞';
+    return Number(value).toLocaleString('ru-RU');
   };
 
   if (loading) {
@@ -142,7 +153,7 @@ const QuotaUsage = ({
           <AlertTriangle className="w-4 h-4" />
           Ошибка загрузки лимитов: {error}
         </p>
-        <button 
+        <button
           onClick={refresh}
           className="mt-2 text-sm text-red-600 dark:text-red-400 hover:underline"
         >
@@ -155,10 +166,23 @@ const QuotaUsage = ({
   const planId = plan?.id || currentPlan || 'basic';
   const isEnterprisePlan = planId === 'enterprise';
   const planData = TARIFF_PLANS[planId] || TARIFF_PLANS.basic;
-  
+
   const dailyPercent = quota?.dailyLimit ? (quota.dailyUsage / quota.dailyLimit) * 100 : 0;
   const monthlyPercent = quota?.monthlyLimit ? (quota.monthlyUsage / quota.monthlyLimit) * 100 : 0;
   const usersPercent = planData.maxUsers > 0 ? ((stats?.users || 0) / planData.maxUsers) * 100 : 0;
+
+  // 🆕 Проценты для поставщиков/RFQ/заказов
+  const suppliersPercent = planData.maxSuppliers > 0
+    ? ((stats?.suppliers || 0) / planData.maxSuppliers) * 100 : 0;
+  const rfqPercent = planData.maxRFQPerMonth > 0
+    ? ((stats?.rfqThisMonth || 0) / planData.maxRFQPerMonth) * 100 : 0;
+  const ordersPercent = planData.maxPurchaseOrdersPerMonth > 0
+    ? ((stats?.purchaseOrdersThisMonth || 0) / planData.maxPurchaseOrdersPerMonth) * 100 : 0;
+
+  // 🆕 Есть ли доступ к модулю поставщиков
+  const hasSuppliersAccess = planData.features.suppliers_manage === true;
+  const hasRFQAccess = planData.features.rfq === true;
+  const hasOrdersAccess = planData.features.purchase_orders === true;
 
   const planColor = getPlanColor(planId);
 
@@ -184,7 +208,7 @@ const QuotaUsage = ({
             </div>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button
             onClick={refresh}
@@ -209,7 +233,7 @@ const QuotaUsage = ({
             {stats?.users || 0}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            из {planData.maxUsers}
+            из {formatLimit(planData.maxUsers)}
           </p>
         </div>
 
@@ -319,7 +343,7 @@ const QuotaUsage = ({
               Использование пользователей
             </span>
             <span className="font-medium text-gray-900 dark:text-white">
-              {stats?.users || 0} / {planData.maxUsers}
+              {stats?.users || 0} / {formatLimit(planData.maxUsers)}
             </span>
           </div>
           <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -329,10 +353,96 @@ const QuotaUsage = ({
             />
           </div>
           <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-            <span>Свободно: {Math.max(0, planData.maxUsers - (stats?.users || 0))}</span>
-            <span>{Math.round(usersPercent)}%</span>
+            <span>Свободно: {planData.maxUsers === -1 ? '∞' : Math.max(0, planData.maxUsers - (stats?.users || 0))}</span>
+            <span>{planData.maxUsers === -1 ? '∞' : Math.round(usersPercent) + '%'}</span>
           </div>
         </div>
+
+        {/* 🆕 БЛОК ПОСТАВЩИКОВ — показываем только если есть доступ */}
+        {hasSuppliersAccess && (
+          <>
+            {/* Разделитель */}
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <Truck className="w-4 h-4 text-[#4A6572]" />
+                Модуль поставщиков и закупок
+              </h4>
+            </div>
+
+            {/* Поставщики */}
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                  <Truck className="w-4 h-4" />
+                  Поставщики
+                </span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {stats?.suppliers || 0} / {formatLimit(planData.maxSuppliers)}
+                </span>
+              </div>
+              <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-500 ${getProgressColor(suppliersPercent)}`}
+                  style={{ width: `${Math.min(100, suppliersPercent)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <span>Свободно: {planData.maxSuppliers === -1 ? '∞' : Math.max(0, planData.maxSuppliers - (stats?.suppliers || 0))}</span>
+                <span>{planData.maxSuppliers === -1 ? '∞' : Math.round(suppliersPercent) + '%'}</span>
+              </div>
+            </div>
+
+            {/* RFQ */}
+            {hasRFQAccess && planData.maxRFQPerMonth > 0 && (
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                    <MessageSquare className="w-4 h-4" />
+                    RFQ в месяц
+                  </span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {stats?.rfqThisMonth || 0} / {formatLimit(planData.maxRFQPerMonth)}
+                  </span>
+                </div>
+                <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${getProgressColor(rfqPercent)}`}
+                    style={{ width: `${Math.min(100, rfqPercent)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <span>Осталось: {planData.maxRFQPerMonth === -1 ? '∞' : Math.max(0, planData.maxRFQPerMonth - (stats?.rfqThisMonth || 0))}</span>
+                  <span>{planData.maxRFQPerMonth === -1 ? '∞' : Math.round(rfqPercent) + '%'}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Заказы */}
+            {hasOrdersAccess && planData.maxPurchaseOrdersPerMonth > 0 && (
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                    <ShoppingBag className="w-4 h-4" />
+                    Заказы в месяц
+                  </span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {stats?.purchaseOrdersThisMonth || 0} / {formatLimit(planData.maxPurchaseOrdersPerMonth)}
+                  </span>
+                </div>
+                <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${getProgressColor(ordersPercent)}`}
+                    style={{ width: `${Math.min(100, ordersPercent)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <span>Осталось: {planData.maxPurchaseOrdersPerMonth === -1 ? '∞' : Math.max(0, planData.maxPurchaseOrdersPerMonth - (stats?.purchaseOrdersThisMonth || 0))}</span>
+                  <span>{planData.maxPurchaseOrdersPerMonth === -1 ? '∞' : Math.round(ordersPercent) + '%'}</span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Преимущества апгрейда */}
@@ -362,6 +472,21 @@ const QuotaUsage = ({
                     🔑 +{upgradeBenefits.benefits.apiKeys.increase} API ключей
                   </div>
                 )}
+                {upgradeBenefits.benefits.suppliers.increase > 0 && (
+                  <div className="text-xs text-gray-600 dark:text-gray-300">
+                    🏭 +{upgradeBenefits.benefits.suppliers.increase} поставщиков
+                  </div>
+                )}
+                {upgradeBenefits.benefits.rfqPerMonth.increase > 0 && (
+                  <div className="text-xs text-gray-600 dark:text-gray-300">
+                    📨 +{upgradeBenefits.benefits.rfqPerMonth.increase} RFQ/мес
+                  </div>
+                )}
+                {upgradeBenefits.benefits.purchaseOrdersPerMonth.increase > 0 && (
+                  <div className="text-xs text-gray-600 dark:text-gray-300">
+                    📦 +{upgradeBenefits.benefits.purchaseOrdersPerMonth.increase} заказов/мес
+                  </div>
+                )}
                 {upgradeBenefits.benefits.prioritySupport && (
                   <div className="text-xs text-gray-600 dark:text-gray-300">
                     ⚡ Приоритетная поддержка
@@ -374,14 +499,20 @@ const QuotaUsage = ({
                 )}
                 {upgradeBenefits.benefits.newFeatures.length > 0 && (
                   <div className="text-xs text-gray-600 dark:text-gray-300 col-span-2">
-                    ✨ Новые функции: {upgradeBenefits.benefits.newFeatures.map(f => {
-                      const labels = {
-                        webhooks: 'Webhooks',
-                        customIntegration: 'Кастомная интеграция',
-                        analytics: 'Аналитика'
-                      };
-                      return labels[f] || f;
-                    }).join(', ')}
+                    ✨ Новые функции: {upgradeBenefits.benefits.newFeatures
+                      .filter(f => ['suppliers_manage', 'rfq', 'purchase_orders', 'supplier_catalog', 'supplier_portal']
+                        .includes(f))
+                      .map(f => {
+                        const labels = {
+                          suppliers_manage: 'Поставщики',
+                          rfq: 'RFQ',
+                          purchase_orders: 'Заказы',
+                          supplier_catalog: 'Каталог',
+                          supplier_portal: 'Кабинет поставщика'
+                        };
+                        return labels[f] || f;
+                      })
+                      .join(', ')}
                   </div>
                 )}
               </div>
@@ -410,21 +541,21 @@ const QuotaUsage = ({
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {stats?.materials || 0}
+                {stats?.suppliers || 0}
               </p>
-              <p className="text-xs text-gray-500">Материалов</p>
+              <p className="text-xs text-gray-500">Поставщиков</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {planData.maxUsers}
+                {stats?.rfqThisMonth || 0}
               </p>
-              <p className="text-xs text-gray-500">Макс. пользователей</p>
+              <p className="text-xs text-gray-500">RFQ за месяц</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {planData.maxApiKeys}
+                {stats?.purchaseOrdersThisMonth || 0}
               </p>
-              <p className="text-xs text-gray-500">Макс. API ключей</p>
+              <p className="text-xs text-gray-500">Заказов за месяц</p>
             </div>
           </div>
         </div>
@@ -434,10 +565,12 @@ const QuotaUsage = ({
       <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
         <div className="flex flex-wrap justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
           <span>📋 Тариф: <span className="font-medium text-gray-700 dark:text-gray-300">{planData.name}</span></span>
-          <span>📦 Материалов: до {planData.features.warehouse ? '∞' : '20'} в заявке</span>
-          <span>👥 Пользователей: до {planData.maxUsers}</span>
-          {planData.features.support && (
-            <span>💬 Поддержка: {planData.features.support}</span>
+          <span>👥 Пользователей: до {formatLimit(planData.maxUsers)}</span>
+          {planData.features.suppliers_manage && (
+            <span>🏭 Поставщиков: до {formatLimit(planData.maxSuppliers)}</span>
+          )}
+          {planData.features.rfq && planData.maxRFQPerMonth > 0 && (
+            <span>📨 RFQ/мес: до {formatLimit(planData.maxRFQPerMonth)}</span>
           )}
         </div>
       </div>

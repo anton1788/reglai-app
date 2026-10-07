@@ -1,22 +1,26 @@
 // src/utils/tariffPlans.js
-
-import { supabase } from './supabaseClient';
-
 // ============================================================
-// 📦 КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ (РАСШИРЕННАЯ)
+// 💰 ТАРИФНЫЕ ПЛАНЫ REGLAI PRO
 // ============================================================
 //
-// 💰 Сетка тарифов:
+// 🎯 Уровни:
 //    basic      - 0 ₽       — знакомство
 //    micro      - 490 ₽     — небольшая бригада
 //    pro        - 3 990 ₽   — растущая компания ⭐
 //    business   - 7 490 ₽   — средний бизнес
 //    enterprise - 13 990 ₽  — холдинги
 //
-// 🎯 Функции разделены на 3 категории:
+// 📦 Функции разделены на 4 категории:
 //    Core       — базовые (создание заявок, склад, поддержка)
 //    Advanced   — продвинутые (API, webhooks, аналитика, календарь, чат)
+//    Suppliers  — 🆕 B2B-модуль (поставщики, RFQ, заказы, прайсы)
 //    Premium    — премиум (SLA, SSO, мультикомпания, BI)
+// ============================================================
+
+import { supabase } from './supabaseClient';
+
+// ============================================================
+// 📦 КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ
 // ============================================================
 
 export const TARIFF_PLANS = {
@@ -34,6 +38,10 @@ export const TARIFF_PLANS = {
     maxUsers: 1,
     maxObjects: 1,
     maxApplicationsPerMonth: 10,
+    // 🆕 Лимиты модуля поставщиков
+    maxSuppliers: 0,
+    maxRFQPerMonth: 0,
+    maxPurchaseOrdersPerMonth: 0,
     features: {
       // Core
       create_applications: true,
@@ -53,6 +61,16 @@ export const TARIFF_PLANS = {
       document_generator: false,
       mobile_qr: false,
       kanban_board: false,
+
+      // 🆕 Suppliers & Procurement
+      suppliers_manage: false,
+      supplier_catalog: false,
+      supplier_price_list: false,
+      rfq: false,
+      purchase_orders: false,
+      price_catalog: false,
+      procurement_dashboard: false,
+      supplier_portal: false,
 
       // Premium
       priority_processing: false,
@@ -89,6 +107,10 @@ export const TARIFF_PLANS = {
     maxUsers: 5,
     maxObjects: 5,
     maxApplicationsPerMonth: 100,
+    // 🆕 Лимиты модуля поставщиков
+    maxSuppliers: 3,
+    maxRFQPerMonth: 5,
+    maxPurchaseOrdersPerMonth: 0,
     features: {
       // Core
       create_applications: true,
@@ -108,6 +130,16 @@ export const TARIFF_PLANS = {
       document_generator: true,
       mobile_qr: true,
       kanban_board: false,
+
+      // 🆕 Suppliers & Procurement
+      suppliers_manage: true,      // ⚠️ до 3 поставщиков
+      supplier_catalog: false,
+      supplier_price_list: false,
+      rfq: true,                   // ⚠️ до 5 RFQ/мес
+      purchase_orders: false,
+      price_catalog: false,
+      procurement_dashboard: false,
+      supplier_portal: false,
 
       // Premium
       priority_processing: false,
@@ -129,7 +161,9 @@ export const TARIFF_PLANS = {
       'Простая аналитика',
       'Документы (акты, сметы)',
       'QR-сканер',
-      '2 API-ключа'
+      '2 API-ключа',
+      '🏭 До 3 поставщиков',
+      '📨 5 RFQ в месяц'
     ]
   },
 
@@ -147,6 +181,10 @@ export const TARIFF_PLANS = {
     maxUsers: 50,
     maxObjects: 50,
     maxApplicationsPerMonth: 1000,
+    // 🆕 Лимиты модуля поставщиков
+    maxSuppliers: 20,
+    maxRFQPerMonth: 50,
+    maxPurchaseOrdersPerMonth: 200,
     features: {
       // Core
       create_applications: true,
@@ -166,6 +204,16 @@ export const TARIFF_PLANS = {
       document_generator: true,
       mobile_qr: true,
       kanban_board: true,
+
+      // 🆕 Suppliers & Procurement
+      suppliers_manage: true,
+      supplier_catalog: true,
+      supplier_price_list: true,
+      rfq: true,
+      purchase_orders: true,
+      price_catalog: true,
+      procurement_dashboard: true,
+      supplier_portal: false,     // только Business+
 
       // Premium
       priority_processing: true,
@@ -188,7 +236,10 @@ export const TARIFF_PLANS = {
       'Webhooks',
       'Расширенная аналитика',
       '10 API-ключей',
-      'Приоритетная обработка'
+      'Приоритетная обработка',
+      '🏭 Модуль закупок (20 поставщиков)',
+      '📨 50 RFQ + 200 заказов в месяц',
+      '💰 Прайс-листы и справочник цен'
     ]
   },
 
@@ -206,6 +257,10 @@ export const TARIFF_PLANS = {
     maxUsers: 200,
     maxObjects: 200,
     maxApplicationsPerMonth: 5000,
+    // 🆕 Лимиты модуля поставщиков
+    maxSuppliers: 100,
+    maxRFQPerMonth: 500,
+    maxPurchaseOrdersPerMonth: 2000,
     features: {
       // Core
       create_applications: true,
@@ -225,6 +280,16 @@ export const TARIFF_PLANS = {
       document_generator: true,
       mobile_qr: true,
       kanban_board: true,
+
+      // 🆕 Suppliers & Procurement
+      suppliers_manage: true,
+      supplier_catalog: true,
+      supplier_price_list: true,
+      rfq: true,
+      purchase_orders: true,
+      price_catalog: true,
+      procurement_dashboard: true,
+      supplier_portal: true,      // ✅ кабинет поставщика
 
       // Premium
       priority_processing: true,
@@ -246,7 +311,10 @@ export const TARIFF_PLANS = {
       'SLA-гарантия 99.9%',
       'Кастомные интеграции',
       'Поддержка 24/7',
-      '25 API-ключей'
+      '25 API-ключей',
+      '🏭 100 поставщиков',
+      '🚪 Кабинет поставщика',
+      '📨 500 RFQ + 2000 заказов в месяц'
     ]
   },
 
@@ -264,6 +332,10 @@ export const TARIFF_PLANS = {
     maxUsers: 1000,
     maxObjects: -1,
     maxApplicationsPerMonth: -1,
+    // 🆕 Лимиты модуля поставщиков
+    maxSuppliers: -1,
+    maxRFQPerMonth: -1,
+    maxPurchaseOrdersPerMonth: -1,
     features: {
       // Core
       create_applications: true,
@@ -283,6 +355,16 @@ export const TARIFF_PLANS = {
       document_generator: true,
       mobile_qr: true,
       kanban_board: true,
+
+      // 🆕 Suppliers & Procurement
+      suppliers_manage: true,
+      supplier_catalog: true,
+      supplier_price_list: true,
+      rfq: true,
+      purchase_orders: true,
+      price_catalog: true,
+      procurement_dashboard: true,
+      supplier_portal: true,
 
       // Premium
       priority_processing: true,
@@ -305,7 +387,8 @@ export const TARIFF_PLANS = {
       'BI-дашборды',
       'Персональный менеджер',
       '100 API-ключей',
-      'Всё включено'
+      'Всё включено',
+      '🏭 Безлимит поставщиков и RFQ'
     ]
   }
 };
@@ -340,6 +423,21 @@ export const FEATURE_CATEGORIES = {
       { key: 'document_generator', label: '📄 Документы (акты, сметы)', icon: '📄' },
       { key: 'mobile_qr', label: '📱 QR-сканер (мобильный)', icon: '📱' },
       { key: 'kanban_board', label: '🎯 Kanban-доска', icon: '🎯' }
+    ]
+  },
+  // 🆕 НОВАЯ КАТЕГОРИЯ: Поставщики и закупки
+  suppliers: {
+    label: 'Поставщики и закупки',
+    description: 'B2B-модуль: RFQ, заказы, прайс-листы',
+    features: [
+      { key: 'suppliers_manage', label: '🏭 Управление поставщиками', icon: '🏭' },
+      { key: 'supplier_catalog', label: '📚 Каталог материалов', icon: '📚' },
+      { key: 'supplier_price_list', label: '💰 Прайс-листы поставщиков', icon: '💰' },
+      { key: 'rfq', label: '📨 RFQ (запросы КП)', icon: '📨' },
+      { key: 'purchase_orders', label: '📦 Заказы поставщикам', icon: '📦' },
+      { key: 'price_catalog', label: '📖 Справочник цен', icon: '📖' },
+      { key: 'procurement_dashboard', label: '📊 Дашборд закупщика', icon: '📊' },
+      { key: 'supplier_portal', label: '🚪 Кабинет поставщика', icon: '🚪' }
     ]
   },
   premium: {
@@ -462,7 +560,11 @@ export const comparePlans = (planIds) => {
           objects: plan.maxObjects,
           applicationsPerMonth: plan.maxApplicationsPerMonth,
           monthlyQuota: plan.apiQuotaMonthly,
-          dailyQuota: plan.apiQuotaDaily
+          dailyQuota: plan.apiQuotaDaily,
+          // 🆕
+          suppliers: plan.maxSuppliers,
+          rfqPerMonth: plan.maxRFQPerMonth,
+          purchaseOrdersPerMonth: plan.maxPurchaseOrdersPerMonth
         },
         popular: plan.popular,
         color: plan.color
@@ -477,15 +579,28 @@ export const comparePlans = (planIds) => {
 // ============================================================
 
 export const recommendPlan = (stats) => {
-  const { users = 0, applications = 0, objects = 0 } = stats || {};
+  const {
+    users = 0,
+    applications = 0,
+    objects = 0,
+    // 🆕
+    suppliers = 0,
+    rfq = 0
+  } = stats || {};
 
-  // Проверяем, что тариф подходит по всем трём параметрам
-  // Если хотя бы один параметр превышает лимит — берём более высокий тариф
-
-  if (users <= 1 && applications <= 10 && objects <= 1) return 'basic';
-  if (users <= 5 && applications <= 100 && objects <= 5) return 'micro';
-  if (users <= 50 && applications <= 1000 && objects <= 50) return 'pro';
-  if (users <= 200 && applications <= 5000 && objects <= 200) return 'business';
+  // Проверяем, что тариф подходит по всем параметрам
+  if (users <= 1 && applications <= 10 && objects <= 1 && suppliers === 0 && rfq === 0) {
+    return 'basic';
+  }
+  if (users <= 5 && applications <= 100 && objects <= 5 && suppliers <= 3 && rfq <= 5) {
+    return 'micro';
+  }
+  if (users <= 50 && applications <= 1000 && objects <= 50 && suppliers <= 20 && rfq <= 50) {
+    return 'pro';
+  }
+  if (users <= 200 && applications <= 5000 && objects <= 200 && suppliers <= 100 && rfq <= 500) {
+    return 'business';
+  }
   return 'enterprise';
 };
 
@@ -856,6 +971,27 @@ export const getTariffUpgradeBenefits = (currentPlanId) => {
         increase: nextPlan.maxApplicationsPerMonth - currentPlan.maxApplicationsPerMonth,
         percent: safePercent(currentPlan.maxApplicationsPerMonth, nextPlan.maxApplicationsPerMonth)
       },
+      // 🆕 Поставщики
+      suppliers: {
+        from: currentPlan.maxSuppliers,
+        to: nextPlan.maxSuppliers,
+        increase: nextPlan.maxSuppliers - currentPlan.maxSuppliers,
+        percent: safePercent(currentPlan.maxSuppliers, nextPlan.maxSuppliers)
+      },
+      // 🆕 RFQ
+      rfqPerMonth: {
+        from: currentPlan.maxRFQPerMonth,
+        to: nextPlan.maxRFQPerMonth,
+        increase: nextPlan.maxRFQPerMonth - currentPlan.maxRFQPerMonth,
+        percent: safePercent(currentPlan.maxRFQPerMonth, nextPlan.maxRFQPerMonth)
+      },
+      // 🆕 Заказы
+      purchaseOrdersPerMonth: {
+        from: currentPlan.maxPurchaseOrdersPerMonth,
+        to: nextPlan.maxPurchaseOrdersPerMonth,
+        increase: nextPlan.maxPurchaseOrdersPerMonth - currentPlan.maxPurchaseOrdersPerMonth,
+        percent: safePercent(currentPlan.maxPurchaseOrdersPerMonth, nextPlan.maxPurchaseOrdersPerMonth)
+      },
       newFeatures
     }
   };
@@ -876,11 +1012,21 @@ export const checkTariffLimit = (planId, limitType, currentValue) => {
     applicationsPerMonth: plan.maxApplicationsPerMonth,
     apiQuotaMonthly: plan.apiQuotaMonthly,
     apiQuotaDaily: plan.apiQuotaDaily,
+    // 🆕 Поставщики
+    suppliers: plan.maxSuppliers,
+    rfqPerMonth: plan.maxRFQPerMonth,
+    purchaseOrdersPerMonth: plan.maxPurchaseOrdersPerMonth
   };
 
   const limit = limits[limitType];
   if (limit === undefined) return { allowed: true, limit: Infinity };
-  if (limit === -1) return { allowed: true, limit: -1, remaining: -1, usagePercent: 0, isUnlimited: true };
+  if (limit === -1) return {
+    allowed: true,
+    limit: -1,
+    remaining: -1,
+    usagePercent: 0,
+    isUnlimited: true
+  };
 
   return {
     allowed: currentValue <= limit,
@@ -901,21 +1047,55 @@ export const getUsageStats = async (companyId) => {
       .from('applications')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId)
-      .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
+      .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
 
     const { count: usersCount } = await supabase
       .from('company_users')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId);
 
+    // 🆕 Поставщики
+    const { count: suppliersCount } = await supabase
+      .from('suppliers')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .neq('status', 'archived');
+
+    // 🆕 RFQ за текущий месяц
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const { count: rfqCount } = await supabase
+      .from('rfq_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .gte('created_at', monthStart.toISOString());
+
+    // 🆕 Заказы за текущий месяц
+    const { count: ordersCount } = await supabase
+      .from('purchase_orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .gte('created_at', monthStart.toISOString());
+
     return {
       applications: applicationsCount || 0,
       users: usersCount || 0,
-      lastUpdated: new Date().toISOString()
+      suppliers: suppliersCount || 0,
+      rfqThisMonth: rfqCount || 0,
+            purchaseOrdersThisMonth: ordersCount || 0
     };
   } catch (error) {
     console.error('Ошибка получения статистики:', error);
-    return { applications: 0, users: 0, lastUpdated: null };
+    return {
+      applications: 0,
+      users: 0,
+      suppliers: 0,
+      rfqThisMonth: 0,
+      purchaseOrdersThisMonth: 0,
+      lastUpdated: null
+    };
   }
 };
 
@@ -1007,7 +1187,7 @@ export const getOurPosition = (planId, usersCount = 10) => {
 };
 
 // ============================================================
-// 🎁 АДДОНЫ (дополнительные опции к любому тарифу)
+// 🎁 АДДОНЫ
 // ============================================================
 
 export const ADDONS = {
@@ -1034,6 +1214,12 @@ export const ADDONS = {
     name: '+50 000 API-запросов',
     monthlyPrice: 1990,
     description: 'Дополнительные 50 000 запросов в месяц'
+  },
+  extraSuppliers10: {
+    id: 'extraSuppliers10',
+    name: '+10 поставщиков',
+    monthlyPrice: 490,
+    description: 'Дополнительные 10 поставщиков (для тарифов Pro+)'
   },
   customIntegration: {
     id: 'customIntegration',

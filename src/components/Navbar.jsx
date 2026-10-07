@@ -443,32 +443,52 @@ const Navbar = ({
       return items;
     }
 
-    // ============================================================
+        // ============================================================
     // 🏢 БЛОК ПОСТАВЩИКОВ (B2B) — только для закупщиков
+    // + проверка доступа по тарифу через can()
     // ============================================================
-    const canSeeSuppliers = [
+    const canSeeSuppliersRole = [
       'procurement_manager', 'supply_admin', 'manager', 'director', 'super_admin',
     ].includes(userRole) || isCompanyOwner;
 
-    if (canSeeSuppliers) {
+    // 🆕 Проверяем доступ к функциям тарифа
+    const hasSuppliersFeature = !currentPlan || can('suppliers_manage');
+    const hasCatalogFeature = !currentPlan || can('supplier_catalog');
+    const hasRFQFeature = !currentPlan || can('rfq');
+    const hasOrdersFeature = !currentPlan || can('purchase_orders');
+
+    // Показываем "Поставщики" только если роль И тариф позволяют
+    if (canSeeSuppliersRole && hasSuppliersFeature) {
       items.push({
         id: 'suppliers',
         label: 'Поставщики',
         icon: Truck,
         path: '/suppliers'
       });
+    }
+
+    // Каталог — если роль И тариф
+    if (canSeeSuppliersRole && hasCatalogFeature) {
       items.push({
         id: 'supplierCatalog',
         label: 'Каталог',
         icon: Layers,
         path: '/supplier-catalog'
       });
+    }
+
+    // RFQ — если роль И тариф
+    if (canSeeSuppliersRole && hasRFQFeature) {
       items.push({
         id: 'rfqList',
         label: `RFQ${rfqCartCount > 0 ? ` (${rfqCartCount})` : ''}`,
         icon: MessageSquare,
         path: '/rfq'
       });
+    }
+
+    // Заказы — если роль И тариф
+    if (canSeeSuppliersRole && hasOrdersFeature) {
       items.push({
         id: 'purchaseOrders',
         label: 'Заказы',
@@ -477,8 +497,8 @@ const Navbar = ({
       });
     }
 
-    // 📚 СПРАВОЧНИК ЦЕН
-    if (canEditPrices(userRole)) {
+        // 📚 СПРАВОЧНИК ЦЕН — плюс проверка тарифа
+    if (canEditPrices(userRole) && (!currentPlan || can('price_catalog'))) {
       items.push({
         id: 'priceCatalog',
         label: 'Справочник цен',
@@ -487,7 +507,7 @@ const Navbar = ({
       });
     }
 
-    if (userRole === 'procurement_manager') {
+        if (userRole === 'procurement_manager' && (!currentPlan || can('procurement_dashboard'))) {
       items.push({
         id: 'procurementDashboard',
         label: 'Закупки',

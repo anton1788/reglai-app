@@ -863,6 +863,28 @@ export const translations = {
     activationDate: 'Дата активации',
     expirationDate: 'Дата окончания',
     extendPlan: 'Продлить тариф',
+        // 🆕 Модуль поставщиков и закупок
+    suppliersFeature: {
+      title: 'Поставщики и закупки',
+      manage: 'Управление поставщиками',
+      catalog: 'Каталог материалов',
+      priceList: 'Прайс-листы поставщиков',
+      rfq: 'RFQ (запросы КП)',
+      purchaseOrders: 'Заказы поставщикам',
+      priceCatalog: 'Справочник цен',
+      dashboard: 'Дашборд закупщика',
+      portal: 'Кабинет поставщика',
+      // Заголовки для заблокированного вида
+      lockedTitle: '{{feature}} доступен на тарифе Профессиональный',
+      lockedMessage: 'Обновите тариф, чтобы получить доступ к модулю закупок и другим продвинутым функциям.',
+      upgradeButton: 'Посмотреть тарифы'
+    },
+    supplierLimits: 'Лимит поставщиков',
+    rfqLimits: 'Лимит RFQ в месяц',
+    purchaseOrdersLimits: 'Лимит заказов в месяц',
+    suppliersUsed: 'Использовано поставщиков',
+    rfqUsed: 'RFQ в этом месяце',
+    ordersUsed: 'Заказов в этом месяце',
 
     // ──────────────────────────────────────────────────────────────────────
     // 📖 API ДОКУМЕНТАЦИЯ
@@ -2003,6 +2025,27 @@ export const translations = {
     activationDate: 'Activation date',
     expirationDate: 'Expiration date',
     extendPlan: 'Extend plan',
+        // 🆕 Suppliers & Procurement module
+    suppliersFeature: {
+      title: 'Suppliers & Procurement',
+      manage: 'Suppliers management',
+      catalog: 'Material catalog',
+      priceList: 'Supplier price lists',
+      rfq: 'RFQ (quotes)',
+      purchaseOrders: 'Purchase orders',
+      priceCatalog: 'Price catalog',
+      dashboard: 'Procurement dashboard',
+      portal: 'Supplier portal',
+      lockedTitle: '{{feature}} is available on the Professional plan',
+      lockedMessage: 'Upgrade your plan to get access to the procurement module and other advanced features.',
+      upgradeButton: 'View plans'
+    },
+    supplierLimits: 'Suppliers limit',
+    rfqLimits: 'RFQ per month limit',
+    purchaseOrdersLimits: 'Purchase orders per month limit',
+    suppliersUsed: 'Suppliers used',
+    rfqUsed: 'RFQ this month',
+    ordersUsed: 'Orders this month',
 
     // ──────────────────────────────────────────────────────────────────────
     // 📖 API DOCUMENTATION
