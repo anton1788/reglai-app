@@ -7439,6 +7439,7 @@ const renderAnalyticsDashboard = () => {
   );
 
   const renderSignupModal = () => {
+  console.log('🟢 [renderSignupModal] вызван, showSignupModal =', showSignupModal, 'consent =', consent);
   if (!showSignupModal) return null;
   
   return (
