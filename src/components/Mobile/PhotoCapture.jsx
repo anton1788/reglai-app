@@ -1,290 +1,463 @@
 // src/components/Mobile/PhotoCapture.jsx
-import React, { useState, useRef } from 'react'; // ← убрали useEffect
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, Upload, X, Check, Loader2, AlertCircle } from 'lucide-react';
+import { supabase } from '../../utils/supabaseClient';
 
-const PhotoCapture = ({ 
-  onCapture, 
-  onClose, 
+// ============================================================
+// 📸 КОНСТАНТЫ
+// ============================================================
+const BUCKET_NAME = 'material-photos';
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_DIMENSION = 1920; // px по длинной стороне
+const JPEG_QUALITY = 0.85;
+const UPLOAD_TIMEOUT_MS = 30000; // 30 сек на файл
+
+// ============================================================
+// 🛠️ ХЕЛПЕРЫ
+// ============================================================
+
+/**
+ * Сжимает изображение через canvas.
+ * Возвращает Blob (JPEG) — в разы меньше исходного.
+ */
+const compressImage = (file) => {
+  return new Promise((resolve, reject) => {
+    // Если это не изображение — вернуть как есть
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('Файл не является изображением'));
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          // Вычисляем новые размеры, сохраняя пропорции
+          let { width, height } = img;
+          if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIMENSION) / width);
+              width = MAX_DIMENSION;
+            } else {
+              width = Math.round((width * MAX_DIMENSION) / height);
+              height = MAX_DIMENSION;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('Не удалось сжать изображение'));
+                return;
+              }
+              resolve(blob);
+            },
+            'image/jpeg',
+            JPEG_QUALITY
+          );
+        } catch (err) {
+          reject(err);
+        }
+      };
+
+      img.onerror = () => reject(new Error('Не удалось прочитать изображение'));
+      img.src = e.target.result;
+    };
+
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
+ * Генерирует безопасное имя файла.
+ */
+const generateFileName = (index) => {
+  const ts = Date.now();
+  const rand = Math.random().toString(36).substring(2, 11);
+  return `${ts}_${index}_${rand}.jpg`;
+};
+
+/**
+ * Обёртка над upload с таймаутом.
+ */
+const uploadWithTimeout = async (uploadPromise, timeoutMs) => {
+  return Promise.race([
+    uploadPromise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Превышено время загрузки (30 сек)')), timeoutMs)
+    ),
+  ]);
+};
+
+// ============================================================
+// 📸 КОМПОНЕНТ
+// ============================================================
+const PhotoCapture = ({
+  onCapture,
+  onClose,
   showNotification: externalShowNotification,
-  multiple = false, 
+  multiple = true,
   maxPhotos = 5,
   applicationId,
   materialIndex,
   companyId,
-  userId // ← оставляем, но добавим комментарий, чтобы ESLint не ругался
+  // eslint-disable-next-line no-unused-vars
+  userId = null,  // оставлен для совместимости с App.jsx
 }) => {
-   // Добавить логирование в начале компонента
-  React.useEffect(() => {
-    if (userId) {
-      console.log('[PhotoCapture] User ID:', userId);
-    }
-  }, [userId]);
-  
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
-  
-  const showNotification = (message, type) => {
-    if (externalShowNotification) {
-      externalShowNotification(message, type);
-    } else {
-      console.log(`[PhotoCapture] ${type}: ${message}`);
-    }
-  };
-  
-  // ✅ ПРОВЕРКА ДОСТУПА К КАМЕРЕ
-  const checkCameraPermission = async () => {
+  const isMountedRef = useRef(true);
+
+  // ─── Cleanup ───────────────────────────────────────────
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // ─── Уведомления ───────────────────────────────────────
+  const showNotification = useCallback(
+    (message, type) => {
+      if (typeof externalShowNotification === 'function') {
+        externalShowNotification(message, type);
+      } else {
+        console.log(`[PhotoCapture] ${type}: ${message}`);
+      }
+    },
+    [externalShowNotification]
+  );
+
+  // ─── Проверка доступа к камере ─────────────────────────
+  const checkCameraPermission = useCallback(async () => {
     try {
-      // Проверяем, есть ли доступ к камере через MediaDevices API
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach((track) => track.stop());
       return true;
     } catch (err) {
       console.error('Camera permission error:', err);
       if (err.name === 'NotAllowedError') {
         setError('❌ Разрешите доступ к камере в настройках браузера');
-        showNotification('Разрешите доступ к камере в настройках браузера', 'error');
+        showNotification('Разрешите доступ к камере', 'error');
       } else if (err.name === 'NotFoundError') {
-        setError('❌ Камера не найдена на устройстве');
+        setError('❌ Камера не найдена');
       } else {
-        setError(`❌ Ошибка: ${err.message}`);
+        setError(`❌ Ошибка камеры: ${err.message}`);
       }
       return false;
     }
-  };
-  
-  // ✅ ФУНКЦИЯ СЪЁМКИ ФОТО
-  const capturePhoto = async () => {
-    console.log('[PhotoCapture] capturePhoto вызван');
-    console.log('[PhotoCapture] navigator.mediaDevices:', navigator.mediaDevices);
-    
-    setError(null);
-    
-    // Проверяем разрешение на камеру
-    const hasPermission = await checkCameraPermission();
-    console.log('[PhotoCapture] hasPermission:', hasPermission);
-    
-    if (!hasPermission) return;
-    
-    // Создаём input с атрибутом capture для открытия камеры
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment';
-    input.multiple = false;
-    
-    input.onchange = async (e) => {
-      const files = Array.from(e.target.files || []);
-      if (files.length === 0) return;
-      
+  }, [showNotification]);
+
+  // ─── Добавление фото (общий хелпер) ────────────────────
+  const addPhotos = useCallback(
+    async (files) => {
+      setError(null);
+
       if (photos.length + files.length > maxPhotos) {
         setError(`Максимум ${maxPhotos} фото`);
         showNotification(`Максимум ${maxPhotos} фото`, 'warning');
         return;
       }
-      
+
       const newPhotos = [...photos];
+
       for (const file of files) {
-        const reader = new FileReader();
-        const photoData = await new Promise((resolve) => {
+        if (!file.type.startsWith('image/')) {
+          showNotification(`Пропущен файл (не изображение): ${file.name}`, 'warning');
+          continue;
+        }
+
+        if (file.size > MAX_FILE_SIZE) {
+          showNotification(
+            `Файл "${file.name}" больше ${Math.round(MAX_FILE_SIZE / 1024 / 1024)} МБ`,
+            'warning'
+          );
+          continue;
+        }
+
+        // Превью для UI
+        const previewUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result);
           reader.readAsDataURL(file);
         });
-        newPhotos.push({ 
-          data: photoData, 
-          file: file,
+
+        newPhotos.push({
+          preview: previewUrl, // для превью в UI
+          file,
           uploaded: false,
-          name: file.name 
+          url: null,
+          name: file.name,
         });
       }
-      
+
       setPhotos(newPhotos);
-      
-      if (!multiple && newPhotos.length === 1) {
-        await uploadPhotos([newPhotos[newPhotos.length - 1]]);
-      }
+    },
+    [photos, maxPhotos, showNotification]
+  );
+
+  // ─── Съёмка через камеру ───────────────────────────────
+  const capturePhoto = useCallback(async () => {
+    setError(null);
+
+    const hasPermission = await checkCameraPermission();
+    if (!hasPermission) return;
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.multiple = false;
+
+    input.onchange = async (e) => {
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+      await addPhotos(files);
     };
-    
+
     input.click();
-  };
-  
-  // ✅ ЗАГРУЗКА ИЗ ГАЛЕРЕИ
-  const handleFileUpload = async (event) => {
-    setError(null);
-    const files = Array.from(event.target.files);
-    if (files.length === 0) return;
-    
-    const total = photos.length + files.length;
-    if (total > maxPhotos) {
-      setError(`Максимум ${maxPhotos} фото`);
-      showNotification(`Максимум ${maxPhotos} фото`, 'warning');
-      return;
-    }
-    
-    const newPhotos = [...photos];
-    
-    for (const file of files) {
-      if (!file.type.startsWith('image/')) {
-        showNotification('Можно загружать только изображения', 'warning');
-        continue;
+  }, [checkCameraPermission, addPhotos]);
+
+  // ─── Загрузка из галереи ───────────────────────────────
+  const handleFileUpload = useCallback(
+    async (event) => {
+      const files = Array.from(event.target.files || []);
+      event.target.value = '';
+      if (files.length === 0) return;
+      await addPhotos(files);
+    },
+    [addPhotos]
+  );
+
+  // ─── 🔥 ЗАГРУЗКА В SUPABASE STORAGE ────────────────────
+  const uploadPhotos = useCallback(
+    async (photosToUpload) => {
+      if (!photosToUpload || photosToUpload.length === 0) {
+        return [];
       }
-      
-      const reader = new FileReader();
-      const photoData = await new Promise((resolve) => {
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(file);
-      });
-      
-      newPhotos.push({ 
-        data: photoData, 
-        file: file,
-        uploaded: false,
-        name: file.name 
-      });
-    }
-    
-    setPhotos(newPhotos);
-    event.target.value = '';
-    
-    if (!multiple && newPhotos.length === 1) {
-      await uploadPhotos([newPhotos[0]]);
-    }
-  };
-  
-  // ✅ ФУНКЦИЯ ЗАГРУЗКИ
-  const uploadPhotos = async (photosToUpload) => {
-    if (!photosToUpload || photosToUpload.length === 0) return;
-    
-    setUploading(true);
-    setError(null);
-    
-    try {
+
+      // Валидация окружения
+      if (!companyId) {
+        setError('❌ Не удалось определить компанию');
+        showNotification('Не удалось определить компанию', 'error');
+        return [];
+      }
+
+      if (!supabase) {
+        setError('❌ Supabase не инициализирован');
+        showNotification('Ошибка подключения к серверу', 'error');
+        return [];
+      }
+
+      setUploading(true);
+      setUploadProgress({ current: 0, total: photosToUpload.length });
+      setError(null);
+
       const uploadedUrls = [];
-      
-      for (let i = 0; i < photosToUpload.length; i++) {
-        const photo = photosToUpload[i];
-        let photoUrl = null;
-        
-        try {
-          const { supabase } = await import('../../utils/supabaseClient');
-          
-          if (supabase && companyId) {
-            const fileName = `${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}.jpg`;
-            const filePath = `photos/company_${companyId}/app_${applicationId || 'temp'}/material_${materialIndex || 0}/${fileName}`;
-            
-            const blob = await fetch(photo.data).then(res => res.blob());
-            
-            const { error: uploadError } = await supabase.storage
-              .from('material-photos')
-              .upload(filePath, blob, {
+
+      try {
+        for (let i = 0; i < photosToUpload.length; i++) {
+          const photo = photosToUpload[i];
+          setUploadProgress({ current: i + 1, total: photosToUpload.length });
+
+          try {
+            // 1. Сжимаем фото
+            const compressedBlob = await compressImage(photo.file);
+
+            // 2. Формируем путь
+            const fileName = generateFileName(i);
+            const filePath = `photos/company_${companyId}/app_${applicationId || 'temp'}/material_${materialIndex ?? 0}/${fileName}`;
+
+            // 3. Загружаем в Storage с таймаутом
+            const uploadPromise = supabase.storage
+              .from(BUCKET_NAME)
+              .upload(filePath, compressedBlob, {
                 cacheControl: '3600',
-                upsert: false
+                upsert: true, // разрешаем перезапись
+                contentType: 'image/jpeg',
               });
-            
-            if (!uploadError) {
-              const { data: { publicUrl } } = supabase.storage
-                .from('material-photos')
-                .getPublicUrl(filePath);
-              photoUrl = publicUrl;
+
+            const { data: uploadData, error: uploadError } = await uploadWithTimeout(
+              uploadPromise,
+              UPLOAD_TIMEOUT_MS
+            );
+
+            // 4. Обрабатываем ошибку upload ЯВНО (без base64-fallback!)
+            if (uploadError) {
+              const errMsg = uploadError.message || 'неизвестная ошибка';
+              console.error(`[PhotoCapture] Upload failed for ${fileName}:`, uploadError);
+
+              if (errMsg.includes('Bucket not found')) {
+                throw new Error(`Bucket "${BUCKET_NAME}" не найден в Supabase Storage`);
+              }
+              if (errMsg.includes('row-level security') || errMsg.includes('policy')) {
+                throw new Error('Нет прав на загрузку. Проверьте RLS-политики для Storage.');
+              }
+              if (errMsg.includes('Payload too large') || errMsg.includes('too large')) {
+                throw new Error('Файл слишком большой. Максимум 10 МБ.');
+              }
+              throw new Error(`Ошибка загрузки: ${errMsg}`);
             }
+
+            if (!uploadData?.path) {
+              throw new Error('Сервер не вернул путь к файлу');
+            }
+
+            // 5. Получаем публичный URL
+            const { data: urlData } = supabase.storage
+              .from(BUCKET_NAME)
+              .getPublicUrl(uploadData.path);
+
+            if (!urlData?.publicUrl) {
+              throw new Error('Не удалось получить публичный URL');
+            }
+
+            uploadedUrls.push(urlData.publicUrl);
+
+            // 6. Обновляем состояние фото
+            if (isMountedRef.current) {
+              setPhotos((prev) =>
+                prev.map((p) =>
+                  p.file === photo.file
+                    ? { ...p, uploaded: true, url: urlData.publicUrl }
+                    : p
+                )
+              );
+            }
+          } catch (fileErr) {
+            console.error(`[PhotoCapture] Ошибка файла #${i + 1}:`, fileErr);
+            // Прерываем всю загрузку — не оставляем частично
+            setError(`❌ ${fileErr.message}`);
+            showNotification(`Ошибка загрузки: ${fileErr.message}`, 'error');
+            setUploading(false);
+            setUploadProgress({ current: 0, total: 0 });
+            return uploadedUrls; // вернём то, что успели
           }
-        } catch (storageErr) {
-          console.warn('Storage upload failed, using base64:', storageErr);
         }
-        
-        if (!photoUrl) {
-          photoUrl = photo.data;
+
+        // 7. Успех
+        if (uploadedUrls.length > 0) {
+          showNotification(`✅ Загружено ${uploadedUrls.length} фото`, 'success');
         }
-        
-        uploadedUrls.push(photoUrl);
-        
-        setPhotos(prev => prev.map(p => 
-          p.data === photo.data ? { ...p, uploaded: true, url: photoUrl } : p
-        ));
+
+        return uploadedUrls;
+      } catch (err) {
+        console.error('[PhotoCapture] Upload critical error:', err);
+        setError(`❌ ${err.message || 'Ошибка загрузки'}`);
+        showNotification('Ошибка загрузки фото', 'error');
+        return uploadedUrls;
+      } finally {
+        if (isMountedRef.current) {
+          setUploading(false);
+          setUploadProgress({ current: 0, total: 0 });
+        }
       }
-      
-      if (onCapture) {
-        onCapture(multiple ? uploadedUrls : uploadedUrls[0]);
-      }
-      
-      showNotification(`✅ Загружено ${uploadedUrls.length} фото`, 'success');
-      
-      if (!multiple) {
-        setTimeout(onClose, 1000);
-      }
-      
-    } catch (error) {
-      console.error('Upload failed:', error);
-      setError('❌ Ошибка загрузки фото: ' + error.message);
-      showNotification('❌ Ошибка загрузки фото', 'error');
-    } finally {
-      setUploading(false);
-    }
-  };
-  
-  // ✅ ПОДТВЕРЖДЕНИЕ ВСЕХ ФОТО
-  const confirmPhotos = async () => {
-    const notUploaded = photos.filter(p => !p.uploaded);
-    if (notUploaded.length > 0) {
-      await uploadPhotos(notUploaded);
-    } else if (onCapture) {
-      onCapture(photos.map(p => p.url));
-      onClose();
-    }
-  };
-  
-  // ✅ УДАЛЕНИЕ ФОТО
-  const removePhoto = (index) => {
-    setPhotos(prev => prev.filter((_, i) => i !== index));
-  };
-  
-  // ✅ ОЧИСТКА ВСЕХ
-  const clearAll = () => {
+    },
+    [companyId, applicationId, materialIndex, showNotification]
+  );
+
+  // ─── Подтверждение ─────────────────────────────────────
+  const confirmPhotos = useCallback(async () => {
+  const notUploaded = photos.filter((p) => !p.uploaded);
+
+  if (notUploaded.length > 0) {
+    const urls = await uploadPhotos(notUploaded);
+    if (urls.length === 0) return; // ошибка — не закрываем
+  }
+
+  // Собираем URL загруженных фото из state
+  const finalUrls = photos.map((p) => p.url).filter(Boolean);
+
+  if (finalUrls.length === 0) {
+    setError('Нет загруженных фото');
+    return;
+  }
+
+  if (typeof onCapture === 'function') {
+    onCapture(multiple ? finalUrls : finalUrls[0]);
+  }
+
+  if (typeof onClose === 'function') {
+    onClose();
+  }
+}, [photos, uploadPhotos, onCapture, onClose, multiple]);
+
+  // ─── Удаление фото ─────────────────────────────────────
+  const removePhoto = useCallback(
+    (index) => {
+      setPhotos((prev) => prev.filter((_, i) => i !== index));
+      setError(null);
+    },
+    []
+  );
+
+  // ─── Очистка ───────────────────────────────────────────
+  const clearAll = useCallback(() => {
     setPhotos([]);
     setError(null);
-  };
-  
+  }, []);
+
+  // ─── Рендер ────────────────────────────────────────────
   return (
     <div className="fixed inset-0 bg-black bg-opacity-95 flex flex-col items-center justify-center z-[100000] p-4">
+      {/* Кнопка закрытия */}
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 p-2 bg-white rounded-full hover:bg-gray-200 transition-colors"
+        className="absolute top-4 right-4 p-2 bg-white rounded-full hover:bg-gray-200 transition-colors z-20"
         disabled={uploading}
         aria-label="Закрыть"
       >
         <X className="w-5 h-5" />
       </button>
-      
+
       <h3 className="text-white text-xl mb-4 font-semibold">
-        {materialIndex !== null && materialIndex !== undefined 
-          ? `Фотофиксация материала #${materialIndex + 1}` 
+        {materialIndex !== null && materialIndex !== undefined
+          ? `Фотофиксация материала #${materialIndex + 1}`
           : 'Общая фотофиксация'}
       </h3>
-      
+
       {error && (
         <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-300 text-sm max-w-md text-center">
           {error}
         </div>
       )}
-      
+
       {uploading && (
         <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-10">
           <div className="text-center">
             <Loader2 className="w-12 h-12 text-white animate-spin mx-auto mb-4" />
             <p className="text-white text-lg">Загрузка фото...</p>
+            {uploadProgress.total > 0 && (
+              <p className="text-gray-400 text-sm mt-1">
+                {uploadProgress.current} / {uploadProgress.total}
+              </p>
+            )}
           </div>
         </div>
       )}
-      
+
       {photos.length > 0 && (
         <div className="grid grid-cols-3 gap-3 mb-4 max-h-96 overflow-y-auto p-2 bg-black/30 rounded-lg">
           {photos.map((photo, idx) => (
             <div key={idx} className="relative group">
-              <img 
-                src={photo.data} 
-                alt={`Фото ${idx + 1}`} 
-                className="w-28 h-28 object-cover rounded-lg shadow-md" 
+              <img
+                src={photo.preview}
+                alt={`Фото ${idx + 1}`}
+                className="w-28 h-28 object-cover rounded-lg shadow-md"
               />
               {!photo.uploaded && (
                 <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
@@ -308,7 +481,7 @@ const PhotoCapture = ({
           ))}
         </div>
       )}
-      
+
       <div className="flex gap-4 flex-wrap justify-center">
         <button
           onClick={capturePhoto}
@@ -318,17 +491,17 @@ const PhotoCapture = ({
           <Camera className="w-5 h-5" />
           Снять фото
         </button>
-        
+
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/*"
           multiple={multiple}
           onChange={handleFileUpload}
           className="hidden"
           disabled={uploading}
         />
-        
+
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading || photos.length >= maxPhotos}
@@ -337,7 +510,7 @@ const PhotoCapture = ({
           <Upload className="w-5 h-5" />
           Загрузить
         </button>
-        
+
         {photos.length > 0 && !multiple && (
           <button
             onClick={clearAll}
@@ -348,18 +521,28 @@ const PhotoCapture = ({
             Очистить
           </button>
         )}
-        
-        {multiple && photos.length > 0 && photos.every(p => p.uploaded) && (
+
+        {photos.length > 0 && (
           <button
             onClick={confirmPhotos}
-            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl flex items-center gap-2 transition-colors shadow-lg"
+            disabled={uploading}
+            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl flex items-center gap-2 disabled:opacity-50 transition-colors shadow-lg"
           >
-            <Check className="w-5 h-5" />
-            Готово ({photos.length})
+            {uploading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Загрузка...
+              </>
+            ) : (
+              <>
+                <Check className="w-5 h-5" />
+                Готово ({photos.length})
+              </>
+            )}
           </button>
         )}
       </div>
-      
+
       <div className="text-center mt-4">
         <p className="text-gray-400 text-sm">
           {photos.length}/{maxPhotos} фото

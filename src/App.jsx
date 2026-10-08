@@ -2824,10 +2824,18 @@ const checkForUpdates = useCallback(async () => {
     }
   };
 
-  const handleLogout = async () => {
+    const handleLogout = async () => {
   // ✅ Очистить кэш
   cacheManager.clear();
-  await supabase.auth.signOut();
+
+  // 🛡️ Безопасный logout: scope 'local' не обращается к серверу,
+  //     поэтому 403 при истёкшей сессии не появится
+  try {
+    await supabase.auth.signOut({ scope: 'local' });
+  } catch (err) {
+    console.warn('[App] Logout error (ignored):', err);
+  }
+
   setUser(null);
   setUserRole('foreman');
   setUserCompany(null);
@@ -3464,8 +3472,8 @@ if (!materialCheck.allowed) {
     return;
   }
   
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) {
+    const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
     showNotification(t('loginToSystem'), 'error');
     return;
   }
@@ -10085,19 +10093,86 @@ onClearFilters={handleClearFilters}
         </div>
       )}
       
-      {/* Photo Capture Modal */}
+            {/* Photo Capture Modal */}
       {showPhotoCapture && (
         <PhotoCapture
-          onCapture={(urls) => {
+          onCapture={async (urls) => {
+            // Нормализуем: массив или строка
+            const urlList = Array.isArray(urls) ? urls : [urls].filter(Boolean);
+
+            if (urlList.length === 0) {
+              showNotification('⚠️ Нет загруженных фото', 'warning');
+              return;
+            }
+
+            // 1. Обновляем локальный state превью
             if (selectedApplication?.id && activeMaterialIndex !== null) {
               const key = `${selectedApplication.id}-${activeMaterialIndex}`;
               setCapturedPhotos(prev => ({
                 ...prev,
-                [key]: [...(prev[key] || []), ...urls]
+                [key]: [...(prev[key] || []), ...urlList]
               }));
             }
+
+            // 2. Сохраняем в applications.materials[i].photos (JSONB)
+            if (selectedApplication?.id && activeMaterialIndex !== null) {
+              try {
+                const updatedMaterials = (selectedApplication.materials || []).map((m, idx) => {
+                  if (idx !== activeMaterialIndex) return m;
+                  const existingPhotos = Array.isArray(m.photos) ? m.photos : [];
+                  return { ...m, photos: [...existingPhotos, ...urlList] };
+                });
+
+                const { error: updErr } = await supabase
+                  .from('applications')
+                  .update({
+                    materials: updatedMaterials,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', selectedApplication.id);
+
+                if (updErr) {
+                  console.warn('[App] Не удалось обновить materials:', updErr);
+                } else {
+                  setApplications(prev =>
+                    prev.map(a =>
+                      a.id === selectedApplication.id
+                        ? { ...a, materials: updatedMaterials }
+                        : a
+                    )
+                  );
+                  setSelectedApplication(prev =>
+                    prev ? { ...prev, materials: updatedMaterials } : prev
+                  );
+                }
+              } catch (err) {
+                console.error('[App] Ошибка сохранения фото в заявку:', err);
+              }
+            }
+
+            // 3. Сохраняем в work_photos (для клиентского портала)
+            try {
+              const rows = urlList.map((url) => ({
+                application_id: selectedApplication?.id || null,
+                client_id: null,
+                photo_url: url,
+                description: null,
+                taken_at: new Date().toISOString(),
+              }));
+
+              const { error: wpErr } = await supabase
+                .from('work_photos')
+                .insert(rows);
+
+              if (wpErr) {
+                console.warn('[App] work_photos insert error:', wpErr);
+              }
+            } catch (err) {
+              console.error('[App] Ошибка сохранения в work_photos:', err);
+            }
+
             setShowPhotoCapture(false);
-            showNotification(`📸 Добавлено ${urls.length} фото`, 'success');
+            showNotification(`📸 Добавлено ${urlList.length} фото`, 'success');
           }}
           onClose={() => setShowPhotoCapture(false)}
           multiple={true}
