@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Plus, Search, Filter, Loader2, Building2, AlertCircle, RefreshCw, X,
-  UserPlus,
+  UserPlus, Lock,
 } from 'lucide-react';
 
 import SupplierCard from './SupplierCard';
@@ -18,6 +18,7 @@ import {
 } from '../../api/suppliers';
 
 import { isProcurement } from '../../utils/permissions';
+import { checkTariffLimit } from '../../utils/tariffPlans';
 
 const STATUS_FILTERS = [
   { value: '', label: 'Все' },
@@ -34,7 +35,9 @@ const STATUS_FILTERS = [
  * @param {string} props.companyId
  * @param {string} props.userId
  * @param {string} [props.role]
- * @param {(msg: string, type?: 'success'|'error'|'info') => void} props.showNotification
+ * @param {object} [props.currentPlan] — 🆕 текущий тариф (для проверки лимитов)
+ * @param {() => void} [props.onUpgrade] — 🆕 callback для перехода на тарифы
+ * @param {(msg: string, type?: 'success'|'error'|'info'|'warning', isUpdate?: boolean, undoFn?: (() => void) | null) => void} props.showNotification
  * @param {(supplier) => void} [props.onSelectSupplier]
  * @param {(supplier) => void} [props.onOpenPriceList]
  */
@@ -42,6 +45,8 @@ export default function SupplierManager({
   companyId,
   userId,
   role,
+  currentPlan,
+  onUpgrade,
   showNotification,
   onSelectSupplier,
   onOpenPriceList,
@@ -49,9 +54,12 @@ export default function SupplierManager({
   const canEdit = isProcurement(role);
 
   const notify = useCallback(
-    (msg, type = 'info') => {
-      if (typeof showNotification === 'function') showNotification(msg, type);
-      else console.log(`[${type}] ${msg}`);
+    (msg, type = 'info', isUpdate = false, undoFn = null) => {
+      if (typeof showNotification === 'function') {
+        showNotification(msg, type, isUpdate, undoFn);
+      } else {
+        console.log(`[${type}] ${msg}`);
+      }
     },
     [showNotification]
   );
@@ -114,12 +122,44 @@ export default function SupplierManager({
     loadSuppliers();
   }, [loadSuppliers]);
 
+  // ─── 🆕 Проверка лимита ────────────────────────────────
+  const supplierLimitInfo = useMemo(() => {
+    if (!currentPlan?.id) {
+      return { allowed: true, remaining: -1, limit: -1, isUnlimited: true, usagePercent: 0 };
+    }
+    // Считаем всех поставщиков, кроме архивных
+    const activeCount = suppliers.filter(s => s.status !== 'archived').length;
+    return checkTariffLimit(currentPlan.id, 'suppliers', activeCount);
+  }, [currentPlan?.id, suppliers]);
+
+  const canCreateMore = supplierLimitInfo.isUnlimited || supplierLimitInfo.allowed;
+
   // ─── Обработчики CRUD ──────────────────────────────────
   const handleOpenCreate = () => {
     if (!canEdit) {
       notify('Недостаточно прав для добавления поставщика', 'error');
       return;
     }
+
+    // 🆕 Проверка лимита перед открытием формы
+    if (!canCreateMore) {
+      const msg = `⚠️ Лимит поставщиков исчерпан (${supplierLimitInfo.limit} из ${supplierLimitInfo.limit}). Обновите тариф, чтобы добавлять новых.`;
+      if (typeof onUpgrade === 'function') {
+        notify(msg, 'warning', false, () => onUpgrade());
+      } else {
+        notify(msg, 'warning');
+      }
+      return;
+    }
+
+    // 🆕 Предупреждение при близком лимите (осталось <= 1)
+    if (!supplierLimitInfo.isUnlimited && supplierLimitInfo.remaining <= 1) {
+      notify(
+        `⚠️ Осталось ${supplierLimitInfo.remaining} мест для поставщиков на вашем тарифе.`,
+        'warning'
+      );
+    }
+
     setEditingSupplier(null);
     setFormOpen(true);
   };
@@ -231,6 +271,45 @@ export default function SupplierManager({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
+        {/* 🆕 Плашка лимита */}
+        {!supplierLimitInfo.isUnlimited && (
+          <div className={`mb-4 p-3 rounded-lg border flex items-start gap-2 ${
+            !canCreateMore
+              ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30'
+              : supplierLimitInfo.remaining <= 1
+                ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30'
+                : 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30'
+          }`}>
+            <Lock className={`w-4 h-4 shrink-0 mt-0.5 ${
+              !canCreateMore ? 'text-red-500' : supplierLimitInfo.remaining <= 1 ? 'text-amber-500' : 'text-blue-500'
+            }`} />
+            <div className="flex-1 text-sm">
+              <span className="font-medium text-gray-900 dark:text-white">
+                Поставщики:{' '}
+                {supplierLimitInfo.limit - supplierLimitInfo.remaining} из {supplierLimitInfo.limit}
+              </span>
+              {!canCreateMore && (
+                <span className="text-red-600 dark:text-red-400 ml-2 font-medium">
+                  Лимит исчерпан
+                </span>
+              )}
+              {canCreateMore && supplierLimitInfo.remaining <= 1 && (
+                <span className="text-amber-600 dark:text-amber-400 ml-2">
+                  Осталось {supplierLimitInfo.remaining} мест
+                </span>
+              )}
+            </div>
+            {!canCreateMore && typeof onUpgrade === 'function' && (
+              <button
+                onClick={onUpgrade}
+                className="shrink-0 px-3 py-1 rounded-lg bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white text-xs font-medium hover:shadow-md transition"
+              >
+                Обновить тариф
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
@@ -266,10 +345,16 @@ export default function SupplierManager({
             {canEdit && (
               <button
                 onClick={handleOpenCreate}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4A6572] hover:bg-[#344955] text-white text-sm font-medium transition"
+                disabled={!canCreateMore}
+                title={!canCreateMore ? 'Лимит поставщиков исчерпан' : 'Добавить поставщика'}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  canCreateMore
+                    ? 'bg-[#4A6572] hover:bg-[#344955] text-white'
+                    : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                }`}
               >
-                <Plus className="w-4 h-4" />
-                Добавить поставщика
+                {canCreateMore ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                {canCreateMore ? 'Добавить поставщика' : 'Лимит исчерпан'}
               </button>
             )}
           </div>
@@ -344,7 +429,7 @@ export default function SupplierManager({
           <EmptyState
             hasFilters={Boolean(statusFilter || searchTerm)}
             onCreate={handleOpenCreate}
-            canCreate={canEdit}
+            canCreate={canEdit && canCreateMore}
             onReset={() => {
               setStatusFilter('');
               setSearchInput('');

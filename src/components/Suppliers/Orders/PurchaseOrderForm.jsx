@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 
 import { createPurchaseOrder, getSuppliers } from '../../../api/suppliers';
+import { supabase } from '../../../utils/supabaseClient';
+import { checkTariffLimit } from '../../../utils/tariffPlans';
 
 const UNIT_OPTIONS = ['шт', 'м', 'м²', 'м³', 'кг', 'т', 'л', 'уп', 'рул', 'компл', 'лист'];
 
@@ -33,6 +35,8 @@ const formatPrice = (v) =>
  * @param {object} [props.fromOffer] — оффер из RFQ (для предзаполнения)
  * @param {object} [props.fromRFQ]
  * @param {string} [props.preselectedSupplierId]
+ * @param {object} [props.currentPlan] — 🆕 текущий тариф
+ * @param {() => void} [props.onUpgrade] — 🆕 callback на тарифы
  * @param {Function} props.showNotification
  * @param {(order) => void} props.onCreated
  * @param {() => void} [props.onCancel]
@@ -43,13 +47,18 @@ export default function PurchaseOrderForm({
   fromOffer = null,
   fromRFQ = null,
   preselectedSupplierId = null,
+  currentPlan,
+  onUpgrade,
   showNotification,
   onCreated,
   onCancel,
 }) {
-  const notify = (msg, type = 'info') => {
-    if (typeof showNotification === 'function') showNotification(msg, type);
-    else console.log(`[${type}] ${msg}`);
+  const notify = (msg, type = 'info', isUpdate = false, undoFn = null) => {
+    if (typeof showNotification === 'function') {
+      showNotification(msg, type, isUpdate, undoFn);
+    } else {
+      console.log(`[${type}] ${msg}`);
+    }
   };
 
   // ─── Состояние ─────────────────────────────────────────
@@ -77,7 +86,6 @@ export default function PurchaseOrderForm({
     fromRFQ?.delivery_address || ''
   );
   const [expectedDelivery, setExpectedDelivery] = useState(() => {
-    // Если у оффера есть delivery_days — посчитаем дату
     if (fromOffer?.delivery_days) {
       const d = new Date();
       d.setDate(d.getDate() + Number(fromOffer.delivery_days));
@@ -95,7 +103,6 @@ export default function PurchaseOrderForm({
     let cancelled = false;
     const load = async () => {
       if (fromOffer) {
-        // Если создаём из оффера — список поставщиков не нужен
         setLoadingSuppliers(false);
         return;
       }
@@ -117,6 +124,52 @@ export default function PurchaseOrderForm({
     load();
     return () => { cancelled = true; };
   }, [companyId, fromOffer]);
+
+  // ─── 🆕 Проверка лимита заказов ────────────────────────
+  const checkPOLimit = async () => {
+    if (!companyId || !currentPlan?.id) return true;
+
+    try {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+
+      const { count, error } = await supabase
+        .from('purchase_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', companyId)
+        .gte('created_at', monthStart.toISOString());
+
+      if (error) {
+        console.warn('[POForm] count error:', error);
+        return true;
+      }
+
+      const limitCheck = checkTariffLimit(currentPlan.id, 'purchaseOrdersPerMonth', count || 0);
+
+      if (!limitCheck.allowed && !limitCheck.isUnlimited) {
+        const msg = `⚠️ Лимит заказов исчерпан (${count}/${limitCheck.limit} за месяц). Обновите тариф.`;
+        if (typeof onUpgrade === 'function') {
+          notify(msg, 'warning', false, () => onUpgrade());
+        } else {
+          notify(msg, 'warning');
+        }
+        return false;
+      }
+
+      if (!limitCheck.isUnlimited && limitCheck.remaining <= 2) {
+        notify(
+          `⚠️ Осталось ${limitCheck.remaining} заказов на этот месяц.`,
+          'warning'
+        );
+      }
+
+      return true;
+    } catch (err) {
+      console.error('[POForm] checkPOLimit error:', err);
+      return true;
+    }
+  };
 
   // ─── Резолв ошибок ─────────────────────────────────────
   const clearError = (key) => {
@@ -185,7 +238,6 @@ export default function PurchaseOrderForm({
       supplier_id: supplierId || fromOffer?.supplier_id || null,
       offer_id: fromOffer?.id || null,
       rfq_id: fromRFQ?.id || fromOffer?.rfq_id || null,
-      // order_number — генерируется триггером БД
       items: validItems,
       total,
       status: 'created',
@@ -197,9 +249,13 @@ export default function PurchaseOrderForm({
     };
   };
 
+  // 🆕 handleSubmit с проверкой лимита
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
     if (!validate()) return;
+
+    const limitOk = await checkPOLimit();
+    if (!limitOk) return;
 
     setSaving(true);
     try {
@@ -264,7 +320,6 @@ export default function PurchaseOrderForm({
           {/* Основное */}
           <Section icon={Info} title="Основное">
             <div className="space-y-3">
-              {/* Поставщик */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Поставщик <span className="text-red-500">*</span>
@@ -358,7 +413,6 @@ export default function PurchaseOrderForm({
                   key={idx}
                   className="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 space-y-2"
                 >
-                  {/* Первая строка: название + удалить */}
                   <div className="flex items-start gap-2">
                     <div className="flex-1">
                       <input
@@ -379,7 +433,6 @@ export default function PurchaseOrderForm({
                     </button>
                   </div>
 
-                  {/* Вторая строка: артикул / кол-во / ед / цена / сумма */}
                   <div className="grid grid-cols-12 gap-2">
                     <input
                       type="text"

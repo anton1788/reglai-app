@@ -9329,6 +9329,8 @@ onClearFilters={handleClearFilters}
       companyId={userCompanyId}
       userId={user?.id}
       role={userRole}
+      currentPlan={currentPlan}
+      onUpgrade={() => setCurrentView('tariffs')}
       showNotification={showNotification}
       onOpenPriceList={(supplier) => {
         setSelectedSupplierId(supplier.id);
@@ -9450,6 +9452,8 @@ onClearFilters={handleClearFilters}
       companyId={userCompanyId}
       userId={user?.id}
       initialItems={rfqCart}
+      currentPlan={currentPlan}
+      onUpgrade={() => setCurrentView('tariffs')}
       showNotification={showNotification}
       onCreated={(rfq) => {
         setRfqCart([]);
@@ -9527,6 +9531,8 @@ onClearFilters={handleClearFilters}
       fromOffer={poFormMode?.offer || null}
       fromRFQ={poFormMode?.rfq || null}
       preselectedSupplierId={poFormMode?.preselectedSupplierId || null}
+      currentPlan={currentPlan}
+      onUpgrade={() => setCurrentView('tariffs')}
       showNotification={showNotification}
       onCreated={(order) => {
         setPoFormMode(null);

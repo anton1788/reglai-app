@@ -11,6 +11,8 @@ import {
   sendRFQToSuppliers,
   logSupplierInteraction,
 } from '../../../api/suppliers';
+import { supabase } from '../../../utils/supabaseClient';
+import { checkTariffLimit } from '../../../utils/tariffPlans';
 
 const UNIT_OPTIONS = ['шт', 'м', 'м²', 'м³', 'кг', 'т', 'л', 'уп', 'рул', 'компл', 'лист'];
 
@@ -23,6 +25,8 @@ const EMPTY_ITEM = { name: '', quantity: 1, unit: 'шт', article: '', descripti
  * @param {string} props.companyId
  * @param {string} props.userId
  * @param {Array} [props.initialItems]
+ * @param {object} [props.currentPlan] — 🆕 текущий тариф
+ * @param {() => void} [props.onUpgrade] — 🆕 callback на тарифы
  * @param {Function} props.showNotification
  * @param {(rfq) => void} props.onCreated
  * @param {() => void} [props.onCancel]
@@ -31,13 +35,18 @@ export default function RFQCreate({
   companyId,
   userId,
   initialItems = [],
+  currentPlan,
+  onUpgrade,
   showNotification,
   onCreated,
   onCancel,
 }) {
-  const notify = (msg, type = 'info') => {
-    if (typeof showNotification === 'function') showNotification(msg, type);
-    else console.log(`[${type}] ${msg}`);
+  const notify = (msg, type = 'info', isUpdate = false, undoFn = null) => {
+    if (typeof showNotification === 'function') {
+      showNotification(msg, type, isUpdate, undoFn);
+    } else {
+      console.log(`[${type}] ${msg}`);
+    }
   };
 
   // ─── Состояние ─────────────────────────────────────────
@@ -64,6 +73,53 @@ export default function RFQCreate({
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // ─── 🆕 Проверка лимита RFQ ────────────────────────────
+  const checkRFQLimit = async () => {
+    if (!companyId || !currentPlan?.id) return true;
+
+    try {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+
+      const { count, error } = await supabase
+        .from('rfq_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', companyId)
+        .gte('created_at', monthStart.toISOString());
+
+      if (error) {
+        console.warn('[RFQCreate] count error:', error);
+        return true; // Не блокируем при ошибке подсчёта
+      }
+
+      const limitCheck = checkTariffLimit(currentPlan.id, 'rfqPerMonth', count || 0);
+
+      if (!limitCheck.allowed && !limitCheck.isUnlimited) {
+        const msg = `⚠️ Лимит RFQ исчерпан (${count}/${limitCheck.limit} за месяц). Обновите тариф.`;
+        if (typeof onUpgrade === 'function') {
+          notify(msg, 'warning', false, () => onUpgrade());
+        } else {
+          notify(msg, 'warning');
+        }
+        return false;
+      }
+
+      // 🆕 Предупреждение при близком лимите
+      if (!limitCheck.isUnlimited && limitCheck.remaining <= 2) {
+        notify(
+          `⚠️ Осталось ${limitCheck.remaining} RFQ на этот месяц.`,
+          'warning'
+        );
+      }
+
+      return true;
+    } catch (err) {
+      console.error('[RFQCreate] checkRFQLimit error:', err);
+      return true;
+    }
+  };
 
   // ─── Резолв ошибок при вводе ───────────────────────────
   const clearError = (key) => {
@@ -115,8 +171,13 @@ export default function RFQCreate({
     };
   };
 
+  // 🆕 handleSaveDraft с проверкой лимита
   const handleSaveDraft = async () => {
     if (!validate()) return;
+
+    const limitOk = await checkRFQLimit();
+    if (!limitOk) return;
+
     setSaving(true);
     try {
       const rfq = await createRFQ(buildPayload());
@@ -130,12 +191,16 @@ export default function RFQCreate({
     }
   };
 
+  // 🆕 handleSend с проверкой лимита
   const handleSend = async () => {
     if (!validate()) return;
     if (invitedSuppliers.length === 0) {
       notify('Выберите хотя бы одного поставщика', 'error');
       return;
     }
+
+    const limitOk = await checkRFQLimit();
+    if (!limitOk) return;
 
     setSaving(true);
     try {
