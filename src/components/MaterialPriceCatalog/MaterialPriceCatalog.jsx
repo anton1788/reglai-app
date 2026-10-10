@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Search, Plus, Edit3, Trash2, Loader2, X, Save,
   BookOpen, Phone, Building, RefreshCw, AlertCircle, CheckCircle,
-  Upload,
+  Upload, Download, Lock,
 } from 'lucide-react';
 import {
   getAllMaterialPrices,
@@ -25,13 +25,24 @@ const emptyForm = {
   is_active: true,
 };
 
+/**
+ * @param {object} props
+ * @param {string} props.companyId
+ * @param {object} props.user
+ * @param {string} props.userRole
+ * @param {(msg: string, type?: string) => void} props.showNotification
+ * @param {boolean} [props.readOnly] — 🆕 если true — только просмотр и экспорт
+ */
 const MaterialPriceCatalog = ({
   companyId,
   user,
   userRole,
   showNotification,
+  readOnly = false,  // 🆕
 }) => {
-  const canEdit = canEditPricesUtil(userRole);
+  // 🆕 canCreate — учитывает и роль, и readOnly
+  const canEditByRole = canEditPricesUtil(userRole);
+  const canCreate = !readOnly && canEditByRole;
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,13 +89,50 @@ const MaterialPriceCatalog = ({
     return { total: items.length, withPrice, withSupplier };
   }, [items]);
 
+  // ─── Экспорт в CSV (доступен всегда, даже в readOnly) ───
+  const handleExportCSV = useCallback(() => {
+    if (items.length === 0) {
+      showNotification('⚠️ Нечего экспортировать', 'warning');
+      return;
+    }
+
+    const headers = ['Материал', 'Ед. изм.', 'Цена, ₽', 'Поставщик', 'Телефон', 'Обновлено'];
+    const rows = items.map((item) => [
+      `"${(item.description || '').replace(/"/g, '""')}"`,
+      item.unit || 'шт',
+      Number(item.price) || 0,
+      `"${(item.supplier_name || '').replace(/"/g, '""')}"`,
+      item.supplier_phone || '',
+      item.updated_at ? new Date(item.updated_at).toLocaleDateString('ru-RU') : '',
+    ]);
+
+    const csv = [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `справочник_цен_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    showNotification(`📥 Экспортировано ${items.length} записей`, 'success');
+  }, [items, showNotification]);
+
   // ─── Открытие модалки ─────────────────────────────
   const openCreate = () => {
+    if (readOnly) {
+      showNotification('🔒 Только просмотр. Обновите тариф для редактирования.', 'warning');
+      return;
+    }
     setForm(emptyForm);
     setShowModal(true);
   };
 
   const openEdit = (item) => {
+    if (readOnly) {
+      showNotification('🔒 Только просмотр. Обновите тариф для редактирования.', 'warning');
+      return;
+    }
     setForm({
       id: item.id,
       description: item.description || '',
@@ -99,6 +147,8 @@ const MaterialPriceCatalog = ({
 
   // ─── Сохранение ──────────────────────────────────
   const handleSave = async () => {
+    if (readOnly) return;
+
     if (!form.description.trim()) {
       showNotification('⚠️ Укажите название материала', 'warning');
       return;
@@ -129,6 +179,7 @@ const MaterialPriceCatalog = ({
 
   // ─── Удаление ────────────────────────────────────
   const handleDelete = async (id) => {
+    if (readOnly) return;
     const result = await deleteMaterialPrice(id);
     if (result.success) {
       showNotification('🗑️ Запись удалена из справочника', 'success');
@@ -141,6 +192,12 @@ const MaterialPriceCatalog = ({
 
   // ─── Импорт прайса ───────────────────────────────
   const handleImport = async (rowsToImport) => {
+    if (readOnly) {
+      showNotification('🔒 Только просмотр. Обновите тариф для импорта.', 'warning');
+      setShowImport(false);
+      return;
+    }
+
     setImporting(true);
     let success = 0;
     let failed = 0;
@@ -173,6 +230,24 @@ const MaterialPriceCatalog = ({
 
   return (
     <div className="max-w-7xl mx-auto p-4 page-enter">
+      {/* 🆕 Read-only баннер (внутренний, если родитель не обернул в FeatureGate) */}
+      {readOnly && (
+        <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl flex items-start gap-3">
+          <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg flex-shrink-0">
+            <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="flex-1 text-sm">
+            <div className="font-semibold text-amber-900 dark:text-amber-200">
+              Режим «Только просмотр»
+            </div>
+            <div className="text-amber-800 dark:text-amber-300">
+              Справочник цен не входит в ваш тариф. Данные доступны для просмотра
+              и экспорта, но не для редактирования.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
         <div>
@@ -181,7 +256,9 @@ const MaterialPriceCatalog = ({
             Справочник цен
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Единый каталог материалов, цен и поставщиков компании
+            {readOnly
+              ? 'Просмотр и экспорт данных'
+              : 'Единый каталог материалов, цен и поставщиков компании'}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -193,7 +270,20 @@ const MaterialPriceCatalog = ({
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Обновить
           </button>
-          {canEdit && (
+
+          {/* 🆕 Экспорт — доступен всегда, если есть данные */}
+          {items.length > 0 && (
+            <button
+              onClick={handleExportCSV}
+              className="px-3 py-2 text-sm bg-white dark:bg-gray-800 text-[#4A6572] dark:text-[#F9AA33] border border-[#4A6572]/30 rounded-lg hover:bg-[#4A6572]/5 transition flex items-center gap-2"
+              title="Экспортировать в CSV"
+            >
+              <Download className="w-4 h-4" />
+              Экспорт
+            </button>
+          )}
+
+          {canCreate && (
             <>
               <button
                 onClick={() => setShowImport(true)}
@@ -259,9 +349,13 @@ const MaterialPriceCatalog = ({
         <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
           <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 dark:text-gray-400">
-            {search ? 'Ничего не найдено' : 'Справочник пуст'}
+            {search
+              ? 'Ничего не найдено'
+              : readOnly
+                ? 'Нет данных в справочнике'
+                : 'Справочник пуст'}
           </p>
-          {canEdit && !search && (
+          {canCreate && !search && (
             <button
               onClick={openCreate}
               className="mt-4 text-[#4A6572] dark:text-[#F9AA33] hover:underline text-sm font-medium"
@@ -282,7 +376,7 @@ const MaterialPriceCatalog = ({
                   <th className="px-4 py-3 text-right">Цена ₽</th>
                   <th className="px-4 py-3 text-left">Поставщик</th>
                   <th className="px-4 py-3 text-left">Обновлено</th>
-                  {canEdit && <th className="px-4 py-3 text-right">Действия</th>}
+                  {canCreate && <th className="px-4 py-3 text-right">Действия</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -318,7 +412,7 @@ const MaterialPriceCatalog = ({
                         ? new Date(item.updated_at).toLocaleDateString('ru-RU')
                         : '—'}
                     </td>
-                    {canEdit && (
+                    {canCreate && (
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1">
                           <button
@@ -357,7 +451,7 @@ const MaterialPriceCatalog = ({
                       {item.unit} • {Number(item.price).toLocaleString('ru-RU')} ₽
                     </p>
                   </div>
-                  {canEdit && (
+                  {canCreate && (
                     <div className="flex gap-1 ml-2">
                       <button
                         onClick={() => openEdit(item)}
@@ -388,7 +482,7 @@ const MaterialPriceCatalog = ({
       )}
 
       {/* Modal: create / edit */}
-      {showModal && (
+      {showModal && canCreate && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter"
           onClick={(e) => e.target === e.currentTarget && !saving && setShowModal(false)}
@@ -496,7 +590,7 @@ const MaterialPriceCatalog = ({
       )}
 
       {/* Modal: delete confirm */}
-      {deleteConfirmId && (
+      {deleteConfirmId && canCreate && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000]">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-sm w-full p-5">
             <div className="flex items-center gap-3 mb-3">
@@ -529,13 +623,15 @@ const MaterialPriceCatalog = ({
       )}
 
       {/* 📥 Modal: import price list */}
-      <ImportPriceListModal
-        isOpen={showImport}
-        onClose={() => setShowImport(false)}
-        onImport={handleImport}
-      />
+      {canCreate && (
+        <ImportPriceListModal
+          isOpen={showImport}
+          onClose={() => setShowImport(false)}
+          onImport={handleImport}
+        />
+      )}
 
-      {/* Inline CSS for inputs (если у вас нет Tailwind-класса .input) */}
+      {/* Inline CSS for inputs */}
       <style>{`
         .input {
           width: 100%;

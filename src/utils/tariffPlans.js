@@ -20,6 +20,26 @@
 import { supabase } from './supabaseClient';
 
 // ============================================================
+// 🆕 УРОВНИ ДОСТУПА К ФУНКЦИЯМ
+// ============================================================
+// Используется в getFeatureAccessLevel и FeatureGate.
+//
+//   FULL      — функция доступна полностью (создание, чтение, изменение)
+//   READ_ONLY — функция недоступна на текущем тарифе, НО
+//               у компании есть существующие данные этой функции
+//               → разрешаем чтение и экспорт, но не создание/изменение
+//   NONE      — функция полностью заблокирована
+//
+// Это позволяет реализовать принцип:
+//   «данные клиента не удаляем, доступ разграничиваем»
+// ============================================================
+export const ACCESS_LEVEL = {
+  FULL: 'full',
+  READ_ONLY: 'read_only',
+  NONE: 'none',
+};
+
+// ============================================================
 // 📦 КОНФИГУРАЦИЯ ТАРИФНЫХ ПЛАНОВ
 // ============================================================
 
@@ -42,6 +62,9 @@ export const TARIFF_PLANS = {
     maxSuppliers: 0,
     maxRFQPerMonth: 0,
     maxPurchaseOrdersPerMonth: 0,
+    // 🆕 Лимиты хранения
+    maxPhotos: 100,
+    maxMaterialsInCatalog: 100,
     features: {
       // Core
       create_applications: true,
@@ -111,6 +134,9 @@ export const TARIFF_PLANS = {
     maxSuppliers: 3,
     maxRFQPerMonth: 5,
     maxPurchaseOrdersPerMonth: 0,
+    // 🆕 Лимиты хранения
+    maxPhotos: 500,
+    maxMaterialsInCatalog: 500,
     features: {
       // Core
       create_applications: true,
@@ -185,6 +211,9 @@ export const TARIFF_PLANS = {
     maxSuppliers: 20,
     maxRFQPerMonth: 50,
     maxPurchaseOrdersPerMonth: 200,
+    // 🆕 Лимиты хранения
+    maxPhotos: 5000,
+    maxMaterialsInCatalog: 5000,
     features: {
       // Core
       create_applications: true,
@@ -261,6 +290,9 @@ export const TARIFF_PLANS = {
     maxSuppliers: 100,
     maxRFQPerMonth: 500,
     maxPurchaseOrdersPerMonth: 2000,
+    // 🆕 Лимиты хранения
+    maxPhotos: 50000,
+    maxMaterialsInCatalog: 50000,
     features: {
       // Core
       create_applications: true,
@@ -336,6 +368,9 @@ export const TARIFF_PLANS = {
     maxSuppliers: -1,
     maxRFQPerMonth: -1,
     maxPurchaseOrdersPerMonth: -1,
+    // 🆕 Лимиты хранения
+    maxPhotos: -1,
+    maxMaterialsInCatalog: -1,
     features: {
       // Core
       create_applications: true,
@@ -512,13 +547,54 @@ export const getCompanyPlan = async (supabaseClient, companyId) => {
 };
 
 // ============================================================
-// 🔐 ПРОВЕРКА ДОСТУПА К ФУНКЦИИ
+// 🔐 ПРОВЕРКА ДОСТУПА К ФУНКЦИИ (СТАРАЯ — boolean)
+// ============================================================
+// ⚠️ Сохранена для обратной совместимости.
+//   Для новых проверок используйте getFeatureAccessLevel() — она
+//   возвращает ACCESS_LEVEL.FULL | READ_ONLY | NONE.
 // ============================================================
 
 export const checkFeatureAccess = (plan, feature) => {
   if (!plan || !plan.features) return false;
   return plan.features[feature] === true ||
          typeof plan.features[feature] === 'string';
+};
+
+// ============================================================
+// 🆕 ПОЛУЧИТЬ УРОВЕНЬ ДОСТУПА К ФУНКЦИИ (НОВАЯ)
+// ============================================================
+// Возвращает один из ACCESS_LEVEL:
+//   FULL      — функция в тарифе → полный доступ
+//   READ_ONLY — функция НЕ в тарифе, но у компании есть данные
+//               → только чтение и экспорт
+//   NONE      — функция НЕ в тарифе и данных нет → полностью закрыто
+//
+// @param {object} plan       — объект TARIFF_PLANS[id]
+// @param {string} feature    — ключ функции (например, 'price_catalog')
+// @param {object} context    — { hasExistingData: boolean }
+// ============================================================
+
+export const getFeatureAccessLevel = (plan, feature, context = {}) => {
+  if (!plan || !plan.features) {
+    return ACCESS_LEVEL.NONE;
+  }
+
+  const { hasExistingData = false } = context;
+  const isInPlan = plan.features[feature] === true ||
+                   typeof plan.features[feature] === 'string';
+
+  // 1. Функция входит в тариф → полный доступ
+  if (isInPlan) {
+    return ACCESS_LEVEL.FULL;
+  }
+
+  // 2. Функция НЕ входит в тариф, но есть данные → read-only
+  if (hasExistingData) {
+    return ACCESS_LEVEL.READ_ONLY;
+  }
+
+  // 3. Функция НЕ входит в тариф и данных нет → полностью закрыто
+  return ACCESS_LEVEL.NONE;
 };
 
 // ============================================================
@@ -564,7 +640,9 @@ export const comparePlans = (planIds) => {
           // 🆕
           suppliers: plan.maxSuppliers,
           rfqPerMonth: plan.maxRFQPerMonth,
-          purchaseOrdersPerMonth: plan.maxPurchaseOrdersPerMonth
+          purchaseOrdersPerMonth: plan.maxPurchaseOrdersPerMonth,
+          photos: plan.maxPhotos,
+          materialsInCatalog: plan.maxMaterialsInCatalog
         },
         popular: plan.popular,
         color: plan.color
@@ -1015,7 +1093,10 @@ export const checkTariffLimit = (planId, limitType, currentValue) => {
     // 🆕 Поставщики
     suppliers: plan.maxSuppliers,
     rfqPerMonth: plan.maxRFQPerMonth,
-    purchaseOrdersPerMonth: plan.maxPurchaseOrdersPerMonth
+    purchaseOrdersPerMonth: plan.maxPurchaseOrdersPerMonth,
+    // 🆕 Хранилище
+    photos: plan.maxPhotos,
+    materialsInCatalog: plan.maxMaterialsInCatalog
   };
 
   const limit = limits[limitType];
@@ -1084,7 +1165,7 @@ export const getUsageStats = async (companyId) => {
       users: usersCount || 0,
       suppliers: suppliersCount || 0,
       rfqThisMonth: rfqCount || 0,
-            purchaseOrdersThisMonth: ordersCount || 0
+      purchaseOrdersThisMonth: ordersCount || 0
     };
   } catch (error) {
     console.error('Ошибка получения статистики:', error);

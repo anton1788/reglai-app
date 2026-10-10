@@ -1,14 +1,24 @@
 // src/components/RoleDashboard.jsx
 import React, { useMemo } from 'react';
-import { 
-  Briefcase, Clock, CheckCircle, 
-  TrendingUp, Building, Package, 
+import {
+  Briefcase, Clock, CheckCircle,
+  TrendingUp, Building, Package,
   Merge, WifiOff, Sparkles, ShoppingCart
 } from 'lucide-react';
+import DataLimitsBanner from './DataLimitsBanner'; // 🆕
 
 const isMasterRole = (role) => role === 'master' || role === 'foreman';
 
-const MasterDashboard = ({ applications, user, userCompany, setCurrentView, isOnline }) => {
+const MasterDashboard = ({
+  applications,
+  user,
+  userCompany,
+  setCurrentView,
+  isOnline,
+  currentPlan,   // 🆕
+  dataStats,     // 🆕
+  onUpgrade,     // 🆕
+}) => {
   const metrics = useMemo(() => {
     const myApps = applications?.filter(a => a.user_id === user?.id) || [];
     return {
@@ -27,6 +37,13 @@ const MasterDashboard = ({ applications, user, userCompany, setCurrentView, isOn
 
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6 page-enter">
+      {/* 🆕 Баннер превышения лимитов */}
+      <DataLimitsBanner
+        currentPlan={currentPlan}
+        stats={dataStats}
+        onUpgrade={onUpgrade}
+      />
+
       <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -35,6 +52,11 @@ const MasterDashboard = ({ applications, user, userCompany, setCurrentView, isOn
             <div className="flex flex-wrap gap-2 text-sm mt-3">
               <span className="bg-white/20 px-3 py-1 rounded-full">📋 {metrics.total} заявок</span>
               <span className="bg-white/20 px-3 py-1 rounded-full">🏗️ {metrics.objects} объектов</span>
+              {currentPlan && (
+                <span className="bg-green-500/30 px-3 py-1 rounded-full flex items-center gap-1 text-xs">
+                  👑 {currentPlan.name}
+                </span>
+              )}
               {!isOnline && <span className="bg-yellow-500/30 px-3 py-1 rounded-full flex items-center gap-1"><WifiOff className="w-3 h-3" /> Офлайн</span>}
             </div>
           </div>
@@ -73,10 +95,42 @@ const MasterDashboard = ({ applications, user, userCompany, setCurrentView, isOn
   );
 };
 
-const FullDashboard = ({ applications, companyUsers, pendingApprovals, userRole, userCompany, setCurrentView, isOnline, mergeableCount, cartItemsCount, isCompanyOwner }) => {
+const FullDashboard = ({
+  applications,
+  companyUsers,
+  pendingApprovals,
+  userRole,
+  userCompany,
+  setCurrentView,
+  isOnline,
+  currentPlan,       // 🆕
+  mergeableCount,
+  cartItemsCount,
+  isCompanyOwner,
+  dataStats,         // 🆕
+  onUpgrade,         // 🆕
+}) => {
   const metrics = useMemo(() => {
     const activeApps = applications?.filter(a => ['pending', 'admin_processing', 'partial_received'].includes(a.status)).length || 0;
-    const totalExpenses = applications?.reduce((sum, app) => sum + (app.materials?.reduce((s, m) => s + (Number(m.quantity) || 0) * (Number(m.price) || 1000), 0) || 0), 0) || 0;
+
+    // ✅ Улучшенная формула: считаем только полученное × цена
+    const totalExpenses = applications?.reduce((sum, app) => {
+      if (app.is_deleted === true) return sum;
+      if (app.is_consolidated === true) return sum;
+      if (['canceled', 'rejected', 'consolidated'].includes(app.status)) return sum;
+
+      const appSum = (app.materials || []).reduce((s, m) => {
+        const received = Number(m.received) || 0;
+        const price = Number(m.final_price)
+          || Number(m.supplier_price)
+          || Number(m.price)
+          || 0;
+        return s + received * price;
+      }, 0);
+
+      return sum + appSum;
+    }, 0) || 0;
+
     return {
       activeApps,
       totalExpenses,
@@ -96,7 +150,7 @@ const FullDashboard = ({ applications, companyUsers, pendingApprovals, userRole,
   const widgets = [
     { icon: <Briefcase className="w-5 h-5 text-blue-500" />, label: 'Активные заявки', value: metrics.activeApps, color: 'border-blue-500', onClick: () => setCurrentView('inwork') },
   ];
-  
+
   if (userRole === 'supply_admin') {
     const pending = applications?.filter(a => ['pending', 'admin_processing'].includes(a.status)).length || 0;
     widgets.push({ icon: <Package className="w-5 h-5 text-orange-500" />, label: 'На обработке', value: pending, color: 'border-orange-500', onClick: () => setCurrentView('received') });
@@ -110,12 +164,24 @@ const FullDashboard = ({ applications, companyUsers, pendingApprovals, userRole,
 
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6 page-enter">
+      {/* 🆕 Баннер превышения лимитов */}
+      <DataLimitsBanner
+        currentPlan={currentPlan}
+        stats={dataStats}
+        onUpgrade={onUpgrade}
+      />
+
       <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-2xl p-6 text-white shadow-xl">
         <h1 className="text-2xl font-bold mb-1">{getGreeting()}</h1>
         <p className="text-white/70 text-sm">{userCompany} • {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
         <div className="flex flex-wrap gap-2 text-sm mt-3">
           <span className="bg-white/20 px-3 py-1 rounded-full">📋 {applications?.length || 0} заявок</span>
           <span className="bg-white/20 px-3 py-1 rounded-full">👥 {metrics.totalUsers} сотрудников</span>
+          {currentPlan && (
+            <span className="bg-green-500/30 px-3 py-1 rounded-full text-xs">
+              👑 {currentPlan.name}
+            </span>
+          )}
           {!isOnline && <span className="bg-yellow-500/30 px-3 py-1 rounded-full flex items-center gap-1"><WifiOff className="w-3 h-3" /> Офлайн</span>}
         </div>
       </div>

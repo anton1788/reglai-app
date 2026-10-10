@@ -1,43 +1,46 @@
 // src/components/UniversalDashboard.jsx
 import React, { useState, useMemo } from 'react';
-import { 
-  Users, Briefcase, Clock, CheckCircle, AlertCircle, 
-  TrendingUp, Building, UserPlus, Package, BarChart3, 
+import {
+  Users, Briefcase, Clock, CheckCircle, AlertCircle,
+  TrendingUp, Building, UserPlus, Package, BarChart3,
   ChevronRight, ShoppingCart, Merge, WifiOff, Crown,
   ClipboardList, MessageCircle, Home, Calendar, FileText,
   Plus, Send, X, Sparkles
 } from 'lucide-react';
 import { usePriceVisibility } from '../hooks/usePriceVisibility';
 import { sanitizeApplicationsForMaster } from '../utils/materialSanitizer';
+import DataLimitsBanner from './DataLimitsBanner'; // 🆕
 
 // ─────────────────────────────────────────────────────────────
 // 🧩 MASTER DASHBOARD (Упрощённая версия без цен)
 // ─────────────────────────────────────────────────────────────
-const MasterDashboard = ({ 
-  applications, 
-  user, 
+const MasterDashboard = ({
+  applications,
+  user,
   userCompany,
   setCurrentView,
   isOnline,
   currentPlan,
+  dataStats,       // 🆕
+  onUpgrade,       // 🆕
 }) => {
   // 📊 РАСЧЕТ МЕТРИК (без финансов)
   const metrics = useMemo(() => {
     const totalApps = applications?.length || 0;
-    const activeApps = applications?.filter(a => 
+    const activeApps = applications?.filter(a =>
       ['pending', 'admin_processing', 'partial_received'].includes(a.status)
     ).length || 0;
-    const completedApps = applications?.filter(a => 
+    const completedApps = applications?.filter(a =>
       ['received', 'confirmed'].includes(a.status)
     ).length || 0;
-    const overdueApps = applications?.filter(a => 
-      a.status === 'pending' && 
+    const overdueApps = applications?.filter(a =>
+      a.status === 'pending' &&
       (new Date() - new Date(a.created_at)) > 2 * 24 * 60 * 60 * 1000
     ).length || 0;
-    
+
     const objects = new Set(applications?.map(a => a.object_name) || []);
     const myApps = applications?.filter(a => a.user_id === user?.id) || [];
-    
+
     return {
       totalApps,
       activeApps,
@@ -50,7 +53,6 @@ const MasterDashboard = ({
     };
   }, [applications, user]);
 
-  // 📊 ВИДЖЕТЫ ДЛЯ МАСТЕРА
   const widgets = [
     {
       icon: <Briefcase className="w-5 h-5 text-blue-500" />,
@@ -86,7 +88,6 @@ const MasterDashboard = ({
     }
   ];
 
-  // Быстрые действия для мастера
   const quickActions = [
     { icon: '📝', label: 'Создать заявку', onClick: () => setCurrentView('create'), color: 'bg-blue-600' },
     { icon: '📋', label: 'Мои заявки', onClick: () => setCurrentView('inwork'), color: 'bg-indigo-600' },
@@ -101,6 +102,13 @@ const MasterDashboard = ({
 
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6 page-enter">
+      {/* 🆕 Баннер превышения лимитов */}
+      <DataLimitsBanner
+        currentPlan={currentPlan}
+        stats={dataStats}
+        onUpgrade={onUpgrade}
+      />
+
       {/* Верхний баннер */}
       <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
@@ -184,7 +192,7 @@ const MasterDashboard = ({
             Все заявки <ChevronRight className="w-3 h-3" />
           </button>
         </div>
-        
+
         {applications?.filter(a => a.user_id === user?.id).slice(0, 5).map((app) => (
           <div
             key={app.id}
@@ -217,7 +225,7 @@ const MasterDashboard = ({
             </span>
           </div>
         ))}
-        
+
         {(!applications || applications.filter(a => a.user_id === user?.id).length === 0) && (
           <div className="text-center py-8">
             <div className="text-4xl mb-2">📭</div>
@@ -240,11 +248,11 @@ const MasterDashboard = ({
 // ─────────────────────────────────────────────────────────────
 // 🧩 FULL DASHBOARD (Полная версия с ценами)
 // ─────────────────────────────────────────────────────────────
-const FullDashboard = ({ 
-  applications, 
-  companyUsers, 
-  pendingApprovals, 
-  user, 
+const FullDashboard = ({
+  applications,
+  companyUsers,
+  pendingApprovals,
+  user,
   userRole,
   userCompany,
   setCurrentView,
@@ -253,70 +261,61 @@ const FullDashboard = ({
   mergeableCount,
   cartItemsCount,
   isCompanyOwner,
+  dataStats,       // 🆕
+  onUpgrade,       // 🆕
 }) => {
-  // AI Assistant State
   const [aiMessage, setAiMessage] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [isAILoading, setIsAILoading] = useState(false);
 
-  // 📊 РАСЧЕТ МЕТРИК
   const metrics = useMemo(() => {
     const totalApps = applications?.length || 0;
-    const activeApps = applications?.filter(a => 
+    const activeApps = applications?.filter(a =>
       ['pending', 'admin_processing', 'partial_received'].includes(a.status)
     ).length || 0;
-    const completedApps = applications?.filter(a => 
+    const completedApps = applications?.filter(a =>
       ['received', 'confirmed'].includes(a.status)
     ).length || 0;
-    const overdueApps = applications?.filter(a => 
-      a.status === 'pending' && 
+    const overdueApps = applications?.filter(a =>
+      a.status === 'pending' &&
       (new Date() - new Date(a.created_at)) > 2 * 24 * 60 * 60 * 1000
     ).length || 0;
-    
+
     const totalUsers = companyUsers?.length || 0;
     const activeUsers = companyUsers?.filter(u => u.is_active !== false).length || 0;
-    
-    // ✅ ИСПРАВЛЕНО: считаем ТОЛЬКО реально потраченные деньги
-    //   - исключаем удалённые, сводные и отменённые
-    //   - считаем только заявки, где материалы уже получены
-    //   - БЕЗ дефолта 1000 ₽ (иначе появляются «фантомные» суммы)
+
     const totalExpenses = applications?.reduce((sum, app) => {
-      // 1. Пропускаем удалённые и сводные
       if (app.is_deleted === true) return sum;
       if (app.is_consolidated === true) return sum;
       if (['canceled', 'rejected', 'consolidated'].includes(app.status)) return sum;
 
-      // 2. Считаем только принятые / частично принятые
       const isReceived = ['received', 'partial_received'].includes(app.status);
       if (!isReceived) return sum;
 
-      // 3. Приоритет — реальная сумма заявки
       if (app.total_amount && Number(app.total_amount) > 0) {
         return sum + Number(app.total_amount);
       }
 
-      // 4. Иначе — по фактически полученным материалам
       const appSum = (app.materials || []).reduce((s, m) => {
         const received = Number(m.received) || 0;
-        const price = Number(m.final_price) 
-          || Number(m.supplier_price) 
-          || Number(m.price) 
+        const price = Number(m.final_price)
+          || Number(m.supplier_price)
+          || Number(m.price)
           || 0;
         return s + received * price;
       }, 0);
 
       return sum + appSum;
     }, 0) || 0;
-    
-    // Объекты — исключаем удалённые и сводные
+
     const objects = new Set(
       applications
         ?.filter(a => !a.is_deleted && a.is_consolidated !== true)
         ?.map(a => a.object_name) || []
     );
     const myApps = applications?.filter(a => a.user_id === user?.id) || [];
-    
+
     return {
       totalApps,
       activeApps,
@@ -333,11 +332,10 @@ const FullDashboard = ({
     };
   }, [applications, companyUsers, pendingApprovals, user]);
 
-  // 🧠 AI ОТВЕТЫ ПО РОЛЯМ
   const handleAIAssistant = (message) => {
     if (!message.trim()) return;
     setIsAILoading(true);
-    
+
     setTimeout(() => {
       let response = '';
       const lowerMsg = message.toLowerCase();
@@ -361,10 +359,10 @@ const FullDashboard = ({
       }
       else if (userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
         if (lowerMsg.includes('просрочен')) {
-          const overdue = applications?.filter(a => 
+          const overdue = applications?.filter(a =>
             a.status === 'pending' && (new Date() - new Date(a.created_at)) > 2 * 24 * 60 * 60 * 1000
           ) || [];
-          response = overdue.length > 0 
+          response = overdue.length > 0
             ? `🔴 Просрочено: ${overdue.length}\n${overdue.map(a => `• ${a.object_name}`).join('\n')}`
             : '✅ Просроченных заявок нет';
         } else if (lowerMsg.includes('сотрудник')) {
@@ -390,7 +388,6 @@ const FullDashboard = ({
     }, 500);
   };
 
-  // 📊 ВИДЖЕТЫ ПО РОЛЯМ
   const getWidgets = () => {
     const widgets = [];
 
@@ -428,7 +425,6 @@ const FullDashboard = ({
     }
 
     if (userRole === 'accountant' || userRole === 'manager' || userRole === 'director' || isCompanyOwner) {
-      // ✅ Форматируем корректно: если < 1000 ₽ — показываем полностью
       const expensesDisplay = metrics.totalExpenses < 1000
         ? `${metrics.totalExpenses.toLocaleString('ru-RU')} ₽`
         : `${(metrics.totalExpenses / 1000).toFixed(1)}K ₽`;
@@ -531,6 +527,13 @@ const FullDashboard = ({
 
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6 page-enter">
+      {/* 🆕 Баннер превышения лимитов */}
+      <DataLimitsBanner
+        currentPlan={currentPlan}
+        stats={dataStats}
+        onUpgrade={onUpgrade}
+      />
+
       {/* Верхний баннер */}
       <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
@@ -561,7 +564,7 @@ const FullDashboard = ({
               )}
             </div>
           </div>
-          
+
           <button
             onClick={() => setShowAIAssistant(!showAIAssistant)}
             className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-xl backdrop-blur-sm transition-all flex items-center gap-2 text-sm font-medium"
@@ -589,7 +592,7 @@ const FullDashboard = ({
               </span>
             </div>
           </div>
-          
+
           <div className="p-4 space-y-4">
             <div className="flex flex-wrap gap-2">
               {userRole === 'supply_admin' ? (
@@ -609,7 +612,7 @@ const FullDashboard = ({
               ) : null}
               <button onClick={() => handleAIAssistant('помощь')} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs">❓ Помощь</button>
             </div>
-            
+
             <div className="flex gap-2">
               <input
                 type="text"
@@ -627,7 +630,7 @@ const FullDashboard = ({
                 {isAILoading ? <span className="animate-spin">⟳</span> : <Send className="w-4 h-4" />}
               </button>
             </div>
-            
+
             {aiResponse && (
               <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl border border-gray-200 dark:border-gray-700 fade-enter">
                 <div className="flex items-start gap-3">
@@ -704,7 +707,7 @@ const FullDashboard = ({
             Все заявки <ChevronRight className="w-3 h-3" />
           </button>
         </div>
-        
+
         {applications?.slice(0, 5).map((app) => (
           <div
             key={app.id}
@@ -737,7 +740,7 @@ const FullDashboard = ({
             </span>
           </div>
         ))}
-        
+
         {(!applications || applications.length === 0) && (
           <div className="text-center py-8">
             <div className="text-4xl mb-2">📭</div>
@@ -761,11 +764,11 @@ const FullDashboard = ({
 // ─────────────────────────────────────────────────────────────
 // 🧩 ОСНОВНОЙ КОМПОНЕНТ
 // ─────────────────────────────────────────────────────────────
-const UniversalDashboard = ({ 
-  applications, 
-  companyUsers, 
-  pendingApprovals, 
-  user, 
+const UniversalDashboard = ({
+  applications,
+  companyUsers,
+  pendingApprovals,
+  user,
   userRole,
   userCompany,
   setCurrentView,
@@ -774,10 +777,11 @@ const UniversalDashboard = ({
   mergeableCount,
   cartItemsCount,
   isCompanyOwner,
+  dataStats,       // 🆕
+  onUpgrade,       // 🆕
 }) => {
   const { isMaster } = usePriceVisibility(userRole);
-  
-  // Если мастер или прораб - показываем упрощённый дашборд без цен
+
   if (isMaster) {
     const safeApps = sanitizeApplicationsForMaster(applications);
     return (
@@ -788,11 +792,12 @@ const UniversalDashboard = ({
         setCurrentView={setCurrentView}
         isOnline={isOnline}
         currentPlan={currentPlan}
+        dataStats={dataStats}
+        onUpgrade={onUpgrade}
       />
     );
   }
-  
-  // Для остальных - полный дашборд с ценами
+
   return (
     <FullDashboard
       applications={applications}
@@ -807,6 +812,8 @@ const UniversalDashboard = ({
       mergeableCount={mergeableCount}
       cartItemsCount={cartItemsCount}
       isCompanyOwner={isCompanyOwner}
+      dataStats={dataStats}
+      onUpgrade={onUpgrade}
     />
   );
 };

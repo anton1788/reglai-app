@@ -29,17 +29,16 @@ const STATUS_FILTERS = [
 ];
 
 /**
- * Менеджер поставщиков: список + фильтры + CRUD через модалку.
- *
  * @param {object} props
  * @param {string} props.companyId
  * @param {string} props.userId
  * @param {string} [props.role]
- * @param {object} [props.currentPlan] — 🆕 текущий тариф (для проверки лимитов)
- * @param {() => void} [props.onUpgrade] — 🆕 callback для перехода на тарифы
- * @param {(msg: string, type?: 'success'|'error'|'info'|'warning', isUpdate?: boolean, undoFn?: (() => void) | null) => void} props.showNotification
+ * @param {object} [props.currentPlan]
+ * @param {() => void} [props.onUpgrade]
+ * @param {(msg: string, type?: string, isUpdate?: boolean, undoFn?: Function|null) => void} props.showNotification
  * @param {(supplier) => void} [props.onSelectSupplier]
  * @param {(supplier) => void} [props.onOpenPriceList]
+ * @param {boolean} [props.readOnly] — 🆕 если true — только просмотр
  */
 export default function SupplierManager({
   companyId,
@@ -50,8 +49,11 @@ export default function SupplierManager({
   showNotification,
   onSelectSupplier,
   onOpenPriceList,
+  readOnly = false,  // 🆕
 }) {
-  const canEdit = isProcurement(role);
+    // 🆕 canCreate — учитывает и роль, и readOnly
+  const canEditByRole = isProcurement(role);
+  const canCreate = !readOnly && canEditByRole;
 
   const notify = useCallback(
     (msg, type = 'info', isUpdate = false, undoFn = null) => {
@@ -122,27 +124,30 @@ export default function SupplierManager({
     loadSuppliers();
   }, [loadSuppliers]);
 
-  // ─── 🆕 Проверка лимита ────────────────────────────────
+  // ─── Проверка лимита ──────────────────────────────────
   const supplierLimitInfo = useMemo(() => {
     if (!currentPlan?.id) {
       return { allowed: true, remaining: -1, limit: -1, isUnlimited: true, usagePercent: 0 };
     }
-    // Считаем всех поставщиков, кроме архивных
     const activeCount = suppliers.filter(s => s.status !== 'archived').length;
     return checkTariffLimit(currentPlan.id, 'suppliers', activeCount);
   }, [currentPlan?.id, suppliers]);
 
-  const canCreateMore = supplierLimitInfo.isUnlimited || supplierLimitInfo.allowed;
+  const canAddMore = supplierLimitInfo.isUnlimited || supplierLimitInfo.allowed;
 
   // ─── Обработчики CRUD ──────────────────────────────────
   const handleOpenCreate = () => {
-    if (!canEdit) {
+    // 🆕 readOnly — блокируем
+    if (readOnly) {
+      notify('🔒 Только просмотр. Обновите тариф для добавления поставщиков.', 'warning');
+      return;
+    }
+    if (!canEditByRole) {
       notify('Недостаточно прав для добавления поставщика', 'error');
       return;
     }
 
-    // 🆕 Проверка лимита перед открытием формы
-    if (!canCreateMore) {
+    if (!canAddMore) {
       const msg = `⚠️ Лимит поставщиков исчерпан (${supplierLimitInfo.limit} из ${supplierLimitInfo.limit}). Обновите тариф, чтобы добавлять новых.`;
       if (typeof onUpgrade === 'function') {
         notify(msg, 'warning', false, () => onUpgrade());
@@ -152,7 +157,6 @@ export default function SupplierManager({
       return;
     }
 
-    // 🆕 Предупреждение при близком лимите (осталось <= 1)
     if (!supplierLimitInfo.isUnlimited && supplierLimitInfo.remaining <= 1) {
       notify(
         `⚠️ Осталось ${supplierLimitInfo.remaining} мест для поставщиков на вашем тарифе.`,
@@ -165,7 +169,11 @@ export default function SupplierManager({
   };
 
   const handleOpenEdit = (supplier) => {
-    if (!canEdit) {
+    if (readOnly) {
+      notify('🔒 Только просмотр. Обновите тариф для редактирования.', 'warning');
+      return;
+    }
+    if (!canEditByRole) {
       notify('Недостаточно прав для редактирования', 'error');
       return;
     }
@@ -180,6 +188,7 @@ export default function SupplierManager({
   };
 
   const handleSubmit = async (payload) => {
+    if (readOnly) return;
     setSaving(true);
     try {
       if (editingSupplier?.id) {
@@ -217,7 +226,8 @@ export default function SupplierManager({
   };
 
   const handleArchive = async (supplier) => {
-    if (!canEdit) return notify('Недостаточно прав', 'error');
+    if (readOnly) return notify('🔒 Только просмотр', 'warning');
+    if (!canEditByRole) return notify('Недостаточно прав', 'error');
     if (!window.confirm(`Переместить «${supplier.name}» в архив?`)) return;
     try {
       await archiveSupplier(supplier.id);
@@ -230,7 +240,8 @@ export default function SupplierManager({
   };
 
   const handleDelete = async (supplier) => {
-    if (!canEdit) return notify('Недостаточно прав', 'error');
+    if (readOnly) return notify('🔒 Только просмотр', 'warning');
+    if (!canEditByRole) return notify('Недостаточно прав', 'error');
     const confirmed = window.confirm(
       `Удалить «${supplier.name}» безвозвратно?\n\n` +
         'Все прайсы, приглашения в RFQ и предложения будут удалены (CASCADE).'
@@ -247,7 +258,8 @@ export default function SupplierManager({
   };
 
   const handleOpenInvite = (supplier = null) => {
-    if (!canEdit) return notify('Недостаточно прав', 'error');
+    if (readOnly) return notify('🔒 Только просмотр', 'warning');
+    if (!canEditByRole) return notify('Недостаточно прав', 'error');
     setInviteSupplierId(supplier?.id || null);
     setInviteOpen(true);
   };
@@ -271,35 +283,61 @@ export default function SupplierManager({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* 🆕 Плашка лимита */}
-        {!supplierLimitInfo.isUnlimited && (
+        {/* 🆕 Read-only баннер */}
+        {readOnly && (
+          <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl flex items-start gap-3">
+            <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg flex-shrink-0">
+              <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="flex-1 text-sm">
+              <div className="font-semibold text-amber-900 dark:text-amber-200">
+                Режим «Только просмотр»
+              </div>
+              <div className="text-amber-800 dark:text-amber-300">
+                Модуль поставщиков не входит в ваш тариф. Существующие данные
+                доступны для просмотра, но не для редактирования.
+              </div>
+            </div>
+            {typeof onUpgrade === 'function' && (
+              <button
+                onClick={onUpgrade}
+                className="shrink-0 px-3 py-1 rounded-lg bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white text-xs font-medium hover:shadow-md transition"
+              >
+                Обновить тариф
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 🆕 Плашка лимита (не показываем при readOnly) */}
+        {!readOnly && !supplierLimitInfo.isUnlimited && (
           <div className={`mb-4 p-3 rounded-lg border flex items-start gap-2 ${
-            !canCreateMore
+            !canAddMore
               ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30'
               : supplierLimitInfo.remaining <= 1
                 ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30'
                 : 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30'
           }`}>
             <Lock className={`w-4 h-4 shrink-0 mt-0.5 ${
-              !canCreateMore ? 'text-red-500' : supplierLimitInfo.remaining <= 1 ? 'text-amber-500' : 'text-blue-500'
+              !canAddMore ? 'text-red-500' : supplierLimitInfo.remaining <= 1 ? 'text-amber-500' : 'text-blue-500'
             }`} />
             <div className="flex-1 text-sm">
               <span className="font-medium text-gray-900 dark:text-white">
                 Поставщики:{' '}
                 {supplierLimitInfo.limit - supplierLimitInfo.remaining} из {supplierLimitInfo.limit}
               </span>
-              {!canCreateMore && (
+              {!canAddMore && (
                 <span className="text-red-600 dark:text-red-400 ml-2 font-medium">
                   Лимит исчерпан
                 </span>
               )}
-              {canCreateMore && supplierLimitInfo.remaining <= 1 && (
+              {canAddMore && supplierLimitInfo.remaining <= 1 && (
                 <span className="text-amber-600 dark:text-amber-400 ml-2">
                   Осталось {supplierLimitInfo.remaining} мест
                 </span>
               )}
             </div>
-            {!canCreateMore && typeof onUpgrade === 'function' && (
+            {!canAddMore && typeof onUpgrade === 'function' && (
               <button
                 onClick={onUpgrade}
                 className="shrink-0 px-3 py-1 rounded-lg bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white text-xs font-medium hover:shadow-md transition"
@@ -318,7 +356,9 @@ export default function SupplierManager({
               Поставщики
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Управление базой B2B-поставщиков, прайсами и заказами
+              {readOnly
+                ? 'Просмотр базы B2B-поставщиков'
+                : 'Управление базой B2B-поставщиков, прайсами и заказами'}
             </p>
           </div>
 
@@ -332,7 +372,7 @@ export default function SupplierManager({
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
 
-            {canEdit && (
+            {canCreate && (
               <button
                 onClick={() => handleOpenInvite(null)}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[#4A6572] text-[#4A6572] hover:bg-[#4A6572]/10 text-sm font-medium transition"
@@ -342,19 +382,19 @@ export default function SupplierManager({
               </button>
             )}
 
-            {canEdit && (
+            {canCreate && (
               <button
                 onClick={handleOpenCreate}
-                disabled={!canCreateMore}
-                title={!canCreateMore ? 'Лимит поставщиков исчерпан' : 'Добавить поставщика'}
+                disabled={!canAddMore}
+                title={!canAddMore ? 'Лимит поставщиков исчерпан' : 'Добавить поставщика'}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                  canCreateMore
+                  canAddMore
                     ? 'bg-[#4A6572] hover:bg-[#344955] text-white'
                     : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                 }`}
               >
-                {canCreateMore ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                {canCreateMore ? 'Добавить поставщика' : 'Лимит исчерпан'}
+                {canAddMore ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                {canAddMore ? 'Добавить поставщика' : 'Лимит исчерпан'}
               </button>
             )}
           </div>
@@ -429,7 +469,7 @@ export default function SupplierManager({
           <EmptyState
             hasFilters={Boolean(statusFilter || searchTerm)}
             onCreate={handleOpenCreate}
-            canCreate={canEdit && canCreateMore}
+            canCreate={canCreate && canAddMore}
             onReset={() => {
               setStatusFilter('');
               setSearchInput('');
@@ -442,34 +482,38 @@ export default function SupplierManager({
                 key={s.id}
                 supplier={s}
                 onSelect={onSelectSupplier}
-                onInvite={canEdit ? (sup) => handleOpenInvite(sup) : undefined}
+                onInvite={canCreate ? (sup) => handleOpenInvite(sup) : undefined}
                 onOpenPriceList={onOpenPriceList}
-                onEdit={canEdit ? handleOpenEdit : undefined}
-                onArchive={canEdit ? handleArchive : undefined}
-                onDelete={canEdit ? handleDelete : undefined}
+                onEdit={canCreate ? handleOpenEdit : undefined}
+                onArchive={canCreate ? handleArchive : undefined}
+                onDelete={canCreate ? handleDelete : undefined}
               />
             ))}
           </div>
         )}
 
-        {/* Модалка формы */}
-        <SupplierForm
-          open={formOpen}
-          supplier={editingSupplier}
-          onClose={handleCloseForm}
-          onSubmit={handleSubmit}
-          saving={saving}
-        />
+        {/* Модалка формы (только если не readOnly) */}
+        {canCreate && (
+          <SupplierForm
+            open={formOpen}
+            supplier={editingSupplier}
+            onClose={handleCloseForm}
+            onSubmit={handleSubmit}
+            saving={saving}
+          />
+        )}
 
         {/* Модалка приглашения */}
-        <SupplierInviteModal
-          open={inviteOpen}
-          onClose={handleCloseInvite}
-          companyId={companyId}
-          userId={userId}
-          preselectedSupplierId={inviteSupplierId}
-          showNotification={notify}
-        />
+        {canCreate && (
+          <SupplierInviteModal
+            open={inviteOpen}
+            onClose={handleCloseInvite}
+            companyId={companyId}
+            userId={userId}
+            preselectedSupplierId={inviteSupplierId}
+            showNotification={notify}
+          />
+        )}
       </div>
     </div>
   );

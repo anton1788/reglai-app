@@ -77,6 +77,8 @@ import translations from './i18n/translations';
 import { useIsMobile } from './hooks/useIsMobile';
 import AuditView from './components/AuditView';
 import ApplicationList from './components/ApplicationList';
+// 🆕 Feature Gate: разграничение доступа к Pro-функциям
+import FeatureGate from './components/FeatureGate';
 // 🆕 ОБЪЕКТЫ (Project Hub)
 import ObjectsList from './components/Objects/ObjectsList';
 // 🏢 ПОСТАВЩИКИ (B2B)
@@ -1320,6 +1322,16 @@ const [selectedForApproval, setSelectedForApproval] = useState(null);
 // 💰 PRICE EDITOR STATES
 const [showPriceEditor, setShowPriceEditor] = useState(false);
 const [priceEditorApp, setPriceEditorApp] = useState(null);
+
+// 🆕 DATA STATS: статистика данных компании для баннера лимитов
+//    и определения readOnly-режима
+const [dataStats, setDataStats] = useState({
+  objects: 0,
+  photos: 0,
+  suppliers: 0,
+  users: 0,
+  pricesCount: 0,
+});
 
 // Хендлер отправки причины оттока
 const handleChurnSubmit = async ({ reason, severity, comment }) => {
@@ -4275,6 +4287,85 @@ const engagementMetrics = useMemo(() => {
     30
   );
 }, [applications, allApplications, isAdminMode]);
+
+// 🆕 ЗАГРУЗКА DATA STATS для баннера лимитов и FeatureGate
+useEffect(() => {
+  const loadDataStats = async () => {
+    if (!userCompanyId || !user?.id) return;
+
+    const cleanId = getSafeCompanyId(userCompanyId);
+    if (!cleanId) return;
+
+    try {
+      // 1. Объекты (уникальные имена в заявках, без удалённых)
+      const { data: apps } = await supabase
+        .from('applications')
+        .select('object_name')
+        .eq('company_id', cleanId)
+        .or('is_deleted.is.null,is_deleted.eq.false');
+
+      const objectsCount = new Set(
+        (apps || []).map(a => a.object_name).filter(Boolean)
+      ).size;
+
+      // 2. Фото (work_photos)
+      const { count: photosCount } = await supabase
+        .from('work_photos')
+        .select('*', { count: 'exact', head: true })
+        .in('application_id',
+          (apps || []).length > 0
+            ? (await supabase
+                .from('applications')
+                .select('id')
+                .eq('company_id', cleanId)
+              ).data?.map(a => a.id) || []
+            : []
+        );
+
+      // 3. Поставщики (не архивные)
+      const { count: suppliersCount } = await supabase
+        .from('suppliers')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', cleanId)
+        .neq('status', 'archived');
+
+      // 4. Пользователи
+      const { count: usersCount } = await supabase
+        .from('company_users')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', cleanId)
+        .eq('is_active', true);
+
+      // 5. Позиции справочника цен
+      const { count: pricesCount } = await supabase
+        .from('material_prices')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', cleanId)
+        .eq('is_active', true);
+
+      setDataStats({
+        objects: objectsCount,
+        photos: photosCount || 0,
+        suppliers: suppliersCount || 0,
+        users: usersCount || 0,
+        pricesCount: pricesCount || 0,
+      });
+
+      console.log('📊 [DataStats] загружено:', {
+        objects: objectsCount,
+        photos: photosCount || 0,
+        suppliers: suppliersCount || 0,
+        users: usersCount || 0,
+        pricesCount: pricesCount || 0,
+      });
+    } catch (err) {
+      console.warn('[DataStats] ошибка загрузки:', err);
+    }
+  };
+
+  loadDataStats();
+}, [userCompanyId, user?.id, currentPlan?.id]); // при смене тарифа — перезагружаем
+
 
 // 📊 LOG ANALYTICS USAGE (Feature Adoption — с дебаунсом)
 useEffect(() => {
@@ -8821,10 +8912,12 @@ if (inviteParam) {
       else if (path === '/reports') setCurrentView('reports');
       else if (path === '/integration') setCurrentView('integration');
       else if (path === '/tariffs') setCurrentView('tariffs');
-      else if (path === '/companyProfile') setCurrentView('companyProfile');
+            else if (path === '/companyProfile') setCurrentView('companyProfile');
       else if (path === '/superAdmin') setCurrentView('superAdmin');
     }}
     t={t}
+    dataStats={dataStats}
+    onUpgrade={() => setCurrentView('tariffs')}
   />
 )}
 
@@ -8861,6 +8954,8 @@ if (inviteParam) {
     mergeableCount={mergeableCount}
     cartItemsCount={formData.cart?.length || 0}
     isCompanyOwner={isCompanyOwner}
+    dataStats={dataStats}
+    onUpgrade={() => setCurrentView('tariffs')}
   />
 )}
         
@@ -9648,7 +9743,13 @@ onClearFilters={handleClearFilters}
 )}
 {/* 🏢 ПОСТАВЩИКИ (B2B) */}
 {currentView === 'suppliers' && (
-  checkFeatureAccess(currentPlan, 'suppliers_manage') ? (
+  <FeatureGate
+    feature="suppliers_manage"
+    featureName="Управление поставщиками"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: dataStats.suppliers > 0 }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <SupplierManager
       companyId={userCompanyId}
       userId={user?.id}
@@ -9661,30 +9762,24 @@ onClearFilters={handleClearFilters}
         setCurrentView('supplierPriceList');
       }}
     />
-  ) : (
-    <FeatureLockedView
-      featureName="Управление поставщиками"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+  </FeatureGate>
 )}
 {/* 📚 СПРАВОЧНИК ЦЕН */}
 {currentView === 'priceCatalog' && (
-  checkFeatureAccess(currentPlan, 'price_catalog') ? (
+  <FeatureGate
+    feature="price_catalog"
+    featureName="Справочник цен"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: dataStats.pricesCount > 0 }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <MaterialPriceCatalog
       companyId={userCompanyId}
       user={user}
       userRole={userRole}
       showNotification={showNotification}
     />
-  ) : (
-    <FeatureLockedView
-      featureName="Справочник цен"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+  </FeatureGate>
 )}
 
 {/* 📚 КАТАЛОГ МАТЕРИАЛОВ */}
