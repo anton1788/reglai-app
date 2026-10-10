@@ -1,7 +1,8 @@
 // src/components/Mobile/PhotoCapture.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, Upload, X, Check, Loader2, AlertCircle } from 'lucide-react';
-import { supabase } from '../../utils/supabaseClient';
+// 🔧 Storage не работает через Proxy — используем raw-клиент
+import { rawSupabase as supabase } from '../../utils/supabaseClient';
 
 // ============================================================
 // 📸 КОНСТАНТЫ
@@ -245,25 +246,33 @@ const PhotoCapture = ({
 
   // ─── 🔥 ЗАГРУЗКА В SUPABASE STORAGE ────────────────────
   const uploadPhotos = useCallback(
-    async (photosToUpload) => {
-      if (!photosToUpload || photosToUpload.length === 0) {
-        return [];
-      }
+  async (photosToUpload) => {
+    if (!photosToUpload || photosToUpload.length === 0) {
+      return [];
+    }
 
-      // Валидация окружения
-      if (!companyId) {
-        setError('❌ Не удалось определить компанию');
-        showNotification('Не удалось определить компанию', 'error');
-        return [];
-      }
+    // 🛡️ РАННЯЯ ВАЛИДАЦИЯ
+    if (!companyId) {
+      setError('❌ Не удалось определить компанию');
+      showNotification('Не удалось определить компанию', 'error');
+      return [];
+    }
 
-      if (!supabase) {
-        setError('❌ Supabase не инициализирован');
-        showNotification('Ошибка подключения к серверу', 'error');
-        return [];
-      }
+    if (!supabase) {
+      setError('❌ Сервер не настроен. Обратитесь к администратору.');
+      showNotification('Ошибка подключения к серверу', 'error');
+      return [];
+    }
 
-      setUploading(true);
+    // 🛡️ Проверка, что storage доступен (защита от Proxy-багов)
+    if (!supabase.storage || typeof supabase.storage.from !== 'function') {
+      setError('❌ Хранилище недоступно. Обратитесь к администратору.');
+      showNotification('Ошибка: хранилище не инициализировано', 'error');
+      console.error('[PhotoCapture] supabase.storage is', supabase.storage);
+      return [];
+    }
+
+    setUploading(true);
       setUploadProgress({ current: 0, total: photosToUpload.length });
       setError(null);
 
@@ -372,6 +381,9 @@ const PhotoCapture = ({
 
   // ─── Подтверждение ─────────────────────────────────────
   const confirmPhotos = useCallback(async () => {
+  // 🛡️ Если уже идёт загрузка — не запускаем повторно
+  if (uploading) return;
+
   const notUploaded = photos.filter((p) => !p.uploaded);
 
   if (notUploaded.length > 0) {
