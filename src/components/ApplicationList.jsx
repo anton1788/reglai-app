@@ -305,6 +305,7 @@ const MobileApplicationCard = memo(({
   onCloseReturns,
   onReopenReturns,
   workPhotos = {},   // ← добавить
+  onAddPhoto,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(false);
@@ -473,12 +474,24 @@ const MobileApplicationCard = memo(({
             </div>
           )}
 
-          {canEditPrices(userRole) && (
+                    {canEditPrices(userRole) && (
             <button
               onClick={() => onOpenPriceEditor?.(application)}
               className="mt-3 w-full py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
             >
               💰 {t('prices') || 'Цены'}
+            </button>
+          )}
+
+          {/* 🆕 КНОПКА ДОБАВИТЬ ФОТО */}
+          {(userRole === 'master' || userRole === 'foreman' ||
+            userRole === 'supply_admin' || userRole === 'manager') && (
+            <button
+              onClick={() => onAddPhoto?.(application, null)}
+              className="mt-3 w-full py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-600 text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Camera className="w-4 h-4" />
+              📷 Добавить фото
             </button>
           )}
 
@@ -659,6 +672,7 @@ const DesktopApplicationRow = memo(({
   onCloseReturns,
   onReopenReturns,
   workPhotos = {},
+  onAddPhoto,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
@@ -804,13 +818,26 @@ const DesktopApplicationRow = memo(({
             </button>
           )}
 
-          {canEditPrices(userRole) && (
+                    {canEditPrices(userRole) && (
             <button
               onClick={() => onOpenPriceEditor?.(application)}
               className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
               title={t('editPrices') || 'Редактировать цены'}
             >
               💰 {t('prices') || 'Цены'}
+            </button>
+          )}
+
+          {/* 🆕 КНОПКА ДОБАВИТЬ ФОТО */}
+          {(userRole === 'master' || userRole === 'foreman' ||
+            userRole === 'supply_admin' || userRole === 'manager') && (
+            <button
+              onClick={() => onAddPhoto?.(application, null)}
+              className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
+              title="Добавить фото"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Фото
             </button>
           )}
 
@@ -1156,6 +1183,7 @@ const ApplicationList = memo(({
   isLoading = false,
   statusCounts: statusCountsProp,
   workPhotos = {},   // ← добавить
+  onAddPhoto,
 }) => {
   const { ref: loadMoreRef, inView } = useInView({
     threshold: 0.1,
@@ -1407,7 +1435,7 @@ const ApplicationList = memo(({
         {!isLoading && filteredApplications.length > 0 && (
           <div className="space-y-3" role="list">
             {filteredApplications.map((application) => (
-              <MobileApplicationCard
+                            <MobileApplicationCard
                 key={application.id}
                 application={application}
                 t={t}
@@ -1432,6 +1460,7 @@ const ApplicationList = memo(({
                 onCloseReturns={onCloseReturns}
                 onReopenReturns={onReopenReturns}
                 workPhotos={workPhotos}
+                onAddPhoto={onAddPhoto}
               />
             ))}
           </div>
@@ -1621,7 +1650,7 @@ const ApplicationList = memo(({
 
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {filteredApplications.map((application) => (
-                <DesktopApplicationRow
+                                <DesktopApplicationRow
                   key={application.id}
                   application={application}
                   t={t}
@@ -1646,6 +1675,7 @@ const ApplicationList = memo(({
                   onCloseReturns={onCloseReturns}
                   onReopenReturns={onReopenReturns}
                   workPhotos={workPhotos}
+                  onAddPhoto={onAddPhoto}
                 />
               ))}
             </div>

@@ -4330,6 +4330,19 @@ const openReceiveModal = useCallback((application, mode = 'admin_receive') => {
   markAsViewed(application.id);
 }, [userRole, showNotification, markAsViewed]);
 
+  // 🆕 ОБЩИЙ ОБРАБОТЧИК: добавить фото к существующей заявке из карточки
+  const handleAddPhotoToApplication = useCallback((application, materialIndex = null) => {
+    if (!application?.id) {
+      showNotification('Ошибка: заявка не найдена', 'error');
+      return;
+    }
+
+    // Устанавливаем контекст для PhotoCapture
+    setSelectedApplication(application);
+    setActiveMaterialIndex(materialIndex);
+    setShowPhotoCapture(true);
+  }, [showNotification]);
+
   const handleSearchChange = useCallback((value) => {
   setSearchTerm(value);
   setPage(1); // ← УЖЕ ДОБАВЛЕНО
@@ -8606,6 +8619,7 @@ if (inviteParam) {
         
         {currentView === 'received' && (
           <ApplicationList
+            onAddPhoto={handleAddPhotoToApplication}
             applications={filteredApplications.filter(app => {
               const isVisibleToSupply = userRole === 'supply_admin' && 
                 ['pending', 'pending_foreman', 'pending_approval', 'partial', 'received', 'canceled'].includes(app.status);
@@ -8752,7 +8766,8 @@ if (inviteParam) {
       </div>
     )}
     
-    <ApplicationList
+        <ApplicationList
+      onAddPhoto={handleAddPhotoToApplication}
       applications={filteredApplications.filter(app => {
         // 🔥 Для мастера/прораба — показываем свои активные заявки + ЧАСТИЧНО ПОЛУЧЕННЫЕ
         if (userRole === 'master' || userRole === 'foreman') {
@@ -8831,8 +8846,9 @@ onClearFilters={handleClearFilters}
   </>
 )}
         
-        {currentView === 'confirmation' && (
+                {currentView === 'confirmation' && (
   <ApplicationList
+    onAddPhoto={handleAddPhotoToApplication}
     applications={filteredApplications.filter(app => {
       if (app.user_id !== user?.id) return false;
       
@@ -8893,8 +8909,9 @@ onClearFilters={handleClearFilters}
           />
         )}
         
-        {currentView === 'history' && (
+                {currentView === 'history' && (
           <ApplicationList
+            onAddPhoto={handleAddPhotoToApplication}
             applications={filteredApplications.filter(app =>
               isApplicationCompleted(app.status)
             )}
@@ -8948,8 +8965,9 @@ onClearFilters={handleClearFilters}
           />
         )}
 
-        {currentView === 'readyToIssue' && (
+                {currentView === 'readyToIssue' && (
   <ApplicationList
+    onAddPhoto={handleAddPhotoToApplication}
     applications={filteredApplications.filter(app => {
       // Проверяем, есть ли материалы для выдачи
       const hasReady = hasMaterialsReadyToIssue(app);
@@ -9764,8 +9782,9 @@ onClearFilters={handleClearFilters}
   'suppliers', 'supplierCatalog', 'supplierPriceList', 'rfqList', 'rfqCreate', 'rfqDetails',
   'purchaseOrders', 'purchaseOrderCreate', 'purchaseOrderDetails',
   'supplierDashboard', 'procurementDashboard', 'priceCatalog' ].includes(currentView) && (
-    <div className="max-w-7xl mx-auto px-4">
+        <div className="max-w-7xl mx-auto px-4">
         <ApplicationList
+            onAddPhoto={handleAddPhotoToApplication}
             applications={filteredApplications}
             title="Заявки"
             emptyMessage="Нет заявок"
