@@ -4307,7 +4307,10 @@ useEffect(() => {
         return;
       }
 
-      const stats = data || {};
+      // 🔧 Supabase возвращает jsonb как массив с одним объектом:
+      //    [{ get_company_data_stats: { objects, photos, ... } }]
+      const raw = Array.isArray(data) ? data[0] : data;
+      const stats = raw?.get_company_data_stats || raw || {};
 
       setDataStats({
         objects:     stats.objects      ?? 0,
