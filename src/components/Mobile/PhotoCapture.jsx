@@ -9,9 +9,9 @@ import { rawSupabase as supabase } from '../../utils/supabaseClient';
 // ============================================================
 const BUCKET_NAME = 'material-photos';
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-const MAX_DIMENSION = 1920; // px по длинной стороне
+const MAX_DIMENSION = 1920;             // px по длинной стороне
 const JPEG_QUALITY = 0.85;
-const UPLOAD_TIMEOUT_MS = 30000; // 30 сек на файл
+const UPLOAD_TIMEOUT_MS = 60000;        // 60 сек (Vercel cold start бывает долгим)
 
 // ============================================================
 // 🛠️ ХЕЛПЕРЫ
@@ -23,7 +23,6 @@ const UPLOAD_TIMEOUT_MS = 30000; // 30 сек на файл
  */
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
-    // Если это не изображение — вернуть как есть
     if (!file.type.startsWith('image/')) {
       reject(new Error('Файл не является изображением'));
       return;
@@ -36,7 +35,6 @@ const compressImage = (file) => {
 
       img.onload = () => {
         try {
-          // Вычисляем новые размеры, сохраняя пропорции
           let { width, height } = img;
           if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
             if (width > height) {
@@ -61,6 +59,12 @@ const compressImage = (file) => {
                 reject(new Error('Не удалось сжать изображение'));
                 return;
               }
+              console.log('🗜️ [compressImage] compressed:', {
+                originalSize: file.size,
+                compressedSize: blob.size,
+                ratio: (blob.size / file.size * 100).toFixed(1) + '%',
+                dimensions: `${width}×${height}`,
+              });
               resolve(blob);
             },
             'image/jpeg',
@@ -92,13 +96,80 @@ const generateFileName = (index) => {
 /**
  * Обёртка над upload с таймаутом.
  */
-const uploadWithTimeout = async (uploadPromise, timeoutMs) => {
+const uploadWithTimeout = (uploadPromise, timeoutMs) => {
   return Promise.race([
     uploadPromise,
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Превышено время загрузки (30 сек)')), timeoutMs)
+      setTimeout(
+        () => reject(new Error(`Превышено время загрузки (${Math.round(timeoutMs / 1000)} сек)`)),
+        timeoutMs
+      )
     ),
   ]);
+};
+
+/**
+ * Fallback: загрузка напрямую через fetch в Storage REST API.
+ * Используется, если SDK-клиент молча висит.
+ */
+const uploadViaFetch = async (filePath, blob) => {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Отсутствуют VITE_SUPABASE_URL или VITE_SUPABASE_ANON_KEY');
+  }
+
+  // Получаем access_token авторизованной сессии
+  let accessToken = supabaseKey;
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (data?.session?.access_token) {
+      accessToken = data.session.access_token;
+    }
+  } catch (e) {
+    console.warn('[uploadViaFetch] getSession failed, using anon key:', e.message);
+  }
+
+  const url = `${supabaseUrl}/storage/v1/object/${BUCKET_NAME}/${filePath}`;
+
+  console.log('🌐 [uploadViaFetch] POST', url);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': blob.type || 'image/jpeg',
+        'x-upsert': 'true',
+        'cache-control': '3600',
+      },
+      body: blob,
+      signal: controller.signal,
+    });
+
+    const text = await response.text();
+    let json;
+    try { json = JSON.parse(text); } catch { json = { raw: text }; }
+
+    console.log('🌐 [uploadViaFetch] response:', {
+      status: response.status,
+      ok: response.ok,
+      body: json,
+    });
+
+    if (!response.ok) {
+      throw new Error(json.message || json.error || `HTTP ${response.status}`);
+    }
+
+    return { path: filePath, ...json };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 };
 
 // ============================================================
@@ -114,12 +185,13 @@ const PhotoCapture = ({
   materialIndex,
   companyId,
   // eslint-disable-next-line no-unused-vars
-  userId = null,  // оставлен для совместимости с App.jsx
+  userId = null,
 }) => {
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, fileName: '' });
   const [error, setError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
   const fileInputRef = useRef(null);
   const isMountedRef = useRef(true);
 
@@ -130,6 +202,31 @@ const PhotoCapture = ({
       isMountedRef.current = false;
     };
   }, []);
+
+  // ─── Первичная диагностика ─────────────────────────────
+  useEffect(() => {
+    const info = {
+      supabase: typeof supabase,
+      storage: typeof supabase?.storage,
+      storageFrom: typeof supabase?.storage?.from,
+      companyId: companyId || '❌ missing',
+      applicationId: applicationId || '❌ missing',
+      materialIndex: materialIndex ?? 'null',
+      bucket: BUCKET_NAME,
+      env: {
+        url: import.meta.env.VITE_SUPABASE_URL ? '✓' : '✗',
+        key: import.meta.env.VITE_SUPABASE_ANON_KEY ? '✓' : '✗',
+      },
+    };
+    console.log('🔍 [PhotoCapture] diagnostics:', info);
+    setDebugInfo(info);
+
+    if (!supabase) {
+      setError('❌ Supabase не инициализирован');
+    } else if (!supabase.storage || typeof supabase.storage.from !== 'function') {
+      setError('❌ Supabase Storage недоступен (проверьте импорт)');
+    }
+  }, [companyId, applicationId, materialIndex]);
 
   // ─── Уведомления ───────────────────────────────────────
   const showNotification = useCallback(
@@ -163,7 +260,7 @@ const PhotoCapture = ({
     }
   }, [showNotification]);
 
-  // ─── Добавление фото (общий хелпер) ────────────────────
+  // ─── Добавление фото ───────────────────────────────────
   const addPhotos = useCallback(
     async (files) => {
       setError(null);
@@ -190,7 +287,6 @@ const PhotoCapture = ({
           continue;
         }
 
-        // Превью для UI
         const previewUrl = await new Promise((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result);
@@ -198,11 +294,12 @@ const PhotoCapture = ({
         });
 
         newPhotos.push({
-          preview: previewUrl, // для превью в UI
+          preview: previewUrl,
           file,
           uploaded: false,
           url: null,
           name: file.name,
+          size: file.size,
         });
       }
 
@@ -214,7 +311,6 @@ const PhotoCapture = ({
   // ─── Съёмка через камеру ───────────────────────────────
   const capturePhoto = useCallback(async () => {
     setError(null);
-
     const hasPermission = await checkCameraPermission();
     if (!hasPermission) return;
 
@@ -244,178 +340,202 @@ const PhotoCapture = ({
     [addPhotos]
   );
 
-  // ─── 🔥 ЗАГРУЗКА В SUPABASE STORAGE ────────────────────
+  // ─── 🔥 ЗАГРУЗКА ОДНОГО ФАЙЛА (SDK + fallback fetch) ───
+  const uploadOneFile = useCallback(async (photo, index) => {
+    console.log(`📤 [uploadOneFile] #${index}`, {
+      name: photo.name,
+      size: photo.size,
+      sizeKB: (photo.size / 1024).toFixed(1),
+    });
+
+    // 1. Сжимаем
+    const compressedBlob = await compressImage(photo.file);
+
+    // 2. Путь
+    const fileName = generateFileName(index);
+    const filePath = `photos/company_${companyId}/app_${applicationId || 'temp'}/material_${materialIndex ?? 0}/${fileName}`;
+
+    console.log('📁 [uploadOneFile] path:', filePath);
+
+    // 3. Пытаемся через SDK
+    let publicUrl = null;
+    let sdkError = null;
+
+    try {
+      const uploadPromise = supabase.storage
+        .from(BUCKET_NAME)
+        .upload(filePath, compressedBlob, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: 'image/jpeg',
+        });
+
+      const { data: uploadData, error: uploadError } = await uploadWithTimeout(
+        uploadPromise,
+        UPLOAD_TIMEOUT_MS
+      );
+
+      console.log('📥 [uploadOneFile] SDK result:', { uploadData, uploadError });
+
+      if (uploadError) {
+        sdkError = uploadError;
+      } else if (uploadData?.path) {
+        const { data: urlData } = supabase.storage
+          .from(BUCKET_NAME)
+          .getPublicUrl(uploadData.path);
+
+        if (urlData?.publicUrl) {
+          publicUrl = urlData.publicUrl;
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ [uploadOneFile] SDK threw:', err);
+      sdkError = err;
+    }
+
+    // 4. Если SDK не сработал — fallback через fetch
+    if (!publicUrl) {
+      console.warn('🔄 [uploadOneFile] SDK failed, trying fetch fallback. Reason:', sdkError?.message);
+      try {
+        await uploadViaFetch(filePath, compressedBlob);
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+        publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${filePath}`;
+        console.log('✅ [uploadOneFile] fetch fallback OK:', publicUrl);
+      } catch (fallbackErr) {
+        console.error('❌ [uploadOneFile] fetch fallback failed:', fallbackErr);
+        throw new Error(
+          `SDK: ${sdkError?.message || 'unknown'} | fetch: ${fallbackErr.message}`
+        );
+      }
+    }
+
+    console.log('🎉 [uploadOneFile] done:', publicUrl);
+    return publicUrl;
+  }, [companyId, applicationId, materialIndex]);
+
+  // ─── 🔥 ЗАГРУЗКА ВСЕХ ФОТО ─────────────────────────────
   const uploadPhotos = useCallback(
-  async (photosToUpload) => {
-    if (!photosToUpload || photosToUpload.length === 0) {
-      return [];
-    }
+    async (photosToUpload) => {
+      console.log('🚀 [uploadPhotos] START', {
+        count: photosToUpload?.length,
+        companyId,
+        applicationId,
+        materialIndex,
+        supabaseType: typeof supabase,
+        storageFromType: typeof supabase?.storage?.from,
+      });
 
-    // 🛡️ РАННЯЯ ВАЛИДАЦИЯ
-    if (!companyId) {
-      setError('❌ Не удалось определить компанию');
-      showNotification('Не удалось определить компанию', 'error');
-      return [];
-    }
+      if (!photosToUpload || photosToUpload.length === 0) return [];
 
-    if (!supabase) {
-      setError('❌ Сервер не настроен. Обратитесь к администратору.');
-      showNotification('Ошибка подключения к серверу', 'error');
-      return [];
-    }
+      if (!companyId) {
+        setError('❌ Не удалось определить компанию');
+        showNotification('Не удалось определить компанию', 'error');
+        return [];
+      }
 
-    // 🛡️ Проверка, что storage доступен (защита от Proxy-багов)
-    if (!supabase.storage || typeof supabase.storage.from !== 'function') {
-      setError('❌ Хранилище недоступно. Обратитесь к администратору.');
-      showNotification('Ошибка: хранилище не инициализировано', 'error');
-      console.error('[PhotoCapture] supabase.storage is', supabase.storage);
-      return [];
-    }
+      if (!supabase) {
+        setError('❌ Сервер не настроен');
+        showNotification('Ошибка подключения к серверу', 'error');
+        return [];
+      }
 
-    setUploading(true);
-      setUploadProgress({ current: 0, total: photosToUpload.length });
+      if (!supabase.storage || typeof supabase.storage.from !== 'function') {
+        console.error('❌ [uploadPhotos] supabase.storage broken:', supabase.storage);
+        setError('❌ Хранилище недоступно');
+        showNotification('Ошибка: хранилище не инициализировано', 'error');
+        return [];
+      }
+
+      setUploading(true);
       setError(null);
 
       const uploadedUrls = [];
 
-      try {
-        for (let i = 0; i < photosToUpload.length; i++) {
-          const photo = photosToUpload[i];
-          setUploadProgress({ current: i + 1, total: photosToUpload.length });
+      for (let i = 0; i < photosToUpload.length; i++) {
+        const photo = photosToUpload[i];
+        setUploadProgress({
+          current: i + 1,
+          total: photosToUpload.length,
+          fileName: photo.name || `фото #${i + 1}`,
+        });
 
-          try {
-            // 1. Сжимаем фото
-            const compressedBlob = await compressImage(photo.file);
+        try {
+          const url = await uploadOneFile(photo, i);
+          uploadedUrls.push(url);
 
-            // 2. Формируем путь
-            const fileName = generateFileName(i);
-            const filePath = `photos/company_${companyId}/app_${applicationId || 'temp'}/material_${materialIndex ?? 0}/${fileName}`;
-
-            // 3. Загружаем в Storage с таймаутом
-            const uploadPromise = supabase.storage
-              .from(BUCKET_NAME)
-              .upload(filePath, compressedBlob, {
-                cacheControl: '3600',
-                upsert: true, // разрешаем перезапись
-                contentType: 'image/jpeg',
-              });
-
-            const { data: uploadData, error: uploadError } = await uploadWithTimeout(
-              uploadPromise,
-              UPLOAD_TIMEOUT_MS
+          if (isMountedRef.current) {
+            setPhotos((prev) =>
+              prev.map((p) =>
+                p.file === photo.file ? { ...p, uploaded: true, url } : p
+              )
             );
-
-            // 4. Обрабатываем ошибку upload ЯВНО (без base64-fallback!)
-            if (uploadError) {
-              const errMsg = uploadError.message || 'неизвестная ошибка';
-              console.error(`[PhotoCapture] Upload failed for ${fileName}:`, uploadError);
-
-              if (errMsg.includes('Bucket not found')) {
-                throw new Error(`Bucket "${BUCKET_NAME}" не найден в Supabase Storage`);
-              }
-              if (errMsg.includes('row-level security') || errMsg.includes('policy')) {
-                throw new Error('Нет прав на загрузку. Проверьте RLS-политики для Storage.');
-              }
-              if (errMsg.includes('Payload too large') || errMsg.includes('too large')) {
-                throw new Error('Файл слишком большой. Максимум 10 МБ.');
-              }
-              throw new Error(`Ошибка загрузки: ${errMsg}`);
-            }
-
-            if (!uploadData?.path) {
-              throw new Error('Сервер не вернул путь к файлу');
-            }
-
-            // 5. Получаем публичный URL
-            const { data: urlData } = supabase.storage
-              .from(BUCKET_NAME)
-              .getPublicUrl(uploadData.path);
-
-            if (!urlData?.publicUrl) {
-              throw new Error('Не удалось получить публичный URL');
-            }
-
-            uploadedUrls.push(urlData.publicUrl);
-
-            // 6. Обновляем состояние фото
-            if (isMountedRef.current) {
-              setPhotos((prev) =>
-                prev.map((p) =>
-                  p.file === photo.file
-                    ? { ...p, uploaded: true, url: urlData.publicUrl }
-                    : p
-                )
-              );
-            }
-          } catch (fileErr) {
-            console.error(`[PhotoCapture] Ошибка файла #${i + 1}:`, fileErr);
-            // Прерываем всю загрузку — не оставляем частично
-            setError(`❌ ${fileErr.message}`);
-            showNotification(`Ошибка загрузки: ${fileErr.message}`, 'error');
-            setUploading(false);
-            setUploadProgress({ current: 0, total: 0 });
-            return uploadedUrls; // вернём то, что успели
           }
-        }
-
-        // 7. Успех
-        if (uploadedUrls.length > 0) {
-          showNotification(`✅ Загружено ${uploadedUrls.length} фото`, 'success');
-        }
-
-        return uploadedUrls;
-      } catch (err) {
-        console.error('[PhotoCapture] Upload critical error:', err);
-        setError(`❌ ${err.message || 'Ошибка загрузки'}`);
-        showNotification('Ошибка загрузки фото', 'error');
-        return uploadedUrls;
-      } finally {
-        if (isMountedRef.current) {
+        } catch (fileErr) {
+          console.error(`❌ [uploadPhotos] file #${i + 1} failed:`, fileErr);
+          setError(`❌ ${fileErr.message}`);
+          showNotification(`Ошибка загрузки: ${fileErr.message}`, 'error');
           setUploading(false);
-          setUploadProgress({ current: 0, total: 0 });
+          setUploadProgress({ current: 0, total: 0, fileName: '' });
+          return uploadedUrls;
         }
       }
+
+      if (uploadedUrls.length > 0) {
+        showNotification(`✅ Загружено ${uploadedUrls.length} фото`, 'success');
+      }
+
+      setUploading(false);
+      setUploadProgress({ current: 0, total: 0, fileName: '' });
+      return uploadedUrls;
     },
-    [companyId, applicationId, materialIndex, showNotification]
+    [companyId, applicationId, materialIndex, showNotification, uploadOneFile]
   );
 
   // ─── Подтверждение ─────────────────────────────────────
   const confirmPhotos = useCallback(async () => {
-  // 🛡️ Если уже идёт загрузка — не запускаем повторно
-  if (uploading) return;
+    if (uploading) return;
 
-  const notUploaded = photos.filter((p) => !p.uploaded);
+    console.log('✔️ [confirmPhotos] clicked. photos:', photos.length);
 
-  if (notUploaded.length > 0) {
-    const urls = await uploadPhotos(notUploaded);
-    if (urls.length === 0) return; // ошибка — не закрываем
-  }
+    const notUploaded = photos.filter((p) => !p.uploaded);
 
-  // Собираем URL загруженных фото из state
-  const finalUrls = photos.map((p) => p.url).filter(Boolean);
+    if (notUploaded.length > 0) {
+      const urls = await uploadPhotos(notUploaded);
+      if (urls.length === 0) {
+        console.warn('⚠️ [confirmPhotos] upload returned 0 urls, aborting close');
+        return;
+      }
+    }
 
-  if (finalUrls.length === 0) {
-    setError('Нет загруженных фото');
-    return;
-  }
+    const finalUrls = photos
+      .map((p) => p.url)
+      .filter(Boolean);
 
-  if (typeof onCapture === 'function') {
-    onCapture(multiple ? finalUrls : finalUrls[0]);
-  }
+    // Если после аплоада urls всё ещё пусто (fallback из state)
+    const allUrls = finalUrls.length > 0
+      ? finalUrls
+      : photos.map((p) => p.url).filter(Boolean);
 
-  if (typeof onClose === 'function') {
-    onClose();
-  }
-}, [photos, uploadPhotos, onCapture, onClose, multiple]);
+    if (allUrls.length === 0) {
+      setError('Нет загруженных фото');
+      return;
+    }
+
+    console.log('✅ [confirmPhotos] final urls:', allUrls);
+
+    if (typeof onCapture === 'function') {
+      onCapture(multiple ? allUrls : allUrls[0]);
+    }
+    if (typeof onClose === 'function') {
+      onClose();
+    }
+  }, [photos, uploadPhotos, onCapture, onClose, multiple, uploading]);
 
   // ─── Удаление фото ─────────────────────────────────────
-  const removePhoto = useCallback(
-    (index) => {
-      setPhotos((prev) => prev.filter((_, i) => i !== index));
-      setError(null);
-    },
-    []
-  );
+  const removePhoto = useCallback((index) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+    setError(null);
+  }, []);
 
   // ─── Очистка ───────────────────────────────────────────
   const clearAll = useCallback(() => {
@@ -442,6 +562,17 @@ const PhotoCapture = ({
           : 'Общая фотофиксация'}
       </h3>
 
+      {/* Диагностика */}
+      {debugInfo && (
+        <div className="mb-3 px-3 py-2 bg-blue-500/10 border border-blue-500/30 rounded text-blue-200 text-xs font-mono max-w-md">
+          <div>supabase: {debugInfo.supabase}</div>
+          <div>storage: {debugInfo.storage} / from: {debugInfo.storageFrom}</div>
+          <div>companyId: {debugInfo.companyId}</div>
+          <div>appId: {debugInfo.applicationId} | material: {debugInfo.materialIndex}</div>
+          <div>env: url {debugInfo.env.url}, key {debugInfo.env.key}</div>
+        </div>
+      )}
+
       {error && (
         <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-300 text-sm max-w-md text-center">
           {error}
@@ -454,9 +585,16 @@ const PhotoCapture = ({
             <Loader2 className="w-12 h-12 text-white animate-spin mx-auto mb-4" />
             <p className="text-white text-lg">Загрузка фото...</p>
             {uploadProgress.total > 0 && (
-              <p className="text-gray-400 text-sm mt-1">
-                {uploadProgress.current} / {uploadProgress.total}
-              </p>
+              <>
+                <p className="text-gray-400 text-sm mt-1">
+                  {uploadProgress.current} / {uploadProgress.total}
+                </p>
+                {uploadProgress.fileName && (
+                  <p className="text-gray-500 text-xs mt-1 max-w-xs truncate">
+                    {uploadProgress.fileName}
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -471,7 +609,7 @@ const PhotoCapture = ({
                 alt={`Фото ${idx + 1}`}
                 className="w-28 h-28 object-cover rounded-lg shadow-md"
               />
-              {!photo.uploaded && (
+              {!photo.uploaded && uploading && (
                 <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
                   <Loader2 className="w-6 h-6 text-white animate-spin" />
                 </div>
