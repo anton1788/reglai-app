@@ -4289,6 +4289,7 @@ const engagementMetrics = useMemo(() => {
 }, [applications, allApplications, isAdminMode]);
 
 // 🆕 ЗАГРУЗКА DATA STATS для баннера лимитов и FeatureGate
+//    Этап 2, п. A: один RPC-вызов вместо 5 отдельных запросов
 useEffect(() => {
   const loadDataStats = async () => {
     if (!userCompanyId || !user?.id) return;
@@ -4297,67 +4298,26 @@ useEffect(() => {
     if (!cleanId) return;
 
     try {
-      // 1. Объекты (уникальные имена в заявках, без удалённых)
-      const { data: apps } = await supabase
-        .from('applications')
-        .select('object_name')
-        .eq('company_id', cleanId)
-        .or('is_deleted.is.null,is_deleted.eq.false');
+      const { data, error } = await supabase.rpc('get_company_data_stats', {
+        p_company_id: cleanId,
+      });
 
-      const objectsCount = new Set(
-        (apps || []).map(a => a.object_name).filter(Boolean)
-      ).size;
+      if (error) {
+        console.warn('[DataStats] RPC error:', error);
+        return;
+      }
 
-      // 2. Фото (work_photos)
-      const { count: photosCount } = await supabase
-        .from('work_photos')
-        .select('*', { count: 'exact', head: true })
-        .in('application_id',
-          (apps || []).length > 0
-            ? (await supabase
-                .from('applications')
-                .select('id')
-                .eq('company_id', cleanId)
-              ).data?.map(a => a.id) || []
-            : []
-        );
-
-      // 3. Поставщики (не архивные)
-      const { count: suppliersCount } = await supabase
-        .from('suppliers')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', cleanId)
-        .neq('status', 'archived');
-
-      // 4. Пользователи
-      const { count: usersCount } = await supabase
-        .from('company_users')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', cleanId)
-        .eq('is_active', true);
-
-      // 5. Позиции справочника цен
-      const { count: pricesCount } = await supabase
-        .from('material_prices')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', cleanId)
-        .eq('is_active', true);
+      const stats = data || {};
 
       setDataStats({
-        objects: objectsCount,
-        photos: photosCount || 0,
-        suppliers: suppliersCount || 0,
-        users: usersCount || 0,
-        pricesCount: pricesCount || 0,
+        objects:     stats.objects      ?? 0,
+        photos:      stats.photos       ?? 0,
+        suppliers:   stats.suppliers    ?? 0,
+        users:       stats.users        ?? 0,
+        pricesCount: stats.prices_count ?? 0,
       });
 
-      console.log('📊 [DataStats] загружено:', {
-        objects: objectsCount,
-        photos: photosCount || 0,
-        suppliers: suppliersCount || 0,
-        users: usersCount || 0,
-        pricesCount: pricesCount || 0,
-      });
+      console.log('📊 [DataStats] загружено через RPC:', stats);
     } catch (err) {
       console.warn('[DataStats] ошибка загрузки:', err);
     }
