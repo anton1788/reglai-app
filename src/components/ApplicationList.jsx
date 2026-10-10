@@ -304,6 +304,7 @@ const MobileApplicationCard = memo(({
   onOpenPriceEditor,
   onCloseReturns,
   onReopenReturns,
+  workPhotos = {},   // ← добавить
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(false);
@@ -411,16 +412,33 @@ const MobileApplicationCard = memo(({
                 <ChevronDown className={`w-4 h-4 transition-transform ${materialsExpanded ? 'rotate-180' : ''}`} />
               </button>
 
-              {materialsExpanded && (
+                            {materialsExpanded && (
                 <div className="space-y-2 max-h-52 overflow-y-auto scrollable-content bg-gray-50 dark:bg-gray-700/30 rounded-xl p-2">
                   {visibleMaterials.slice(0, 10).map((m, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-sm py-2 px-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-                      <span className="text-gray-700 dark:text-gray-300 truncate flex-1 mr-2 font-medium">
-                        {m.description || '—'}
-                      </span>
-                      <span className="text-gray-500 flex-shrink-0 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
-                        {m.quantity} {m.unit}
-                      </span>
+                    <div key={idx} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                      <div className="flex items-center justify-between text-sm py-2 px-3">
+                        <span className="text-gray-700 dark:text-gray-300 truncate flex-1 mr-2 font-medium">
+                          {m.description || '—'}
+                        </span>
+                        <span className="text-gray-500 flex-shrink-0 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
+                          {m.quantity} {m.unit}
+                        </span>
+                      </div>
+                      {/* 🆕 ФОТО МАТЕРИАЛА */}
+                      {Array.isArray(m.photos) && m.photos.length > 0 && (
+                        <div className="flex gap-1.5 flex-wrap px-3 pb-2">
+                          {m.photos.map((url, i) => (
+                            <img
+                              key={i}
+                              src={url}
+                              alt={`${m.description} — фото ${i + 1}`}
+                              loading="lazy"
+                              onClick={(e) => { e.stopPropagation(); window.open(url, '_blank'); }}
+                              className="w-14 h-14 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-105 transition-transform"
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                   {visibleMaterials.length > 10 && (
@@ -430,6 +448,28 @@ const MobileApplicationCard = memo(({
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+                    {/* 🆕 ФОТО ИЗ work_photos (fallback, если нет в materials) */}
+          {Array.isArray(workPhotos[application.id]) && workPhotos[application.id].length > 0 && (
+            <div className="mt-3">
+              <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+                <Camera className="w-4 h-4 text-purple-500" />
+                Фото ({workPhotos[application.id].length})
+              </h4>
+              <div className="flex gap-2 flex-wrap">
+                {workPhotos[application.id].map((p, i) => (
+                  <img
+                    key={p.id || i}
+                    src={p.photo_url}
+                    alt={`Фото ${i + 1}`}
+                    loading="lazy"
+                    onClick={() => window.open(p.photo_url, '_blank')}
+                    className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-105 transition-transform"
+                  />
+                ))}
+              </div>
             </div>
           )}
 
@@ -618,6 +658,7 @@ const DesktopApplicationRow = memo(({
   onOpenPriceEditor,
   onCloseReturns,
   onReopenReturns,
+  workPhotos = {},
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
@@ -906,10 +947,27 @@ const DesktopApplicationRow = memo(({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700/30">
-                      {visibleMaterials.map((m, idx) => (
+                                            {visibleMaterials.map((m, idx) => (
                         <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors">
                           <td className="px-3 py-1.5 text-xs text-gray-400">{idx + 1}</td>
-                          <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{m.description || '—'}</td>
+                          <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">
+                            <div>{m.description || '—'}</div>
+                            {/* 🆕 ФОТО МАТЕРИАЛА */}
+                            {Array.isArray(m.photos) && m.photos.length > 0 && (
+                              <div className="flex gap-1 flex-wrap mt-1">
+                                {m.photos.map((url, i) => (
+                                  <img
+                                    key={i}
+                                    src={url}
+                                    alt={`Фото ${i + 1}`}
+                                    loading="lazy"
+                                    onClick={(e) => { e.stopPropagation(); window.open(url, '_blank'); }}
+                                    className="w-10 h-10 object-cover rounded border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-110 transition-transform"
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </td>
                           <td className="px-3 py-1.5 text-right font-medium">{m.quantity}</td>
                           <td className="px-3 py-1.5 text-gray-500">{m.unit || 'шт'}</td>
                           <td className="px-3 py-1.5">
@@ -936,6 +994,28 @@ const DesktopApplicationRow = memo(({
                   </table>
                 </div>
               )}
+            </div>
+          )}
+
+                    {/* 🆕 ФОТО ИЗ work_photos (fallback, если нет в materials) */}
+          {Array.isArray(workPhotos[application.id]) && workPhotos[application.id].length > 0 && (
+            <div className="mt-3">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+                <Camera className="w-4 h-4 text-purple-500" />
+                Фото ({workPhotos[application.id].length})
+              </h4>
+              <div className="flex gap-2 flex-wrap">
+                {workPhotos[application.id].map((p, i) => (
+                  <img
+                    key={p.id || i}
+                    src={p.photo_url}
+                    alt={`Фото ${i + 1}`}
+                    loading="lazy"
+                    onClick={() => window.open(p.photo_url, '_blank')}
+                    className="w-14 h-14 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-105 transition-transform"
+                  />
+                ))}
+              </div>
             </div>
           )}
 
@@ -1074,7 +1154,8 @@ const ApplicationList = memo(({
   comments = {},
   showComments = {},
   isLoading = false,
-  statusCounts: statusCountsProp
+  statusCounts: statusCountsProp,
+  workPhotos = {},   // ← добавить
 }) => {
   const { ref: loadMoreRef, inView } = useInView({
     threshold: 0.1,
@@ -1350,6 +1431,7 @@ const ApplicationList = memo(({
                 onOpenPriceEditor={onOpenPriceEditor}
                 onCloseReturns={onCloseReturns}
                 onReopenReturns={onReopenReturns}
+                workPhotos={workPhotos}
               />
             ))}
           </div>
@@ -1563,6 +1645,7 @@ const ApplicationList = memo(({
                   onOpenPriceEditor={onOpenPriceEditor}
                   onCloseReturns={onCloseReturns}
                   onReopenReturns={onReopenReturns}
+                  workPhotos={workPhotos}
                 />
               ))}
             </div>

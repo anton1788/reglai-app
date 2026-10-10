@@ -1253,10 +1253,12 @@ const [showInteractiveTour, setShowInteractiveTour] = useState(false);
   const [hasLoadedDrafts, setHasLoadedDrafts] = useState(false);
   const [analyticsDetailType, setAnalyticsDetailType] = useState(null);
   // 📸 Photo Capture States
+  // 📸 Photo Capture States
 const [showPhotoCapture, setShowPhotoCapture] = useState(false);
 const [showQRScanner, setShowQRScanner] = useState(false);
 const [activeMaterialIndex, setActiveMaterialIndex] = useState(null);
 const [capturedPhotos, setCapturedPhotos] = useState({}); // { [appId-materialIdx]: [urls] }
+const [workPhotos, setWorkPhotos] = useState({}); // 🆕 { [applicationId]: [photo, ...] }
   // ✅ Отключить правило только для этой строки
 // eslint-disable-next-line no-unused-vars
   const [isExportingSection, setIsExportingSection] = useState({ html: false, xlsx: false, pdf: false });
@@ -2844,6 +2846,8 @@ const checkForUpdates = useCallback(async () => {
   setCurrentView('create');
   // 🔧 Очищаем все заявки компании (для мерджера и других мест)
   setAllCompanyApplications([]);
+  setWorkPhotos({});          // ← 🆕
+  setCapturedPhotos({}); 
 };
 
   // ─────────────────────────────────────────────────────────
@@ -4407,12 +4411,23 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
 
     console.log('✅ [RECEIVE] Успешно:', data);
 
-    // ✅ 2. Обновляем локальный стейт заявки
-    setApplications(prev => prev.map(app =>
-      app.id === application.id
-        ? { ...app, status: data.status, materials: data.materials }
-        : app
-    ));
+        // ✅ 2. Обновляем локальный стейт заявки — СОХРАНЯЕМ photos из старых materials
+    setApplications(prev => prev.map(app => {
+      if (app.id !== application.id) return app;
+
+      // Мержим пришедшие из RPC материалы со старыми photos
+      const mergedMaterials = (data.materials || []).map(newMat => {
+        const oldMat = (app.materials || []).find(
+          o => (o.description || o.item_name) === (newMat.description || newMat.item_name)
+        );
+        return {
+          ...newMat,
+          photos: Array.isArray(oldMat?.photos) ? oldMat.photos : (newMat.photos || []),
+        };
+      });
+
+      return { ...app, status: data.status, materials: mergedMaterials };
+    }));
 
     // Инвалидируем кэш
     cacheManager.delete('applications', `applications_${cleanCompanyId}_page_1`);
@@ -4751,12 +4766,12 @@ const handleSendToMaster = useCallback(async (itemsToSend, application, recipien
 // ============================================================
 const handleMasterConfirm = useCallback(async (localMaterialsFromModal, application) => {
   console.log('✅ handleMasterConfirm вызван');
-  
+
   if (!application?.id) {
     showNotification('Ошибка: заявка не найдена', 'error');
     return { success: false };
   }
-  
+
   try {
     // ============================================================
     // ✅ ШАГ 1: Обновляем материалы с защитой от уменьшения
@@ -4765,6 +4780,11 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
       const original = application.materials.find(o =>
         (o.description || o.item_name) === (m.description || m.item_name)
       );
+
+      // 🔧 СОХРАНЯЕМ photos (JSONB), иначе они теряются при пересборке
+      const photos = Array.isArray(m.photos)
+        ? m.photos
+        : (Array.isArray(original?.photos) ? original.photos : []);
 
       const previousReceived = Number(original?.received) || 0;
       const newReceived = Number(m.received) || 0;
@@ -4776,8 +4796,9 @@ const handleMasterConfirm = useCallback(async (localMaterialsFromModal, applicat
       const sentToMaster = Number(m.sent_to_master_quantity) || 0;
       const safeReceived = Math.min(finalReceived, sentToMaster);
 
-      return {
+            return {
         ...m,
+        photos,   // ← СОХРАНЯЕМ ФОТО
         received: safeReceived,
         supplier_received_quantity: Number(m.supplier_received_quantity) || 0,
         sent_to_master_quantity: sentToMaster,
@@ -5622,6 +5643,23 @@ if (allAppsError) {
       setComments(commentsMap);
     } else {
       setComments({});
+    }
+
+        // 🆕 Загружаем work_photos для отображения галереи
+    if (userApps.length > 0) {
+      const appIds = userApps.map(app => app.id);
+      const { data: workPhotosData = [] } = await supabase
+        .from('work_photos')
+        .select('*')
+        .in('application_id', appIds);
+
+      const photosMap = {};
+      workPhotosData.forEach(p => {
+        if (!p.application_id) return;
+        if (!photosMap[p.application_id]) photosMap[p.application_id] = [];
+        photosMap[p.application_id].push(p);
+      });
+      setWorkPhotos(photosMap);
     }
 
     if (isAdminMode) {
@@ -8429,9 +8467,12 @@ if (inviteParam) {
       language={language}
       showNotification={showNotification}
       handleSubmit={handleSubmit}
-      onAddPhoto={(materialIndex) => {
-        setActiveMaterialIndex(materialIndex);
-        setShowPhotoCapture(true);
+            onAddPhoto={(materialIndex) => {
+        // 🛑 Фото к заявке можно добавлять только после её сохранения
+        showNotification(
+          '📸 Сохраните заявку, затем добавьте фото через карточку заявки',
+          'info'
+        );
       }}
       handleObjectInput={handleObjectInput}
       handlePhoneChange={handlePhoneChange}
@@ -8625,6 +8666,7 @@ if (inviteParam) {
             isExportingPDF={isExportingPDF}
             isExportingXLSX={isExportingXLSX}
             onOpenPriceEditor={openPriceEditor}
+            workPhotos={workPhotos}
           />
         )}
         
@@ -8784,6 +8826,7 @@ onClearFilters={handleClearFilters}
       isExportingPDF={isExportingPDF}
       isExportingXLSX={isExportingXLSX}
       onOpenPriceEditor={openPriceEditor}
+      workPhotos={workPhotos}
     />
   </>
 )}
@@ -8846,6 +8889,7 @@ onClearFilters={handleClearFilters}
             isExportingPDF={isExportingPDF}
             isExportingXLSX={isExportingXLSX}
             onOpenPriceEditor={openPriceEditor}
+            workPhotos={workPhotos}
           />
         )}
         
@@ -8900,6 +8944,7 @@ onClearFilters={handleClearFilters}
             isExportingPDF={isExportingPDF}
             isExportingXLSX={isExportingXLSX}
             onOpenPriceEditor={openPriceEditor}
+            workPhotos={workPhotos}
           />
         )}
 
@@ -8962,6 +9007,7 @@ onClearFilters={handleClearFilters}
     isExportingPDF={isExportingPDF}
     isExportingXLSX={isExportingXLSX}
     onOpenPriceEditor={openPriceEditor}
+    workPhotos={workPhotos}
   />
 )}
         
@@ -9767,6 +9813,7 @@ onClearFilters={handleClearFilters}
             isExportingPDF={isExportingPDF}
             isExportingXLSX={isExportingXLSX}
             onOpenPriceEditor={openPriceEditor}
+            workPhotos={workPhotos}
         />
     </div>
 )}
@@ -10094,10 +10141,9 @@ onClearFilters={handleClearFilters}
       )}
       
             {/* Photo Capture Modal */}
-      {showPhotoCapture && (
+            {showPhotoCapture && (
         <PhotoCapture
           onCapture={async (urls) => {
-            // Нормализуем: массив или строка
             const urlList = Array.isArray(urls) ? urls : [urls].filter(Boolean);
 
             if (urlList.length === 0) {
@@ -10105,20 +10151,25 @@ onClearFilters={handleClearFilters}
               return;
             }
 
-            // 1. Обновляем локальный state превью
-            if (selectedApplication?.id && activeMaterialIndex !== null) {
-              const key = `${selectedApplication.id}-${activeMaterialIndex}`;
+            // 1. Локальный state превью
+            if (selectedApplication?.id) {
+              const key = `${selectedApplication.id}-${activeMaterialIndex ?? 'all'}`;
               setCapturedPhotos(prev => ({
                 ...prev,
                 [key]: [...(prev[key] || []), ...urlList]
               }));
             }
 
-            // 2. Сохраняем в applications.materials[i].photos (JSONB)
-            if (selectedApplication?.id && activeMaterialIndex !== null) {
+            // 2. Записываем в applications.materials[].photos (JSONB)
+            if (selectedApplication?.id) {
               try {
+                const hasExplicitIndex =
+                  activeMaterialIndex !== null && activeMaterialIndex !== undefined;
+
                 const updatedMaterials = (selectedApplication.materials || []).map((m, idx) => {
-                  if (idx !== activeMaterialIndex) return m;
+                  // Если индекс задан — пишем только в него
+                  if (hasExplicitIndex && idx !== activeMaterialIndex) return m;
+                  // Если индекс НЕ задан — пишем во все материалы (или можно в первый)
                   const existingPhotos = Array.isArray(m.photos) ? m.photos : [];
                   return { ...m, photos: [...existingPhotos, ...urlList] };
                 });
@@ -10133,6 +10184,7 @@ onClearFilters={handleClearFilters}
 
                 if (updErr) {
                   console.warn('[App] Не удалось обновить materials:', updErr);
+                  showNotification('⚠️ Фото в Storage, но не привязаны к заявке', 'warning');
                 } else {
                   setApplications(prev =>
                     prev.map(a =>
@@ -10148,13 +10200,15 @@ onClearFilters={handleClearFilters}
               } catch (err) {
                 console.error('[App] Ошибка сохранения фото в заявку:', err);
               }
+            } else {
+              console.warn('[App] onCapture: selectedApplication.id отсутствует — фото не привязаны к заявке');
             }
 
-            // 3. Сохраняем в work_photos (для клиентского портала)
+            // 3. work_photos — с корректным client_id
             try {
               const rows = urlList.map((url) => ({
                 application_id: selectedApplication?.id || null,
-                client_id: null,
+                client_id: clientId || null,   // ← ИСПРАВЛЕНО
                 photo_url: url,
                 description: null,
                 taken_at: new Date().toISOString(),
