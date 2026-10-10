@@ -3848,36 +3848,171 @@ const { data: lastApp } = await supabase
   // ─────────────────────────────────────────────────────────
   // ❌ CANCEL APPLICATION
   // ─────────────────────────────────────────────────────────
-  const cancelApplication = async (id) => {
-  if (!user) return;
-  if (!window.confirm(t('confirmCancel'))) return;
-  
-  const appToCancel = applications.find(a => a.id === id);
-  if (!appToCancel || appToCancel.user_id !== user?.id) {
-    showNotification('Вы не можете отменить чужую заявку', 'error');
-    return;
-  }
-  
-  // ✅ ПРОСТОЕ РЕШЕНИЕ: помечаем как удалённую, а не удаляем
-  const { error } = await supabase
-    .from('applications')
-    .update({
-      status: 'canceled',
-      updated_at: new Date().toISOString(),
-      deleted_at: new Date().toISOString(),  // запоминаем когда удалили
-      is_deleted: true                        // флаг удаления
-    })
-    .eq('id', id);
-  
-  if (error) {
-    showNotification('Ошибка при отмене заявки', 'error');
-    return;
-  }
-  
-  // Обновляем UI - скрываем заявку
-  setApplications(prev => prev.filter(app => app.id !== id));
-  showNotification('Заявка отменена', 'success');
-};
+    const cancelApplication = async (id) => {
+    if (!user) return;
+    if (!window.confirm(t('confirmCancel'))) return;
+
+    const appToCancel = applications.find(a => a.id === id);
+    if (!appToCancel || appToCancel.user_id !== user?.id) {
+      showNotification('Вы не можете отменить чужую заявку', 'error');
+      return;
+    }
+
+    const cleanCompanyId = getSafeCompanyId(userCompanyId);
+    if (!cleanCompanyId) {
+      showNotification('Ошибка: компания не найдена', 'error');
+      return;
+    }
+
+    // ============================================================
+    // 🆕 ШАГ 1: Собираем ВСЕ пути файлов этой заявки
+    // ============================================================
+    const filesToDelete = new Set();
+
+    // 1.1. Из JSONB materials[].photos
+    (appToCancel.materials || []).forEach(m => {
+      (m.photos || []).forEach(url => {
+        const path = url.split(`/material-photos/`)[1];
+        if (path) filesToDelete.add(path);
+      });
+    });
+
+    // 1.2. Из work_photos
+    try {
+      const { data: wpRows, error: wpErr } = await supabase
+        .from('work_photos')
+        .select('photo_url')
+        .eq('application_id', id);
+
+      if (!wpErr && wpRows) {
+        wpRows.forEach(row => {
+          const path = row.photo_url?.split(`/material-photos/`)[1];
+          if (path) filesToDelete.add(path);
+        });
+      }
+    } catch (e) {
+      console.warn('[cancelApplication] work_photos select failed:', e);
+    }
+
+        // 1.3. Fallback: рекурсивный обход папки заявки в Storage
+    //      (на случай, если ссылки потерялись из БД)
+    //
+    // 🎯 Supabase Storage list() работает так:
+    //    - list(path) → массив { name, id, ... }
+    //    - id === null  → это папка
+    //    - id !== null  → это файл
+    //    Рекурсии нет, обходим вручную (глубина ≤ 2-3 уровня)
+    try {
+      const folderPath = `photos/company_${cleanCompanyId}/app_${id}`;
+
+      const walkStorage = async (path, depth = 0) => {
+        if (depth > 5) return; // 🛡️ защита от бесконечной рекурсии
+
+        const { data: items, error } = await supabase.storage
+          .from('material-photos')
+          .list(path, { limit: 1000 });
+
+        if (error) {
+          console.warn(`[cancelApplication] list(${path}) error:`, error);
+          return;
+        }
+
+        for (const item of items || []) {
+          if (!item.name) continue;
+          const itemPath = `${path}/${item.name}`;
+
+          if (item.id === null) {
+            // 📁 Папка — идём глубже
+            await walkStorage(itemPath, depth + 1);
+          } else {
+            // 📄 Файл — добавляем в список на удаление
+            filesToDelete.add(itemPath);
+          }
+        }
+      };
+
+      await walkStorage(folderPath);
+    } catch (e) {
+      console.warn('[cancelApplication] Storage walk failed:', e);
+    }
+
+    console.log('🗑️ [cancelApplication] files to delete:', Array.from(filesToDelete));
+
+    // ============================================================
+    // 🆕 ШАГ 2: Удаляем файлы из Storage
+    // ============================================================
+    if (filesToDelete.size > 0) {
+      try {
+        const pathsArray = Array.from(filesToDelete);
+        // Supabase remove() работает с массивом до 1000 файлов
+        const { error: rmErr } = await supabase.storage
+          .from('material-photos')
+          .remove(pathsArray);
+
+        if (rmErr) {
+          console.warn('[cancelApplication] Storage remove error:', rmErr);
+          // Не блокируем отмену заявки — файлы можно доудалить позже
+        } else {
+          console.log(`✅ [cancelApplication] deleted ${pathsArray.length} files`);
+        }
+      } catch (e) {
+        console.warn('[cancelApplication] Storage remove exception:', e);
+      }
+    }
+
+    // ============================================================
+    // 🆕 ШАГ 3: Удаляем записи из work_photos
+    // ============================================================
+    try {
+      await supabase
+        .from('work_photos')
+        .delete()
+        .eq('application_id', id);
+    } catch (e) {
+      console.warn('[cancelApplication] work_photos delete failed:', e);
+    }
+
+    // ============================================================
+    // 🆕 ШАГ 4: Помечаем заявку удалённой (soft delete)
+    //           + очищаем JSONB photos
+    // ============================================================
+    const clearedMaterials = (appToCancel.materials || []).map(m => {
+      if (!m.photos || m.photos.length === 0) return m;
+      const { photos, ...rest } = m;
+      return rest;
+    });
+
+    const { error } = await supabase
+      .from('applications')
+      .update({
+        status: 'canceled',
+        updated_at: new Date().toISOString(),
+        deleted_at: new Date().toISOString(),
+        is_deleted: true,
+        materials: clearedMaterials,
+      })
+      .eq('id', id);
+
+    if (error) {
+      showNotification('Ошибка при отмене заявки', 'error');
+      return;
+    }
+
+    // ============================================================
+    // 🆕 ШАГ 5: Обновляем UI
+    // ============================================================
+    setApplications(prev => prev.filter(app => app.id !== id));
+
+    if (filesToDelete.size > 0) {
+      showNotification(`Заявка отменена. Удалено ${filesToDelete.size} фото`, 'success');
+    } else {
+      showNotification('Заявка отменена', 'success');
+    }
+
+    // Инвалидируем кэш
+    cacheManager.delete('applications', `applications_${cleanCompanyId}_page_1`);
+    cacheManager.delete('analytics', `analytics_${cleanCompanyId}_${isAdminMode}`);
+  };
 
   // ─────────────────────────────────────────────────────────
   // 💬 ADD COMMENT
@@ -4342,6 +4477,118 @@ const openReceiveModal = useCallback((application, mode = 'admin_receive') => {
     setActiveMaterialIndex(materialIndex);
     setShowPhotoCapture(true);
   }, [showNotification]);
+
+    // 🆕 ОБРАБОТЧИК: удалить одно фото из заявки
+    const handleDeletePhotoFromApplication = useCallback(async (application, photoUrl) => {
+    if (!application?.id || !photoUrl) {
+      showNotification('Ошибка: не хватает данных для удаления', 'error');
+      return;
+    }
+
+    // 🛡️ Проверка прав: кто может удалять фото
+    //    - снабженец / руководитель / директор — любые фото
+    //    - автор заявки (master / foreman) — только свои
+        const isAdminRole =
+      userRole === 'supply_admin' ||
+      userRole === 'manager' ||
+      userRole === 'director' ||
+      userRole === 'super_admin';
+
+    const isApplicationOwner = application.user_id === user?.id;
+
+    if (!isAdminRole && !isApplicationOwner) {
+      showNotification('У вас нет прав на удаление этого фото', 'error');
+      return;
+    }
+
+    if (!window.confirm('🗑️ Удалить это фото? Действие необратимо.')) {
+      return;
+    }
+
+    const cleanCompanyId = getSafeCompanyId(userCompanyId);
+    if (!cleanCompanyId) return;
+
+    try {
+      // 1. Путь в Storage
+      const storagePath = photoUrl.split(`/material-photos/`)[1];
+
+      // 2. Удаляем из Storage
+      if (storagePath) {
+        const { error: rmErr } = await supabase.storage
+          .from('material-photos')
+          .remove([storagePath]);
+
+        if (rmErr) {
+          console.warn('[handleDeletePhoto] Storage remove error:', rmErr);
+        }
+      }
+
+      // 3. Обновляем JSONB: убираем URL из всех materials[].photos
+      const updatedMaterials = (application.materials || []).map(m => {
+        if (!Array.isArray(m.photos) || m.photos.length === 0) return m;
+        const filtered = m.photos.filter(url => url !== photoUrl);
+        if (filtered.length === m.photos.length) return m; // нечего убирать
+        return { ...m, photos: filtered };
+      });
+
+      // 4. Обновляем applications в БД
+      const { error: updErr } = await supabase
+        .from('applications')
+        .update({
+          materials: updatedMaterials,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', application.id);
+
+      if (updErr) {
+        console.error('[handleDeletePhoto] DB update error:', updErr);
+        showNotification('Ошибка обновления заявки', 'error');
+        return;
+      }
+
+      // 5. Удаляем из work_photos
+      try {
+        await supabase
+          .from('work_photos')
+          .delete()
+          .eq('photo_url', photoUrl);
+      } catch (e) {
+        console.warn('[handleDeletePhoto] work_photos delete failed:', e);
+      }
+
+      // 6. Обновляем UI
+      setApplications(prev =>
+        prev.map(a =>
+          a.id === application.id
+            ? { ...a, materials: updatedMaterials }
+            : a
+        )
+      );
+
+      // Также обновляем workPhotos state (для блока «Фото (N)»)
+      setWorkPhotos(prev => {
+        const current = prev[application.id] || [];
+        const filtered = current.filter(p => p.photo_url !== photoUrl);
+        return { ...prev, [application.id]: filtered };
+      });
+
+      // Если открыта модалка — обновляем и её
+      if (selectedApplication?.id === application.id) {
+        setSelectedApplication(prev =>
+          prev ? { ...prev, materials: updatedMaterials } : prev
+        );
+      }
+
+      // Инвалидируем кэш
+      cacheManager.delete('applications', `applications_${cleanCompanyId}_page_1`);
+      cacheManager.delete('analytics', `analytics_${cleanCompanyId}_${isAdminMode}`);
+
+      showNotification('🗑️ Фото удалено', 'success');
+    } catch (err) {
+      console.error('[handleDeletePhoto] Критическая ошибка:', err);
+      showNotification('Ошибка удаления фото: ' + err.message, 'error');
+    }
+    }, [userCompanyId, supabase, showNotification, selectedApplication, userRole, user?.id]);
 
   const handleSearchChange = useCallback((value) => {
   setSearchTerm(value);
@@ -8620,6 +8867,7 @@ if (inviteParam) {
         {currentView === 'received' && (
           <ApplicationList
             onAddPhoto={handleAddPhotoToApplication}
+            onDeletePhoto={handleDeletePhotoFromApplication}
             applications={filteredApplications.filter(app => {
               const isVisibleToSupply = userRole === 'supply_admin' && 
                 ['pending', 'pending_foreman', 'pending_approval', 'partial', 'received', 'canceled'].includes(app.status);
@@ -8768,6 +9016,7 @@ if (inviteParam) {
     
         <ApplicationList
       onAddPhoto={handleAddPhotoToApplication}
+      onDeletePhoto={handleDeletePhotoFromApplication}
       applications={filteredApplications.filter(app => {
         // 🔥 Для мастера/прораба — показываем свои активные заявки + ЧАСТИЧНО ПОЛУЧЕННЫЕ
         if (userRole === 'master' || userRole === 'foreman') {
@@ -8849,6 +9098,7 @@ onClearFilters={handleClearFilters}
                 {currentView === 'confirmation' && (
   <ApplicationList
     onAddPhoto={handleAddPhotoToApplication}
+    onDeletePhoto={handleDeletePhotoFromApplication}
     applications={filteredApplications.filter(app => {
       if (app.user_id !== user?.id) return false;
       
@@ -8912,6 +9162,7 @@ onClearFilters={handleClearFilters}
                 {currentView === 'history' && (
           <ApplicationList
             onAddPhoto={handleAddPhotoToApplication}
+            onDeletePhoto={handleDeletePhotoFromApplication}
             applications={filteredApplications.filter(app =>
               isApplicationCompleted(app.status)
             )}
@@ -8968,6 +9219,7 @@ onClearFilters={handleClearFilters}
                 {currentView === 'readyToIssue' && (
   <ApplicationList
     onAddPhoto={handleAddPhotoToApplication}
+    onDeletePhoto={handleDeletePhotoFromApplication}
     applications={filteredApplications.filter(app => {
       // Проверяем, есть ли материалы для выдачи
       const hasReady = hasMaterialsReadyToIssue(app);
@@ -9785,6 +10037,7 @@ onClearFilters={handleClearFilters}
         <div className="max-w-7xl mx-auto px-4">
         <ApplicationList
             onAddPhoto={handleAddPhotoToApplication}
+            onDeletePhoto={handleDeletePhotoFromApplication}
             applications={filteredApplications}
             title="Заявки"
             emptyMessage="Нет заявок"

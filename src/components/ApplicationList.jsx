@@ -306,6 +306,7 @@ const MobileApplicationCard = memo(({
   onReopenReturns,
   workPhotos = {},   // ← добавить
   onAddPhoto,
+  onDeletePhoto,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(false);
@@ -425,18 +426,37 @@ const MobileApplicationCard = memo(({
                           {m.quantity} {m.unit}
                         </span>
                       </div>
-                      {/* 🆕 ФОТО МАТЕРИАЛА */}
+                                                                  {/* 🆕 ФОТО МАТЕРИАЛА */}
                       {Array.isArray(m.photos) && m.photos.length > 0 && (
                         <div className="flex gap-1.5 flex-wrap px-3 pb-2">
                           {m.photos.map((url, i) => (
-                            <img
-                              key={i}
-                              src={url}
-                              alt={`${m.description} — фото ${i + 1}`}
-                              loading="lazy"
-                              onClick={(e) => { e.stopPropagation(); window.open(url, '_blank'); }}
-                              className="w-14 h-14 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-105 transition-transform"
-                            />
+                            <div key={i} className="relative group">
+                              <img
+                                src={url}
+                                alt={`${m.description} — фото ${i + 1}`}
+                                loading="lazy"
+                                onClick={(e) => { e.stopPropagation(); window.open(url, '_blank'); }}
+                                className="w-14 h-14 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-105 transition-transform"
+                              />
+                              {/* 🗑️ Удалить — только для admin-ролей или автора заявки */}
+                              {(userRole === 'supply_admin' ||
+                                userRole === 'manager' ||
+                                userRole === 'director' ||
+                                userRole === 'super_admin' ||
+                                application.user_id === user?.id) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDeletePhoto?.(application, url);
+                                  }}
+                                  className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-md transition-colors text-xs"
+                                  title="Удалить фото"
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </div>
                           ))}
                         </div>
                       )}
@@ -452,7 +472,7 @@ const MobileApplicationCard = memo(({
             </div>
           )}
 
-                    {/* 🆕 ФОТО ИЗ work_photos (fallback, если нет в materials) */}
+                                        {/* 🆕 ФОТО ИЗ work_photos (fallback, если нет в materials) */}
           {Array.isArray(workPhotos[application.id]) && workPhotos[application.id].length > 0 && (
             <div className="mt-3">
               <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2 flex items-center gap-1.5">
@@ -461,14 +481,32 @@ const MobileApplicationCard = memo(({
               </h4>
               <div className="flex gap-2 flex-wrap">
                 {workPhotos[application.id].map((p, i) => (
-                  <img
-                    key={p.id || i}
-                    src={p.photo_url}
-                    alt={`Фото ${i + 1}`}
-                    loading="lazy"
-                    onClick={() => window.open(p.photo_url, '_blank')}
-                    className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-105 transition-transform"
-                  />
+                  <div key={p.id || i} className="relative group">
+                    <img
+                      src={p.photo_url}
+                      alt={`Фото ${i + 1}`}
+                      loading="lazy"
+                      onClick={() => window.open(p.photo_url, '_blank')}
+                      className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-105 transition-transform"
+                    />
+                    {(userRole === 'supply_admin' ||
+                      userRole === 'manager' ||
+                      userRole === 'director' ||
+                      userRole === 'super_admin' ||
+                      application.user_id === user?.id) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeletePhoto?.(application, p.photo_url);
+                        }}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-md transition-colors text-xs"
+                        title="Удалить фото"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -673,6 +711,7 @@ const DesktopApplicationRow = memo(({
   onReopenReturns,
   workPhotos = {},
   onAddPhoto,
+  onDeletePhoto,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
@@ -979,18 +1018,36 @@ const DesktopApplicationRow = memo(({
                           <td className="px-3 py-1.5 text-xs text-gray-400">{idx + 1}</td>
                           <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">
                             <div>{m.description || '—'}</div>
-                            {/* 🆕 ФОТО МАТЕРИАЛА */}
+                                                                                    {/* 🆕 ФОТО МАТЕРИАЛА */}
                             {Array.isArray(m.photos) && m.photos.length > 0 && (
                               <div className="flex gap-1 flex-wrap mt-1">
                                 {m.photos.map((url, i) => (
-                                  <img
-                                    key={i}
-                                    src={url}
-                                    alt={`Фото ${i + 1}`}
-                                    loading="lazy"
-                                    onClick={(e) => { e.stopPropagation(); window.open(url, '_blank'); }}
-                                    className="w-10 h-10 object-cover rounded border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-110 transition-transform"
-                                  />
+                                  <div key={i} className="relative group/photo">
+                                    <img
+                                      src={url}
+                                      alt={`Фото ${i + 1}`}
+                                      loading="lazy"
+                                      onClick={(e) => { e.stopPropagation(); window.open(url, '_blank'); }}
+                                      className="w-10 h-10 object-cover rounded border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-110 transition-transform"
+                                    />
+                                    {(userRole === 'supply_admin' ||
+                                      userRole === 'manager' ||
+                                      userRole === 'director' ||
+                                      userRole === 'super_admin' ||
+                                      application.user_id === user?.id) && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onDeletePhoto?.(application, url);
+                                        }}
+                                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full items-center justify-center shadow hidden group-hover/photo:flex transition-colors text-[10px] leading-none"
+                                        title="Удалить фото"
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+                                  </div>
                                 ))}
                               </div>
                             )}
@@ -1024,7 +1081,7 @@ const DesktopApplicationRow = memo(({
             </div>
           )}
 
-                    {/* 🆕 ФОТО ИЗ work_photos (fallback, если нет в materials) */}
+                                        {/* 🆕 ФОТО ИЗ work_photos (fallback, если нет в materials) */}
           {Array.isArray(workPhotos[application.id]) && workPhotos[application.id].length > 0 && (
             <div className="mt-3">
               <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
@@ -1033,14 +1090,32 @@ const DesktopApplicationRow = memo(({
               </h4>
               <div className="flex gap-2 flex-wrap">
                 {workPhotos[application.id].map((p, i) => (
-                  <img
-                    key={p.id || i}
-                    src={p.photo_url}
-                    alt={`Фото ${i + 1}`}
-                    loading="lazy"
-                    onClick={() => window.open(p.photo_url, '_blank')}
-                    className="w-14 h-14 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-105 transition-transform"
-                  />
+                  <div key={p.id || i} className="relative group/photo">
+                    <img
+                      src={p.photo_url}
+                      alt={`Фото ${i + 1}`}
+                      loading="lazy"
+                      onClick={() => window.open(p.photo_url, '_blank')}
+                      className="w-14 h-14 object-cover rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:scale-105 transition-transform"
+                    />
+                    {(userRole === 'supply_admin' ||
+                      userRole === 'manager' ||
+                      userRole === 'director' ||
+                      userRole === 'super_admin' ||
+                      application.user_id === user?.id) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeletePhoto?.(application, p.photo_url);
+                        }}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full items-center justify-center shadow hidden group-hover/photo:flex transition-colors text-xs leading-none"
+                        title="Удалить фото"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -1184,6 +1259,7 @@ const ApplicationList = memo(({
   statusCounts: statusCountsProp,
   workPhotos = {},   // ← добавить
   onAddPhoto,
+  onDeletePhoto,
 }) => {
   const { ref: loadMoreRef, inView } = useInView({
     threshold: 0.1,
@@ -1461,6 +1537,7 @@ const ApplicationList = memo(({
                 onReopenReturns={onReopenReturns}
                 workPhotos={workPhotos}
                 onAddPhoto={onAddPhoto}
+                onDeletePhoto={onDeletePhoto}
               />
             ))}
           </div>
@@ -1676,6 +1753,7 @@ const ApplicationList = memo(({
                   onReopenReturns={onReopenReturns}
                   workPhotos={workPhotos}
                   onAddPhoto={onAddPhoto}
+                  onDeletePhoto={onDeletePhoto}
                 />
               ))}
             </div>
