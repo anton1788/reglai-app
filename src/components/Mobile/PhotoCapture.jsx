@@ -1,6 +1,6 @@
 // src/components/Mobile/PhotoCapture.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, Upload, X, Check, Loader2, AlertCircle } from 'lucide-react';
+import { Camera, Upload, X, Check, Loader2 } from 'lucide-react';
 // 🔧 Storage не работает через Proxy — используем raw-клиент
 import { rawSupabase as supabase } from '../../utils/supabaseClient';
 
@@ -59,12 +59,6 @@ const compressImage = (file) => {
                 reject(new Error('Не удалось сжать изображение'));
                 return;
               }
-              console.log('🗜️ [compressImage] compressed:', {
-                originalSize: file.size,
-                compressedSize: blob.size,
-                ratio: (blob.size / file.size * 100).toFixed(1) + '%',
-                dimensions: `${width}×${height}`,
-              });
               resolve(blob);
             },
             'image/jpeg',
@@ -128,12 +122,10 @@ const uploadViaFetch = async (filePath, blob) => {
       accessToken = data.session.access_token;
     }
   } catch (e) {
-    console.warn('[uploadViaFetch] getSession failed, using anon key:', e.message);
+    console.warn('[PhotoCapture] getSession failed, using anon key:', e.message);
   }
 
   const url = `${supabaseUrl}/storage/v1/object/${BUCKET_NAME}/${filePath}`;
-
-  console.log('🌐 [uploadViaFetch] POST', url);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
@@ -155,12 +147,6 @@ const uploadViaFetch = async (filePath, blob) => {
     const text = await response.text();
     let json;
     try { json = JSON.parse(text); } catch { json = { raw: text }; }
-
-    console.log('🌐 [uploadViaFetch] response:', {
-      status: response.status,
-      ok: response.ok,
-      body: json,
-    });
 
     if (!response.ok) {
       throw new Error(json.message || json.error || `HTTP ${response.status}`);
@@ -191,7 +177,6 @@ const PhotoCapture = ({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, fileName: '' });
   const [error, setError] = useState(null);
-  const [debugInfo, setDebugInfo] = useState(null);
   const fileInputRef = useRef(null);
   const isMountedRef = useRef(true);
 
@@ -203,38 +188,22 @@ const PhotoCapture = ({
     };
   }, []);
 
-  // ─── Первичная диагностика ─────────────────────────────
+  // ─── Валидация окружения ───────────────────────────────
   useEffect(() => {
-    const info = {
-      supabase: typeof supabase,
-      storage: typeof supabase?.storage,
-      storageFrom: typeof supabase?.storage?.from,
-      companyId: companyId || '❌ missing',
-      applicationId: applicationId || '❌ missing',
-      materialIndex: materialIndex ?? 'null',
-      bucket: BUCKET_NAME,
-      env: {
-        url: import.meta.env.VITE_SUPABASE_URL ? '✓' : '✗',
-        key: import.meta.env.VITE_SUPABASE_ANON_KEY ? '✓' : '✗',
-      },
-    };
-    console.log('🔍 [PhotoCapture] diagnostics:', info);
-    setDebugInfo(info);
-
     if (!supabase) {
-      setError('❌ Supabase не инициализирован');
+      setError('❌ Сервер не настроен. Обратитесь к администратору.');
     } else if (!supabase.storage || typeof supabase.storage.from !== 'function') {
-      setError('❌ Supabase Storage недоступен (проверьте импорт)');
+      setError('❌ Хранилище недоступно. Обратитесь к администратору.');
+    } else if (!companyId) {
+      setError('❌ Не удалось определить компанию');
     }
-  }, [companyId, applicationId, materialIndex]);
+  }, [companyId]);
 
   // ─── Уведомления ───────────────────────────────────────
   const showNotification = useCallback(
     (message, type) => {
       if (typeof externalShowNotification === 'function') {
         externalShowNotification(message, type);
-      } else {
-        console.log(`[PhotoCapture] ${type}: ${message}`);
       }
     },
     [externalShowNotification]
@@ -342,20 +311,12 @@ const PhotoCapture = ({
 
   // ─── 🔥 ЗАГРУЗКА ОДНОГО ФАЙЛА (SDK + fallback fetch) ───
   const uploadOneFile = useCallback(async (photo, index) => {
-    console.log(`📤 [uploadOneFile] #${index}`, {
-      name: photo.name,
-      size: photo.size,
-      sizeKB: (photo.size / 1024).toFixed(1),
-    });
-
     // 1. Сжимаем
     const compressedBlob = await compressImage(photo.file);
 
     // 2. Путь
     const fileName = generateFileName(index);
     const filePath = `photos/company_${companyId}/app_${applicationId || 'temp'}/material_${materialIndex ?? 0}/${fileName}`;
-
-    console.log('📁 [uploadOneFile] path:', filePath);
 
     // 3. Пытаемся через SDK
     let publicUrl = null;
@@ -375,8 +336,6 @@ const PhotoCapture = ({
         UPLOAD_TIMEOUT_MS
       );
 
-      console.log('📥 [uploadOneFile] SDK result:', { uploadData, uploadError });
-
       if (uploadError) {
         sdkError = uploadError;
       } else if (uploadData?.path) {
@@ -389,42 +348,30 @@ const PhotoCapture = ({
         }
       }
     } catch (err) {
-      console.warn('⚠️ [uploadOneFile] SDK threw:', err);
+      console.warn('[PhotoCapture] SDK upload failed, will try fallback:', err.message);
       sdkError = err;
     }
 
     // 4. Если SDK не сработал — fallback через fetch
     if (!publicUrl) {
-      console.warn('🔄 [uploadOneFile] SDK failed, trying fetch fallback. Reason:', sdkError?.message);
       try {
         await uploadViaFetch(filePath, compressedBlob);
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
         publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${filePath}`;
-        console.log('✅ [uploadOneFile] fetch fallback OK:', publicUrl);
       } catch (fallbackErr) {
-        console.error('❌ [uploadOneFile] fetch fallback failed:', fallbackErr);
+        console.error('[PhotoCapture] fetch fallback failed:', fallbackErr);
         throw new Error(
           `SDK: ${sdkError?.message || 'unknown'} | fetch: ${fallbackErr.message}`
         );
       }
     }
 
-    console.log('🎉 [uploadOneFile] done:', publicUrl);
     return publicUrl;
   }, [companyId, applicationId, materialIndex]);
 
   // ─── 🔥 ЗАГРУЗКА ВСЕХ ФОТО ─────────────────────────────
   const uploadPhotos = useCallback(
     async (photosToUpload) => {
-      console.log('🚀 [uploadPhotos] START', {
-        count: photosToUpload?.length,
-        companyId,
-        applicationId,
-        materialIndex,
-        supabaseType: typeof supabase,
-        storageFromType: typeof supabase?.storage?.from,
-      });
-
       if (!photosToUpload || photosToUpload.length === 0) return [];
 
       if (!companyId) {
@@ -440,7 +387,7 @@ const PhotoCapture = ({
       }
 
       if (!supabase.storage || typeof supabase.storage.from !== 'function') {
-        console.error('❌ [uploadPhotos] supabase.storage broken:', supabase.storage);
+        console.error('[PhotoCapture] supabase.storage broken:', supabase.storage);
         setError('❌ Хранилище недоступно');
         showNotification('Ошибка: хранилище не инициализировано', 'error');
         return [];
@@ -471,7 +418,7 @@ const PhotoCapture = ({
             );
           }
         } catch (fileErr) {
-          console.error(`❌ [uploadPhotos] file #${i + 1} failed:`, fileErr);
+          console.error(`[PhotoCapture] file #${i + 1} failed:`, fileErr);
           setError(`❌ ${fileErr.message}`);
           showNotification(`Ошибка загрузки: ${fileErr.message}`, 'error');
           setUploading(false);
@@ -488,43 +435,31 @@ const PhotoCapture = ({
       setUploadProgress({ current: 0, total: 0, fileName: '' });
       return uploadedUrls;
     },
-    [companyId, applicationId, materialIndex, showNotification, uploadOneFile]
+    [companyId, showNotification, uploadOneFile]
   );
 
   // ─── Подтверждение ─────────────────────────────────────
   const confirmPhotos = useCallback(async () => {
     if (uploading) return;
 
-    console.log('✔️ [confirmPhotos] clicked. photos:', photos.length);
-
     const notUploaded = photos.filter((p) => !p.uploaded);
 
     if (notUploaded.length > 0) {
       const urls = await uploadPhotos(notUploaded);
-      if (urls.length === 0) {
-        console.warn('⚠️ [confirmPhotos] upload returned 0 urls, aborting close');
-        return;
-      }
+      if (urls.length === 0) return;
     }
 
     const finalUrls = photos
       .map((p) => p.url)
       .filter(Boolean);
 
-    // Если после аплоада urls всё ещё пусто (fallback из state)
-    const allUrls = finalUrls.length > 0
-      ? finalUrls
-      : photos.map((p) => p.url).filter(Boolean);
-
-    if (allUrls.length === 0) {
+    if (finalUrls.length === 0) {
       setError('Нет загруженных фото');
       return;
     }
 
-    console.log('✅ [confirmPhotos] final urls:', allUrls);
-
     if (typeof onCapture === 'function') {
-      onCapture(multiple ? allUrls : allUrls[0]);
+      onCapture(multiple ? finalUrls : finalUrls[0]);
     }
     if (typeof onClose === 'function') {
       onClose();
@@ -561,17 +496,6 @@ const PhotoCapture = ({
           ? `Фотофиксация материала #${materialIndex + 1}`
           : 'Общая фотофиксация'}
       </h3>
-
-      {/* Диагностика */}
-      {debugInfo && (
-        <div className="mb-3 px-3 py-2 bg-blue-500/10 border border-blue-500/30 rounded text-blue-200 text-xs font-mono max-w-md">
-          <div>supabase: {debugInfo.supabase}</div>
-          <div>storage: {debugInfo.storage} / from: {debugInfo.storageFrom}</div>
-          <div>companyId: {debugInfo.companyId}</div>
-          <div>appId: {debugInfo.applicationId} | material: {debugInfo.materialIndex}</div>
-          <div>env: url {debugInfo.env.url}, key {debugInfo.env.key}</div>
-        </div>
-      )}
 
       {error && (
         <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-300 text-sm max-w-md text-center">
