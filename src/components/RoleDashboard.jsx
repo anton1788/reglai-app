@@ -5,7 +5,9 @@ import {
   TrendingUp, Building, Package,
   Merge, WifiOff, Sparkles, ShoppingCart
 } from 'lucide-react';
+import { TARIFF_PLANS } from '../utils/tariffPlans'; // 🆕 для GracePeriodBanner
 import DataLimitsBanner from './DataLimitsBanner'; // 🆕
+import GracePeriodBanner from './GracePeriodBanner'; // 🆕
 
 const isMasterRole = (role) => role === 'master' || role === 'foreman';
 
@@ -15,9 +17,12 @@ const MasterDashboard = ({
   userCompany,
   setCurrentView,
   isOnline,
-  currentPlan,   // 🆕
-  dataStats,     // 🆕
-  onUpgrade,     // 🆕
+  currentPlan,     // 🆕
+  dataStats,       // 🆕
+  onUpgrade,       // 🆕
+  gracePeriodData, // 🆕
+  onRevertPlan,    // 🆕
+  revertLoading,   // 🆕
 }) => {
   const metrics = useMemo(() => {
     const myApps = applications?.filter(a => a.user_id === user?.id) || [];
@@ -43,6 +48,17 @@ const MasterDashboard = ({
         stats={dataStats}
         onUpgrade={onUpgrade}
       />
+
+      {/* 🆕 Grace period — откат тарифа */}
+      {gracePeriodData?.has_grace && (
+        <GracePeriodBanner
+          graceData={gracePeriodData}
+          fromPlan={TARIFF_PLANS[gracePeriodData.from_plan]}
+          toPlan={TARIFF_PLANS[gracePeriodData.to_plan]}
+          onRevert={onRevertPlan}
+          loading={revertLoading}
+        />
+      )}
 
       <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -109,6 +125,9 @@ const FullDashboard = ({
   isCompanyOwner,
   dataStats,         // 🆕
   onUpgrade,         // 🆕
+  gracePeriodData,   // 🆕
+  onRevertPlan,      // 🆕
+  revertLoading,     // 🆕
 }) => {
   const metrics = useMemo(() => {
     const activeApps = applications?.filter(a => ['pending', 'admin_processing', 'partial_received'].includes(a.status)).length || 0;
@@ -170,6 +189,17 @@ const FullDashboard = ({
         stats={dataStats}
         onUpgrade={onUpgrade}
       />
+
+      {/* 🆕 Grace period — откат тарифа */}
+      {gracePeriodData?.has_grace && (
+        <GracePeriodBanner
+          graceData={gracePeriodData}
+          fromPlan={TARIFF_PLANS[gracePeriodData.from_plan]}
+          toPlan={TARIFF_PLANS[gracePeriodData.to_plan]}
+          onRevert={onRevertPlan}
+          loading={revertLoading}
+        />
+      )}
 
       <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-2xl p-6 text-white shadow-xl">
         <h1 className="text-2xl font-bold mb-1">{getGreeting()}</h1>

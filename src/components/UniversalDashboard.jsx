@@ -9,7 +9,9 @@ import {
 } from 'lucide-react';
 import { usePriceVisibility } from '../hooks/usePriceVisibility';
 import { sanitizeApplicationsForMaster } from '../utils/materialSanitizer';
+import { TARIFF_PLANS } from '../utils/tariffPlans'; // 🆕 для GracePeriodBanner
 import DataLimitsBanner from './DataLimitsBanner'; // 🆕
+import GracePeriodBanner from './GracePeriodBanner'; // 🆕
 
 // ─────────────────────────────────────────────────────────────
 // 🧩 MASTER DASHBOARD (Упрощённая версия без цен)
@@ -23,6 +25,9 @@ const MasterDashboard = ({
   currentPlan,
   dataStats,       // 🆕
   onUpgrade,       // 🆕
+  gracePeriodData, // 🆕
+  onRevertPlan,    // 🆕
+  revertLoading,   // 🆕
 }) => {
   // 📊 РАСЧЕТ МЕТРИК (без финансов)
   const metrics = useMemo(() => {
@@ -108,6 +113,17 @@ const MasterDashboard = ({
         stats={dataStats}
         onUpgrade={onUpgrade}
       />
+
+      {/* 🆕 Grace period — откат тарифа */}
+      {gracePeriodData?.has_grace && (
+        <GracePeriodBanner
+          graceData={gracePeriodData}
+          fromPlan={TARIFF_PLANS[gracePeriodData.from_plan]}
+          toPlan={TARIFF_PLANS[gracePeriodData.to_plan]}
+          onRevert={onRevertPlan}
+          loading={revertLoading}
+        />
+      )}
 
       {/* Верхний баннер */}
       <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
@@ -263,6 +279,9 @@ const FullDashboard = ({
   isCompanyOwner,
   dataStats,       // 🆕
   onUpgrade,       // 🆕
+  gracePeriodData, // 🆕
+  onRevertPlan,    // 🆕
+  revertLoading,   // 🆕
 }) => {
   const [aiMessage, setAiMessage] = useState('');
   const [aiResponse, setAiResponse] = useState('');
@@ -534,6 +553,17 @@ const FullDashboard = ({
         onUpgrade={onUpgrade}
       />
 
+      {/* 🆕 Grace period — откат тарифа */}
+      {gracePeriodData?.has_grace && (
+        <GracePeriodBanner
+          graceData={gracePeriodData}
+          fromPlan={TARIFF_PLANS[gracePeriodData.from_plan]}
+          toPlan={TARIFF_PLANS[gracePeriodData.to_plan]}
+          onRevert={onRevertPlan}
+          loading={revertLoading}
+        />
+      )}
+
       {/* Верхний баннер */}
       <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
@@ -779,6 +809,9 @@ const UniversalDashboard = ({
   isCompanyOwner,
   dataStats,       // 🆕
   onUpgrade,       // 🆕
+  gracePeriodData, // 🆕 GRACE PERIOD
+  onRevertPlan,    // 🆕 GRACE PERIOD
+  revertLoading,   // 🆕 GRACE PERIOD
 }) => {
   const { isMaster } = usePriceVisibility(userRole);
 
@@ -794,6 +827,9 @@ const UniversalDashboard = ({
         currentPlan={currentPlan}
         dataStats={dataStats}
         onUpgrade={onUpgrade}
+        gracePeriodData={gracePeriodData}
+        onRevertPlan={onRevertPlan}
+        revertLoading={revertLoading}
       />
     );
   }
@@ -814,6 +850,9 @@ const UniversalDashboard = ({
       isCompanyOwner={isCompanyOwner}
       dataStats={dataStats}
       onUpgrade={onUpgrade}
+      gracePeriodData={gracePeriodData}
+      onRevertPlan={onRevertPlan}
+      revertLoading={revertLoading}
     />
   );
 };

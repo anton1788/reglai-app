@@ -18,6 +18,7 @@ import {
   getMarketAverage
 } from '../utils/tariffPlans';
 import TariffComparison from './TariffComparison';
+import GracePeriodBanner from './GracePeriodBanner'; // 🆕
 
 // ============================================================
 // 🎨 Компонент строки функции
@@ -50,7 +51,11 @@ const TariffSelector = ({
   currentPlanDetails,
   promoCodeInfo,
   onExtendPlan,
-  showUpgradePrompt = true
+  showUpgradePrompt = true,
+  // 🆕 GRACE PERIOD
+  gracePeriodData,
+  onRevertPlan,
+  revertLoading,
 }) => {
   const [internalBillingPeriod, setInternalBillingPeriod] = useState('monthly');
   const [showComparison, setShowComparison] = useState(false);
@@ -357,6 +362,20 @@ const TariffSelector = ({
               {translate('extendPlan', '🔄 Продлить тариф')}
             </button>
           )}
+        </div>
+      )}
+
+      {/* 🆕 Grace period — компактный баннер */}
+      {gracePeriodData?.has_grace && (
+        <div className="mb-6">
+          <GracePeriodBanner
+            graceData={gracePeriodData}
+            fromPlan={TARIFF_PLANS[gracePeriodData.from_plan]}
+            toPlan={TARIFF_PLANS[gracePeriodData.to_plan]}
+            onRevert={onRevertPlan}
+            loading={revertLoading}
+            compact
+          />
         </div>
       )}
 

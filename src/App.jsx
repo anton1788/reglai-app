@@ -232,6 +232,8 @@ import MaterialPriceCatalog from './components/MaterialPriceCatalog/MaterialPric
 import { canEditPrices as canEditPricesUtil } from './utils/priceManager';
 // 🆕 DOWNGRADE: модалка понижения тарифа
 import DowngradeModal from './components/DowngradeModal';
+// 🆕 GRACE PERIOD: баннер отката тарифа
+import GracePeriodBanner from './components/GracePeriodBanner';
 
 const getCleanCompanyId = (companyId) => {
   if (!companyId) return null;
@@ -1302,6 +1304,10 @@ const [pendingDowngrade, setPendingDowngrade] = useState(null);
 //     planId: 'micro',      // id нового тарифа
 //   }
 const [downgradeLoading, setDowngradeLoading] = useState(false);
+// 🆕 GRACE PERIOD: активный период отката
+const [gracePeriodData, setGracePeriodData] = useState(null);
+const [revertLoading, setRevertLoading] = useState(false);
+const [showRevertConfirm, setShowRevertConfirm] = useState(false);
 // 📊 NPS Survey State
 const [showNpsSurvey, setShowNpsSurvey] = useState(false);
 const [npsSubmitting, setNpsSubmitting] = useState(false);
@@ -4341,6 +4347,43 @@ useEffect(() => {
   loadDataStats();
 }, [userCompanyId, user?.id, currentPlan?.id]); // при смене тарифа — перезагружаем
 
+// 🆕 GRACE PERIOD: загрузка активного grace period
+useEffect(() => {
+  const loadGracePeriod = async () => {
+    if (!userCompanyId || !user?.id) return;
+
+    const cleanId = getSafeCompanyId(userCompanyId);
+    if (!cleanId) return;
+
+    try {
+      const { data, error } = await supabase.rpc('get_active_grace_period', {
+        p_company_id: cleanId,
+      });
+
+      if (error) {
+        console.warn('[GracePeriod] RPC error:', error);
+        setGracePeriodData(null);
+        return;
+      }
+
+      const raw = Array.isArray(data) ? data[0] : data;
+      const result = raw?.get_active_grace_period || raw;
+
+      if (result?.has_grace) {
+        setGracePeriodData(result);
+        console.log('⏳ [GracePeriod] активен:', result);
+      } else {
+        setGracePeriodData(null);
+      }
+    } catch (err) {
+      console.warn('[GracePeriod] ошибка загрузки:', err);
+      setGracePeriodData(null);
+    }
+  };
+
+  loadGracePeriod();
+}, [userCompanyId, user?.id, currentPlan?.id]);
+
 
 // 📊 LOG ANALYTICS USAGE (Feature Adoption — с дебаунсом)
 useEffect(() => {
@@ -7224,6 +7267,106 @@ const checkApiQuota = useCallback(async (apiKeyId = null) => {
   return quota.allowed;
 }, [userCompanyId, supabase, showNotification, userRole, user, currentPlan]);
 
+// 🆕 GRACE PERIOD: откат тарифа
+const handleRevertPlan = async () => {
+  if (!gracePeriodData?.has_grace) return;
+
+  const cleanId = getSafeCompanyId(userCompanyId);
+  if (!cleanId) {
+    showNotification('Ошибка: компания не найдена', 'error');
+    return;
+  }
+
+  setRevertLoading(true);
+  try {
+    const { data, error } = await supabase.rpc('revert_plan_change', {
+      p_company_id: cleanId,
+      p_user_id: user?.id,
+      p_user_email: user?.email,
+    });
+
+    if (error) throw error;
+
+    const raw = Array.isArray(data) ? data[0] : data;
+    const result = raw?.revert_plan_change || raw;
+
+    if (!result?.success) {
+      const errMsg = {
+        grace_expired: 'Срок отката истёк',
+        no_active_change: 'Нет активного отката',
+        company_not_found: 'Компания не найдена',
+      }[result?.error] || result?.error || 'неизвестная ошибка';
+
+      showNotification(`Не удалось откатить: ${errMsg}`, 'error');
+      setGracePeriodData(null);
+      return;
+    }
+
+    // Обновляем локальный тариф
+    setCurrentPlan(TARIFF_PLANS[result.restored_plan]);
+    setCurrentPlanDetails({
+      activated_at: new Date().toISOString(),
+      expires_at: result.expires_at,
+      usageCurrent: 0,
+    });
+
+    // Grace period больше неактивен
+    setGracePeriodData(null);
+    setShowRevertConfirm(false);
+
+    // Обновляем квоту
+    try {
+      const newQuota = await checkQuota(supabase, cleanId);
+      setQuotaStatus(newQuota);
+    } catch (e) {
+      console.warn('Quota refresh failed:', e.message);
+    }
+
+    showNotification(
+      `✅ Тариф восстановлен: «${TARIFF_PLANS[result.restored_plan].name}»`,
+      'success'
+    );
+
+    // Аудит
+    try {
+      await logAuditAction(supabase, {
+        actionType: 'plan_reverted',
+        entityType: 'company',
+        entityId: cleanId,
+        oldValue: { plan: result.from_plan },
+        newValue: { plan: result.restored_plan },
+        companyId: cleanId,
+        userId: user?.id,
+        userEmail: user?.email,
+        userRole: userRole,
+      });
+    } catch (auditErr) {
+      console.debug('Audit log skipped:', auditErr.message);
+    }
+
+    // Перезагружаем данные
+    if (currentView === 'create' || currentView === 'tariffs') {
+      await loadApplications(page);
+    }
+  } catch (err) {
+    console.error('❌ [Revert] error:', err);
+    showNotification('Ошибка отката: ' + err.message, 'error');
+  } finally {
+    setRevertLoading(false);
+  }
+};
+
+// 🆕 Открыть подтверждение отката
+const handleOpenRevertConfirm = () => {
+  setShowRevertConfirm(true);
+};
+
+// 🆕 Закрыть подтверждение
+const handleCloseRevertConfirm = () => {
+  if (revertLoading) return;
+  setShowRevertConfirm(false);
+};
+
 // Добавьте в App.jsx после всех useCallback
 const forceRefresh = useCallback(async () => {
   // Очищаем кэш
@@ -8965,6 +9108,9 @@ if (inviteParam) {
     t={t}
     dataStats={dataStats}
     onUpgrade={() => setCurrentView('tariffs')}
+    gracePeriodData={gracePeriodData}
+    onRevertPlan={handleOpenRevertConfirm}
+    revertLoading={revertLoading}
   />
 )}
 
@@ -9003,6 +9149,9 @@ if (inviteParam) {
     isCompanyOwner={isCompanyOwner}
     dataStats={dataStats}
     onUpgrade={() => setCurrentView('tariffs')}
+    gracePeriodData={gracePeriodData}
+    onRevertPlan={handleOpenRevertConfirm}
+    revertLoading={revertLoading}
   />
 )}
         
@@ -9603,6 +9752,9 @@ onClearFilters={handleClearFilters}
     is_trial_expired: currentPlanDetails?.is_trial_expired || false
   }}
   promoCodeInfo={promoCodeInfo}  // ← ДОБАВИТЬ ЭТУ СТРОКУ
+  gracePeriodData={gracePeriodData}
+  onRevertPlan={handleOpenRevertConfirm}
+  revertLoading={revertLoading}
 />
               
       {currentPlan && !isSuperAdmin(userRole, user?.user_metadata) && (
@@ -10395,6 +10547,55 @@ onClearFilters={handleClearFilters}
   toPlan={pendingDowngrade?.toPlan}
   loading={downgradeLoading}
 />
+
+{/* 🆕 Подтверждение отката тарифа */}
+{showRevertConfirm && gracePeriodData?.has_grace && (
+  <div
+    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10001] fade-enter"
+    onClick={(e) => e.target === e.currentTarget && handleCloseRevertConfirm()}
+  >
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-5">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full">
+          <RotateCcw className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+          Вернуться на {TARIFF_PLANS[gracePeriodData.from_plan]?.name}?
+        </h3>
+      </div>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+        Тариф восстановится, и все ваши данные снова станут доступны для редактирования.
+        Это действие нельзя отменить.
+      </p>
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={handleCloseRevertConfirm}
+          disabled={revertLoading}
+          className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white disabled:opacity-50"
+        >
+          Отмена
+        </button>
+        <button
+          onClick={handleRevertPlan}
+          disabled={revertLoading}
+          className="px-5 py-2 text-sm font-medium bg-gradient-to-r from-amber-600 to-yellow-600 text-white rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-2 disabled:opacity-50"
+        >
+          {revertLoading ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Откатываем...
+            </>
+          ) : (
+            <>
+              <RotateCcw className="w-4 h-4" />
+              Откатить
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
       
       <ChurnReasonModal
         isOpen={showChurnModal}
