@@ -90,7 +90,9 @@ export const TARIFF_PLANS = {
       supplier_catalog: false,
       supplier_price_list: false,
       rfq: false,
+      rfq_create: false,              // 🆕
       purchase_orders: false,
+      purchase_orders_create: false,  // 🆕
       price_catalog: false,
       procurement_dashboard: false,
       supplier_portal: false,
@@ -162,7 +164,9 @@ export const TARIFF_PLANS = {
       supplier_catalog: false,
       supplier_price_list: false,
       rfq: true,                   // ⚠️ до 5 RFQ/мес
+      rfq_create: true,               // 🆕
       purchase_orders: false,
+      purchase_orders_create: false,  // 🆕
       price_catalog: false,
       procurement_dashboard: false,
       supplier_portal: false,
@@ -239,7 +243,9 @@ export const TARIFF_PLANS = {
       supplier_catalog: true,
       supplier_price_list: true,
       rfq: true,
+      rfq_create: true,               // 🆕
       purchase_orders: true,
+      purchase_orders_create: true,   // 🆕
       price_catalog: true,
       procurement_dashboard: true,
       supplier_portal: false,     // только Business+
@@ -318,7 +324,9 @@ export const TARIFF_PLANS = {
       supplier_catalog: true,
       supplier_price_list: true,
       rfq: true,
+      rfq_create: true,               // 🆕
       purchase_orders: true,
+      purchase_orders_create: true,   // 🆕
       price_catalog: true,
       procurement_dashboard: true,
       supplier_portal: true,      // ✅ кабинет поставщика
@@ -396,7 +404,9 @@ export const TARIFF_PLANS = {
       supplier_catalog: true,
       supplier_price_list: true,
       rfq: true,
+      rfq_create: true,               // 🆕
       purchase_orders: true,
+      purchase_orders_create: true,   // 🆕
       price_catalog: true,
       procurement_dashboard: true,
       supplier_portal: true,
@@ -469,7 +479,9 @@ export const FEATURE_CATEGORIES = {
       { key: 'supplier_catalog', label: '📚 Каталог материалов', icon: '📚' },
       { key: 'supplier_price_list', label: '💰 Прайс-листы поставщиков', icon: '💰' },
       { key: 'rfq', label: '📨 RFQ (запросы КП)', icon: '📨' },
+      { key: 'rfq_create', label: '📨 Создание RFQ', icon: '📨' },              // 🆕
       { key: 'purchase_orders', label: '📦 Заказы поставщикам', icon: '📦' },
+      { key: 'purchase_orders_create', label: '📦 Создание заказов', icon: '📦' }, // 🆕
       { key: 'price_catalog', label: '📖 Справочник цен', icon: '📖' },
       { key: 'procurement_dashboard', label: '📊 Дашборд закупщика', icon: '📊' },
       { key: 'supplier_portal', label: '🚪 Кабинет поставщика', icon: '🚪' }

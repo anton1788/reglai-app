@@ -1,8 +1,8 @@
 // src/components/Chat/ChatMessage.jsx
 import React, { useState, useMemo, useCallback } from 'react';
-import { 
-  Edit2, Trash2, CornerUpLeft, Bookmark, BookmarkCheck, 
-  Pin, FileText, Smile, Copy, Check, X
+import {
+  Edit2, Trash2, CornerUpLeft, Bookmark, BookmarkCheck,
+  Pin, FileText, Smile, Copy, Check, X, Lock,
 } from 'lucide-react';
 import { formatChatMessage, extractMentions } from '../../utils/chatFormatters';
 
@@ -27,36 +27,34 @@ const ChatMessage = ({
   isPinned,
   showReactionsPicker,
   setShowReactionsPicker,
-  textareaRef
+  textareaRef,
+  // 🆕 READ-ONLY
+  readOnly = false,
 }) => {
   const [copied, setCopied] = useState(false);
 
-  // Проверяем, является ли сообщение голосовым
+  // Голосовое сообщение?
   const isVoiceMessage = useMemo(() => {
-    return msg.content?.includes('🎙️ Голосовое сообщение') && 
-           msg.content?.includes('https://') && 
+    return msg.content?.includes('🎙️ Голосовое сообщение') &&
+           msg.content?.includes('https://') &&
            msg.content?.includes('.webm');
   }, [msg.content]);
 
-  // Извлекаем URL из голосового сообщения
   const voiceAudioUrl = useMemo(() => {
     if (!isVoiceMessage) return null;
     const urlMatch = msg.content.match(/https?:\/\/[^\s]+\.webm/);
     return urlMatch ? urlMatch[0] : null;
   }, [isVoiceMessage, msg.content]);
 
-  // Форматированное содержимое (только для текстовых сообщений)
   const formattedContent = useMemo(() => {
     if (!msg.content || isVoiceMessage) return '';
     return formatChatMessage(msg.content);
   }, [msg.content, isVoiceMessage]);
 
-  // Упоминания в сообщении
   const mentions = useMemo(() => {
     return extractMentions(msg.content);
   }, [msg.content]);
 
-  // Реакции с группировкой
   const reactionCounts = useMemo(() => {
     if (!msg.reactions?.length) return {};
     return msg.reactions.reduce((acc, r) => {
@@ -65,22 +63,40 @@ const ChatMessage = ({
     }, {});
   }, [msg.reactions]);
 
-  // Проверка, поставил ли текущий пользователь реакцию
   const hasReacted = useCallback((emoji) => {
     return msg.reactions?.some(r => r.emoji === emoji && r.user_id === user?.id);
   }, [msg.reactions, user?.id]);
 
-  const canEdit = msg.user_id === user?.id || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
-  const canDelete = msg.user_id === user?.id || userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director';
+  // 🆕 READ-ONLY блокирует и права на редактирование/удаление
+  const canEdit = !readOnly && (
+    msg.user_id === user?.id ||
+    userRole === 'manager' ||
+    userRole === 'supply_admin' ||
+    userRole === 'director'
+  );
 
-  // Двойной клик для быстрой реакции ❤️
+  const canDelete = !readOnly && (
+    msg.user_id === user?.id ||
+    userRole === 'manager' ||
+    userRole === 'supply_admin' ||
+    userRole === 'director'
+  );
+
+  // 🆕 READ-ONLY: реакции/ответы/сохранение недоступны
+  const canReact = !readOnly;
+  const canReply = !readOnly;
+  const canSave = !readOnly;
+  const canPin = !readOnly && typeof onPinMessage === 'function';
+
+  // Двойной клик для быстрой реакции ❤️ (заблокирован в read-only)
   const handleDoubleClick = useCallback(() => {
+    if (readOnly) return;
     if (!isEditing) {
       onToggleReaction?.(msg.id, '❤️');
     }
-  }, [isEditing, onToggleReaction, msg.id]);
+  }, [isEditing, onToggleReaction, msg.id, readOnly]);
 
-  // Копирование текста
+  // Копирование текста — разрешено всегда (это чтение)
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(msg.content || '');
@@ -99,19 +115,17 @@ const ChatMessage = ({
     }
   }, [msg.content]);
 
-  // Имя отправителя
   const senderName = msg.user?.user_metadata?.full_name || 'Пользователь';
   const senderInitial = senderName[0]?.toUpperCase() || '?';
   const senderRole = msg.user?.user_metadata?.role || userRole;
 
-  // Проверка, упомянут ли текущий пользователь
   const isMentioned = useMemo(() => {
     if (!user?.user_metadata?.full_name) return false;
     const nameParts = user.user_metadata.full_name.split(' ');
     const firstName = nameParts[0];
     const lastName = nameParts[1] || '';
-    
-    return mentions.some(m => 
+
+    return mentions.some(m =>
       m.toLowerCase() === user.user_metadata.full_name.toLowerCase() ||
       m.toLowerCase() === firstName.toLowerCase() ||
       (lastName && m.toLowerCase() === lastName.toLowerCase()) ||
@@ -121,22 +135,20 @@ const ChatMessage = ({
   }, [mentions, user]);
 
   // ============================================================
-  // Рендер голосового сообщения (с кнопкой удаления)
+  // Рендер голосового сообщения
   // ============================================================
   if (isVoiceMessage && voiceAudioUrl) {
     return (
-      <article 
+      <article
         className={`group flex gap-2 sm:gap-3 ${isOwn ? 'flex-row-reverse' : ''} animate-in fade-in`}
       >
-        {/* Аватар */}
         <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0 ${isOwn ? 'order-2' : ''}`}>
           <span className="text-white text-[10px] sm:text-xs font-medium">
             {senderInitial}
           </span>
         </div>
-        
+
         <div className={`max-w-[85%] sm:max-w-[75%] ${isOwn ? 'order-1' : ''}`}>
-          {/* Имя отправителя */}
           {!isOwn && (
             <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 pl-1 flex-wrap">
               <span className="text-xs sm:text-sm font-bold text-[#4A6572] dark:text-[#F9AA33]">
@@ -149,19 +161,18 @@ const ChatMessage = ({
               )}
             </div>
           )}
-          
-          {/* Аудио-плеер с кнопкой удаления */}
+
           <div className="relative">
-            <div 
+            <div
               className={`rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-sm ${
-                isOwn 
-                  ? 'bg-[#4A6572] text-white rounded-br-md' 
+                isOwn
+                  ? 'bg-[#4A6572] text-white rounded-br-md'
                   : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md border border-gray-100 dark:border-gray-600'
               }`}
             >
               <div className="flex flex-col gap-1">
-                <audio 
-                  controls 
+                <audio
+                  controls
                   src={voiceAudioUrl}
                   className="w-full max-w-[280px] h-10 rounded"
                   preload="metadata"
@@ -174,8 +185,8 @@ const ChatMessage = ({
                 <span className="text-[10px] opacity-70">🎙️ Голосовое сообщение</span>
               </div>
             </div>
-            
-            {/* ✅ КНОПКА УДАЛЕНИЯ (появляется при наведении) */}
+
+            {/* 🆕 Кнопка удаления — скрыта в read-only */}
             {canDelete && (
               <button
                 onClick={(e) => {
@@ -184,17 +195,14 @@ const ChatMessage = ({
                     onDelete?.(msg.id);
                   }
                 }}
-                className={`absolute -top-2 -right-2 p-1.5 rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600 transition-all opacity-0 group-hover:opacity-100 ${
-                  isOwn ? 'block' : 'block'
-                }`}
+                className="absolute -top-2 -right-2 p-1.5 rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600 transition-all opacity-0 group-hover:opacity-100"
                 title="Удалить голосовое сообщение"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-          
-          {/* Время */}
+
           <div className={`flex items-center gap-1 mt-0.5 text-[10px] sm:text-xs ${isOwn ? 'justify-end' : ''}`}>
             <span className="text-gray-400 dark:text-gray-500">
               {new Date(msg.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
@@ -209,21 +217,19 @@ const ChatMessage = ({
   // Рендер текстового сообщения
   // ============================================================
   return (
-    <article 
+    <article
       className={`group flex gap-2 sm:gap-3 ${isOwn ? 'flex-row-reverse' : ''} animate-in fade-in ${
         isMentioned ? 'bg-yellow-50 dark:bg-yellow-900/10 rounded-lg -mx-2 px-2 py-1 border-l-4 border-yellow-400' : ''
       }`}
       onDoubleClick={handleDoubleClick}
     >
-      {/* Аватар */}
       <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center flex-shrink-0 ${isOwn ? 'order-2' : ''}`}>
         <span className="text-white text-[10px] sm:text-xs font-medium">
           {senderInitial}
         </span>
       </div>
-      
+
       <div className={`max-w-[85%] sm:max-w-[75%] ${isOwn ? 'order-1' : ''}`}>
-        {/* Имя отправителя */}
         {!isOwn && (
           <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 pl-1 flex-wrap">
             <span className="text-xs sm:text-sm font-bold text-[#4A6572] dark:text-[#F9AA33]">
@@ -241,21 +247,20 @@ const ChatMessage = ({
             )}
           </div>
         )}
-        
-        {/* Тело сообщения */}
-        <div 
+
+        <div
           className={`relative rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-sm ${
-            isOwn 
-              ? 'bg-[#4A6572] text-white rounded-br-md' 
+            isOwn
+              ? 'bg-[#4A6572] text-white rounded-br-md'
               : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md border border-gray-100 dark:border-gray-600'
           } ${isPinned ? 'border-l-4 border-l-yellow-400' : ''}`}
         >
           {isEditing ? (
             <div className="flex gap-2 items-start">
-              <textarea 
-                ref={textareaRef} 
+              <textarea
+                ref={textareaRef}
                 value={editText}
-                onChange={(e) => onStartEdit({ ...msg, content: e.target.value })} 
+                onChange={(e) => onStartEdit({ ...msg, content: e.target.value })}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -264,8 +269,8 @@ const ChatMessage = ({
                   if (e.key === 'Escape') onCancelEdit();
                 }}
                 className="flex-1 bg-black/10 dark:bg-white/10 rounded-lg px-2 py-1 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#F9AA33] min-h-[60px]"
-                rows={2} 
-                autoFocus 
+                rows={2}
+                autoFocus
               />
               <div className="flex flex-col gap-1">
                 <button onClick={() => onSaveEdit(msg.id)} className="p-1 hover:bg-green-500/20 text-green-600 rounded-lg">
@@ -278,7 +283,6 @@ const ChatMessage = ({
             </div>
           ) : (
             <>
-              {/* Ответ на сообщение */}
               {msg.replied_message && (
                 <div className="mb-2 p-1.5 sm:p-2 bg-black/10 dark:bg-white/10 rounded-lg border-l-4 border-[#4A6572]">
                   <p className="text-[10px] sm:text-xs font-bold text-[#4A6572] dark:text-[#F9AA33]">
@@ -287,14 +291,12 @@ const ChatMessage = ({
                   <p className="text-[10px] sm:text-xs opacity-75 truncate">{msg.replied_message.content}</p>
                 </div>
               )}
-              
-              {/* Контент с форматированием */}
-              <div 
+
+              <div
                 className="text-sm whitespace-pre-wrap break-words leading-relaxed chat-message-content"
                 dangerouslySetInnerHTML={{ __html: formattedContent }}
               />
-              
-              {/* Отметка о редактировании */}
+
               {msg.edited_at && (
                 <span className="text-[10px] opacity-50 mt-1 block">
                   (изменено)
@@ -303,47 +305,57 @@ const ChatMessage = ({
             </>
           )}
         </div>
-        
-        {/* Действия под сообщением */}
-        <div className={`flex items-center gap-1 mt-0.5 text-[10px] sm:text-xs ${isOwn ? 'justify-end' : ''}`}>
-          <span className="text-gray-400 dark:text-gray-500">
-            {new Date(msg.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-          </span>
-          
-          {!isEditing && (
+
+        {/* Действия под сообщением — скрыты, если read-only и нет кнопки «Копировать» */}
+        {!isEditing && (
+          <div className={`flex items-center gap-1 mt-0.5 text-[10px] sm:text-xs ${isOwn ? 'justify-end' : ''}`}>
+            <span className="text-gray-400 dark:text-gray-500">
+              {new Date(msg.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               {/* Реакции */}
-              <button 
-                onClick={() => setShowReactionsPicker?.(showReactionsPicker === msg.id ? null : msg.id)}
-                className="p-0.5 sm:p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded-full"
-              >
-                <Smile className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
-              </button>
-              
-              {/* Ответ */}
-              <button 
-                onClick={() => onReply?.(msg)} 
-                className="p-0.5 sm:p-1 hover:bg-gray-200/50 rounded-full"
-              >
-                <CornerUpLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
-              </button>
-              
-              {/* Сохранить */}
-              <button 
-                onClick={() => onToggleSave?.(msg.id)} 
-                className="p-0.5 sm:p-1 hover:bg-gray-200/50 rounded-full"
-              >
-                {isSaved ? (
-                  <BookmarkCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#4A6572]" />
-                ) : (
-                  <Bookmark className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
-                )}
-              </button>
+              {canReact && (
+                <button
+                  onClick={() => setShowReactionsPicker?.(showReactionsPicker === msg.id ? null : msg.id)}
+                  className="p-0.5 sm:p-1 hover:bg-gray-200/50 dark:hover:bg-gray-600/50 rounded-full"
+                  title="Реакция"
+                >
+                  <Smile className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
+                </button>
+              )}
 
-              {/* Копировать */}
-              <button 
+              {/* Ответ */}
+              {canReply && (
+                <button
+                  onClick={() => onReply?.(msg)}
+                  className="p-0.5 sm:p-1 hover:bg-gray-200/50 rounded-full"
+                  title="Ответить"
+                >
+                  <CornerUpLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
+                </button>
+              )}
+
+              {/* Сохранить */}
+              {canSave && (
+                <button
+                  onClick={() => onToggleSave?.(msg.id)}
+                  className="p-0.5 sm:p-1 hover:bg-gray-200/50 rounded-full"
+                  title="Сохранить"
+                >
+                  {isSaved ? (
+                    <BookmarkCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#4A6572]" />
+                  ) : (
+                    <Bookmark className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
+                  )}
+                </button>
+              )}
+
+              {/* Копировать — разрешено всегда */}
+              <button
                 onClick={handleCopy}
                 className="p-0.5 sm:p-1 hover:bg-gray-200/50 rounded-full"
+                title="Копировать"
               >
                 {copied ? (
                   <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" />
@@ -351,41 +363,44 @@ const ChatMessage = ({
                   <Copy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
                 )}
               </button>
-              
+
               {/* Закрепить */}
-              {onPinMessage && (
-                <button 
-                  onClick={() => onPinMessage?.(msg.id)} 
+              {canPin && (
+                <button
+                  onClick={() => onPinMessage?.(msg.id)}
                   className="p-0.5 sm:p-1 hover:bg-yellow-100/50 rounded text-yellow-500"
+                  title={isPinned ? 'Открепить' : 'Закрепить'}
                 >
                   <Pin className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isPinned ? 'fill-current' : ''}`} />
                 </button>
               )}
-              
+
               {/* Редактировать */}
               {canEdit && (
-                <button 
-                  onClick={() => onStartEdit?.(msg)} 
+                <button
+                  onClick={() => onStartEdit?.(msg)}
                   className="p-0.5 sm:p-1 hover:bg-blue-100/50 rounded text-blue-500"
+                  title="Редактировать"
                 >
                   <Edit2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 </button>
               )}
-              
+
               {/* Удалить */}
               {canDelete && (
-                <button 
-                  onClick={() => onDelete?.(msg.id)} 
+                <button
+                  onClick={() => onDelete?.(msg.id)}
                   className="p-0.5 sm:p-1 hover:bg-red-100/50 rounded text-red-500"
+                  title="Удалить"
                 >
                   <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 </button>
               )}
             </div>
-          )}
-        </div>
-        
-        {/* Реакции под сообщением */}
+          </div>
+        )}
+
+        {/* Реакции под сообщением — кликабельны только в FULL */}
         {Object.keys(reactionCounts).length > 0 && (
           <div className={`flex flex-wrap gap-1 mt-1.5 ${isOwn ? 'justify-end' : ''}`}>
             {Object.entries(reactionCounts).map(([emoji, count]) => {
@@ -393,12 +408,14 @@ const ChatMessage = ({
               return (
                 <button
                   key={`${msg.id}-${emoji}`}
-                  onClick={() => onToggleReaction?.(msg.id, emoji)}
+                  onClick={() => canReact && onToggleReaction?.(msg.id, emoji)}
+                  disabled={!canReact}
                   className={`px-1.5 py-0.5 rounded-full text-xs font-medium flex items-center gap-0.5 transition-all ${
-                    reacted 
-                      ? 'bg-[#4A6572]/10 text-[#4A6572] dark:bg-[#F9AA33]/10 dark:text-[#F9AA33] scale-105' 
+                    reacted
+                      ? 'bg-[#4A6572]/10 text-[#4A6572] dark:bg-[#F9AA33]/10 dark:text-[#F9AA33] scale-105'
                       : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
+                  } ${!canReact ? 'cursor-default opacity-80' : ''}`}
+                  title={canReact ? 'Переключить реакцию' : 'Только чтение'}
                 >
                   {emoji} <span className="text-[10px]">{count}</span>
                 </button>
@@ -406,9 +423,9 @@ const ChatMessage = ({
             })}
           </div>
         )}
-        
-        {/* Picker реакций */}
-        {showReactionsPicker === msg.id && (
+
+        {/* Picker реакций — скрыт в read-only */}
+        {canReact && showReactionsPicker === msg.id && (
           <div className="absolute bottom-full mb-2 p-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 flex gap-1 z-50">
             {REACTION_EMOJIS.map(emoji => {
               const reacted = hasReacted(emoji);

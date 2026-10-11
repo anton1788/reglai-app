@@ -1,17 +1,25 @@
 // src/components/ReportBuilder.jsx
 import React, { useState, useMemo, useCallback } from 'react';
-import { 
+import {
   FileText, Plus, Trash2, Eye, Download, Settings,
-  Calendar, BarChart3, PieChart, LineChart, Filter, Save
+  Calendar, BarChart3, PieChart, LineChart, Filter, Save, Lock,
 } from 'lucide-react';
 
-const ReportBuilder = ({ 
-  applications, 
-  // companyUsers - удалён, так как не используется
+const ReadOnlyBadge = () => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs font-medium rounded-full">
+    <Lock className="w-3.5 h-3.5" />
+    Только чтение
+  </span>
+);
+
+const ReportBuilder = ({
+  applications,
   supabase,
   companyId,
-  showNotification
-  // t - удалён, так как не используется
+  showNotification,
+  // 🆕 READ-ONLY
+  readOnly = false,
+  readOnlyReason = '',
 }) => {
   const [reportName, setReportName] = useState('');
   const [selectedFields, setSelectedFields] = useState([
@@ -27,10 +35,9 @@ const ReportBuilder = ({
   const [viewMode, setViewMode] = useState('table');
   const [savedReports, setSavedReports] = useState([]);
 
-  // Загрузка сохранённых отчётов - обернута в useCallback
   const loadSavedReports = useCallback(async () => {
     if (!companyId) return;
-    
+
     const { data } = await supabase
       .from('saved_reports')
       .select('*')
@@ -39,7 +46,6 @@ const ReportBuilder = ({
     if (data) setSavedReports(data);
   }, [companyId, supabase]);
 
-  // Эффект с корректными зависимостями
   React.useEffect(() => {
     loadSavedReports();
   }, [loadSavedReports]);
@@ -56,7 +62,7 @@ const ReportBuilder = ({
   ];
 
   const toggleField = (fieldKey) => {
-    setSelectedFields(prev => 
+    setSelectedFields(prev =>
       prev.includes(fieldKey)
         ? prev.filter(f => f !== fieldKey)
         : [...prev, fieldKey]
@@ -65,7 +71,7 @@ const ReportBuilder = ({
 
   const filteredData = useMemo(() => {
     let data = applications;
-    
+
     if (filters.dateFrom) {
       data = data.filter(app => app.created_at >= filters.dateFrom);
     }
@@ -76,11 +82,11 @@ const ReportBuilder = ({
       data = data.filter(app => app.status === filters.status);
     }
     if (filters.objectName) {
-      data = data.filter(app => 
+      data = data.filter(app =>
         app.object_name.toLowerCase().includes(filters.objectName.toLowerCase())
       );
     }
-    
+
     return data;
   }, [applications, filters]);
 
@@ -95,10 +101,11 @@ const ReportBuilder = ({
     }));
   }, [filteredData]);
 
+  // Экспорт — разрешён всегда (это чтение)
   const exportReport = (format = 'csv') => {
     let content = '';
     let filename = `report_${reportName || 'untitled'}_${new Date().toISOString().slice(0,10)}`;
-    
+
     if (format === 'csv') {
       content = selectedFields.join(',') + '\n';
       filteredData.forEach(app => {
@@ -125,11 +132,16 @@ const ReportBuilder = ({
     link.download = filename;
     link.click();
     URL.revokeObjectURL(link.href);
-    
+
     showNotification(`📊 Отчёт "${reportName || 'без названия'}" экспортирован`, 'success');
   };
 
+  // 🆕 Сохранение заблокировано в read-only
   const saveReport = async () => {
+    if (readOnly) {
+      showNotification('🔒 Режим просмотра: сохранение отчётов недоступно', 'warning');
+      return;
+    }
     if (!reportName.trim()) {
       showNotification('Введите название отчёта', 'error');
       return;
@@ -151,16 +163,17 @@ const ReportBuilder = ({
         }]);
 
       if (error) throw error;
-      
+
       showNotification('✅ Отчёт сохранён!', 'success');
       await loadSavedReports();
-      
+
     } catch (err) {
       console.error('Ошибка сохранения отчёта:', err);
       showNotification('Ошибка сохранения: ' + err.message, 'error');
     }
   };
 
+  // Загрузка отчёта — разрешена (это чтение)
   const loadSavedReport = (report) => {
     setReportName(report.name);
     setSelectedFields(report.config.fields || ['object_name', 'foreman_name', 'status', 'created_at']);
@@ -172,22 +185,37 @@ const ReportBuilder = ({
 
   return (
     <div className="max-w-7xl mx-auto p-4 page-enter">
+      {/* 🆕 READ-ONLY BANNER */}
+      {readOnly && readOnlyReason && (
+        <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-3 flex items-start gap-2">
+          <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <div className="text-sm font-medium text-amber-900 dark:text-amber-200">Только чтение</div>
+            <div className="text-xs text-amber-800 dark:text-amber-300">{readOnlyReason}</div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <FileText className="w-8 h-8 text-[#4A6572]" />
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
               Конструктор отчётов
             </h2>
+            {readOnly && <ReadOnlyBadge />}
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={saveReport}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              Сохранить
-            </button>
+            {/* 🆕 Кнопка «Сохранить» — только в FULL */}
+            {!readOnly && (
+              <button
+                onClick={saveReport}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                Сохранить
+              </button>
+            )}
             <button
               onClick={() => exportReport('csv')}
               className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors flex items-center gap-2"
@@ -300,8 +328,8 @@ const ReportBuilder = ({
                     key={type}
                     onClick={() => setChartType(type)}
                     className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 ${
-                      chartType === type 
-                        ? 'bg-[#4A6572] text-white' 
+                      chartType === type
+                        ? 'bg-[#4A6572] text-white'
                         : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                     }`}
                   >

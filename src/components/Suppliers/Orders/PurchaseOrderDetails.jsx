@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   ArrowLeft, Loader2, AlertCircle, RefreshCw, FileText,
   Calendar, MapPin, Truck, Building2, Banknote, CheckCircle2, Clock,
-  Ban, ChevronRight, Edit3,
+  Ban, ChevronRight, Edit3, Lock,
 } from 'lucide-react';
 
 import {
@@ -13,7 +13,6 @@ import {
 } from '../../../api/suppliers';
 import { isProcurement } from '../../../utils/permissions';
 
-// ─── Статусы ─────────────────────────────────────────────
 const STATUS_META = {
   created:   { label: 'Создан',       color: 'bg-gray-500/15 text-gray-400 border-gray-500/30',        icon: FileText },
   confirmed: { label: 'Подтверждён',  color: 'bg-blue-500/15 text-blue-400 border-blue-500/30',         icon: CheckCircle2 },
@@ -47,22 +46,24 @@ const formatQty = (v) => {
     : n.toLocaleString('ru-RU', { maximumFractionDigits: 3 });
 };
 
-/**
- * Детали заказа поставщику.
- *
- * @param {object} props
- * @param {string} props.orderId
- * @param {string} [props.role]
- * @param {Function} props.showNotification
- * @param {() => void} [props.onBack]
- */
+const ReadOnlyBadge = () => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-500 text-xs font-medium rounded-full border border-amber-500/30">
+    <Lock className="w-3.5 h-3.5" />
+    Только чтение
+  </span>
+);
+
 export default function PurchaseOrderDetails({
   orderId,
   role,
   showNotification,
   onBack,
+  // 🆕 READ-ONLY
+  readOnly = false,
+  readOnlyReason = '',
 }) {
-  const canEdit = isProcurement(role) || role === 'supply_admin';
+  // 🆕 READ-ONLY блокирует изменение статуса и оплаты
+  const canEdit = !readOnly && (isProcurement(role) || role === 'supply_admin');
 
   const notify = useCallback(
     (msg, type = 'info') => {
@@ -72,14 +73,12 @@ export default function PurchaseOrderDetails({
     [showNotification]
   );
 
-  // ─── Состояние ─────────────────────────────────────────
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // ─── Загрузка ──────────────────────────────────────────
   const loadOrder = useCallback(
     async ({ silent = false } = {}) => {
       if (!orderId) return;
@@ -105,8 +104,11 @@ export default function PurchaseOrderDetails({
     loadOrder();
   }, [loadOrder]);
 
-  // ─── Действия ──────────────────────────────────────────
   const handleChangeStatus = async (newStatus) => {
+    if (readOnly) {
+      notify('🔒 Режим просмотра: изменение статуса недоступно', 'warning');
+      return;
+    }
     if (newStatus === order?.status) return;
     setActionLoading(true);
     try {
@@ -122,6 +124,10 @@ export default function PurchaseOrderDetails({
   };
 
   const handleChangePayment = async (newStatus) => {
+    if (readOnly) {
+      notify('🔒 Режим просмотра: изменение оплаты недоступно', 'warning');
+      return;
+    }
     if (newStatus === order?.payment_status) return;
     setActionLoading(true);
     try {
@@ -136,7 +142,6 @@ export default function PurchaseOrderDetails({
     }
   };
 
-  // ─── Рендер ────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -151,9 +156,7 @@ export default function PurchaseOrderDetails({
         <div className="max-w-3xl mx-auto">
           <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-xl p-6 text-center">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-            <p className="text-red-700 dark:text-red-400 font-medium">
-              {error || 'Заказ не найден'}
-            </p>
+            <p className="text-red-700 dark:text-red-400 font-medium">{error || 'Заказ не найден'}</p>
             {onBack && (
               <button
                 onClick={onBack}
@@ -178,7 +181,17 @@ export default function PurchaseOrderDetails({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* 🆕 READ-ONLY BANNER */}
+        {readOnly && readOnlyReason && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+            <Lock className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-medium text-amber-500">Только чтение</div>
+              <div className="text-xs text-amber-500/80">{readOnlyReason}</div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
           <div className="flex items-start gap-3 flex-1 min-w-0">
             {onBack && (
@@ -203,6 +216,7 @@ export default function PurchaseOrderDetails({
                   <Banknote className="w-3 h-3" />
                   {payMeta.label}
                 </span>
+                {readOnly && <ReadOnlyBadge />}
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
                 Создан: {new Date(order.created_at).toLocaleString('ru-RU')}
@@ -222,38 +236,25 @@ export default function PurchaseOrderDetails({
           </div>
         </div>
 
-        {/* Pipeline */}
         <Pipeline currentIdx={currentIdx} status={order.status} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Левая колонка */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Поставщик */}
             <Card icon={Building2} title="Поставщик">
               {sup.id ? (
                 <div className="space-y-1">
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {sup.name || '—'}
-                  </div>
+                  <div className="font-medium text-gray-900 dark:text-white">{sup.name || '—'}</div>
                   {sup.inn && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      ИНН {sup.inn}
-                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">ИНН {sup.inn}</div>
                   )}
                   {sup.contact_person && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {sup.contact_person}
-                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{sup.contact_person}</div>
                   )}
                   {sup.phone && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {sup.phone}
-                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{sup.phone}</div>
                   )}
                   {sup.email && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {sup.email}
-                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{sup.email}</div>
                   )}
                 </div>
               ) : (
@@ -261,7 +262,6 @@ export default function PurchaseOrderDetails({
               )}
             </Card>
 
-            {/* Условия */}
             <Card icon={Truck} title="Доставка">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <Field label="Адрес доставки" value={order.delivery_address} icon={MapPin} />
@@ -279,12 +279,9 @@ export default function PurchaseOrderDetails({
               </div>
             </Card>
 
-            {/* Позиции */}
             <Card icon={FileText} title={`Позиции (${items.length})`}>
               {items.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                  Нет позиций
-                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">Нет позиций</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -299,9 +296,7 @@ export default function PurchaseOrderDetails({
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                       {items.map((it, i) => {
-                        const lineTotal =
-                          Number(it.total) ||
-                          (Number(it.price) || 0) * (Number(it.quantity) || 0);
+                        const lineTotal = Number(it.total) || (Number(it.price) || 0) * (Number(it.quantity) || 0);
                         return (
                           <tr key={i} className="text-gray-900 dark:text-white">
                             <td className="py-2 px-2 text-gray-400">{i + 1}</td>
@@ -316,12 +311,8 @@ export default function PurchaseOrderDetails({
                             <td className="py-2 px-2 text-right text-xs text-gray-600 dark:text-gray-400">
                               {formatQty(it.quantity)} {it.unit || 'шт'}
                             </td>
-                            <td className="py-2 px-2 text-right text-sm">
-                              {formatPrice(it.price)} ₽
-                            </td>
-                            <td className="py-2 px-2 text-right text-sm font-medium">
-                              {formatPrice(lineTotal)} ₽
-                            </td>
+                            <td className="py-2 px-2 text-right text-sm">{formatPrice(it.price)} ₽</td>
+                            <td className="py-2 px-2 text-right text-sm font-medium">{formatPrice(lineTotal)} ₽</td>
                           </tr>
                         );
                       })}
@@ -331,9 +322,7 @@ export default function PurchaseOrderDetails({
               )}
 
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  Итого по заказу
-                </span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-white">Итого по заказу</span>
                 <span className="text-xl font-bold text-[#344955] dark:text-[#F9AA33]">
                   {formatPrice(order.total)} ₽
                 </span>
@@ -341,9 +330,7 @@ export default function PurchaseOrderDetails({
             </Card>
           </div>
 
-          {/* Правая колонка */}
           <div className="space-y-4">
-            {/* Управление */}
             {canEdit && (
               <Card icon={Edit3} title="Управление">
                 <div className="space-y-4">
@@ -358,9 +345,7 @@ export default function PurchaseOrderDetails({
                       className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#F9AA33]/50 disabled:opacity-50"
                     >
                       {ALL_STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {STATUS_META[s].label}
-                        </option>
+                        <option key={s} value={s}>{STATUS_META[s].label}</option>
                       ))}
                     </select>
                   </div>
@@ -376,9 +361,7 @@ export default function PurchaseOrderDetails({
                       className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#F9AA33]/50 disabled:opacity-50"
                     >
                       {PAYMENT_STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {PAYMENT_META[s].label}
-                        </option>
+                        <option key={s} value={s}>{PAYMENT_META[s].label}</option>
                       ))}
                     </select>
                     {order.paid_at && (
@@ -398,7 +381,6 @@ export default function PurchaseOrderDetails({
               </Card>
             )}
 
-            {/* Связи */}
             {(order.rfq_id || order.offer_id || order.application_id) && (
               <Card icon={ChevronRight} title="Связи">
                 <ul className="space-y-2 text-sm">
@@ -432,30 +414,17 @@ export default function PurchaseOrderDetails({
               </Card>
             )}
 
-            {/* История */}
             <Card icon={Clock} title="История">
               <ul className="space-y-2 text-xs">
-                <MetaRow
-                  label="Создан"
-                  value={new Date(order.created_at).toLocaleString('ru-RU')}
-                />
+                <MetaRow label="Создан" value={new Date(order.created_at).toLocaleString('ru-RU')} />
                 {order.updated_at && order.updated_at !== order.created_at && (
-                  <MetaRow
-                    label="Обновлён"
-                    value={new Date(order.updated_at).toLocaleString('ru-RU')}
-                  />
+                  <MetaRow label="Обновлён" value={new Date(order.updated_at).toLocaleString('ru-RU')} />
                 )}
                 {order.paid_at && (
-                  <MetaRow
-                    label="Оплачен"
-                    value={new Date(order.paid_at).toLocaleString('ru-RU')}
-                  />
+                  <MetaRow label="Оплачен" value={new Date(order.paid_at).toLocaleString('ru-RU')} />
                 )}
                 {order.actual_delivery && (
-                  <MetaRow
-                    label="Доставлен"
-                    value={new Date(order.actual_delivery).toLocaleDateString('ru-RU')}
-                  />
+                  <MetaRow label="Доставлен" value={new Date(order.actual_delivery).toLocaleDateString('ru-RU')} />
                 )}
               </ul>
             </Card>
@@ -466,7 +435,6 @@ export default function PurchaseOrderDetails({
   );
 }
 
-// ─── Pipeline ────────────────────────────────────────────
 function Pipeline({ currentIdx, status }) {
   const isCanceled = status === 'canceled';
   return (
@@ -483,12 +451,11 @@ function Pipeline({ currentIdx, status }) {
               <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
                 <div
                   className={`w-9 h-9 rounded-full flex items-center justify-center transition
-                    ${
-                      isDone
-                        ? 'bg-[#4A6572] text-white'
-                        : isNext
-                          ? 'bg-[#F9AA33]/20 text-[#F9AA33] border-2 border-dashed border-[#F9AA33]'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+                    ${isDone
+                      ? 'bg-[#4A6572] text-white'
+                      : isNext
+                        ? 'bg-[#F9AA33]/20 text-[#F9AA33] border-2 border-dashed border-[#F9AA33]'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
                     }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -507,11 +474,7 @@ function Pipeline({ currentIdx, status }) {
               </div>
               {i < STATUS_ORDER.length - 1 && (
                 <div
-                  className={`flex-1 h-0.5 mx-1 rounded ${
-                    isDone && i < currentIdx
-                      ? 'bg-[#4A6572]'
-                      : 'bg-gray-200 dark:bg-gray-700'
-                  }`}
+                  className={`flex-1 h-0.5 mx-1 rounded ${isDone && i < currentIdx ? 'bg-[#4A6572]' : 'bg-gray-200 dark:bg-gray-700'}`}
                 />
               )}
             </div>
@@ -528,7 +491,6 @@ function Pipeline({ currentIdx, status }) {
   );
 }
 
-// ─── UI helpers ──────────────────────────────────────────
 function Card({ icon: IconCmp, title, children }) {
   const Icon = IconCmp;
   return (

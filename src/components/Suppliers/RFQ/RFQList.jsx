@@ -3,13 +3,12 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Plus, Search, Filter, Loader2, AlertCircle, RefreshCw, X,
   FileText, Clock, Users, MessageSquare, TrendingDown, Building2,
-  CheckCircle2, Ban, Send, BarChart3,
+  CheckCircle2, Ban, Send, BarChart3, Lock,
 } from 'lucide-react';
 
 import { getRFQList } from '../../../api/suppliers';
 import { isProcurement } from '../../../utils/permissions';
 
-// ─── Статусы RFQ ─────────────────────────────────────────
 const STATUS_META = {
   draft:      { label: 'Черновик',    color: 'bg-gray-500/15 text-gray-400 border-gray-500/30',        icon: FileText },
   sent:       { label: 'Отправлен',   color: 'bg-blue-500/15 text-blue-400 border-blue-500/30',         icon: Send },
@@ -36,26 +35,26 @@ const formatMoney = (value) => {
   return `${n.toLocaleString('ru-RU')} ₽`;
 };
 
-/**
- * Список запросов цен (RFQ).
- *
- * @param {object} props
- * @param {string} props.companyId
- * @param {string} [props.role]
- * @param {Function} props.showNotification
- * @param {() => void} [props.onCreate]
- * @param {(rfq) => void} [props.onOpen]
- */
+const ReadOnlyBadge = () => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-500 text-xs font-medium rounded-full border border-amber-500/30">
+    <Lock className="w-3.5 h-3.5" />
+    Только чтение
+  </span>
+);
+
 export default function RFQList({
   companyId,
   role,
   showNotification,
   onCreate,
   onOpen,
+  // 🆕 READ-ONLY
+  readOnly = false,
+  readOnlyReason = '',
 }) {
-  const canCreate = isProcurement(role) || role === 'supply_admin';
+  // 🆕 READ-ONLY блокирует создание
+  const canCreate = !readOnly && (isProcurement(role) || role === 'supply_admin');
 
-  // ─── Состояние ─────────────────────────────────────────
   const [rfqs, setRfqs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,13 +64,11 @@ export default function RFQList({
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // ─── Дебаунс поиска ────────────────────────────────────
   useEffect(() => {
     const t = setTimeout(() => setSearchTerm(searchInput.trim()), 350);
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // ─── Загрузка ──────────────────────────────────────────
   const loadRFQs = useCallback(
     async ({ silent = false } = {}) => {
       if (!companyId) {
@@ -91,42 +88,51 @@ export default function RFQList({
         const data = await getRFQList(companyId, filters);
         setRfqs(data || []);
       } catch (err) {
-  console.error('[RFQList] load error:', err);
-  const message = err.message || 'Не удалось загрузить RFQ';
-  setError(message);
-  setRfqs([]);
-  if (typeof showNotification === 'function') {
-    showNotification(message, 'error');
-  }
-} finally {
+        console.error('[RFQList] load error:', err);
+        const message = err.message || 'Не удалось загрузить RFQ';
+        setError(message);
+        setRfqs([]);
+        if (typeof showNotification === 'function') {
+          showNotification(message, 'error');
+        }
+      } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [companyId, statusFilter, searchTerm]
+    [companyId, statusFilter, searchTerm, showNotification]
   );
 
   useEffect(() => {
     loadRFQs();
   }, [loadRFQs]);
 
-  // ─── Счётчики по статусам ──────────────────────────────
   const counts = useMemo(() => {
     const c = { all: rfqs.length };
     for (const r of rfqs) c[r.status] = (c[r.status] || 0) + 1;
     return c;
   }, [rfqs]);
 
-  // ─── Рендер ────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* 🆕 READ-ONLY BANNER */}
+        {readOnly && readOnlyReason && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+            <Lock className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-medium text-amber-500">Только чтение</div>
+              <div className="text-xs text-amber-500/80">{readOnlyReason}</div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
               <MessageSquare className="w-6 h-6 text-[#4A6572]" />
               Запросы цен (RFQ)
+              {readOnly && <ReadOnlyBadge />}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Запрашивайте цены у нескольких поставщиков и сравнивайте предложения
@@ -154,7 +160,6 @@ export default function RFQList({
           </div>
         </div>
 
-        {/* Фильтры */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -173,9 +178,7 @@ export default function RFQList({
                       }`}
                   >
                     {f.label}
-                    <span className={`ml-1.5 ${active ? 'text-white/70' : 'text-gray-400'}`}>
-                      {count}
-                    </span>
+                    <span className={`ml-1.5 ${active ? 'text-white/70' : 'text-gray-400'}`}>{count}</span>
                   </button>
                 );
               })}
@@ -203,7 +206,6 @@ export default function RFQList({
           </div>
         </div>
 
-        {/* Контент */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
@@ -224,19 +226,12 @@ export default function RFQList({
             hasFilters={Boolean(statusFilter || searchTerm)}
             canCreate={canCreate}
             onCreate={onCreate}
-            onReset={() => {
-              setStatusFilter('');
-              setSearchInput('');
-            }}
+            onReset={() => { setStatusFilter(''); setSearchInput(''); }}
           />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {rfqs.map((rfq) => (
-              <RFQCard
-                key={rfq.id}
-                rfq={rfq}
-                onOpen={onOpen ? () => onOpen(rfq) : undefined}
-              />
+              <RFQCard key={rfq.id} rfq={rfq} onOpen={onOpen ? () => onOpen(rfq) : undefined} />
             ))}
           </div>
         )}
@@ -245,7 +240,6 @@ export default function RFQList({
   );
 }
 
-// ─── Карточка RFQ ────────────────────────────────────────
 function RFQCard({ rfq, onOpen }) {
   const meta = STATUS_META[rfq.status] || STATUS_META.draft;
   const StatusIcon = meta.icon;
@@ -269,9 +263,7 @@ function RFQCard({ rfq, onOpen }) {
           <StatusIcon className="w-5 h-5 text-[#4A6572] dark:text-gray-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-            {rfq.title}
-          </h3>
+          <h3 className="font-semibold text-gray-900 dark:text-white truncate">{rfq.title}</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             {new Date(rfq.created_at).toLocaleString('ru-RU', {
               day: '2-digit', month: '2-digit', year: 'numeric',
@@ -310,7 +302,6 @@ function RFQCard({ rfq, onOpen }) {
   );
 }
 
-// ─── Мини-стат ───────────────────────────────────────────
 function StatCard({ icon: IconCmp, label, value }) {
   const Icon = IconCmp;
   return (
@@ -324,7 +315,6 @@ function StatCard({ icon: IconCmp, label, value }) {
   );
 }
 
-// ─── Пустое состояние ────────────────────────────────────
 function EmptyState({ hasFilters, canCreate, onCreate, onReset }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 py-16 px-6 text-center">
@@ -333,9 +323,7 @@ function EmptyState({ hasFilters, canCreate, onCreate, onReset }) {
       </div>
       {hasFilters ? (
         <>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-            Ничего не найдено
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Ничего не найдено</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
             Попробуйте изменить фильтры или поисковый запрос
           </p>
@@ -348,9 +336,7 @@ function EmptyState({ hasFilters, canCreate, onCreate, onReset }) {
         </>
       ) : (
         <>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-            Пока нет запросов цен
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Пока нет запросов цен</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
             {canCreate
               ? 'Создайте RFQ, отправьте нескольким поставщикам и сравните предложения в одном месте'

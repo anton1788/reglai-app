@@ -2,37 +2,10 @@
 // ============================================================
 // 🚪 ОБЁРТКА: Разграничение доступа к Pro-функциям
 // ============================================================
-//
-// Использование:
-//   <FeatureGate
-//     feature="price_catalog"
-//     currentPlan={currentPlan}
-//     context={{ hasExistingData: pricesCount > 0 }}
-//     onUpgrade={() => setCurrentView('tariffs')}
-//   >
-//     <MaterialPriceCatalog ... />
-//   </FeatureGate>
-//
-// Что делает:
-//   - FULL      → рендерит children как есть
-//   - READ_ONLY → показывает баннер + рендерит children с readOnly={true}
-//   - NONE      → показывает заглушку «функция недоступна»
-// ============================================================
-
 import React from 'react';
 import { Lock, Sparkles, ArrowRight, Eye, Download } from 'lucide-react';
 import { useFeatureAccess } from '../hooks/useFeatureAccess';
 
-/**
- * @param {object} props
- * @param {string} props.feature — ключ функции (например, 'price_catalog')
- * @param {object} props.currentPlan — объект тарифа
- * @param {object} [props.context] — { hasExistingData: boolean }
- * @param {() => void} [props.onUpgrade] — callback при клике «Обновить тариф»
- * @param {React.ReactNode} props.children — что рендерить
- * @param {string} [props.featureName] — человекочитаемое название (для заглушки)
- * @param {React.ReactNode} [props.fallback] — кастомная заглушка для NONE
- */
 export default function FeatureGate({
   feature,
   currentPlan,
@@ -60,15 +33,24 @@ export default function FeatureGate({
     );
   }
 
-  // ─── READ_ONLY: показываем баннер + children с readOnly ───
+  // ─── READ_ONLY: баннер + children с readOnly ──────
+  const readOnlyReason = context.hasExistingData
+    ? 'У вас есть данные в этой функции, но тариф не позволяет их изменять.'
+    : 'Тариф не позволяет создавать новые записи в этой функции.';
+
   return (
     <div>
       <ReadOnlyBanner
         featureName={featureName || feature}
         onUpgrade={onUpgrade}
+        readOnlyReason={readOnlyReason}
+        hasExistingData={context.hasExistingData}
       />
       {React.isValidElement(children)
-        ? React.cloneElement(children, { readOnly: true })
+        ? React.cloneElement(children, {
+            readOnly: true,
+            readOnlyReason,
+          })
         : children}
     </div>
   );
@@ -77,7 +59,7 @@ export default function FeatureGate({
 // ============================================================
 // 🧩 READ-ONLY BANNER
 // ============================================================
-function ReadOnlyBanner({ featureName, onUpgrade }) {
+function ReadOnlyBanner({ featureName, onUpgrade, readOnlyReason, hasExistingData }) {
   return (
     <div className="max-w-7xl mx-auto mb-4 px-4">
       <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4">
@@ -87,15 +69,20 @@ function ReadOnlyBanner({ featureName, onUpgrade }) {
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-amber-900 dark:text-amber-200 mb-1">
-              Функция недоступна на текущем тарифе
+              Режим просмотра — «{featureName}»
             </h3>
             <p className="text-sm text-amber-800 dark:text-amber-300 mb-2">
-              «{featureName}» не входит в ваш тариф. Вы можете просмотреть и{' '}
-              <span className="inline-flex items-center gap-1 font-medium">
-                <Download className="w-3 h-3" />
-                экспортировать
-              </span>{' '}
-              существующие данные, но не можете создавать или изменять их.
+              {readOnlyReason}
+              {hasExistingData && (
+                <>
+                  {' '}Вы можете просмотреть и{' '}
+                  <span className="inline-flex items-center gap-1 font-medium">
+                    <Download className="w-3 h-3" />
+                    экспортировать
+                  </span>{' '}
+                  существующие данные.
+                </>
+              )}
             </p>
             {typeof onUpgrade === 'function' && (
               <button

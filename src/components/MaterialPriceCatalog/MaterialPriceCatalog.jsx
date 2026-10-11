@@ -25,20 +25,14 @@ const emptyForm = {
   is_active: true,
 };
 
-/**
- * @param {object} props
- * @param {string} props.companyId
- * @param {object} props.user
- * @param {string} props.userRole
- * @param {(msg: string, type?: string) => void} props.showNotification
- * @param {boolean} [props.readOnly] — 🆕 если true — только просмотр и экспорт
- */
 const MaterialPriceCatalog = ({
   companyId,
   user,
   userRole,
   showNotification,
-  readOnly = false,  // 🆕
+  // 🆕 READ-ONLY
+  readOnly = false,
+  readOnlyReason = '',
 }) => {
   // 🆕 canCreate — учитывает и роль, и readOnly
   const canEditByRole = canEditPricesUtil(userRole);
@@ -55,7 +49,6 @@ const MaterialPriceCatalog = ({
   const [showImport, setShowImport] = useState(false);
   const [importing, setImporting] = useState(false);
 
-  // Debounce поиска
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(t);
@@ -145,7 +138,6 @@ const MaterialPriceCatalog = ({
     setShowModal(true);
   };
 
-  // ─── Сохранение ──────────────────────────────────
   const handleSave = async () => {
     if (readOnly) return;
 
@@ -177,7 +169,6 @@ const MaterialPriceCatalog = ({
     setSaving(false);
   };
 
-  // ─── Удаление ────────────────────────────────────
   const handleDelete = async (id) => {
     if (readOnly) return;
     const result = await deleteMaterialPrice(id);
@@ -190,7 +181,6 @@ const MaterialPriceCatalog = ({
     setDeleteConfirmId(null);
   };
 
-  // ─── Импорт прайса ───────────────────────────────
   const handleImport = async (rowsToImport) => {
     if (readOnly) {
       showNotification('🔒 Только просмотр. Обновите тариф для импорта.', 'warning');
@@ -230,7 +220,7 @@ const MaterialPriceCatalog = ({
 
   return (
     <div className="max-w-7xl mx-auto p-4 page-enter">
-      {/* 🆕 Read-only баннер (внутренний, если родитель не обернул в FeatureGate) */}
+      {/* 🆕 Read-only баннер */}
       {readOnly && (
         <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl flex items-start gap-3">
           <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg flex-shrink-0">
@@ -241,8 +231,7 @@ const MaterialPriceCatalog = ({
               Режим «Только просмотр»
             </div>
             <div className="text-amber-800 dark:text-amber-300">
-              Справочник цен не входит в ваш тариф. Данные доступны для просмотра
-              и экспорта, но не для редактирования.
+              {readOnlyReason || 'Справочник цен не входит в ваш тариф. Данные доступны для просмотра и экспорта, но не для редактирования.'}
             </div>
           </div>
         </div>
@@ -271,7 +260,6 @@ const MaterialPriceCatalog = ({
             Обновить
           </button>
 
-          {/* 🆕 Экспорт — доступен всегда, если есть данные */}
           {items.length > 0 && (
             <button
               onClick={handleExportCSV}

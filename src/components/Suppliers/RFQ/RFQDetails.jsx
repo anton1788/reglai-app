@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ArrowLeft, Loader2, AlertCircle, RefreshCw, Users, FileText,
   MessageSquare, Calendar, MapPin, Banknote, CheckCircle2,
-  Ban, Plus, Clock, Trophy, TrendingDown, X, BarChart3,
+  Ban, Plus, Clock, Trophy, TrendingDown, X, BarChart3, Lock,
 } from 'lucide-react';
 
 import RFQSupplierSelector from './RFQSupplierSelector';
@@ -47,17 +47,13 @@ const formatQty = (v) => {
     : n.toLocaleString('ru-RU', { maximumFractionDigits: 3 });
 };
 
-/**
- * Детали RFQ + приглашения + офферы + выбор победителя.
- *
- * @param {object} props
- * @param {string} props.rfqId
- * @param {string} props.companyId
- * @param {string} [props.role]
- * @param {Function} props.showNotification
- * @param {() => void} [props.onBack]
- * @param {(offer, rfq) => void} [props.onCreatePO]
- */
+const ReadOnlyBadge = () => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-500 text-xs font-medium rounded-full border border-amber-500/30">
+    <Lock className="w-3.5 h-3.5" />
+    Только чтение
+  </span>
+);
+
 export default function RFQDetails({
   rfqId,
   companyId,
@@ -65,8 +61,12 @@ export default function RFQDetails({
   showNotification,
   onBack,
   onCreatePO,
+  // 🆕 READ-ONLY
+  readOnly = false,
+  readOnlyReason = '',
 }) {
-  const canEdit = isProcurement(role) || role === 'supply_admin';
+  // 🆕 READ-ONLY блокирует всё редактирование
+  const canEdit = !readOnly && (isProcurement(role) || role === 'supply_admin');
 
   const notify = useCallback(
     (msg, type = 'info') => {
@@ -76,7 +76,6 @@ export default function RFQDetails({
     [showNotification]
   );
 
-  // ─── Состояние ─────────────────────────────────────────
   const [rfq, setRfq] = useState(null);
   const [invitations, setInvitations] = useState([]);
   const [offers, setOffers] = useState([]);
@@ -86,11 +85,8 @@ export default function RFQDetails({
 
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-
-  // 🆕 Модалка сравнения офферов
   const [comparisonOpen, setComparisonOpen] = useState(false);
 
-    // 🆕 АВТОФОКУС НА СРАВНЕНИЕ ИЗ AI-АССИСТЕНТА
   useEffect(() => {
     const focusRfqId = localStorage.getItem('rfq_focus_compare');
     if (focusRfqId === rfqId && offers.length > 1) {
@@ -99,7 +95,6 @@ export default function RFQDetails({
     }
   }, [rfqId, offers.length]);
 
-  // ─── Загрузка ──────────────────────────────────────────
   const loadAll = useCallback(
     async ({ silent = false } = {}) => {
       if (!rfqId) return;
@@ -131,7 +126,6 @@ export default function RFQDetails({
     loadAll();
   }, [loadAll]);
 
-  // ─── Статистика ────────────────────────────────────────
   const bestOffer = useMemo(() => {
     if (offers.length === 0) return null;
     return offers.reduce((best, o) => {
@@ -145,8 +139,11 @@ export default function RFQDetails({
   const invitationsCount = invitations.length;
   const respondedCount = invitations.filter((i) => i.status === 'responded').length;
 
-  // ─── Действия ──────────────────────────────────────────
   const handleAddSuppliers = async (picked) => {
+    if (readOnly) {
+      notify('🔒 Режим просмотра: приглашение недоступно', 'warning');
+      return;
+    }
     setSelectorOpen(false);
     if (!picked || picked.length === 0) return;
 
@@ -165,6 +162,10 @@ export default function RFQDetails({
   };
 
   const handleCancel = async () => {
+    if (readOnly) {
+      notify('🔒 Режим просмотра: отмена недоступна', 'warning');
+      return;
+    }
     if (!window.confirm('Отменить RFQ? Поставщики больше не смогут отправить предложения.')) return;
     setActionLoading(true);
     try {
@@ -180,6 +181,10 @@ export default function RFQDetails({
   };
 
   const handleSelectOffer = async (offer) => {
+    if (readOnly) {
+      notify('🔒 Режим просмотра: выбор предложения недоступен', 'warning');
+      return;
+    }
     if (!window.confirm(
       `Выбрать предложение «${offer.suppliers?.name || 'поставщика'}» за ${formatPrice(offer.total)} ₽?\n\n` +
       'Остальные предложения будут отклонены, RFQ закроется.'
@@ -202,7 +207,6 @@ export default function RFQDetails({
     }
   };
 
-  // ─── Рендер ────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -217,9 +221,7 @@ export default function RFQDetails({
         <div className="max-w-3xl mx-auto">
           <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-xl p-6 text-center">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-            <p className="text-red-700 dark:text-red-400 font-medium">
-              {error || 'RFQ не найден'}
-            </p>
+            <p className="text-red-700 dark:text-red-400 font-medium">{error || 'RFQ не найден'}</p>
             {onBack && (
               <button
                 onClick={onBack}
@@ -240,7 +242,17 @@ export default function RFQDetails({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* 🆕 READ-ONLY BANNER */}
+        {readOnly && readOnlyReason && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+            <Lock className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-medium text-amber-500">Только чтение</div>
+              <div className="text-xs text-amber-500/80">{readOnlyReason}</div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
           <div className="flex items-start gap-3 flex-1 min-w-0">
             {onBack && (
@@ -254,17 +266,14 @@ export default function RFQDetails({
             )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {rfq.title}
-                </h1>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{rfq.title}</h1>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border ${meta.color}`}>
                   {meta.label}
                 </span>
+                {readOnly && <ReadOnlyBadge />}
               </div>
               {rfq.description && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  {rfq.description}
-                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{rfq.description}</p>
               )}
               <p className="text-xs text-gray-400 mt-1">
                 Создан: {new Date(rfq.created_at).toLocaleString('ru-RU')}
@@ -305,7 +314,6 @@ export default function RFQDetails({
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <StatBox icon={FileText} label="Позиций" value={items.length} color="text-blue-500" />
           <StatBox icon={Users} label="Приглашено" value={invitationsCount} color="text-purple-500" />
@@ -313,10 +321,8 @@ export default function RFQDetails({
           <StatBox icon={Trophy} label="Лучшая цена" value={bestOffer ? formatPrice(bestOffer.total) + ' ₽' : '—'} color="text-emerald-500" />
         </div>
 
-        {/* Основной контент */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-4">
-            {/* Условия */}
             <Card icon={Calendar} title="Условия">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <Field label="Адрес доставки" value={rfq.delivery_address} icon={MapPin} />
@@ -334,12 +340,9 @@ export default function RFQDetails({
               </div>
             </Card>
 
-            {/* Позиции */}
             <Card icon={FileText} title={`Позиции (${items.length})`}>
               {items.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                  Нет позиций
-                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">Нет позиций</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -367,9 +370,7 @@ export default function RFQDetails({
                             )}
                           </td>
                           <td className="py-2 px-2 text-right">{formatQty(it.quantity)}</td>
-                          <td className="py-2 px-2 text-gray-500 dark:text-gray-400">
-                            {it.unit || 'шт'}
-                          </td>
+                          <td className="py-2 px-2 text-gray-500 dark:text-gray-400">{it.unit || 'шт'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -378,7 +379,6 @@ export default function RFQDetails({
               )}
             </Card>
 
-            {/* Предложения */}
             <Card
               icon={Trophy}
               title={`Предложения (${offers.length})`}
@@ -397,9 +397,7 @@ export default function RFQDetails({
             >
               {offers.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                  {invitationsCount === 0
-                    ? 'Сначала пригласите поставщиков'
-                    : 'Ожидаем ответы поставщиков'}
+                  {invitationsCount === 0 ? 'Сначала пригласите поставщиков' : 'Ожидаем ответы поставщиков'}
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -418,7 +416,6 @@ export default function RFQDetails({
             </Card>
           </div>
 
-          {/* Правая колонка */}
           <div className="space-y-4">
             <Card icon={Users} title={`Приглашения (${invitations.length})`}>
               {invitations.length === 0 ? (
@@ -431,10 +428,7 @@ export default function RFQDetails({
                     const sup = inv.suppliers;
                     const invMeta = INVITATION_META[inv.status] || INVITATION_META.pending;
                     return (
-                      <li
-                        key={inv.id}
-                        className="p-2 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700"
-                      >
+                      <li key={inv.id} className="p-2 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center gap-2">
                           <span className="flex-1 truncate text-sm font-medium text-gray-900 dark:text-white">
                             {sup?.name || 'Поставщик'}
@@ -446,9 +440,7 @@ export default function RFQDetails({
                         <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                           {sup?.email || sup?.phone || '—'}
                           {inv.responded_at && (
-                            <span className="ml-1">
-                              · {new Date(inv.responded_at).toLocaleDateString('ru-RU')}
-                            </span>
+                            <span className="ml-1">· {new Date(inv.responded_at).toLocaleDateString('ru-RU')}</span>
                           )}
                         </div>
                       </li>
@@ -461,7 +453,6 @@ export default function RFQDetails({
         </div>
       </div>
 
-      {/* Селектор поставщиков */}
       <RFQSupplierSelector
         open={selectorOpen}
         onClose={() => setSelectorOpen(false)}
@@ -470,7 +461,6 @@ export default function RFQDetails({
         onConfirm={handleAddSuppliers}
       />
 
-      {/* 🆕 Модалка сравнения офферов */}
       {comparisonOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] fade-enter overflow-y-auto">
           <div className="min-h-full p-4 md:p-6">
@@ -479,10 +469,7 @@ export default function RFQDetails({
               offers={offers}
               canSelect={canSelectNow}
               actionLoading={actionLoading}
-              onSelect={(offer) => {
-                setComparisonOpen(false);
-                handleSelectOffer(offer);
-              }}
+              onSelect={(offer) => { setComparisonOpen(false); handleSelectOffer(offer); }}
               onBack={() => setComparisonOpen(false)}
             />
           </div>
@@ -492,7 +479,6 @@ export default function RFQDetails({
   );
 }
 
-// ─── UI helpers ──────────────────────────────────────────
 function StatBox({ icon: IconCmp, label, value, color = 'text-[#4A6572]' }) {
   const Icon = IconCmp;
   return (
@@ -501,9 +487,7 @@ function StatBox({ icon: IconCmp, label, value, color = 'text-[#4A6572]' }) {
         <Icon className={`w-4 h-4 ${color}`} />
         <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
       </div>
-      <div className="mt-1.5 text-lg font-bold text-gray-900 dark:text-white">
-        {value}
-      </div>
+      <div className="mt-1.5 text-lg font-bold text-gray-900 dark:text-white">{value}</div>
     </div>
   );
 }
@@ -516,15 +500,11 @@ function Card({ icon: IconCmp, title, subtitle, headerAction, children }) {
         <div className="w-7 h-7 rounded-lg bg-[#4A6572]/10 dark:bg-[#4A6572]/30 flex items-center justify-center shrink-0">
           <Icon className="w-4 h-4 text-[#4A6572]" />
         </div>
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
-          {title}
-        </h3>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">{title}</h3>
         {(headerAction || subtitle) && (
           <div className="ml-auto flex items-center gap-2">
             {headerAction}
-            {subtitle && (
-              <span className="text-[11px] text-gray-400">{subtitle}</span>
-            )}
+            {subtitle && <span className="text-[11px] text-gray-400">{subtitle}</span>}
           </div>
         )}
       </div>
@@ -590,9 +570,7 @@ function OfferRow({ offer, isBest, canSelect, onSelect, loading }) {
               {sup?.name || 'Поставщик'}
             </span>
             {sup?.rating > 0 && (
-              <span className="text-[10px] text-[#F9AA33]">
-                ★ {Number(sup.rating).toFixed(1)}
-              </span>
+              <span className="text-[10px] text-[#F9AA33]">★ {Number(sup.rating).toFixed(1)}</span>
             )}
           </div>
 
@@ -623,9 +601,7 @@ function OfferRow({ offer, isBest, canSelect, onSelect, loading }) {
             {formatPrice(offer.total)} ₽
           </div>
           {offer.subtotal > 0 && offer.total !== offer.subtotal && (
-            <div className="text-[11px] text-gray-400 line-through">
-              {formatPrice(offer.subtotal)} ₽
-            </div>
+            <div className="text-[11px] text-gray-400 line-through">{formatPrice(offer.subtotal)} ₽</div>
           )}
         </div>
       </div>

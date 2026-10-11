@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import {
   ArrowLeft, Plus, Trash2, Loader2, Save, Send, Users, FileText,
-  MapPin, Banknote, Info, AlertCircle, X,
+  MapPin, Banknote, Info, AlertCircle, X, Lock,
 } from 'lucide-react';
 
 import RFQSupplierSelector from './RFQSupplierSelector';
@@ -18,19 +18,13 @@ const UNIT_OPTIONS = ['шт', 'м', 'м²', 'м³', 'кг', 'т', 'л', 'уп', 
 
 const EMPTY_ITEM = { name: '', quantity: 1, unit: 'шт', article: '', description: '' };
 
-/**
- * Создание RFQ.
- *
- * @param {object} props
- * @param {string} props.companyId
- * @param {string} props.userId
- * @param {Array} [props.initialItems]
- * @param {object} [props.currentPlan] — 🆕 текущий тариф
- * @param {() => void} [props.onUpgrade] — 🆕 callback на тарифы
- * @param {Function} props.showNotification
- * @param {(rfq) => void} props.onCreated
- * @param {() => void} [props.onCancel]
- */
+const ReadOnlyBadge = () => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-500 text-xs font-medium rounded-full border border-amber-500/30">
+    <Lock className="w-3.5 h-3.5" />
+    Только чтение
+  </span>
+);
+
 export default function RFQCreate({
   companyId,
   userId,
@@ -40,6 +34,9 @@ export default function RFQCreate({
   showNotification,
   onCreated,
   onCancel,
+  // 🆕 READ-ONLY
+  readOnly = false,
+  readOnlyReason = '',
 }) {
   const notify = (msg, type = 'info', isUpdate = false, undoFn = null) => {
     if (typeof showNotification === 'function') {
@@ -49,7 +46,6 @@ export default function RFQCreate({
     }
   };
 
-  // ─── Состояние ─────────────────────────────────────────
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -74,7 +70,6 @@ export default function RFQCreate({
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // ─── 🆕 Проверка лимита RFQ ────────────────────────────
   const checkRFQLimit = async () => {
     if (!companyId || !currentPlan?.id) return true;
 
@@ -91,7 +86,7 @@ export default function RFQCreate({
 
       if (error) {
         console.warn('[RFQCreate] count error:', error);
-        return true; // Не блокируем при ошибке подсчёта
+        return true;
       }
 
       const limitCheck = checkTariffLimit(currentPlan.id, 'rfqPerMonth', count || 0);
@@ -106,12 +101,8 @@ export default function RFQCreate({
         return false;
       }
 
-      // 🆕 Предупреждение при близком лимите
       if (!limitCheck.isUnlimited && limitCheck.remaining <= 2) {
-        notify(
-          `⚠️ Осталось ${limitCheck.remaining} RFQ на этот месяц.`,
-          'warning'
-        );
+        notify(`⚠️ Осталось ${limitCheck.remaining} RFQ на этот месяц.`, 'warning');
       }
 
       return true;
@@ -121,12 +112,10 @@ export default function RFQCreate({
     }
   };
 
-  // ─── Резолв ошибок при вводе ───────────────────────────
   const clearError = (key) => {
     if (errors[key]) setErrors((e) => ({ ...e, [key]: undefined }));
   };
 
-  // ─── Работа с позициями ────────────────────────────────
   const addItem = () => setItems((prev) => [...prev, { ...EMPTY_ITEM }]);
   const removeItem = (idx) => {
     setItems((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev));
@@ -135,7 +124,6 @@ export default function RFQCreate({
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [key]: value } : it)));
   };
 
-  // ─── Валидация ─────────────────────────────────────────
   const validate = () => {
     const e = {};
     if (!title.trim()) e.title = 'Введите название RFQ';
@@ -145,7 +133,6 @@ export default function RFQCreate({
     return Object.keys(e).length === 0;
   };
 
-  // ─── Создание RFQ ──────────────────────────────────────
   const buildPayload = () => {
     const validItems = items
       .filter((it) => it.name.trim() && Number(it.quantity) > 0)
@@ -171,8 +158,12 @@ export default function RFQCreate({
     };
   };
 
-  // 🆕 handleSaveDraft с проверкой лимита
+  // 🆕 READ-ONLY блокирует сохранение черновика
   const handleSaveDraft = async () => {
+    if (readOnly) {
+      notify('🔒 Режим просмотра: создание RFQ недоступно', 'warning');
+      return;
+    }
     if (!validate()) return;
 
     const limitOk = await checkRFQLimit();
@@ -191,8 +182,12 @@ export default function RFQCreate({
     }
   };
 
-  // 🆕 handleSend с проверкой лимита
+  // 🆕 READ-ONLY блокирует отправку
   const handleSend = async () => {
+    if (readOnly) {
+      notify('🔒 Режим просмотра: отправка RFQ недоступна', 'warning');
+      return;
+    }
     if (!validate()) return;
     if (invitedSuppliers.length === 0) {
       notify('Выберите хотя бы одного поставщика', 'error');
@@ -233,7 +228,35 @@ export default function RFQCreate({
     }
   };
 
-  // ─── Рендер ────────────────────────────────────────────
+  // 🆕 READ-ONLY — заглушка вместо формы
+  if (readOnly) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
+        <div className="max-w-3xl mx-auto">
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8 text-amber-500" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+              Создание RFQ недоступно
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              {readOnlyReason || 'На вашем тарифе создание запросов цен недоступно.'}
+            </p>
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                className="px-4 py-2 rounded-lg bg-[#4A6572] hover:bg-[#344955] text-white text-sm font-medium transition"
+              >
+                ← Вернуться к списку
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-5xl mx-auto">
@@ -248,9 +271,10 @@ export default function RFQCreate({
               <ArrowLeft className="w-4 h-4" />
             </button>
           )}
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
               Новый запрос цен
+              {readOnly && <ReadOnlyBadge />}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               Заполните информацию и выберите поставщиков для приглашения
@@ -259,7 +283,6 @@ export default function RFQCreate({
         </div>
 
         <div className="space-y-4">
-          {/* Основное */}
           <Section icon={Info} title="Основная информация">
             <div className="space-y-3">
               <div>
@@ -293,7 +316,6 @@ export default function RFQCreate({
             </div>
           </Section>
 
-          {/* Условия */}
           <Section icon={MapPin} title="Условия поставки">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
@@ -345,7 +367,6 @@ export default function RFQCreate({
             </div>
           </Section>
 
-          {/* Позиции */}
           <Section icon={FileText} title={`Позиции (${items.length})`}>
             {errors.items && (
               <div className="mb-3 flex items-start gap-2 p-2 rounded bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
@@ -421,7 +442,6 @@ export default function RFQCreate({
             </button>
           </Section>
 
-          {/* Поставщики */}
           <Section icon={Users} title={`Приглашённые поставщики (${invitedSuppliers.length})`}>
             {invitedSuppliers.length === 0 ? (
               <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">
@@ -436,9 +456,7 @@ export default function RFQCreate({
                   >
                     {s.name}
                     <button
-                      onClick={() =>
-                        setInvitedSuppliers((prev) => prev.filter((x) => x.id !== s.id))
-                      }
+                      onClick={() => setInvitedSuppliers((prev) => prev.filter((x) => x.id !== s.id))}
                       className="hover:text-red-500"
                       aria-label="Убрать"
                     >
@@ -474,7 +492,7 @@ export default function RFQCreate({
             <button
               type="button"
               onClick={handleSaveDraft}
-              disabled={saving}
+              disabled={saving || readOnly}
               className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium disabled:opacity-50 transition"
             >
               {saving ? (
@@ -490,7 +508,7 @@ export default function RFQCreate({
             <button
               type="button"
               onClick={handleSend}
-              disabled={saving || invitedSuppliers.length === 0}
+              disabled={saving || invitedSuppliers.length === 0 || readOnly}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4A6572] hover:bg-[#344955] text-white text-sm font-medium disabled:opacity-50 transition"
             >
               {saving ? (
@@ -508,7 +526,6 @@ export default function RFQCreate({
         </div>
       </div>
 
-      {/* Селектор поставщиков */}
       <RFQSupplierSelector
         open={selectorOpen}
         onClose={() => setSelectorOpen(false)}
@@ -528,7 +545,6 @@ export default function RFQCreate({
   );
 }
 
-// ─── Секция ──────────────────────────────────────────────
 function Section({ icon: IconCmp, title, children }) {
   const Icon = IconCmp;
   return (

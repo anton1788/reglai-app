@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Loader2, AlertCircle, RefreshCw, MessageSquare, Package, Users,
   TrendingUp, Banknote, ChevronRight,
-  ArrowRight, AlertTriangle, Trophy, BarChart3, Plus, Layers,
+  ArrowRight, AlertTriangle, Trophy, BarChart3, Plus, Layers, Lock,
 } from 'lucide-react';
 
 import {
@@ -20,37 +20,20 @@ const formatMoney = (v) => {
   return `${n.toLocaleString('ru-RU')} ₽`;
 };
 
-const RFQ_STATUS_META = {
-  draft:      { label: 'Черновик',   color: 'bg-gray-500/15 text-gray-400' },
-  sent:       { label: 'Отправлен',  color: 'bg-blue-500/15 text-blue-400' },
-  collecting: { label: 'Сбор',       color: 'bg-amber-500/15 text-amber-400' },
-  analyzing:  { label: 'Анализ',     color: 'bg-purple-500/15 text-purple-400' },
-  completed:  { label: 'Завершён',   color: 'bg-emerald-500/15 text-emerald-400' },
-  canceled:   { label: 'Отменён',    color: 'bg-red-500/15 text-red-400' },
-};
+const ReadOnlyBadge = () => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-500 text-xs font-medium rounded-full border border-amber-500/30">
+    <Lock className="w-3.5 h-3.5" />
+    Только чтение
+  </span>
+);
 
-const ORDER_STATUS_META = {
-  created:   { label: 'Создан',      color: 'bg-gray-500/15 text-gray-400' },
-  confirmed: { label: 'Подтверждён', color: 'bg-blue-500/15 text-blue-400' },
-  paid:      { label: 'Оплачен',     color: 'bg-indigo-500/15 text-indigo-400' },
-  shipped:   { label: 'Отправлен',   color: 'bg-purple-500/15 text-purple-400' },
-  delivered: { label: 'Доставлен',   color: 'bg-amber-500/15 text-amber-400' },
-  received:  { label: 'Получен',     color: 'bg-emerald-500/15 text-emerald-400' },
-  canceled:  { label: 'Отменён',     color: 'bg-red-500/15 text-red-400' },
-};
-
-/**
- * Дашборд закупщика.
- *
- * @param {object} props
- * @param {string} props.companyId
- * @param {(view: string, payload?: object) => void} props.onNavigate
- */
 export default function ProcurementDashboard({
   companyId,
   onNavigate,
+  // 🆕 READ-ONLY
+  readOnly = false,
+  readOnlyReason = '',
 }) {
-  // ─── Состояние ─────────────────────────────────────────
   const [rfqs, setRfqs] = useState([]);
   const [orders, setOrders] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -59,7 +42,6 @@ export default function ProcurementDashboard({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  // ─── Загрузка ──────────────────────────────────────────
   const loadAll = useCallback(
     async ({ silent = false } = {}) => {
       if (!companyId) {
@@ -97,7 +79,6 @@ export default function ProcurementDashboard({
     loadAll();
   }, [loadAll]);
 
-  // ─── Метрики ───────────────────────────────────────────
   const metrics = useMemo(() => {
     const activeRfqStatuses = ['sent', 'collecting', 'analyzing'];
     const activeOrderStatuses = ['created', 'confirmed', 'paid', 'shipped'];
@@ -111,14 +92,8 @@ export default function ProcurementDashboard({
       (o) => o.payment_status !== 'paid' && o.status !== 'canceled'
     );
 
-    const activeOrdersSum = activeOrders.reduce(
-      (sum, o) => sum + (Number(o.total) || 0),
-      0
-    );
-    const unpaidSum = unpaidOrders.reduce(
-      (sum, o) => sum + (Number(o.total) || 0),
-      0
-    );
+    const activeOrdersSum = activeOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+    const unpaidSum = unpaidOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
 
     return {
       activeRfqs: activeRfqs.length,
@@ -131,23 +106,15 @@ export default function ProcurementDashboard({
     };
   }, [rfqs, orders, suppliers]);
 
-  // ─── Требуют внимания ──────────────────────────────────
   const attention = useMemo(() => {
     const items = [];
 
     rfqs
-      .filter(
-        (r) =>
-          (r.offers_count || 0) >= 2 &&
-          r.status !== 'completed' &&
-          r.status !== 'canceled' &&
-          r.status !== 'draft'
-      )
+      .filter((r) => (r.offers_count || 0) >= 2 && r.status !== 'completed' && r.status !== 'canceled' && r.status !== 'draft')
       .slice(0, 3)
       .forEach((rfq) => {
         items.push({
           id: `rfq-${rfq.id}`,
-          type: 'rfq_select',
           icon: Trophy,
           color: 'amber',
           title: 'Готово к выбору победителя',
@@ -158,17 +125,11 @@ export default function ProcurementDashboard({
 
     const now = new Date();
     orders
-      .filter(
-        (o) =>
-          o.expected_delivery &&
-          !['delivered', 'received', 'canceled'].includes(o.status) &&
-          new Date(o.expected_delivery) < now
-      )
+      .filter((o) => o.expected_delivery && !['delivered', 'received', 'canceled'].includes(o.status) && new Date(o.expected_delivery) < now)
       .slice(0, 3)
       .forEach((order) => {
         items.push({
           id: `po-${order.id}`,
-          type: 'overdue',
           icon: AlertTriangle,
           color: 'red',
           title: 'Просрочена доставка',
@@ -180,17 +141,11 @@ export default function ProcurementDashboard({
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
     orders
-      .filter(
-        (o) =>
-          o.payment_status !== 'paid' &&
-          o.status !== 'canceled' &&
-          new Date(o.created_at) < fourteenDaysAgo
-      )
+      .filter((o) => o.payment_status !== 'paid' && o.status !== 'canceled' && new Date(o.created_at) < fourteenDaysAgo)
       .slice(0, 2)
       .forEach((order) => {
         items.push({
           id: `pay-${order.id}`,
-          type: 'unpaid',
           icon: Banknote,
           color: 'purple',
           title: 'Счёт не оплачен > 14 дней',
@@ -202,14 +157,12 @@ export default function ProcurementDashboard({
     return items.slice(0, 5);
   }, [rfqs, orders, onNavigate]);
 
-  // ─── Последние заказы ──────────────────────────────────
   const recentOrders = useMemo(() => {
     return [...orders]
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 5);
   }, [orders]);
 
-  // ─── Топ поставщиков ───────────────────────────────────
   const topSuppliers = useMemo(() => {
     const map = new Map();
     for (const o of orders) {
@@ -226,12 +179,9 @@ export default function ProcurementDashboard({
       cur.total += Number(o.total) || 0;
       map.set(o.supplier_id, cur);
     }
-    return Array.from(map.values())
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
+    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 5);
   }, [orders]);
 
-  // ─── Рендер ────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -262,12 +212,23 @@ export default function ProcurementDashboard({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* 🆕 READ-ONLY BANNER */}
+        {readOnly && readOnlyReason && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+            <Lock className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-medium text-amber-500">Только чтение</div>
+              <div className="text-xs text-amber-500/80">{readOnlyReason}</div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
               <BarChart3 className="w-6 h-6 text-[#4A6572]" />
               Закупки
+              {readOnly && <ReadOnlyBadge />}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Сводка по RFQ, заказам и поставщикам за последние 90 дней
@@ -283,61 +244,37 @@ export default function ProcurementDashboard({
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
-            <button
-              onClick={() => onNavigate?.('rfqCreate')}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4A6572] hover:bg-[#344955] text-white text-sm font-medium transition"
-            >
-              <Plus className="w-4 h-4" />
-              Создать RFQ
-            </button>
+            {!readOnly && (
+              <button
+                onClick={() => onNavigate?.('rfqCreate')}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4A6572] hover:bg-[#344955] text-white text-sm font-medium transition"
+              >
+                <Plus className="w-4 h-4" />
+                Создать RFQ
+              </button>
+            )}
           </div>
         </div>
 
-        {/* KPI Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          <KPICard
-            icon={MessageSquare}
-            label="Активные RFQ"
-            value={metrics.activeRfqs}
-            color="blue"
-            onClick={() => onNavigate?.('rfqList')}
-          />
-          <KPICard
-            icon={Trophy}
-            label="Ждут выбора"
-            value={metrics.rfqsWithOffers}
-            color="amber"
-            onClick={() => onNavigate?.('rfqList', { filter: 'collecting' })}
-          />
-          <KPICard
-            icon={Package}
-            label="Активные заказы"
-            value={metrics.activeOrders}
-            color="emerald"
-            onClick={() => onNavigate?.('purchaseOrders')}
-          />
-          <KPICard
-            icon={Users}
-            label="Поставщиков"
-            value={metrics.totalSuppliers}
-            color="purple"
-            onClick={() => onNavigate?.('suppliers')}
-          />
+          <KPICard icon={MessageSquare} label="Активные RFQ" value={metrics.activeRfqs} color="blue"
+            onClick={() => onNavigate?.('rfqList')} />
+          <KPICard icon={Trophy} label="Ждут выбора" value={metrics.rfqsWithOffers} color="amber"
+            onClick={() => onNavigate?.('rfqList', { filter: 'collecting' })} />
+          <KPICard icon={Package} label="Активные заказы" value={metrics.activeOrders} color="emerald"
+            onClick={() => onNavigate?.('purchaseOrders')} />
+          <KPICard icon={Users} label="Поставщиков" value={metrics.totalSuppliers} color="purple"
+            onClick={() => onNavigate?.('suppliers')} />
         </div>
 
-        {/* Финансовая сводка */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
           <div className="bg-gradient-to-br from-[#4A6572] to-[#344955] rounded-2xl p-5 text-white">
             <div className="flex items-center gap-2 text-white/70 text-sm">
               <TrendingUp className="w-4 h-4" />
               В работе
             </div>
-            <div className="text-3xl font-bold mt-2">
-              {formatMoney(metrics.activeOrdersSum)}
-            </div>
-            <div className="text-xs text-white/60 mt-1">
-              {metrics.activeOrders} активных заказов
-            </div>
+            <div className="text-3xl font-bold mt-2">{formatMoney(metrics.activeOrdersSum)}</div>
+            <div className="text-xs text-white/60 mt-1">{metrics.activeOrders} активных заказов</div>
             <button
               onClick={() => onNavigate?.('purchaseOrders')}
               className="mt-3 flex items-center gap-1.5 text-xs font-medium text-white/90 hover:text-white transition"
@@ -356,25 +293,15 @@ export default function ProcurementDashboard({
               <Banknote className="w-4 h-4" />
               К оплате
             </div>
-            <div className="text-3xl font-bold mt-2">
-              {formatMoney(metrics.unpaidSum)}
-            </div>
+            <div className="text-3xl font-bold mt-2">{formatMoney(metrics.unpaidSum)}</div>
             <div className="text-xs text-white/70 mt-1">
-              {metrics.unpaidOrders === 0
-                ? 'Все заказы оплачены ✅'
-                : `${metrics.unpaidOrders} неоплаченных заказов`}
+              {metrics.unpaidOrders === 0 ? 'Все заказы оплачены ✅' : `${metrics.unpaidOrders} неоплаченных заказов`}
             </div>
           </div>
         </div>
 
-        {/* Требуют внимания */}
         {attention.length > 0 && (
-          <SectionCard
-            icon={AlertTriangle}
-            title="Требуют внимания"
-            count={attention.length}
-            className="mb-6"
-          >
+          <SectionCard icon={AlertTriangle} title="Требуют внимания" count={attention.length} className="mb-6">
             <div className="space-y-2">
               {attention.map((item) => {
                 const Icon = item.icon;
@@ -394,12 +321,8 @@ export default function ProcurementDashboard({
                       <Icon className={`w-4 h-4 ${palette.text}`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
-                        {item.title}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                        {item.subtitle}
-                      </div>
+                      <div className="font-medium text-sm text-gray-900 dark:text-white truncate">{item.title}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{item.subtitle}</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
                   </div>
@@ -410,21 +333,18 @@ export default function ProcurementDashboard({
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          {/* Последние заказы */}
           <SectionCard
             icon={Package}
             title="Последние заказы"
-            action={
-              recentOrders.length > 0 && (
-                <button
-                  onClick={() => onNavigate?.('purchaseOrders')}
-                  className="text-xs text-[#4A6572] hover:text-[#344955] font-medium transition flex items-center gap-1"
-                >
-                  Все
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              )
-            }
+            action={recentOrders.length > 0 && (
+              <button
+                onClick={() => onNavigate?.('purchaseOrders')}
+                className="text-xs text-[#4A6572] hover:text-[#344955] font-medium transition flex items-center gap-1"
+              >
+                Все
+                <ChevronRight className="w-3 h-3" />
+              </button>
+            )}
           >
             {recentOrders.length === 0 ? (
               <EmptyRow text="Заказов пока нет" />
@@ -434,49 +354,30 @@ export default function ProcurementDashboard({
                   <OrderRow
                     key={order.id}
                     order={order}
-                    onClick={() =>
-                      onNavigate?.('purchaseOrderDetails', { orderId: order.id })
-                    }
+                    onClick={() => onNavigate?.('purchaseOrderDetails', { orderId: order.id })}
                   />
                 ))}
               </div>
             )}
           </SectionCard>
 
-          {/* Топ поставщиков */}
-          <SectionCard
-            icon={Trophy}
-            title="Топ поставщиков"
-            subtitle="по сумме заказов"
-          >
+          <SectionCard icon={Trophy} title="Топ поставщиков" subtitle="по сумме заказов">
             {topSuppliers.length === 0 ? (
               <EmptyRow text="Нет данных для отображения" />
             ) : (
               <div className="space-y-2">
                 {topSuppliers.map((sup, i) => (
-                  <div
-                    key={sup.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40"
-                  >
+                  <div key={sup.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0
-                      ${i === 0
-                        ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
-                        : i === 1
-                          ? 'bg-gray-400/20 text-gray-600 dark:text-gray-300'
-                          : i === 2
-                            ? 'bg-orange-500/20 text-orange-600 dark:text-orange-400'
-                            : 'bg-[#4A6572]/10 text-[#4A6572] dark:text-gray-400'
-                      }`}
-                    >
+                      ${i === 0 ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                        : i === 1 ? 'bg-gray-400/20 text-gray-600 dark:text-gray-300'
+                        : i === 2 ? 'bg-orange-500/20 text-orange-600 dark:text-orange-400'
+                        : 'bg-[#4A6572]/10 text-[#4A6572] dark:text-gray-400'}`}>
                       {i + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
-                        {sup.name}
-                      </div>
-                      <div className="text-[11px] text-gray-500 dark:text-gray-400">
-                        {sup.orders} заказ{sup.orders % 10 === 1 && sup.orders % 100 !== 11 ? '' : sup.orders % 10 >= 2 && sup.orders % 10 <= 4 && (sup.orders % 100 < 10 || sup.orders % 100 >= 20) ? 'а' : 'ов'}
-                      </div>
+                      <div className="font-medium text-sm text-gray-900 dark:text-white truncate">{sup.name}</div>
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400">{sup.orders} заказ(ов)</div>
                     </div>
                     <div className="text-sm font-bold text-[#344955] dark:text-[#F9AA33] shrink-0">
                       {formatMoney(sup.total)}
@@ -488,35 +389,19 @@ export default function ProcurementDashboard({
           </SectionCard>
         </div>
 
-        {/* Quick actions */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <QuickAction
-            icon={Plus}
-            label="Создать RFQ"
-            onClick={() => onNavigate?.('rfqCreate')}
-          />
-          <QuickAction
-            icon={Layers}
-            label="Каталог"
-            onClick={() => onNavigate?.('supplierCatalog')}
-          />
-          <QuickAction
-            icon={Users}
-            label="Поставщики"
-            onClick={() => onNavigate?.('suppliers')}
-          />
-          <QuickAction
-            icon={Package}
-            label="Все заказы"
-            onClick={() => onNavigate?.('purchaseOrders')}
-          />
+          {!readOnly && (
+            <QuickAction icon={Plus} label="Создать RFQ" onClick={() => onNavigate?.('rfqCreate')} />
+          )}
+          <QuickAction icon={Layers} label="Каталог" onClick={() => onNavigate?.('supplierCatalog')} />
+          <QuickAction icon={Users} label="Поставщики" onClick={() => onNavigate?.('suppliers')} />
+          <QuickAction icon={Package} label="Все заказы" onClick={() => onNavigate?.('purchaseOrders')} />
         </div>
       </div>
     </div>
   );
 }
 
-// ─── KPI Card ───────────────────────────────────────────
 function KPICard({ icon: IconCmp, label, value, color = 'blue', onClick }) {
   const Icon = IconCmp;
   const colors = {
@@ -524,7 +409,6 @@ function KPICard({ icon: IconCmp, label, value, color = 'blue', onClick }) {
     amber: { bg: 'bg-amber-500/10', text: 'text-amber-500' },
     emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-500' },
     purple: { bg: 'bg-purple-500/10', text: 'text-purple-500' },
-    gray: { bg: 'bg-gray-500/10', text: 'text-gray-500' },
   };
   const palette = colors[color] || colors.blue;
   return (
@@ -537,14 +421,11 @@ function KPICard({ icon: IconCmp, label, value, color = 'blue', onClick }) {
         <Icon className={`w-4 h-4 ${palette.text}`} />
       </div>
       <div className="text-[11px] text-gray-500 dark:text-gray-400">{label}</div>
-      <div className="text-xl font-bold text-gray-900 dark:text-white mt-0.5">
-        {value}
-      </div>
+      <div className="text-xl font-bold text-gray-900 dark:text-white mt-0.5">{value}</div>
     </div>
   );
 }
 
-// ─── Section Card ───────────────────────────────────────
 function SectionCard({ icon: IconCmp, title, subtitle, count, action, className = '', children }) {
   const Icon = IconCmp;
   return (
@@ -553,17 +434,9 @@ function SectionCard({ icon: IconCmp, title, subtitle, count, action, className 
         <div className="w-7 h-7 rounded-lg bg-[#4A6572]/10 dark:bg-[#4A6572]/30 flex items-center justify-center shrink-0">
           <Icon className="w-4 h-4 text-[#4A6572]" />
         </div>
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
-          {title}
-        </h3>
-        {typeof count === 'number' && (
-          <span className="ml-1 text-[10px] font-medium text-gray-400">
-            {count}
-          </span>
-        )}
-        {subtitle && (
-          <span className="text-[11px] text-gray-400">{subtitle}</span>
-        )}
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">{title}</h3>
+        {typeof count === 'number' && <span className="ml-1 text-[10px] font-medium text-gray-400">{count}</span>}
+        {subtitle && <span className="text-[11px] text-gray-400">{subtitle}</span>}
         {action && <div className="ml-auto">{action}</div>}
       </div>
       {children}
@@ -571,9 +444,7 @@ function SectionCard({ icon: IconCmp, title, subtitle, count, action, className 
   );
 }
 
-// ─── Order Row ──────────────────────────────────────────
 function OrderRow({ order, onClick }) {
-  const meta = ORDER_STATUS_META[order.status] || ORDER_STATUS_META.created;
   return (
     <div
       onClick={onClick}
@@ -589,27 +460,16 @@ function OrderRow({ order, onClick }) {
         </div>
       </div>
       <div className="text-right shrink-0">
-        <div className="text-sm font-bold text-gray-900 dark:text-white">
-          {formatMoney(order.total)}
-        </div>
-        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${meta.color} inline-block mt-0.5`}>
-          {meta.label}
-        </span>
+        <div className="text-sm font-bold text-gray-900 dark:text-white">{formatMoney(order.total)}</div>
       </div>
     </div>
   );
 }
 
-// ─── EmptyRow ───────────────────────────────────────────
 function EmptyRow({ text }) {
-  return (
-    <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">
-      {text}
-    </div>
-  );
+  return <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">{text}</div>;
 }
 
-// ─── QuickAction ────────────────────────────────────────
 function QuickAction({ icon: IconCmp, label, onClick }) {
   const Icon = IconCmp;
   return (
@@ -620,9 +480,7 @@ function QuickAction({ icon: IconCmp, label, onClick }) {
       <div className="w-10 h-10 rounded-lg bg-[#4A6572]/10 dark:bg-[#4A6572]/30 flex items-center justify-center">
         <Icon className="w-5 h-5 text-[#4A6572]" />
       </div>
-      <span className="text-xs font-medium text-gray-900 dark:text-white">
-        {label}
-      </span>
+      <span className="text-xs font-medium text-gray-900 dark:text-white">{label}</span>
     </button>
   );
 }

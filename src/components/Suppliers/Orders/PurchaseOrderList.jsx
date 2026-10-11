@@ -3,27 +3,26 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Plus, Search, Filter, Loader2, AlertCircle, RefreshCw, X,
   Package, Clock, Truck, CheckCircle2, Ban, Banknote, Calendar,
-  Building2, TrendingUp, FileText, ChevronRight,
+  Building2, TrendingUp, FileText, ChevronRight, Lock,
 } from 'lucide-react';
 
 import { getPurchaseOrders } from '../../../api/suppliers';
 import { isProcurement } from '../../../utils/permissions';
 
-// ─── Статусы заказа ─────────────────────────────────────
 const STATUS_META = {
-  created:   { label: 'Создан',    color: 'bg-gray-500/15 text-gray-400 border-gray-500/30',       icon: FileText },
-  confirmed: { label: 'Подтверждён', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30',      icon: CheckCircle2 },
-  paid:      { label: 'Оплачен',   color: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30', icon: Banknote },
-  shipped:   { label: 'Отправлен', color: 'bg-purple-500/15 text-purple-400 border-purple-500/30', icon: Truck },
-  delivered: { label: 'Доставлен', color: 'bg-amber-500/15 text-amber-400 border-amber-500/30',    icon: Truck },
-  received:  { label: 'Получен',   color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', icon: CheckCircle2 },
-  canceled:  { label: 'Отменён',   color: 'bg-red-500/15 text-red-400 border-red-500/30',          icon: Ban },
+  created:   { label: 'Создан',      color: 'bg-gray-500/15 text-gray-400 border-gray-500/30',        icon: FileText },
+  confirmed: { label: 'Подтверждён', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30',         icon: CheckCircle2 },
+  paid:      { label: 'Оплачен',     color: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',   icon: Banknote },
+  shipped:   { label: 'Отправлен',   color: 'bg-purple-500/15 text-purple-400 border-purple-500/30',   icon: Truck },
+  delivered: { label: 'Доставлен',   color: 'bg-amber-500/15 text-amber-400 border-amber-500/30',      icon: Truck },
+  received:  { label: 'Получен',     color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', icon: CheckCircle2 },
+  canceled:  { label: 'Отменён',     color: 'bg-red-500/15 text-red-400 border-red-500/30',            icon: Ban },
 };
 
 const PAYMENT_META = {
-  unpaid:  { label: 'Не оплачен',    color: 'bg-gray-500/15 text-gray-400' },
-  partial: { label: 'Частично',      color: 'bg-amber-500/15 text-amber-400' },
-  paid:    { label: 'Оплачен',       color: 'bg-emerald-500/15 text-emerald-400' },
+  unpaid:  { label: 'Не оплачен', color: 'bg-gray-500/15 text-gray-400' },
+  partial: { label: 'Частично',   color: 'bg-amber-500/15 text-amber-400' },
+  paid:    { label: 'Оплачен',    color: 'bg-emerald-500/15 text-emerald-400' },
 };
 
 const STATUS_FILTERS = [
@@ -44,24 +43,24 @@ const formatMoney = (value) => {
   return `${n.toLocaleString('ru-RU')} ₽`;
 };
 
-/**
- * Список заказов поставщикам.
- *
- * @param {object} props
- * @param {string} props.companyId
- * @param {string} [props.role]
- * @param {() => void} [props.onCreate]
- * @param {(po) => void} [props.onOpen]
- */
+const ReadOnlyBadge = () => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-500 text-xs font-medium rounded-full border border-amber-500/30">
+    <Lock className="w-3.5 h-3.5" />
+    Только чтение
+  </span>
+);
+
 export default function PurchaseOrderList({
   companyId,
   role,
   onCreate,
   onOpen,
+  // 🆕 READ-ONLY
+  readOnly = false,
+  readOnlyReason = '',
 }) {
-  const canCreate = isProcurement(role) || role === 'supply_admin';
+  const canCreate = !readOnly && (isProcurement(role) || role === 'supply_admin');
 
-  // ─── Состояние ─────────────────────────────────────────
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,13 +70,11 @@ export default function PurchaseOrderList({
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // ─── Дебаунс поиска ────────────────────────────────────
   useEffect(() => {
     const t = setTimeout(() => setSearchTerm(searchInput.trim()), 350);
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // ─── Загрузка ──────────────────────────────────────────
   const loadOrders = useCallback(
     async ({ silent = false } = {}) => {
       if (!companyId) {
@@ -112,14 +109,12 @@ export default function PurchaseOrderList({
     loadOrders();
   }, [loadOrders]);
 
-  // ─── Счётчики ──────────────────────────────────────────
   const counts = useMemo(() => {
     const c = { all: orders.length };
     for (const o of orders) c[o.status] = (c[o.status] || 0) + 1;
     return c;
   }, [orders]);
 
-  // ─── Суммы ─────────────────────────────────────────────
   const totals = useMemo(() => {
     let sum = 0;
     let unpaid = 0;
@@ -131,16 +126,26 @@ export default function PurchaseOrderList({
     return { sum, unpaid };
   }, [orders]);
 
-  // ─── Рендер ────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* 🆕 READ-ONLY BANNER */}
+        {readOnly && readOnlyReason && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+            <Lock className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-medium text-amber-500">Только чтение</div>
+              <div className="text-xs text-amber-500/80">{readOnlyReason}</div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
               <Package className="w-6 h-6 text-[#4A6572]" />
               Заказы поставщикам
+              {readOnly && <ReadOnlyBadge />}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Управление закупками: статусы, оплата, доставка
@@ -168,21 +173,10 @@ export default function PurchaseOrderList({
           </div>
         </div>
 
-        {/* Сводка */}
         {orders.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-            <SummaryBox
-              icon={Package}
-              label="Всего заказов"
-              value={orders.length}
-              color="text-blue-500"
-            />
-            <SummaryBox
-              icon={TrendingUp}
-              label="Сумма"
-              value={formatMoney(totals.sum)}
-              color="text-emerald-500"
-            />
+            <SummaryBox icon={Package} label="Всего заказов" value={orders.length} color="text-blue-500" />
+            <SummaryBox icon={TrendingUp} label="Сумма" value={formatMoney(totals.sum)} color="text-emerald-500" />
             <SummaryBox
               icon={Banknote}
               label="К оплате"
@@ -192,7 +186,6 @@ export default function PurchaseOrderList({
           </div>
         )}
 
-        {/* Фильтры */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -211,9 +204,7 @@ export default function PurchaseOrderList({
                       }`}
                   >
                     {f.label}
-                    <span className={`ml-1.5 ${active ? 'text-white/70' : 'text-gray-400'}`}>
-                      {count}
-                    </span>
+                    <span className={`ml-1.5 ${active ? 'text-white/70' : 'text-gray-400'}`}>{count}</span>
                   </button>
                 );
               })}
@@ -241,7 +232,6 @@ export default function PurchaseOrderList({
           </div>
         </div>
 
-        {/* Контент */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-[#4A6572]" />
@@ -262,19 +252,12 @@ export default function PurchaseOrderList({
             hasFilters={Boolean(statusFilter || searchTerm)}
             canCreate={canCreate}
             onCreate={onCreate}
-            onReset={() => {
-              setStatusFilter('');
-              setSearchInput('');
-            }}
+            onReset={() => { setStatusFilter(''); setSearchInput(''); }}
           />
         ) : (
           <div className="space-y-2">
             {orders.map((order) => (
-              <POCard
-                key={order.id}
-                order={order}
-                onOpen={onOpen ? () => onOpen(order) : undefined}
-              />
+              <POCard key={order.id} order={order} onOpen={onOpen ? () => onOpen(order) : undefined} />
             ))}
           </div>
         )}
@@ -283,7 +266,6 @@ export default function PurchaseOrderList({
   );
 }
 
-// ─── Карточка PO ─────────────────────────────────────────
 function POCard({ order, onOpen }) {
   const meta = STATUS_META[order.status] || STATUS_META.created;
   const payMeta = PAYMENT_META[order.payment_status] || PAYMENT_META.unpaid;
@@ -292,9 +274,7 @@ function POCard({ order, onOpen }) {
   const itemsCount = Array.isArray(order.items) ? order.items.length : 0;
 
   const expected = order.expected_delivery ? new Date(order.expected_delivery) : null;
-  const isOverdue =
-    expected && !['received', 'delivered', 'canceled'].includes(order.status) &&
-    expected < new Date();
+  const isOverdue = expected && !['received', 'delivered', 'canceled'].includes(order.status) && expected < new Date();
 
   return (
     <div
@@ -309,7 +289,6 @@ function POCard({ order, onOpen }) {
         </div>
 
         <div className="flex-1 min-w-0">
-          {/* Верхняя строка */}
           <div className="flex items-start gap-2 flex-wrap mb-1">
             <span className="font-mono text-xs font-semibold text-[#344955] dark:text-[#F9AA33] bg-[#4A6572]/10 dark:bg-[#4A6572]/30 px-2 py-0.5 rounded">
               {order.order_number || '—'}
@@ -322,13 +301,11 @@ function POCard({ order, onOpen }) {
             </span>
           </div>
 
-          {/* Поставщик */}
           <div className="flex items-center gap-1.5 text-sm text-gray-900 dark:text-white font-medium">
             <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
             <span className="truncate">{sup.name || 'Поставщик не указан'}</span>
           </div>
 
-          {/* Мета */}
           <div className="flex items-center gap-3 flex-wrap mt-1.5 text-xs text-gray-500 dark:text-gray-400">
             <span className="flex items-center gap-1">
               <FileText className="w-3 h-3" />
@@ -350,12 +327,9 @@ function POCard({ order, onOpen }) {
           </div>
         </div>
 
-        {/* Сумма + стрелка */}
         <div className="text-right shrink-0 flex items-center gap-2">
           <div>
-            <div className="text-lg font-bold text-[#344955] dark:text-[#F9AA33]">
-              {formatMoney(order.total)}
-            </div>
+            <div className="text-lg font-bold text-[#344955] dark:text-[#F9AA33]">{formatMoney(order.total)}</div>
             <div className="text-[10px] text-gray-400">
               {order.payment_status === 'paid' ? 'оплачен' : 'к оплате'}
             </div>
@@ -369,7 +343,6 @@ function POCard({ order, onOpen }) {
   );
 }
 
-// ─── Сводка ──────────────────────────────────────────────
 function SummaryBox({ icon: IconCmp, label, value, color = 'text-[#4A6572]' }) {
   const Icon = IconCmp;
   return (
@@ -380,14 +353,11 @@ function SummaryBox({ icon: IconCmp, label, value, color = 'text-[#4A6572]' }) {
         </div>
         <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
       </div>
-      <div className="mt-2 text-lg font-bold text-gray-900 dark:text-white">
-        {value}
-      </div>
+      <div className="mt-2 text-lg font-bold text-gray-900 dark:text-white">{value}</div>
     </div>
   );
 }
 
-// ─── Пусто ───────────────────────────────────────────────
 function EmptyState({ hasFilters, canCreate, onCreate, onReset }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 py-16 px-6 text-center">
@@ -396,9 +366,7 @@ function EmptyState({ hasFilters, canCreate, onCreate, onReset }) {
       </div>
       {hasFilters ? (
         <>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-            Ничего не найдено
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Ничего не найдено</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
             Попробуйте изменить фильтры или поисковый запрос
           </p>
@@ -411,13 +379,9 @@ function EmptyState({ hasFilters, canCreate, onCreate, onReset }) {
         </>
       ) : (
         <>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-            Пока нет заказов
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Пока нет заказов</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
-            {canCreate
-              ? 'Создайте первый заказ — вручную или из выбранного предложения RFQ'
-              : 'Заказы ещё не созданы'}
+            {canCreate ? 'Создайте первый заказ — вручную или из выбранного предложения RFQ' : 'Заказы ещё не созданы'}
           </p>
           {canCreate && onCreate && (
             <button

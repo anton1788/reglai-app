@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Loader2, AlertCircle, RefreshCw, Building2, MessageSquare, Package,
   Trophy, CheckCircle2, FileText, Layers,
-  ArrowRight, Calendar, Star, ChevronRight,
+  ArrowRight, Calendar, Star, ChevronRight, Lock,
 } from 'lucide-react';
 
 import {
@@ -21,39 +21,21 @@ const formatMoney = (v) => {
   return `${n.toLocaleString('ru-RU')} ₽`;
 };
 
-const STATUS_META = {
-  draft:      { label: 'Черновик',   color: 'bg-gray-500/15 text-gray-400' },
-  sent:       { label: 'Отправлен',  color: 'bg-blue-500/15 text-blue-400' },
-  collecting: { label: 'Сбор',       color: 'bg-amber-500/15 text-amber-400' },
-  analyzing:  { label: 'Анализ',     color: 'bg-purple-500/15 text-purple-400' },
-  completed:  { label: 'Завершён',   color: 'bg-emerald-500/15 text-emerald-400' },
-  canceled:   { label: 'Отменён',    color: 'bg-red-500/15 text-red-400' },
-};
+const ReadOnlyBadge = () => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-500 text-xs font-medium rounded-full border border-amber-500/30">
+    <Lock className="w-3.5 h-3.5" />
+    Только чтение
+  </span>
+);
 
-const ORDER_STATUS_META = {
-  created:   { label: 'Создан',       color: 'bg-gray-500/15 text-gray-400' },
-  confirmed: { label: 'Подтверждён',  color: 'bg-blue-500/15 text-blue-400' },
-  paid:      { label: 'Оплачен',      color: 'bg-indigo-500/15 text-indigo-400' },
-  shipped:   { label: 'Отправлен',    color: 'bg-purple-500/15 text-purple-400' },
-  delivered: { label: 'Доставлен',    color: 'bg-amber-500/15 text-amber-400' },
-  received:  { label: 'Получен',      color: 'bg-emerald-500/15 text-emerald-400' },
-  canceled:  { label: 'Отменён',      color: 'bg-red-500/15 text-red-400' },
-};
-
-/**
- * Дашборд поставщика.
- *
- * @param {object} props
- * @param {string} props.companyId
- * @param {string} props.supplierId
- * @param {(view: string, payload?: object) => void} props.onNavigate
- */
 export default function SupplierDashboard({
   companyId,
   supplierId,
   onNavigate,
+  // 🆕 READ-ONLY
+  readOnly = false,
+  readOnlyReason = '',
 }) {
-  // ─── Состояние ─────────────────────────────────────────
   const [supplier, setSupplier] = useState(null);
   const [rfqs, setRfqs] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -64,7 +46,6 @@ export default function SupplierDashboard({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  // ─── Загрузка ──────────────────────────────────────────
   const loadAll = useCallback(
     async ({ silent = false } = {}) => {
       if (!supplierId) {
@@ -77,13 +58,7 @@ export default function SupplierDashboard({
       setError(null);
 
       try {
-        const [
-          supplierData,
-          rfqsData,
-          ordersData,
-          priceListsData,
-          itemsData,
-        ] = await Promise.all([
+        const [supplierData, rfqsData, ordersData, priceListsData, itemsData] = await Promise.all([
           getSupplierById(supplierId).catch(() => null),
           getRFQList(companyId, {}).catch(() => []),
           getPurchaseOrders(companyId, { supplierId }).catch(() => []),
@@ -111,7 +86,6 @@ export default function SupplierDashboard({
     loadAll();
   }, [loadAll]);
 
-  // ─── Метрики ───────────────────────────────────────────
   const stats = useMemo(() => {
     const activeRfqStatuses = ['sent', 'collecting', 'analyzing'];
     const activeOrderStatuses = ['created', 'confirmed', 'paid', 'shipped'];
@@ -121,11 +95,7 @@ export default function SupplierDashboard({
     const activeOrders = orders.filter((o) => activeOrderStatuses.includes(o.status));
     const completedOrders = orders.filter((o) => completedOrderStatuses.includes(o.status));
 
-    const totalOrdersSum = completedOrders.reduce(
-      (sum, o) => sum + (Number(o.total) || 0),
-      0
-    );
-
+    const totalOrdersSum = completedOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
     const completedRfqs = rfqs.filter((r) => r.status === 'completed').length;
     const winRate = completedRfqs > 0
       ? Math.min(100, Math.round((completedOrders.length / completedRfqs) * 100))
@@ -141,14 +111,10 @@ export default function SupplierDashboard({
     };
   }, [rfqs, orders]);
 
-  // ─── RFQ требующие ответа ──────────────────────────────
   const rfqsToRespond = useMemo(() => {
-    return rfqs
-      .filter((r) => ['sent', 'collecting'].includes(r.status))
-      .slice(0, 5);
+    return rfqs.filter((r) => ['sent', 'collecting'].includes(r.status)).slice(0, 5);
   }, [rfqs]);
 
-  // ─── Активные заказы ───────────────────────────────────
   const activeOrders = useMemo(() => {
     const activeStatuses = ['created', 'confirmed', 'paid', 'shipped'];
     return orders
@@ -157,7 +123,6 @@ export default function SupplierDashboard({
       .slice(0, 5);
   }, [orders]);
 
-  // ─── Рендер ────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -188,15 +153,26 @@ export default function SupplierDashboard({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* 🆕 READ-ONLY BANNER */}
+        {readOnly && readOnlyReason && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+            <Lock className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-medium text-amber-500">Только чтение</div>
+              <div className="text-xs text-amber-500/80">{readOnlyReason}</div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
           <div className="flex items-start gap-3">
             <div className="w-12 h-12 shrink-0 rounded-xl bg-gradient-to-br from-[#4A6572] to-[#344955] flex items-center justify-center text-white">
               <Building2 className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
                 {supplier?.name || 'Дашборд поставщика'}
+                {readOnly && <ReadOnlyBadge />}
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
                 {supplier?.inn && <span>ИНН {supplier.inn}</span>}
@@ -220,44 +196,20 @@ export default function SupplierDashboard({
           </button>
         </div>
 
-        {/* KPI */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          <KPICard
-            icon={MessageSquare}
-            label="Активные RFQ"
-            value={stats.activeRfqs}
-            color="blue"
-            onClick={() => onNavigate?.('rfqList')}
-          />
-          <KPICard
-            icon={Package}
-            label="Заказов в работе"
-            value={stats.activeOrders}
-            color="amber"
-            onClick={() => onNavigate?.('purchaseOrders')}
-          />
-          <KPICard
-            icon={CheckCircle2}
-            label="Завершено"
-            value={stats.completedOrders}
-            color="emerald"
-          />
-          <KPICard
-            icon={Trophy}
-            label="Win rate"
-            value={`${stats.winRate}%`}
-            color="purple"
-          />
+          <KPICard icon={MessageSquare} label="Активные RFQ" value={stats.activeRfqs} color="blue"
+            onClick={() => onNavigate?.('rfqList')} />
+          <KPICard icon={Package} label="Заказов в работе" value={stats.activeOrders} color="amber"
+            onClick={() => onNavigate?.('purchaseOrders')} />
+          <KPICard icon={CheckCircle2} label="Завершено" value={stats.completedOrders} color="emerald" />
+          <KPICard icon={Trophy} label="Win rate" value={`${stats.winRate}%`} color="purple" />
         </div>
 
-        {/* Сумма заказов */}
         <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] rounded-2xl p-5 mb-6 text-white">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <div className="text-sm text-white/70">Всего закупок (получено)</div>
-              <div className="text-3xl font-bold mt-1">
-                {formatMoney(stats.totalOrdersSum)}
-              </div>
+              <div className="text-3xl font-bold mt-1">{formatMoney(stats.totalOrdersSum)}</div>
               <div className="text-xs text-white/60 mt-1">
                 по {stats.completedOrders} завершённым заказам
               </div>
@@ -273,22 +225,19 @@ export default function SupplierDashboard({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* RFQ требующие ответа */}
           <SectionCard
             icon={MessageSquare}
             title="Ожидают ответа"
             count={rfqsToRespond.length}
-            action={
-              rfqsToRespond.length > 0 && (
-                <button
-                  onClick={() => onNavigate?.('rfqList', { filter: 'sent' })}
-                  className="text-xs text-[#4A6572] hover:text-[#344955] font-medium transition flex items-center gap-1"
-                >
-                  Все RFQ
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              )
-            }
+            action={rfqsToRespond.length > 0 && (
+              <button
+                onClick={() => onNavigate?.('rfqList', { filter: 'sent' })}
+                className="text-xs text-[#4A6572] hover:text-[#344955] font-medium transition flex items-center gap-1"
+              >
+                Все RFQ
+                <ChevronRight className="w-3 h-3" />
+              </button>
+            )}
           >
             {rfqsToRespond.length === 0 ? (
               <EmptyRow text="Нет активных запросов цен" />
@@ -298,31 +247,26 @@ export default function SupplierDashboard({
                   <RFQRow
                     key={rfq.id}
                     rfq={rfq}
-                    onClick={() =>
-                      onNavigate?.('rfqDetails', { rfqId: rfq.id })
-                    }
+                    onClick={() => onNavigate?.('rfqDetails', { rfqId: rfq.id })}
                   />
                 ))}
               </div>
             )}
           </SectionCard>
 
-          {/* Активные заказы */}
           <SectionCard
             icon={Package}
             title="Заказы в работе"
             count={activeOrders.length}
-            action={
-              activeOrders.length > 0 && (
-                <button
-                  onClick={() => onNavigate?.('purchaseOrders')}
-                  className="text-xs text-[#4A6572] hover:text-[#344955] font-medium transition flex items-center gap-1"
-                >
-                  Все заказы
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              )
-            }
+            action={activeOrders.length > 0 && (
+              <button
+                onClick={() => onNavigate?.('purchaseOrders')}
+                className="text-xs text-[#4A6572] hover:text-[#344955] font-medium transition flex items-center gap-1"
+              >
+                Все заказы
+                <ChevronRight className="w-3 h-3" />
+              </button>
+            )}
           >
             {activeOrders.length === 0 ? (
               <EmptyRow text="Нет активных заказов" />
@@ -332,9 +276,7 @@ export default function SupplierDashboard({
                   <OrderRow
                     key={order.id}
                     order={order}
-                    onClick={() =>
-                      onNavigate?.('purchaseOrderDetails', { orderId: order.id })
-                    }
+                    onClick={() => onNavigate?.('purchaseOrderDetails', { orderId: order.id })}
                   />
                 ))}
               </div>
@@ -342,12 +284,11 @@ export default function SupplierDashboard({
           </SectionCard>
         </div>
 
-        {/* Прайс-лист */}
         <div className="mt-4">
           <SectionCard
             icon={Layers}
             title="Прайс-лист"
-            action={
+            action={(
               <button
                 onClick={() => onNavigate?.('supplierPriceList', { supplierId })}
                 className="text-xs text-[#4A6572] hover:text-[#344955] font-medium transition flex items-center gap-1"
@@ -355,19 +296,13 @@ export default function SupplierDashboard({
                 Открыть
                 <ChevronRight className="w-3 h-3" />
               </button>
-            }
+            )}
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <MiniStat label="Прайс-листов" value={priceLists.length} />
-              <MiniStat
-                label="Активных"
-                value={priceLists.filter((p) => p.is_active).length}
-              />
-              <MiniStat
-                label="Позиций загружено"
-                value={itemsCount}
-                hint={itemsCount >= 1 ? 'по первой странице' : null}
-              />
+              <MiniStat label="Активных" value={priceLists.filter((p) => p.is_active).length} />
+              <MiniStat label="Позиций загружено" value={itemsCount}
+                hint={itemsCount >= 1 ? 'по первой странице' : null} />
             </div>
           </SectionCard>
         </div>
@@ -376,7 +311,6 @@ export default function SupplierDashboard({
   );
 }
 
-// ─── KPI Card ───────────────────────────────────────────
 function KPICard({ icon: IconCmp, label, value, color = 'blue', onClick }) {
   const Icon = IconCmp;
   const colors = {
@@ -384,7 +318,6 @@ function KPICard({ icon: IconCmp, label, value, color = 'blue', onClick }) {
     amber: { bg: 'bg-amber-500/10', text: 'text-amber-500' },
     emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-500' },
     purple: { bg: 'bg-purple-500/10', text: 'text-purple-500' },
-    gray: { bg: 'bg-gray-500/10', text: 'text-gray-500' },
   };
   const palette = colors[color] || colors.blue;
   return (
@@ -397,14 +330,11 @@ function KPICard({ icon: IconCmp, label, value, color = 'blue', onClick }) {
         <Icon className={`w-4 h-4 ${palette.text}`} />
       </div>
       <div className="text-[11px] text-gray-500 dark:text-gray-400">{label}</div>
-      <div className="text-xl font-bold text-gray-900 dark:text-white mt-0.5">
-        {value}
-      </div>
+      <div className="text-xl font-bold text-gray-900 dark:text-white mt-0.5">{value}</div>
     </div>
   );
 }
 
-// ─── Section Card ───────────────────────────────────────
 function SectionCard({ icon: IconCmp, title, count, action, children }) {
   const Icon = IconCmp;
   return (
@@ -417,9 +347,7 @@ function SectionCard({ icon: IconCmp, title, count, action, children }) {
           {title}
         </h3>
         {typeof count === 'number' && (
-          <span className="ml-1 text-[10px] font-medium text-gray-400">
-            {count}
-          </span>
+          <span className="ml-1 text-[10px] font-medium text-gray-400">{count}</span>
         )}
         {action && <div className="ml-auto">{action}</div>}
       </div>
@@ -428,9 +356,7 @@ function SectionCard({ icon: IconCmp, title, count, action, children }) {
   );
 }
 
-// ─── RFQ Row ────────────────────────────────────────────
 function RFQRow({ rfq, onClick }) {
-  const meta = STATUS_META[rfq.status] || STATUS_META.sent;
   const itemsCount = Array.isArray(rfq.items) ? rfq.items.length : 0;
   return (
     <div
@@ -439,9 +365,7 @@ function RFQRow({ rfq, onClick }) {
         ${onClick ? 'cursor-pointer hover:border-[#F9AA33]/50 hover:bg-white dark:hover:bg-gray-800' : ''}`}
     >
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
-          {rfq.title}
-        </div>
+        <div className="font-medium text-sm text-gray-900 dark:text-white truncate">{rfq.title}</div>
         <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500 dark:text-gray-400">
           <span className="flex items-center gap-1">
             <FileText className="w-3 h-3" />
@@ -455,16 +379,11 @@ function RFQRow({ rfq, onClick }) {
           )}
         </div>
       </div>
-      <span className={`shrink-0 text-[10px] font-medium px-2 py-1 rounded ${meta.color}`}>
-        {meta.label}
-      </span>
     </div>
   );
 }
 
-// ─── Order Row ──────────────────────────────────────────
 function OrderRow({ order, onClick }) {
-  const meta = ORDER_STATUS_META[order.status] || ORDER_STATUS_META.created;
   return (
     <div
       onClick={onClick}
@@ -475,47 +394,34 @@ function OrderRow({ order, onClick }) {
         <div className="font-mono text-xs font-semibold text-[#344955] dark:text-[#F9AA33]">
           {order.order_number || '—'}
         </div>
-        <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-          {order.expected_delivery && (
+        {order.expected_delivery && (
+          <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500 dark:text-gray-400">
             <span className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
               до {new Date(order.expected_delivery).toLocaleDateString('ru-RU')}
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
       <div className="text-right shrink-0">
-        <div className="text-sm font-bold text-gray-900 dark:text-white">
-          {formatMoney(order.total)}
-        </div>
-        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${meta.color} inline-block mt-0.5`}>
-          {meta.label}
-        </span>
+        <div className="text-sm font-bold text-gray-900 dark:text-white">{formatMoney(order.total)}</div>
       </div>
     </div>
   );
 }
 
-// ─── EmptyRow ───────────────────────────────────────────
 function EmptyRow({ text }) {
   return (
-    <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">
-      {text}
-    </div>
+    <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">{text}</div>
   );
 }
 
-// ─── MiniStat ───────────────────────────────────────────
 function MiniStat({ label, value, hint }) {
   return (
     <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-700">
       <div className="text-[11px] text-gray-500 dark:text-gray-400">{label}</div>
-      <div className="text-lg font-bold text-gray-900 dark:text-white mt-0.5">
-        {value}
-      </div>
-      {hint && (
-        <div className="text-[10px] text-gray-400 mt-0.5">{hint}</div>
-      )}
+      <div className="text-lg font-bold text-gray-900 dark:text-white mt-0.5">{value}</div>
+      {hint && <div className="text-[10px] text-gray-400 mt-0.5">{hint}</div>}
     </div>
   );
 }

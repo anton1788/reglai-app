@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Search, Package, Loader2, AlertCircle, X, Filter, ShoppingCart,
   BadgeCheck, Building2, ArrowUpDown, Layers, Tag, Boxes,
-  Plus, Check, TrendingDown,
+  Plus, Check, TrendingDown, Lock,
 } from 'lucide-react';
 
 import { searchMaterialsAcrossSuppliers } from '../../api/suppliers';
@@ -31,6 +31,13 @@ const SORT_OPTIONS = [
   { value: 'stock_desc', label: 'Остаток' },
 ];
 
+const ReadOnlyBadge = () => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-500 text-xs font-medium rounded-full border border-amber-500/30">
+    <Lock className="w-3.5 h-3.5" />
+    Только чтение
+  </span>
+);
+
 // ────────────────────────────────────────────────────────────
 // 🧩 КОМПОНЕНТ
 // ────────────────────────────────────────────────────────────
@@ -45,6 +52,9 @@ export default function SupplierCatalog({
   rfqCart: externalRfqCart = [],
   initialSearchTerm = '',
   initialCategory = '',
+  // 🆕 READ-ONLY
+  readOnly = false,
+  readOnlyReason = '',
 }) {
   const notify = useCallback(
     (msg, type = 'info') => {
@@ -54,7 +64,9 @@ export default function SupplierCatalog({
     [showNotification]
   );
 
-  // ─── Состояние ─────────────────────────────────────────
+  // 🆕 READ-ONLY: блокируем добавление в RFQ-корзину
+  const canAddToRfq = !readOnly;
+
   const [query, setQuery] = useState(initialSearchTerm);
   const [debouncedQuery, setDebouncedQuery] = useState(initialSearchTerm.trim());
   const [category, setCategory] = useState(initialCategory);
@@ -67,7 +79,6 @@ export default function SupplierCatalog({
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(false);
 
-  // RFQ-корзина — единый источник правды из App.jsx
   const [localCartFallback, setLocalCartFallback] = useState([]);
   const rfqCart = Array.isArray(externalRfqCart) && externalRfqCart.length >= 0
     ? externalRfqCart
@@ -75,6 +86,12 @@ export default function SupplierCatalog({
 
   const updateCart = useCallback(
     (updater) => {
+      // 🆕 READ-ONLY: если внешний cart передан — не даём менять
+      if (readOnly) {
+        notify('🔒 Режим просмотра: RFQ-корзина недоступна', 'warning');
+        return;
+      }
+
       if (Array.isArray(externalRfqCart)) {
         const next = typeof updater === 'function' ? updater(externalRfqCart) : updater;
         const added = next.find((n) => !externalRfqCart.some((e) => e.id === n.id));
@@ -87,18 +104,16 @@ export default function SupplierCatalog({
         setLocalCartFallback(updater);
       }
     },
-    [externalRfqCart, onAddToRFQ, onRemoveFromRFQ, onClearRFQ]
+    [externalRfqCart, onAddToRFQ, onRemoveFromRFQ, onClearRFQ, readOnly, notify]
   );
 
   const inputRef = useRef(null);
 
-  // ─── Дебаунс ввода ─────────────────────────────────────
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query.trim()), 400);
     return () => clearTimeout(t);
   }, [query]);
 
-  // ─── Загрузка через RPC ────────────────────────────────
   const search = useCallback(async () => {
     if (!companyId) {
       setError('companyId не передан');
@@ -135,7 +150,6 @@ export default function SupplierCatalog({
     search();
   }, [search]);
 
-  // ─── Сортировка ────────────────────────────────────────
   const sortedItems = useMemo(() => {
     const arr = [...items];
     switch (sortBy) {
@@ -153,7 +167,6 @@ export default function SupplierCatalog({
     }
   }, [items, sortBy]);
 
-  // ─── Группировка ───────────────────────────────────────
   const groupedByName = useMemo(() => {
     const map = new Map();
     for (const it of sortedItems) {
@@ -170,14 +183,12 @@ export default function SupplierCatalog({
     }));
   }, [sortedItems]);
 
-  // ─── Категории ─────────────────────────────────────────
   const categories = useMemo(() => {
     const s = new Set();
     for (const it of items) if (it.category) s.add(it.category);
     return Array.from(s).sort();
   }, [items]);
 
-  // ─── RFQ-корзина ───────────────────────────────────────
   const isInRfqCart = useCallback(
     (item) => rfqCart.some((c) => c.id === item.id),
     [rfqCart]
@@ -185,6 +196,10 @@ export default function SupplierCatalog({
 
   const addToRfqCart = useCallback(
     (item) => {
+      if (readOnly) {
+        notify('🔒 Режим просмотра: добавление в RFQ недоступно', 'warning');
+        return;
+      }
       if (rfqCart.some((p) => p.id === item.id)) {
         notify(`«${item.name}» уже в корзине`, 'info');
         return;
@@ -203,24 +218,26 @@ export default function SupplierCatalog({
 
       updateCart((prev) => [...prev, cartItem]);
     },
-    [rfqCart, updateCart, notify]
+    [rfqCart, updateCart, notify, readOnly]
   );
 
   const removeFromRfqCart = useCallback(
     (id) => {
+      if (readOnly) return;
       updateCart((prev) => prev.filter((p) => p.id !== id));
     },
-    [updateCart]
+    [updateCart, readOnly]
   );
 
   const clearRfqCart = useCallback(() => {
+    if (readOnly) return;
     if (typeof onClearRFQ === 'function') onClearRFQ();
     else updateCart([]);
-  }, [onClearRFQ, updateCart]);
+  }, [onClearRFQ, updateCart, readOnly]);
 
-  // 🆕 Кнопка «В RFQ →» — открывает форму создания RFQ в App.jsx
   const handleOpenRFQCreate = useCallback(() => {
-    // 🔍 Отладка — смотрим, что видят колбэки
+    if (readOnly) return;
+
     console.log('🔍 [SupplierCatalog] handleOpenRFQCreate:', {
       rfqCartLength: rfqCart.length,
       hasOnOpenRFQCreate: typeof onOpenRFQCreate === 'function',
@@ -237,25 +254,36 @@ export default function SupplierCatalog({
       console.warn('❌ [SupplierCatalog] onOpenRFQCreate не передан!');
       notify('Откройте раздел RFQ для создания запроса', 'info');
     }
-  }, [rfqCart.length, onOpenRFQCreate, notify]);
+  }, [rfqCart.length, onOpenRFQCreate, notify, readOnly]);
 
-  // ─── Рендер ────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
+        {/* 🆕 READ-ONLY BANNER */}
+        {readOnly && readOnlyReason && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+            <Lock className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-medium text-amber-500">Только чтение</div>
+              <div className="text-xs text-amber-500/80">{readOnlyReason}</div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
               <Layers className="w-6 h-6 text-[#4A6572]" />
               Каталог материалов
+              {readOnly && <ReadOnlyBadge />}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Сквозной поиск по прайс-листам всех поставщиков
             </p>
           </div>
 
-          {rfqCart.length > 0 && (
+          {canAddToRfq && rfqCart.length > 0 && (
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4A6572]/10 text-[#4A6572] text-sm font-medium">
                 <ShoppingCart className="w-4 h-4" />
@@ -380,6 +408,7 @@ export default function SupplierCatalog({
                 isInRfqCart={isInRfqCart}
                 onAddToRfq={addToRfqCart}
                 onRemoveFromRfq={removeFromRfqCart}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -392,6 +421,7 @@ export default function SupplierCatalog({
                 inCart={isInRfqCart(item)}
                 onAdd={() => addToRfqCart(item)}
                 onRemove={() => removeFromRfqCart(item.id)}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -446,7 +476,7 @@ function NoResults({ query }) {
   );
 }
 
-function MaterialCard({ item, inCart, onAdd, onRemove }) {
+function MaterialCard({ item, inCart, onAdd, onRemove, readOnly = false }) {
   const hasStock = item.stock_quantity === null || item.stock_quantity === undefined
     ? null
     : Number(item.stock_quantity) > 0;
@@ -517,29 +547,33 @@ function MaterialCard({ item, inCart, onAdd, onRemove }) {
             ? `от ${formatQuantity(item.min_quantity)} ${item.unit || 'шт'}`
             : 'Любое количество'}
         </span>
-        {inCart ? (
-          <button
-            onClick={onRemove}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium transition"
-          >
-            <Check className="w-3.5 h-3.5" />
-            В запросе
-          </button>
-        ) : (
-          <button
-            onClick={onAdd}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#4A6572] text-[#4A6572] hover:bg-[#4A6572] hover:text-white text-xs font-medium transition"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            В RFQ
-          </button>
+
+        {/* 🆕 Кнопки RFQ скрыты в read-only */}
+        {!readOnly && (
+          inCart ? (
+            <button
+              onClick={onRemove}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium transition"
+            >
+              <Check className="w-3.5 h-3.5" />
+              В запросе
+            </button>
+          ) : (
+            <button
+              onClick={onAdd}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#4A6572] text-[#4A6572] hover:bg-[#4A6572] hover:text-white text-xs font-medium transition"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              В RFQ
+            </button>
+          )
         )}
       </div>
     </div>
   );
 }
 
-function GroupCard({ group, isInRfqCart, onAddToRfq, onRemoveFromRfq }) {
+function GroupCard({ group, isInRfqCart, onAddToRfq, onRemoveFromRfq, readOnly = false }) {
   const { name, variants, minPrice, maxPrice } = group;
   const spread = maxPrice > 0 && minPrice < maxPrice
     ? Math.round(((maxPrice - minPrice) / maxPrice) * 100)
@@ -622,25 +656,29 @@ function GroupCard({ group, isInRfqCart, onAddToRfq, onRemoveFromRfq }) {
                   )}
                 </div>
               </div>
-              <div className="shrink-0">
-                {inCart ? (
-                  <button
-                    onClick={() => onRemoveFromRfq(v.id)}
-                    className="p-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition"
-                    title="Убрать из RFQ"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => onAddToRfq(v)}
-                    className="p-1.5 rounded-lg border border-[#4A6572] text-[#4A6572] hover:bg-[#4A6572] hover:text-white transition"
-                    title="Добавить в RFQ"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
+
+              {/* 🆕 Кнопка добавления в RFQ — только в FULL */}
+              {!readOnly && (
+                <div className="shrink-0">
+                  {inCart ? (
+                    <button
+                      onClick={() => onRemoveFromRfq(v.id)}
+                      className="p-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition"
+                      title="Убрать из RFQ"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => onAddToRfq(v)}
+                      className="p-1.5 rounded-lg border border-[#4A6572] text-[#4A6572] hover:bg-[#4A6572] hover:text-white transition"
+                      title="Добавить в RFQ"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

@@ -1,10 +1,10 @@
 // src/components/CompanyChat.jsx
 import React, { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
-import { 
-  Send, Smile, Paperclip, Edit2, Trash2, X, Check, 
-  Loader2, MessageCircle, Plus, Settings, Search, CornerUpLeft, 
+import {
+  Send, Smile, Paperclip, Edit2, Trash2, X, Check,
+  Loader2, MessageCircle, Plus, Settings, Search, CornerUpLeft,
   Bookmark, BookmarkCheck, Menu, FileText, Pin, Download,
-  Mic, Square, Play, Copy
+  Mic, Square, Play, Copy, Lock,
 } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 import toast from 'react-hot-toast';
@@ -22,38 +22,38 @@ import useChat from '../hooks/useChat';
 
 // ========== КОНСТАНТЫ ==========
 const SYSTEM_CHANNELS = [
-  { 
-    id: 'general', 
-    label: 'Общий', 
+  {
+    id: 'general',
+    label: 'Общий',
     name: 'Общий',
-    icon: '💬', 
+    icon: '💬',
     description: 'Общие вопросы компании',
     canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
     canWrite: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client']
   },
-  { 
-    id: 'supply', 
-    label: 'Снабжение', 
+  {
+    id: 'supply',
+    label: 'Снабжение',
     name: 'Снабжение',
-    icon: '📦', 
+    icon: '📦',
     description: 'Закупки, материалы, логистика',
     canView: ['manager', 'supply_admin'],
     canWrite: ['manager', 'supply_admin']
   },
-  { 
-    id: 'foremen', 
-    label: 'Прорабы', 
+  {
+    id: 'foremen',
+    label: 'Прорабы',
     name: 'Прорабы',
-    icon: '👷', 
+    icon: '👷',
     description: 'Оперативные вопросы на объектах',
     canView: ['manager', 'master', 'foreman'],
     canWrite: ['manager', 'master', 'foreman']
   },
-  { 
-    id: 'announcements', 
-    label: 'Объявления', 
+  {
+    id: 'announcements',
+    label: 'Объявления',
     name: 'Объявления',
-    icon: '📢', 
+    icon: '📢',
     description: 'Важные новости и приказы',
     canView: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client'],
     canWrite: ['manager', 'supply_admin']
@@ -67,8 +67,27 @@ const ArrowDown = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
+// 🆕 READ-ONLY BADGE
+const ReadOnlyBadge = () => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs font-medium rounded-full">
+    <Lock className="w-3.5 h-3.5" />
+    Только чтение
+  </span>
+);
+
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
-const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnreadCountChange }) => {
+const CompanyChat = ({
+  user,
+  userCompanyId,
+  userRole,
+  showNotification,
+  onUnreadCountChange,
+  initialChatId,
+  onChatOpened,
+  // 🆕 READ-ONLY
+  readOnly = false,
+  readOnlyReason = '',
+}) => {
   // ============================================================
   // 🔥 ИСПОЛЬЗУЕМ ХУК useChat
   // ============================================================
@@ -79,6 +98,18 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     showNotification,
     onUnreadCountChange
   });
+
+  // 🆕 Открытие чата по initialChatId (например, из уведомления)
+  useEffect(() => {
+    if (initialChatId && chat.activeChannel !== initialChatId) {
+      console.log('🔄 [CompanyChat] Открываем чат по initialChatId:', initialChatId);
+      chat.setActiveChannel(initialChatId);
+      if (typeof onChatOpened === 'function') {
+        onChatOpened();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialChatId]);
 
   // ✅ Добавляем для отладки
   if (typeof window !== 'undefined') {
@@ -106,35 +137,35 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   useEffect(() => {
     const handleNewMessage = async (payload) => {
       const newMsg = payload.new;
-      
+
       // Пропускаем свои сообщения
       if (newMsg.user_id === user?.id) return;
-      
+
       // Проверяем, что сообщение для текущего канала
-      const isForCurrentChannel = newMsg.channel_id === chat.activeChannel || 
+      const isForCurrentChannel = newMsg.channel_id === chat.activeChannel ||
                                  newMsg.channel === chat.activeChannel;
       if (!isForCurrentChannel) return;
-      
+
       // Получаем имя отправителя
       const { data: userData } = await supabase
         .from('company_users')
         .select('full_name')
         .eq('user_id', newMsg.user_id)
         .single();
-      
+
       const senderName = userData?.full_name || 'Пользователь';
-      
+
       // Toast уведомление
       toast.success(`💬 ${senderName}: ${newMsg.content?.substring(0, 50)}${newMsg.content?.length > 50 ? '...' : ''}`, {
         duration: 5000,
         position: 'top-right',
         className: 'dark:bg-gray-800 dark:text-white',
       });
-      
+
       // Звук
       playNotificationSound();
     };
-    
+
     // Подписка на новые сообщения
     const subscription = supabase
       .channel('new_messages_notifications')
@@ -144,7 +175,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         table: 'company_messages',
       }, handleNewMessage)
       .subscribe();
-    
+
     return () => {
       supabase.removeChannel(subscription);
     };
@@ -173,8 +204,8 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     // 1️⃣ Системные каналы (фильтруем по роли)
     const systemChannels = SYSTEM_CHANNELS
       .filter(ch => ch.canView?.includes(userRole))
-      .map(ch => ({ 
-        ...ch, 
+      .map(ch => ({
+        ...ch,
         id: ch.id,
         label: ch.label || ch.name,
         name: ch.name || ch.label,
@@ -184,14 +215,14 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         canView: ch.canView || [],
         canWrite: ch.canWrite || []
       }));
-    
+
     // 2️⃣ Каналы из БД (включая личные чаты)
     const dbChannels = (chat.customChannels || []).map(ch => {
       const isDirect = ch.is_direct || ch.id?.startsWith('dm_');
       return {
         id: ch.id,
-        label: isDirect 
-          ? (ch.participant_name || ch.name?.replace('Чат с ', '') || 'Личный чат') 
+        label: isDirect
+          ? (ch.participant_name || ch.name?.replace('Чат с ', '') || 'Личный чат')
           : (ch.name || ch.label || 'Без названия'),
         name: ch.name || ch.label || 'Без названия',
         icon: ch.icon || (isDirect ? '👤' : '💬'),
@@ -208,10 +239,10 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         canWrite: ['manager', 'supply_admin', 'master', 'foreman', 'accountant', 'client']
       };
     });
-    
+
     // 3️⃣ Объединяем
     const result = [...systemChannels, ...dbChannels];
-    
+
     // 🐛 ОТЛАДКА
     console.log('📋 [CompanyChat] Все каналы (объединенные):', result);
     console.log('📊 [CompanyChat] Количество каналов:', result.length);
@@ -219,7 +250,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     console.log('📦 [CompanyChat] Из БД:', dbChannels.length);
     console.log('👤 [CompanyChat] Личных чатов:', dbChannels.filter(ch => ch.is_direct).length);
     console.log('👤 [CompanyChat] Роль пользователя:', userRole);
-    
+
     return result;
   }, [chat.customChannels, userRole]);
 
@@ -234,7 +265,6 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   // 🔥 ЭФФЕКТ ДЛЯ ПРИНУДИТЕЛЬНОГО ПЕРЕКЛЮЧЕНИЯ НА GENERAL
   // ============================================================
   useEffect(() => {
-    // Если активный канал не установлен или равен undefined, устанавливаем 'general'
     if (!chat.activeChannel) {
       console.log('🔄 Активный канал не установлен, переключаем на general');
       chat.setActiveChannel('general');
@@ -247,155 +277,170 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
   }, [chat.activeChannel]);
 
   // ============================================================
-  // 🔥 ОТПРАВКА СООБЩЕНИЯ
+  // 🔥 ОТПРАВКА СООБЩЕНИЯ (READ-ONLY блокирует)
   // ============================================================
   const handleSendMessage = useCallback(async () => {
+    if (readOnly) {
+      showNotification?.('🔒 Режим просмотра: отправка сообщений недоступна', 'warning');
+      return;
+    }
     if (!newMessage.trim() || chat.sending) return;
-    
+
     const result = await chat.sendMessage(newMessage, chat.replyTo);
     if (result.success) {
       setNewMessage('');
       chat.setReplyTo(null);
     }
-  }, [newMessage, chat]);
+  }, [newMessage, chat, readOnly, showNotification]);
 
+  // ============================================================
+  // 🔥 ОТПРАВКА ГОЛОСОВОГО (READ-ONLY блокирует)
+  // ============================================================
   const handleVoiceSend = useCallback(async (audio) => {
-  console.log('🔍 [handleVoiceSend] Начало');
-  console.log('📊 audio:', audio);
-  console.log('📊 audio.blob:', audio?.blob);
-  console.log('📊 audio.blob.size:', audio?.blob?.size);
-  console.log('📊 audio.blob.type:', audio?.blob?.type);
-  
-  if (!audio || !audio.blob) {
-    console.error('❌ Нет аудио для отправки');
-    showNotification?.('Не удалось отправить голосовое сообщение', 'error');
-    return;
-  }
-  
-  try {
-    const companyId = chat.getCompanyId();
-    console.log('🏢 companyId:', companyId);
-    
-    if (!companyId) {
-      showNotification?.('Ошибка: компания не указана', 'error');
+    if (readOnly) {
+      showNotification?.('🔒 Режим просмотра: отправка голосовых недоступна', 'warning');
       return;
     }
 
-    // ✅ Проверяем размер
-    if (audio.blob.size > 10 * 1024 * 1024) {
-      showNotification?.('Файл слишком большой (макс. 10MB)', 'error');
+    console.log('🔍 [handleVoiceSend] Начало');
+    console.log('📊 audio:', audio);
+    console.log('📊 audio.blob:', audio?.blob);
+    console.log('📊 audio.blob.size:', audio?.blob?.size);
+    console.log('📊 audio.blob.type:', audio?.blob?.type);
+
+    if (!audio || !audio.blob) {
+      console.error('❌ Нет аудио для отправки');
+      showNotification?.('Не удалось отправить голосовое сообщение', 'error');
       return;
     }
 
-    if (audio.blob.size < 1024) {
-      showNotification?.('Запись слишком короткая', 'error');
-      return;
-    }
-    
-    // ✅ Определяем расширение файла
-    const mimeType = audio.mimeType || audio.blob.type || 'audio/webm';
-    const extension = mimeType.includes('ogg') ? 'ogg' : 
-                     mimeType.includes('mp4') ? 'mp4' : 'webm';
-    
-    // ✅ Создаем File
-    const file = new File(
-      [audio.blob], 
-      `voice_${Date.now()}.${extension}`, 
-      { 
-        type: mimeType,
-        lastModified: Date.now()
-      }
-    );
-    
-    const fileName = `${companyId}/voice_${Date.now()}.${extension}`;
-    console.log('📤 Загрузка голоса:', fileName);
-    console.log('📊 Размер файла:', file.size, 'байт');
-    console.log('📊 Тип файла:', file.type);
-    
-    // ✅ Проверяем bucket перед загрузкой
-    const { data: buckets } = await supabase.storage.listBuckets();
-    console.log('📦 Все buckets:', buckets);
-    
-    const bucketExists = buckets?.some(b => b.id === 'chat-attachments');
-    console.log('✅ chat-attachments существует:', bucketExists);
-    
-    if (!bucketExists) {
-      console.log('🆕 Создаем bucket через RPC...');
-      const { data: bucketData, error: bucketError } = await supabase
-        .rpc('create_chat_bucket');
-      
-      if (bucketError) {
-        console.error('❌ Ошибка создания bucket:', bucketError);
-        showNotification?.('Ошибка доступа к хранилищу', 'error');
+    try {
+      const companyId = chat.getCompanyId();
+      console.log('🏢 companyId:', companyId);
+
+      if (!companyId) {
+        showNotification?.('Ошибка: компания не указана', 'error');
         return;
       }
-      console.log('✅ Bucket создан:', bucketData);
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    
-    // ✅ Загружаем с подробным логированием
-    console.log('📤 Отправка запроса на загрузку...');
-    const startTime = Date.now();
-    
-    const { data, error: uploadError } = await supabase.storage
-      .from('chat-attachments')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false,
-        contentType: mimeType
-      });
-    
-    console.log(`⏱️ Загрузка заняла: ${Date.now() - startTime}мс`);
-    
-    if (uploadError) {
-      console.error('❌ Ошибка загрузки:', uploadError);
-      console.error('❌ Код ошибки:', uploadError.statusCode);
-      console.error('❌ Сообщение:', uploadError.message);
-      console.error('❌ Детали:', uploadError);
-      
-      showNotification?.(`Ошибка загрузки: ${uploadError.message || 'Неизвестная ошибка'}`, 'error');
-      return;
-    }
-    
-    console.log('✅ Загрузка успешна:', data);
-    
-    // ✅ Проверяем, что файл действительно существует
-    console.log('🔍 Проверка существования файла...');
-    const { data: checkData, error: checkError } = await supabase.storage
-      .from('chat-attachments')
-      .download(fileName);
-    
-    if (checkError) {
-      console.error('❌ Файл не найден после загрузки:', checkError);
-      showNotification?.('Файл загружен, но недоступен. Попробуйте снова.', 'error');
-      return;
-    }
-    
-    console.log('✅ Файл подтвержден, размер:', checkData?.size, 'байт');
-    
-    // ✅ Получаем публичный URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('chat-attachments')
-      .getPublicUrl(fileName);
-    
-    console.log('✅ Публичный URL:', publicUrl);
-    
-    // ✅ Отправляем ТОЛЬКО ссылку (без HTML)
-    const result = await chat.sendMessage(`🎙️ Голосовое сообщение: ${publicUrl}`);
-    
-    if (result.success) {
-      showNotification?.('✅ Голосовое сообщение отправлено', 'success');
-    } else {
-      throw new Error('Не удалось отправить сообщение');
-    }
-    
-  } catch (err) {
-    console.error('❌ Ошибка отправки голоса:', err);
-    console.error('❌ Стек ошибки:', err.stack);
-    showNotification?.('Не удалось отправить голосовое сообщение', 'error');
-  }
-}, [chat, showNotification]);
 
+      // ✅ Проверяем размер
+      if (audio.blob.size > 10 * 1024 * 1024) {
+        showNotification?.('Файл слишком большой (макс. 10MB)', 'error');
+        return;
+      }
+
+      if (audio.blob.size < 1024) {
+        showNotification?.('Запись слишком короткая', 'error');
+        return;
+      }
+
+      // ✅ Определяем расширение файла
+      const mimeType = audio.mimeType || audio.blob.type || 'audio/webm';
+      const extension = mimeType.includes('ogg') ? 'ogg' :
+                       mimeType.includes('mp4') ? 'mp4' : 'webm';
+
+      // ✅ Создаем File
+      const file = new File(
+        [audio.blob],
+        `voice_${Date.now()}.${extension}`,
+        {
+          type: mimeType,
+          lastModified: Date.now()
+        }
+      );
+
+      const fileName = `${companyId}/voice_${Date.now()}.${extension}`;
+      console.log('📤 Загрузка голоса:', fileName);
+      console.log('📊 Размер файла:', file.size, 'байт');
+      console.log('📊 Тип файла:', file.type);
+
+      // ✅ Проверяем bucket перед загрузкой
+      const { data: buckets } = await supabase.storage.listBuckets();
+      console.log('📦 Все buckets:', buckets);
+
+      const bucketExists = buckets?.some(b => b.id === 'chat-attachments');
+      console.log('✅ chat-attachments существует:', bucketExists);
+
+      if (!bucketExists) {
+        console.log('🆕 Создаем bucket через RPC...');
+        const { data: bucketData, error: bucketError } = await supabase
+          .rpc('create_chat_bucket');
+
+        if (bucketError) {
+          console.error('❌ Ошибка создания bucket:', bucketError);
+          showNotification?.('Ошибка доступа к хранилищу', 'error');
+          return;
+        }
+        console.log('✅ Bucket создан:', bucketData);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      // ✅ Загружаем с подробным логированием
+      console.log('📤 Отправка запроса на загрузку...');
+      const startTime = Date.now();
+
+      const { data, error: uploadError } = await supabase.storage
+        .from('chat-attachments')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: mimeType
+        });
+
+      console.log(`⏱️ Загрузка заняла: ${Date.now() - startTime}мс`);
+
+      if (uploadError) {
+        console.error('❌ Ошибка загрузки:', uploadError);
+        console.error('❌ Код ошибки:', uploadError.statusCode);
+        console.error('❌ Сообщение:', uploadError.message);
+        console.error('❌ Детали:', uploadError);
+
+        showNotification?.(`Ошибка загрузки: ${uploadError.message || 'Неизвестная ошибка'}`, 'error');
+        return;
+      }
+
+      console.log('✅ Загрузка успешна:', data);
+
+      // ✅ Проверяем, что файл действительно существует
+      console.log('🔍 Проверка существования файла...');
+      const { data: checkData, error: checkError } = await supabase.storage
+        .from('chat-attachments')
+        .download(fileName);
+
+      if (checkError) {
+        console.error('❌ Файл не найден после загрузки:', checkError);
+        showNotification?.('Файл загружен, но недоступен. Попробуйте снова.', 'error');
+        return;
+      }
+
+      console.log('✅ Файл подтвержден, размер:', checkData?.size, 'байт');
+
+      // ✅ Получаем публичный URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('chat-attachments')
+        .getPublicUrl(fileName);
+
+      console.log('✅ Публичный URL:', publicUrl);
+
+      // ✅ Отправляем ТОЛЬКО ссылку (без HTML)
+      const result = await chat.sendMessage(`🎙️ Голосовое сообщение: ${publicUrl}`);
+
+      if (result.success) {
+        showNotification?.('✅ Голосовое сообщение отправлено', 'success');
+      } else {
+        throw new Error('Не удалось отправить сообщение');
+      }
+
+    } catch (err) {
+      console.error('❌ Ошибка отправки голоса:', err);
+      console.error('❌ Стек ошибки:', err.stack);
+      showNotification?.('Не удалось отправить голосовое сообщение', 'error');
+    }
+  }, [chat, showNotification, readOnly]);
+
+  // ============================================================
+  // 🔥 ЗАГРУЗКА УЧАСТНИКОВ КАНАЛА
+  // ============================================================
   const loadChannelMembers = useCallback(async (channelId) => {
     if (!channelId) return;
     setLoadingMembers(true);
@@ -404,9 +449,9 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         .from('channel_members')
         .select('user_id, role, joined_at')
         .eq('channel_id', channelId);
-      
+
       if (error) throw error;
-      
+
       const userIds = data?.map(m => m.user_id) || [];
       let usersMap = {};
       if (userIds.length > 0) {
@@ -419,12 +464,12 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
           return acc;
         }, {});
       }
-      
+
       const membersWithUsers = (data || []).map(m => ({
         ...m,
         user: usersMap[m.user_id] || { full_name: 'Пользователь', role: 'user' }
       }));
-      
+
       setChannelMembers(membersWithUsers);
     } catch (err) {
       console.error('Ошибка загрузки участников:', err);
@@ -434,62 +479,77 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
     }
   }, [showNotification]);
 
+  // ============================================================
+  // 🔥 ДОБАВЛЕНИЕ / УДАЛЕНИЕ УЧАСТНИКА (READ-ONLY блокирует)
+  // ============================================================
   const addChannelMember = useCallback(async (channelId, userId) => {
+    if (readOnly) {
+      showNotification?.('🔒 Режим просмотра: управление участниками недоступно', 'warning');
+      return;
+    }
     if (!channelId || !userId) return;
-    
+
     try {
       const { error } = await supabase
         .from('channel_members')
         .insert({ channel_id: channelId, user_id: userId, role: 'member' });
-      
+
       if (error) throw error;
-      
+
       await loadChannelMembers(channelId);
       showNotification?.('Участник добавлен', 'success');
     } catch (err) {
       console.error('Ошибка добавления участника:', err);
       showNotification?.('Не удалось добавить участника', 'error');
     }
-  }, [loadChannelMembers, showNotification]);
+  }, [loadChannelMembers, showNotification, readOnly]);
 
   const removeChannelMember = useCallback(async (channelId, userId) => {
+    if (readOnly) {
+      showNotification?.('🔒 Режим просмотра: управление участниками недоступно', 'warning');
+      return;
+    }
     if (!channelId || !userId) return;
-    
+
     try {
       const { error } = await supabase
         .from('channel_members')
         .delete()
         .eq('channel_id', channelId)
         .eq('user_id', userId);
-      
+
       if (error) throw error;
-      
+
       await loadChannelMembers(channelId);
       showNotification?.('Участник удалён', 'info');
     } catch (err) {
       console.error('Ошибка удаления участника:', err);
       showNotification?.('Не удалось удалить участника', 'error');
     }
-  }, [loadChannelMembers, showNotification]);
+  }, [loadChannelMembers, showNotification, readOnly]);
 
   // ============================================================
-  // 🔥 УДАЛЕНИЕ КАНАЛА
+  // 🔥 УДАЛЕНИЕ КАНАЛА (READ-ONLY блокирует)
   // ============================================================
   const deleteChannel = useCallback(async (channelId) => {
+    if (readOnly) {
+      showNotification?.('🔒 Режим просмотра: удаление каналов недоступно', 'warning');
+      return;
+    }
     if (!channelId) return;
-    
+
     const channel = chat.customChannels.find(c => c.id === channelId);
     if (!channel) return;
-    
+
     if (!window.confirm(`Удалить канал "${channel.name}"? Все сообщения в канале будут удалены.`)) return;
-    
+
     try {
       await supabase.from('company_messages').delete().eq('channel_id', channelId);
       await supabase.from('channel_members').delete().eq('channel_id', channelId);
-      
+
       const { error } = await supabase.from('company_channels').delete().eq('id', channelId);
       if (error) throw error;
-      
+
       chat.setCustomChannels(prev => prev.filter(c => c.id !== channelId));
       if (chat.activeChannel === channelId) {
         chat.setActiveChannel('general');
@@ -499,11 +559,18 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
       console.error('Ошибка удаления канала:', err);
       showNotification?.('Не удалось удалить канал', 'error');
     }
-  }, [chat, showNotification]);
+  }, [chat, showNotification, readOnly]);
 
+  // ============================================================
+  // 🔥 СОЗДАНИЕ КАНАЛА (READ-ONLY блокирует)
+  // ============================================================
   const handleCreateChannel = useCallback(async (channelData) => {
+    if (readOnly) {
+      showNotification?.('🔒 Режим просмотра: создание каналов недоступно', 'warning');
+      return;
+    }
     if (!userCompanyId || !user?.id) return;
-    
+
     try {
       const { data, error } = await supabase
         .from('company_channels')
@@ -518,15 +585,15 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
         }])
         .select()
         .single();
-      
+
       if (error) throw error;
-      
+
       await supabase.from('channel_members').insert({
         channel_id: data.id,
         user_id: user.id,
         role: 'admin'
       });
-      
+
       if (channelData.is_private && channelData.memberIds?.length) {
         await supabase.from('channel_members').insert(
           channelData.memberIds.map(userId => ({
@@ -536,7 +603,7 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
           }))
         );
       }
-      
+
       chat.setCustomChannels(prev => [...prev, data]);
       chat.setActiveChannel(data.id);
       showNotification?.('Канал создан', 'success');
@@ -545,23 +612,30 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
       showNotification?.('Не удалось создать канал', 'error');
       throw err;
     }
-  }, [userCompanyId, user?.id, showNotification, chat]);
+  }, [userCompanyId, user?.id, showNotification, chat, readOnly]);
 
+  // ============================================================
+  // 🔥 ЗАГРУЗКА ФАЙЛА (READ-ONLY блокирует)
+  // ============================================================
   const handleFileUpload = useCallback(async (e) => {
+    if (readOnly) {
+      showNotification?.('🔒 Режим просмотра: загрузка файлов недоступна', 'warning');
+      return;
+    }
     const file = e.target.files?.[0] || e.dataTransfer?.files[0];
     if (!file || !userCompanyId) return;
-    
+
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       showNotification?.('Файл слишком большой (макс. 10MB)', 'error');
       return;
     }
-    
+
     try {
       const fileName = `${userCompanyId}/${Date.now()}_${file.name.replace(/[^a-z0-9.-]/gi, '_')}`;
       const { error: uploadError } = await supabase.storage.from('chat-attachments').upload(fileName, file);
       if (uploadError) throw uploadError;
-      
+
       const { data: { publicUrl } } = supabase.storage.from('chat-attachments').getPublicUrl(fileName);
       setNewMessage(prev => prev + `\n📎 ${file.name}: ${publicUrl}`);
       showNotification?.('Файл прикреплён', 'success');
@@ -570,150 +644,150 @@ const CompanyChat = ({ user, userCompanyId, userRole, showNotification, onUnread
       showNotification?.('Не удалось загрузить файл', 'error');
     }
     if (e.target) e.target.value = '';
-  }, [userCompanyId, showNotification]);
+  }, [userCompanyId, showNotification, readOnly]);
 
   // ============================================================
-// 🔥 УДАЛЕНИЕ СООБЩЕНИЯ (С УДАЛЕНИЕМ ФАЙЛА ИЗ STORAGE)
-// ============================================================
-const deleteMessage = useCallback(async (messageId) => {
-  if (!messageId) {
-    console.error('❌ Нет ID сообщения');
-    return;
-  }
-  
-  console.log('🗑️ Начинаем удаление сообщения:', messageId);
-  
-  // Находим сообщение
-  const message = chat.messages.find(m => m.id === messageId);
-  if (!message) {
-    console.error('❌ Сообщение не найдено');
-    showNotification?.('Сообщение не найдено', 'error');
-    return;
-  }
-  
-  console.log('📨 Сообщение:', message);
-  console.log('📝 Содержание:', message.content);
-  
-  // ✅ Проверяем, является ли сообщение голосовым
-  const isVoice = message.content?.includes('🎙️ Голосовое сообщение') && 
-                  message.content?.includes('.webm');
-  
-  console.log('🎵 Это голосовое сообщение?', isVoice);
-  
-  // ✅ Если это голосовое сообщение, извлекаем путь к файлу
-  let filePath = null;
-  if (isVoice) {
-    // Ищем URL в сообщении
-    const urlMatch = message.content.match(/https?:\/\/[^\s]+\.webm/);
-    console.log('🔗 Найденный URL:', urlMatch?.[0]);
-    
-    if (urlMatch) {
-      const url = urlMatch[0];
-      console.log('🔗 Полный URL:', url);
-      
-      // ✅ ИЗВЛЕКАЕМ ПУТЬ ИЗ URL
-      // Пробуем разные способы
-      
-      // Способ 1: через split
-      const pathParts = url.split('/public/chat-attachments/');
-      if (pathParts.length === 2) {
-        filePath = pathParts[1];
-        console.log('📁 Путь (способ 1):', filePath);
-      }
-      
-      // Способ 2: через регулярное выражение
-      if (!filePath) {
-        const regexMatch = url.match(/\/object\/public\/chat-attachments\/(.+\.webm)/);
-        if (regexMatch) {
-          filePath = regexMatch[1];
-          console.log('📁 Путь (способ 2):', filePath);
+  // 🔥 УДАЛЕНИЕ СООБЩЕНИЯ (С УДАЛЕНИЕМ ФАЙЛА ИЗ STORAGE)
+  // ============================================================
+  const deleteMessage = useCallback(async (messageId) => {
+    if (readOnly) {
+      showNotification?.('🔒 Режим просмотра: удаление сообщений недоступно', 'warning');
+      return;
+    }
+    if (!messageId) {
+      console.error('❌ Нет ID сообщения');
+      return;
+    }
+
+    console.log('🗑️ Начинаем удаление сообщения:', messageId);
+
+    // Находим сообщение
+    const message = chat.messages.find(m => m.id === messageId);
+    if (!message) {
+      console.error('❌ Сообщение не найдено');
+      showNotification?.('Сообщение не найдено', 'error');
+      return;
+    }
+
+    console.log('📨 Сообщение:', message);
+    console.log('📝 Содержание:', message.content);
+
+    // ✅ Проверяем, является ли сообщение голосовым
+    const isVoice = message.content?.includes('🎙️ Голосовое сообщение') &&
+                    message.content?.includes('.webm');
+
+    console.log('🎵 Это голосовое сообщение?', isVoice);
+
+    // ✅ Если это голосовое сообщение, извлекаем путь к файлу
+    let filePath = null;
+    if (isVoice) {
+      // Ищем URL в сообщении
+      const urlMatch = message.content.match(/https?:\/\/[^\s]+\.webm/);
+      console.log('🔗 Найденный URL:', urlMatch?.[0]);
+
+      if (urlMatch) {
+        const url = urlMatch[0];
+        console.log('🔗 Полный URL:', url);
+
+        // ✅ ИЗВЛЕКАЕМ ПУТЬ ИЗ URL
+
+        // Способ 1: через split
+        const pathParts = url.split('/public/chat-attachments/');
+        if (pathParts.length === 2) {
+          filePath = pathParts[1];
+          console.log('📁 Путь (способ 1):', filePath);
+        }
+
+        // Способ 2: через регулярное выражение
+        if (!filePath) {
+          const regexMatch = url.match(/\/object\/public\/chat-attachments\/(.+\.webm)/);
+          if (regexMatch) {
+            filePath = regexMatch[1];
+            console.log('📁 Путь (способ 2):', filePath);
+          }
+        }
+
+        // Способ 3: через URL объект
+        if (!filePath) {
+          try {
+            const urlObj = new URL(url);
+            const pathname = urlObj.pathname;
+            const parts = pathname.split('/public/chat-attachments/');
+            if (parts.length === 2) {
+              filePath = parts[1];
+              console.log('📁 Путь (способ 3):', filePath);
+            }
+          } catch {
+            console.error('❌ Ошибка парсинга URL');
+          }
+        }
+
+        // Если путь найден, убираем возможные параметры
+        if (filePath) {
+          filePath = filePath.split('?')[0];
+          console.log('📁 Итоговый путь:', filePath);
         }
       }
-      
-      // Способ 3: через URL объект
-      if (!filePath) {
+    }
+
+    // Подтверждение удаления
+    if (!window.confirm('Удалить сообщение?')) {
+      console.log('❌ Удаление отменено пользователем');
+      return;
+    }
+
+    try {
+      // ✅ Сначала удаляем файл из Storage (если это голосовое сообщение)
+      if (filePath) {
+        console.log('🗑️ Удаление файла из Storage:', filePath);
+
         try {
-          const urlObj = new URL(url);
-          const pathname = urlObj.pathname;
-          // /storage/v1/object/public/chat-attachments/folder/file.webm
-          const parts = pathname.split('/public/chat-attachments/');
-          if (parts.length === 2) {
-            filePath = parts[1];
-            console.log('📁 Путь (способ 3):', filePath);
+          const { data: removeData, error: storageError } = await supabase.storage
+            .from('chat-attachments')
+            .remove([filePath]);
+
+          if (storageError) {
+            console.error('❌ Ошибка удаления файла из Storage:', storageError);
+            console.error('❌ Код ошибки:', storageError.statusCode);
+            console.error('❌ Сообщение:', storageError.message);
+          } else {
+            console.log('✅ Файл удален из Storage:', removeData);
           }
         } catch {
-          console.error('❌ Ошибка парсинга URL');
+          console.error('❌ Исключение при удалении файла');
         }
+      } else {
+        console.log('ℹ️ Это не голосовое сообщение или файл не найден');
       }
-      
-      // Если путь найден, убираем возможные параметры
-      if (filePath) {
-        filePath = filePath.split('?')[0];
-        console.log('📁 Итоговый путь:', filePath);
+
+      // ✅ Удаляем сообщение из БД
+      console.log('🗑️ Удаление сообщения из БД...');
+      const { error: deleteError } = await supabase
+        .from('company_messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (deleteError) {
+        console.error('❌ Ошибка удаления из БД:', deleteError);
+        throw deleteError;
       }
+
+      console.log('✅ Сообщение удалено из БД');
+
+      // ✅ Обновляем локальное состояние
+      chat.setMessages(prev => prev.filter(m => m.id !== messageId));
+      showNotification?.('Сообщение удалено', 'success');
+
+    } catch (error) {
+      console.error('❌ Ошибка удаления:', error);
+      showNotification?.('Не удалось удалить сообщение', 'error');
     }
-  }
-  
-  // Подтверждение удаления
-  if (!window.confirm('Удалить сообщение?')) {
-    console.log('❌ Удаление отменено пользователем');
-    return;
-  }
-  
-  try {
-    // ✅ Сначала удаляем файл из Storage (если это голосовое сообщение)
-    if (filePath) {
-      console.log('🗑️ Удаление файла из Storage:', filePath);
-      
-      try {
-        const { data: removeData, error: storageError } = await supabase.storage
-          .from('chat-attachments')
-          .remove([filePath]);
-        
-        if (storageError) {
-          console.error('❌ Ошибка удаления файла из Storage:', storageError);
-          console.error('❌ Код ошибки:', storageError.statusCode);
-          console.error('❌ Сообщение:', storageError.message);
-          // Продолжаем удаление сообщения даже если файл не удалился
-        } else {
-          console.log('✅ Файл удален из Storage:', removeData);
-        }
-      } catch {
-        console.error('❌ Исключение при удалении файла');
-        // Продолжаем удаление сообщения
-      }
-    } else {
-      console.log('ℹ️ Это не голосовое сообщение или файл не найден');
-    }
-    
-    // ✅ Удаляем сообщение из БД
-    console.log('🗑️ Удаление сообщения из БД...');
-    const { error: deleteError } = await supabase
-      .from('company_messages')
-      .delete()
-      .eq('id', messageId);
-    
-    if (deleteError) {
-      console.error('❌ Ошибка удаления из БД:', deleteError);
-      throw deleteError;
-    }
-    
-    console.log('✅ Сообщение удалено из БД');
-    
-    // ✅ Обновляем локальное состояние
-    chat.setMessages(prev => prev.filter(m => m.id !== messageId));
-    showNotification?.('Сообщение удалено', 'success');
-    
-  } catch (error) {
-    console.error('❌ Ошибка удаления:', error);
-    showNotification?.('Не удалось удалить сообщение', 'error');
-  }
-}, [chat, showNotification]);
+  }, [chat, showNotification, readOnly]);
 
   // ===== ФИЛЬТРАЦИЯ СООБЩЕНИЙ =====
   const displayedMessages = useMemo(() => {
     if (!searchQuery) return chat.messages;
-    return chat.messages.filter(m => 
+    return chat.messages.filter(m =>
       m.content?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [chat.messages, searchQuery]);
@@ -746,6 +820,17 @@ const deleteMessage = useCallback(async (messageId) => {
   // ============================================================
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+      {/* 🆕 READ-ONLY BANNER */}
+      {readOnly && readOnlyReason && (
+        <div className="mx-3 sm:mx-4 mt-3 bg-amber-100 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-3 flex items-start gap-2">
+          <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <div className="text-sm font-medium text-amber-900 dark:text-amber-200">Только чтение</div>
+            <div className="text-xs text-amber-800 dark:text-amber-300">{readOnlyReason}</div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* Сайдбар */}
         <ChatSidebar
@@ -754,30 +839,33 @@ const deleteMessage = useCallback(async (messageId) => {
           onChannelSelect={(channelId) => {
             console.log('🔄 Выбран канал:', channelId);
             console.log('📌 Текущий активный:', chat.activeChannel);
-            
-            // ✅ Принудительно переключаем
+
             chat.setActiveChannel(channelId);
-            
-            // ✅ Если это 'general', принудительно обновляем
+
             if (channelId === 'general') {
               console.log('🔄 Принудительное обновление канала general');
               setTimeout(() => {
                 chat.loadMessages();
-                // Проверяем, что активный канал действительно general
                 if (chat.activeChannel !== 'general') {
                   chat.setActiveChannel('general');
                 }
               }, 50);
             }
-            
+
             console.log('📌 Новый активный:', chat.activeChannel);
-            
+
             if (chat.isMobile) {
               chat.setShowSidebar(false);
             }
           }}
-          canCreateChannel={userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director'}
-          onCreateChannel={() => setShowCreateModal(true)}
+          canCreateChannel={!readOnly && (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director')}
+          onCreateChannel={() => {
+            if (readOnly) {
+              showNotification?.('🔒 Режим просмотра: создание каналов недоступно', 'warning');
+              return;
+            }
+            setShowCreateModal(true);
+          }}
           connectionStatus={chat.connectionStatus}
           showSidebar={chat.showSidebar}
           onChannelSettings={(channel) => {
@@ -789,6 +877,10 @@ const deleteMessage = useCallback(async (messageId) => {
           companyUsers={chat.companyUsers}
           currentUser={user}
           onStartDirectChat={async (userData) => {
+            if (readOnly) {
+              showNotification?.('🔒 Режим просмотра: создание чатов недоступно', 'warning');
+              return;
+            }
             console.log('👤 Начинаем личный чат с:', userData);
             await chat.startDirectChat(userData);
             if (chat.isMobile) {
@@ -808,7 +900,7 @@ const deleteMessage = useCallback(async (messageId) => {
             <header className="flex-shrink-0 px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between bg-white/50 dark:bg-gray-800/50">
               <div className="flex items-center gap-2 sm:gap-3">
                 {chat.isMobile && !chat.showSidebar && (
-                  <button 
+                  <button
                     onClick={() => chat.setShowSidebar(true)}
                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                     aria-label="Открыть список каналов"
@@ -816,7 +908,7 @@ const deleteMessage = useCallback(async (messageId) => {
                     <Menu className="w-5 h-5" />
                   </button>
                 )}
-                
+
                 {/* 🐛 Отладочная кнопка */}
                 <button
                   onClick={() => {
@@ -825,8 +917,7 @@ const deleteMessage = useCallback(async (messageId) => {
                     console.log('📌 Все каналы:', allChannels);
                     console.log('📌 Системные каналы:', SYSTEM_CHANNELS);
                     console.log('📌 Пользовательские каналы:', chat.customChannels);
-                    
-                    // Принудительно переключаем на general
+
                     chat.setActiveChannel('general');
                     console.log('📌 Принудительно переключили на general');
                   }}
@@ -835,14 +926,15 @@ const deleteMessage = useCallback(async (messageId) => {
                 >
                   🐛
                 </button>
-                
+
                 <div className="flex items-center gap-2 sm:gap-3">
                   <span className="text-xl sm:text-2xl bg-gray-100 dark:bg-gray-700 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center">
                     {currentChannel?.icon || '💬'}
                   </span>
                   <div>
-                    <h2 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+                    <h2 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base flex items-center gap-2 flex-wrap">
                       {currentChannel?.label || currentChannel?.name || 'Чат'}
+                      {readOnly && <ReadOnlyBadge />}
                     </h2>
                     <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
                       {currentChannel?.description || ''}
@@ -850,28 +942,27 @@ const deleteMessage = useCallback(async (messageId) => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2">
-                <button 
+                <button
                   onClick={() => setShowExportModal(true)}
                   className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 transition-colors"
                   title="Экспорт чата"
                 >
                   <Download className="w-5 h-5" />
                 </button>
-                
-                <button 
+
+                <button
                   onClick={() => setShowSearch(!showSearch)}
                   className={`p-2 rounded-lg transition-colors ${
-                    showSearch 
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' 
+                    showSearch
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                       : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500'
                   }`}
                 >
                   <Search className="w-5 h-5" />
                 </button>
-                
-                {/* ✅ СЧЕТЧИК НЕПРОЧИТАННЫХ В ХЕДЕРЕ */}
+
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full relative">
                   <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   <span>{chat.messages.length}</span>
@@ -889,22 +980,22 @@ const deleteMessage = useCallback(async (messageId) => {
               <div className="p-2 bg-white/95 dark:bg-gray-800/95 border-b border-gray-200 dark:border-gray-700 z-20 shadow-md">
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                  <input 
-                    type="text" 
-                    placeholder="Поиск по сообщениям..." 
+                  <input
+                    type="text"
+                    placeholder="Поиск по сообщениям..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-10 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A6572] text-sm"
                     autoFocus
                   />
-                  <button 
+                  <button
                     onClick={() => {
                       setShowSearch(false);
                       setSearchQuery('');
-                    }} 
+                    }}
                     className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                   >
-                    <X size={16}/>
+                    <X size={16} />
                   </button>
                 </div>
                 {searchQuery && (
@@ -916,23 +1007,29 @@ const deleteMessage = useCallback(async (messageId) => {
             )}
 
             {/* Сообщения */}
-            <div 
+            <div
               ref={messagesContainerRef}
               className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 relative"
               onScroll={chat.handleScroll}
               style={{ WebkitOverflowScrolling: 'touch' }}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragOver={(e) => {
+                // 🆕 READ-ONLY: не активируем drag
+                if (readOnly) return;
+                e.preventDefault();
+                setIsDragging(true);
+              }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={(e) => {
+                if (readOnly) return;
                 e.preventDefault();
                 setIsDragging(false);
                 handleFileUpload(e);
               }}
             >
-              {isDragging && (
+              {isDragging && !readOnly && (
                 <div className="absolute inset-0 z-30 bg-blue-500/10 border-4 border-blue-500 border-dashed m-4 rounded-xl flex items-center justify-center backdrop-blur-sm">
                   <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl flex flex-col items-center">
-                    <Download size={48} className="text-blue-500 mb-2"/>
+                    <Download size={48} className="text-blue-500 mb-2" />
                     <p className="font-bold text-lg">Отпустите файл для отправки</p>
                   </div>
                 </div>
@@ -967,6 +1064,10 @@ const deleteMessage = useCallback(async (messageId) => {
                       isEditing={chat.editingMessageId === msg.id}
                       editText={chat.editText}
                       onStartEdit={(message) => {
+                        if (readOnly) {
+                          showNotification?.('🔒 Режим просмотра: редактирование недоступно', 'warning');
+                          return;
+                        }
                         chat.setEditingMessageId(message.id);
                         chat.setEditText(message.content);
                       }}
@@ -994,6 +1095,7 @@ const deleteMessage = useCallback(async (messageId) => {
                       companyUsers={chat.companyUsers}
                       isMobile={chat.isMobile}
                       textareaRef={textareaRef}
+                      readOnly={readOnly}
                     />
                   ))}
                   <div ref={chat.bottomRef} />
@@ -1012,97 +1114,103 @@ const deleteMessage = useCallback(async (messageId) => {
               </button>
             )}
 
-            {/* Поле ввода */}
-            <ChatInput
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onSend={handleSendMessage}
-              onFileUpload={handleFileUpload}
-              onVoiceSend={handleVoiceSend}
-              replyTo={chat.replyTo}
-              onCancelReply={() => chat.setReplyTo(null)}
-              isSending={chat.sending}
-              placeholder={chat.replyTo ? `Ответ ${chat.replyTo.user?.user_metadata?.full_name}...` : 'Введите сообщение...'}
-            />
+            {/* 🆕 Поле ввода / READ-ONLY заглушка */}
+            {readOnly ? (
+              <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700 text-center text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50">
+                🔒 Режим просмотра — отправка сообщений недоступна
+              </div>
+            ) : (
+              <ChatInput
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onSend={handleSendMessage}
+                onFileUpload={handleFileUpload}
+                onVoiceSend={handleVoiceSend}
+                replyTo={chat.replyTo}
+                onCancelReply={() => chat.setReplyTo(null)}
+                isSending={chat.sending}
+                placeholder={chat.replyTo ? `Ответ ${chat.replyTo.user?.user_metadata?.full_name}...` : 'Введите сообщение...'}
+              />
+            )}
           </div>
         )}
       </div>
 
       {/* Модальные окна */}
-      {showCreateModal && (
+      {showCreateModal && !readOnly && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000] fade-enter">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-2xl">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Создать канал</h3>
-              <button 
+              <button
                 onClick={() => setShowCreateModal(false)}
                 className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            
+
             <div className="space-y-3">
               <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Название канала *</label>
-                <input 
+                <input
                   id="channelName"
-                  type="text" 
-                  placeholder="Например: Обсуждение проекта" 
+                  type="text"
+                  placeholder="Например: Обсуждение проекта"
                   className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572]"
                   autoFocus
                 />
               </div>
-              
+
               <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Описание</label>
-                <textarea 
+                <textarea
                   id="channelDesc"
-                  placeholder="Краткое описание канала..." 
+                  placeholder="Краткое описание канала..."
                   className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572]"
                   rows={2}
                 />
               </div>
-              
+
               <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Иконка (эмодзи)</label>
-                <input 
+                <input
                   id="channelIcon"
-                  type="text" 
-                  placeholder="💬" 
+                  type="text"
+                  placeholder="💬"
                   maxLength={2}
                   className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572] focus:border-[#4A6572] text-center text-xl"
                 />
               </div>
-              
+
               <div className="flex items-center gap-2">
                 <input type="checkbox" id="channelPrivate" className="w-4 h-4 text-[#4A6572] rounded" />
                 <label htmlFor="channelPrivate" className="text-sm text-gray-700 dark:text-gray-300">Приватный канал</label>
               </div>
             </div>
-            
+
             <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button 
-                onClick={() => setShowCreateModal(false)} 
+              <button
+                onClick={() => setShowCreateModal(false)}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
               >
                 Отмена
               </button>
-              <button 
+              <button
                 onClick={() => {
                   const name = document.getElementById('channelName')?.value?.trim();
                   const description = document.getElementById('channelDesc')?.value?.trim();
                   const icon = document.getElementById('channelIcon')?.value?.trim() || '💬';
                   const isPrivate = document.getElementById('channelPrivate')?.checked || false;
-                  
+
                   if (!name) {
                     showNotification?.('Введите название канала', 'error');
                     return;
                   }
-                  
+
                   handleCreateChannel({ name, description, icon, is_private: isPrivate });
                   setShowCreateModal(false);
-                }} 
+                }}
                 className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors"
               >
                 Создать
@@ -1119,16 +1227,18 @@ const deleteMessage = useCallback(async (messageId) => {
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                 Управление каналом: {selectedChannel.name}
               </h3>
-              <button 
+              <button
                 onClick={() => setShowChannelSettings(false)}
                 className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            
+
             <div className="mb-4">
-              <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Участники ({channelMembers.length})</h4>
+              <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Участники ({channelMembers.length})
+              </h4>
               {loadingMembers ? (
                 <div className="flex justify-center py-4">
                   <Loader2 className="w-5 h-5 animate-spin text-[#4A6572]" />
@@ -1139,11 +1249,13 @@ const deleteMessage = useCallback(async (messageId) => {
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {channelMembers.map(member => {
                     const isCreator = selectedChannel.created_by === member.user_id;
-                    const canRemove = !isCreator && (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director');
+                    const canRemove = !readOnly && !isCreator && (userRole === 'manager' || userRole === 'supply_admin' || userRole === 'director');
                     return (
                       <div key={member.user_id} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                         <div>
-                          <p className="font-medium text-gray-900 dark:text-white">{member.user?.full_name || 'Пользователь'}</p>
+                          <p className="font-medium text-gray-900 dark:text-white">
+                            {member.user?.full_name || 'Пользователь'}
+                          </p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             {member.role}{isCreator && ' (создатель)'}
                           </p>
@@ -1162,46 +1274,55 @@ const deleteMessage = useCallback(async (messageId) => {
                 </div>
               )}
             </div>
-            
-            <div>
-              <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Добавить участника</h4>
-              <select className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572]" id="newMemberSelect">
-                <option value="">-- Выберите пользователя --</option>
-                {chat.companyUsers
-                  .filter(u => !channelMembers.some(m => m.user_id === u.user_id))
-                  .map(u => (
-                    <option key={u.user_id} value={u.user_id}>{u.full_name} ({u.role})</option>
-                  ))
-                }
-              </select>
-              <button
-                onClick={() => {
-                  const select = document.getElementById('newMemberSelect');
-                  const userId = select?.value;
-                  if (userId) {
-                    addChannelMember(selectedChannel.id, userId);
-                    select.value = '';
+
+            {!readOnly && (
+              <div>
+                <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Добавить участника</h4>
+                <select
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4A6572]"
+                  id="newMemberSelect"
+                >
+                  <option value="">-- Выберите пользователя --</option>
+                  {chat.companyUsers
+                    .filter(u => !channelMembers.some(m => m.user_id === u.user_id))
+                    .map(u => (
+                      <option key={u.user_id} value={u.user_id}>
+                        {u.full_name} ({u.role})
+                      </option>
+                    ))
                   }
-                }}
-                className="w-full mt-2 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors"
-              >
-                Добавить
-              </button>
-            </div>
-            
-            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => {
-                  if (confirm(`Удалить канал "${selectedChannel.name}"?`)) {
-                    deleteChannel(selectedChannel.id);
-                    setShowChannelSettings(false);
-                  }
-                }}
-                className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Удалить канал
-              </button>
-            </div>
+                </select>
+                <button
+                  onClick={() => {
+                    const select = document.getElementById('newMemberSelect');
+                    const userId = select?.value;
+                    if (userId) {
+                      addChannelMember(selectedChannel.id, userId);
+                      select.value = '';
+                    }
+                  }}
+                  className="w-full mt-2 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors"
+                >
+                  Добавить
+                </button>
+              </div>
+            )}
+
+            {!readOnly && (
+              <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => {
+                    if (confirm(`Удалить канал "${selectedChannel.name}"?`)) {
+                      deleteChannel(selectedChannel.id);
+                      setShowChannelSettings(false);
+                    }
+                  }}
+                  className="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Удалить канал
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
