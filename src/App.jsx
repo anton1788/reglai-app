@@ -230,6 +230,8 @@ import UpdatePassword from './components/UpdatePassword';
 import PriceEditor from './components/MaterialPriceView/PriceEditor';
 import MaterialPriceCatalog from './components/MaterialPriceCatalog/MaterialPriceCatalog';
 import { canEditPrices as canEditPricesUtil } from './utils/priceManager';
+// 🆕 DOWNGRADE: модалка понижения тарифа
+import DowngradeModal from './components/DowngradeModal';
 
 const getCleanCompanyId = (companyId) => {
   if (!companyId) return null;
@@ -1290,6 +1292,16 @@ const [billingPeriod, setBillingPeriod] = useState('monthly');
 const [showPromoModal, setShowPromoModal] = useState(false);
 const [showPromoManager, setShowPromoManager] = useState(false);
 const [activatingPromo, setActivatingPromo] = useState(false);
+// 🆕 DOWNGRADE: состояние модалки понижения тарифа
+const [showDowngradeModal, setShowDowngradeModal] = useState(false);
+const [pendingDowngrade, setPendingDowngrade] = useState(null);
+//   pendingDowngrade = {
+//     checkResult: {...},   // результат can_downgrade_to
+//     fromPlan: {...},      // TARIFF_PLANS[from]
+//     toPlan: {...},        // TARIFF_PLANS[to]
+//     planId: 'micro',      // id нового тарифа
+//   }
+const [downgradeLoading, setDowngradeLoading] = useState(false);
 // 📊 NPS Survey State
 const [showNpsSurvey, setShowNpsSurvey] = useState(false);
 const [npsSubmitting, setNpsSubmitting] = useState(false);
@@ -7005,107 +7017,179 @@ const resetOnboarding = () => {
   setOnboardingStep(0);
   setShowOnboarding(true);
 };
-// 💰 Tariff management functions
+// 💰 Tariff management functions (обновлено для Этапа 2, п. B)
 const handleSelectPlan = async (planId) => {
   if (!userCompanyId) {
     showNotification('Ошибка: компания не указана', 'error');
     return;
   }
-  
+
   // Проверяем, не пытается ли пользователь выбрать тот же тариф
   if (currentPlan?.id === planId) {
     showNotification(`Вы уже используете тариф "${TARIFF_PLANS[planId].name}"`, 'info');
     setShowTariffModal(false);
     return;
   }
-  
-  try {
-    const now = new Date().toISOString();
-    let expiresAt = null;
-    
-    // Для платных тарифов устанавливаем дату окончания
-    if (planId !== 'basic') {
-      const days = billingPeriod === 'monthly' ? 30 : 365;
-      expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-    }
-    
-    // 🔍 ОТЛАДКА: логируем изменение тарифа
-    console.log('🔍 [TARIFF] Changing plan:', {
-      userCompanyId,
-      planId,
-      userId: user?.id,
-      userEmail: user?.email,
-      userRole,
-      activated_at: now,
-      expires_at: expiresAt
-    });
-    
-    // 1. Обновляем тариф в базе данных с датами
-    const updateData = {
-      plan_tier: planId,
-      plan_activated_at: now,
-      plan_expires_at: expiresAt,
-      updated_at: now
-    };
-    
-    // ✅ СТАЛО
-const cleanCompanyId = getSafeCompanyId(userCompanyId);
-if (!cleanCompanyId) {
-  showNotification('Ошибка: компания не найдена', 'error');
-  return;
-}
 
-const { error } = await supabase
-  .from('companies')
-  .update(updateData)
-  .eq('id', cleanCompanyId);  // ✅ ИСПРАВЛЕНО
+  const cleanCompanyId = getSafeCompanyId(userCompanyId);
+  if (!cleanCompanyId) {
+    showNotification('Ошибка: компания не найдена', 'error');
+    return;
+  }
+
+  try {
+    // 🔍 Проверяем, downgrade ли это и есть ли превышения
+    const { data, error } = await supabase.rpc('can_downgrade_to', {
+      p_company_id: cleanCompanyId,
+      p_new_plan: planId,
+    });
+
+    if (error) {
+      console.error('❌ [Downgrade] can_downgrade_to error:', error);
+      showNotification('Не удалось проверить смену тарифа', 'error');
+      return;
+    }
+
+    // Supabase оборачивает jsonb в массив
+    const raw = Array.isArray(data) ? data[0] : data;
+    const checkResult = raw?.can_downgrade_to || raw;
+
+    if (!checkResult?.allowed) {
+      showNotification(
+        `Нельзя перейти на "${TARIFF_PLANS[planId].name}": ${checkResult?.error || 'неизвестная ошибка'}`,
+        'error'
+      );
+      return;
+    }
+
+    // ✅ UPGRADE или тот же уровень → применяем сразу (старое поведение)
+    if (!checkResult.is_downgrade) {
+      await applyPlanChange(planId, 'manual', checkResult);
+      return;
+    }
+
+    // ⬇️ DOWNGRADE → открываем модалку
+    setPendingDowngrade({
+      checkResult,
+      fromPlan: TARIFF_PLANS[checkResult.from_plan],
+      toPlan: TARIFF_PLANS[planId],
+      planId,
+    });
+    setShowDowngradeModal(true);
+    setShowTariffModal(false);
+  } catch (err) {
+    console.error('❌ [Downgrade] handleSelectPlan error:', err);
+    showNotification('Ошибка проверки тарифа: ' + err.message, 'error');
+  }
+};
+
+// 🆕 Применение смены тарифа через RPC apply_plan_change
+const applyPlanChange = async (planId, reason = 'manual', checkResult = null) => {
+  const cleanCompanyId = getSafeCompanyId(userCompanyId);
+  if (!cleanCompanyId) {
+    showNotification('Ошибка: компания не найдена', 'error');
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('apply_plan_change', {
+      p_company_id: cleanCompanyId,
+      p_new_plan: planId,
+      p_user_id: user?.id,
+      p_user_email: user?.email,
+      p_reason: reason,
+    });
 
     if (error) throw error;
 
-    // 2. Обновляем локальные состояния
+    const raw = Array.isArray(data) ? data[0] : data;
+    const result = raw?.apply_plan_change || raw;
+
+    if (!result?.success) {
+      showNotification(`Ошибка: ${result?.error || 'не удалось применить тариф'}`, 'error');
+      return;
+    }
+
+    // Обновляем локальные состояния
     setCurrentPlan(TARIFF_PLANS[planId]);
     setCurrentPlanDetails({
-      activated_at: now,
-      expires_at: expiresAt,
-      usageCurrent: 0
+      activated_at: new Date().toISOString(),
+      expires_at: result.expires_at,
+      usageCurrent: 0,
     });
-    
-    // 3. Обновляем квоту
+
+    // Обновляем квоту
     try {
-      const newQuota = await checkQuota(supabase, userCompanyId);
+      const newQuota = await checkQuota(supabase, cleanCompanyId);
       setQuotaStatus(newQuota);
     } catch (quotaErr) {
       console.warn('⚠️ Не удалось обновить квоту:', quotaErr.message);
     }
-    
-    // 4. Закрываем модальное окно
-    setShowTariffModal(false);
-    
-    // 5. Показываем уведомление об успехе
-    showNotification(`✅ Тариф "${TARIFF_PLANS[planId].name}" активирован`, 'success');
-    
-    // 6. Аудит
-    await logAuditAction(supabase, {
-      actionType: 'plan_changed',
-      entityType: 'company',
-      entityId: userCompanyId,
-      oldValue: { plan: currentPlan?.id },
-      newValue: { plan: planId },
-      companyId: userCompanyId,
-      userId: user?.id,
-      userEmail: user?.email,
-      userRole: userRole
-    });
-    
-    // 7. Перезагружаем данные
+
+    // Уведомление
+    const isDowngrade = result.is_downgrade;
+    if (isDowngrade) {
+      showNotification(
+        `✅ Тариф "${TARIFF_PLANS[planId].name}" активирован. Grace period: 7 дней.`,
+        'success'
+      );
+    } else {
+      showNotification(
+        `✅ Тариф "${TARIFF_PLANS[planId].name}" активирован`,
+        'success'
+      );
+    }
+
+    // Аудит
+    try {
+      await logAuditAction(supabase, {
+        actionType: isDowngrade ? 'plan_downgraded' : 'plan_upgraded',
+        entityType: 'company',
+        entityId: cleanCompanyId,
+        oldValue: { plan: checkResult?.from_plan || currentPlan?.id },
+        newValue: { plan: planId },
+        companyId: cleanCompanyId,
+        userId: user?.id,
+        userEmail: user?.email,
+        userRole: userRole,
+      });
+    } catch (auditErr) {
+      console.debug('Audit log skipped:', auditErr.message);
+    }
+
+    // Перезагружаем данные
     if (currentView === 'create' || currentView === 'tariffs') {
       await loadApplications(page);
     }
-    
+
+    // Обновляем dataStats (там зависимость от currentPlan.id)
+    // → useEffect с dataStats сам перезагрузится
+
   } catch (err) {
-    console.error('❌ [TARIFF] Plan change error:', err);
+    console.error('❌ [PlanChange] applyPlanChange error:', err);
     showNotification('Не удалось изменить тариф: ' + err.message, 'error');
   }
+};
+
+// 🆕 Подтверждение downgrade из модалки
+const handleConfirmDowngrade = async () => {
+  if (!pendingDowngrade) return;
+
+  setDowngradeLoading(true);
+  try {
+    await applyPlanChange(pendingDowngrade.planId, 'manual', pendingDowngrade.checkResult);
+    setShowDowngradeModal(false);
+    setPendingDowngrade(null);
+  } finally {
+    setDowngradeLoading(false);
+  }
+};
+
+// 🆕 Отмена downgrade
+const handleCancelDowngrade = () => {
+  if (downgradeLoading) return;
+  setShowDowngradeModal(false);
+  setPendingDowngrade(null);
 };
 // 🔐 Проверка доступа к функции по тарифу
 const _canUseFeature = useCallback((feature) => {
@@ -10299,6 +10383,17 @@ onClearFilters={handleClearFilters}
       window.location.reload(true);
     }, 500);
   }}
+/>
+
+{/* 🆕 Модалка понижения тарифа */}
+<DowngradeModal
+  isOpen={showDowngradeModal}
+  onClose={handleCancelDowngrade}
+  onConfirm={handleConfirmDowngrade}
+  checkResult={pendingDowngrade?.checkResult}
+  fromPlan={pendingDowngrade?.fromPlan}
+  toPlan={pendingDowngrade?.toPlan}
+  loading={downgradeLoading}
 />
       
       <ChurnReasonModal
