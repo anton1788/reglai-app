@@ -244,39 +244,6 @@ const getCleanCompanyId = (companyId) => {
   return null;
 };
 
-// ============================================================
-// 🔒 ЗАГЛУШКА: ФУНКЦИЯ НЕДОСТУПНА НА ТЕКУЩЕМ ТАРИФЕ
-// ============================================================
-const FeatureLockedView = ({ featureName, onUpgrade, t }) => {
-  const lockedTitle = typeof t === 'function'
-    ? t('suppliersFeature.lockedTitle').replace('{{feature}}', featureName)
-    : `${featureName} доступен на тарифе Профессиональный`;
-  const lockedMessage = typeof t === 'function'
-    ? t('suppliersFeature.lockedMessage')
-    : 'Обновите тариф, чтобы получить доступ к модулю закупок и другим продвинутым функциям.';
-  const upgradeButton = typeof t === 'function'
-    ? t('suppliersFeature.upgradeButton')
-    : 'Посмотреть тарифы';
-
-  return (
-    <div className="max-w-2xl mx-auto p-8 text-center page-enter">
-      <div className="text-6xl mb-4">🔒</div>
-      <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">
-        {lockedTitle}
-      </h2>
-      <p className="text-gray-600 dark:text-gray-400 mb-6">
-        {lockedMessage}
-      </p>
-      <button
-        onClick={onUpgrade}
-        className="px-6 py-3 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-xl hover:shadow-lg transition-all"
-      >
-        {upgradeButton}
-      </button>
-    </div>
-  );
-};
-
 // === Feature flags ===
 const WAREHOUSE_ENABLED = true;
 const NOTIFICATIONS_ENABLED = false;
@@ -5867,7 +5834,8 @@ await logEmployeeBlocked(supabase, employeeId, newStatus, userContextWithCleanId
   .from('applications')
   .select('*', { count: 'exact' })
   .eq('company_id', safeCompanyId)
-  .or('is_deleted.is.null,is_deleted.eq.false');   // 🔧 Исключаем удалённые
+  .or('is_deleted.is.null,is_deleted.eq.false')
+  .is('archived_at', null);
 
         // ✅ 2. Применяем ВСЕ фильтры ДО пагинации
     if (userRole === 'master' || userRole === 'foreman') {
@@ -9244,7 +9212,13 @@ if (inviteParam) {
 )}
         
         {currentView === 'calendar' && (
-  checkFeatureAccess(currentPlan, 'calendar') ? (
+  <FeatureGate
+    feature="calendar"
+    featureName="Календарь"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: dataStats.objects > 0 }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <CalendarView
       supabase={supabase}
       userCompanyId={userCompanyId}
@@ -9261,23 +9235,7 @@ if (inviteParam) {
         }
       }}
     />
-  ) : (
-    <div className="max-w-2xl mx-auto p-8 text-center">
-      <div className="text-5xl mb-4">📅</div>
-      <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
-        Календарь доступен на тарифе Профессиональный
-      </h2>
-      <p className="text-gray-600 dark:text-gray-400 mb-6">
-        Обновите тариф, чтобы получить доступ к календарю и другим продвинутым функциям.
-      </p>
-      <button
-        onClick={() => setCurrentView('tariffs')}
-        className="px-6 py-3 bg-gradient-to-r from-[#4A6572] to-[#344955] text-white font-semibold rounded-xl hover:shadow-lg transition-all"
-      >
-        Посмотреть тарифы
-      </button>
-    </div>
-  )
+  </FeatureGate>
 )}
         
        {currentView === 'inwork' && (
@@ -9622,17 +9580,25 @@ onClearFilters={handleClearFilters}
 )}
         
         {currentView === 'documents' && (
-          <DocumentGenerator
-            applications={isAdminMode ? allApplications : applications}
-            user={user}
-            userCompanyId={userCompanyId}
-            userRole={userRole}
-            t={t}
-            showNotification={showNotification}
-            companyName={userCompany}
-            supabase={supabase}
-          />
-        )}
+  <FeatureGate
+    feature="document_generator"
+    featureName="Генератор документов"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: applications.length > 0 }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
+    <DocumentGenerator
+      applications={isAdminMode ? allApplications : applications}
+      user={user}
+      userCompanyId={userCompanyId}
+      userRole={userRole}
+      t={t}
+      showNotification={showNotification}
+      companyName={userCompany}
+      supabase={supabase}
+    />
+  </FeatureGate>
+)}
         
         {currentView === 'profile' && renderProfilePage()}
         
@@ -9673,39 +9639,63 @@ onClearFilters={handleClearFilters}
         )}
         
         {currentView === 'tasks' && (
-          <TaskBoard
-            user={user}
-            userCompanyId={userCompanyId}
-            applications={applications}
-            showNotification={showNotification}
-            language={language}
-            userRole={userRole}
-          />
-        )}
+  <FeatureGate
+    feature="kanban_board"
+    featureName="Канбан-доска"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: false }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
+    <TaskBoard
+      user={user}
+      userCompanyId={userCompanyId}
+      applications={applications}
+      showNotification={showNotification}
+      language={language}
+      userRole={userRole}
+    />
+  </FeatureGate>
+)}
         
         {currentView === 'chat' && (
-  <CompanyChat
-    user={user}
-    userCompanyId={userCompanyId}
-    userRole={userRole}
-    showNotification={showNotification}
-    onUnreadCountChange={setChatUnreadCount}
-    initialChatId={selectedChatId}
-    onChatOpened={() => setSelectedChatId(null)}
-  />
+  <FeatureGate
+    feature="internal_chat"
+    featureName="Внутренний чат"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: false }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
+    <CompanyChat
+      user={user}
+      userCompanyId={userCompanyId}
+      userRole={userRole}
+      showNotification={showNotification}
+      onUnreadCountChange={setChatUnreadCount}
+      initialChatId={selectedChatId}
+      onChatOpened={() => setSelectedChatId(null)}
+    />
+  </FeatureGate>
 )}
         
         {currentView === 'approvals' && renderApprovalsQueue()}
         
         {currentView === 'api' && (
-          <APIDocumentation
-            user={user}
-            userCompanyId={userCompanyId}
-            showNotification={showNotification}
-            t={t}
-            language={language}
-          />
-        )}
+  <FeatureGate
+    feature="api_access"
+    featureName="API-доступ"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: false }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
+    <APIDocumentation
+      user={user}
+      userCompanyId={userCompanyId}
+      showNotification={showNotification}
+      t={t}
+      language={language}
+    />
+  </FeatureGate>
+)}
         
         {currentView === 'tariffs' && !isSuperAdmin(userRole, user?.user_metadata) && 
   (isCompanyOwner || userRole === 'manager' || userRole === 'director' || userRole === 'client_manager') && (
@@ -9870,14 +9860,22 @@ onClearFilters={handleClearFilters}
 )}
 
 {currentView === 'reports' && (
-  <ReportBuilder
-    applications={isAdminMode ? allApplications : applications}
-    companyUsers={companyUsers}
-    supabase={supabase}
-    companyId={userCompanyId}
-    showNotification={showNotification}
-    t={t}
-  />
+  <FeatureGate
+    feature="advanced_analytics"
+    featureName="Конструктор отчётов"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: applications.length > 0 }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
+    <ReportBuilder
+      applications={isAdminMode ? allApplications : applications}
+      companyUsers={companyUsers}
+      supabase={supabase}
+      companyId={userCompanyId}
+      showNotification={showNotification}
+      t={t}
+    />
+  </FeatureGate>
 )}
 
 {currentView === 'integration' && (
@@ -9983,7 +9981,13 @@ onClearFilters={handleClearFilters}
 
 {/* 📚 КАТАЛОГ МАТЕРИАЛОВ */}
 {currentView === 'supplierCatalog' && (
-  checkFeatureAccess(currentPlan, 'supplier_catalog') ? (
+  <FeatureGate
+    feature="supplier_catalog"
+    featureName="Каталог материалов"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: dataStats.suppliers > 0 }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <SupplierCatalog
       companyId={userCompanyId}
       showNotification={showNotification}
@@ -10010,18 +10014,18 @@ onClearFilters={handleClearFilters}
         setCurrentView('rfqCreate');
       }}
     />
-  ) : (
-    <FeatureLockedView
-      featureName="Каталог материалов"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+  </FeatureGate>
 )}
 
 {/* 💰 ПРАЙС-ЛИСТ ПОСТАВЩИКА */}
 {currentView === 'supplierPriceList' && selectedSupplierId && (
-  checkFeatureAccess(currentPlan, 'supplier_price_list') ? (
+  <FeatureGate
+    feature="supplier_price_list"
+    featureName="Прайс-листы поставщиков"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: dataStats.pricesCount > 0 }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <PriceListManager
       supplierId={selectedSupplierId}
       companyId={userCompanyId}
@@ -10032,18 +10036,18 @@ onClearFilters={handleClearFilters}
         setCurrentView('suppliers');
       }}
     />
-  ) : (
-    <FeatureLockedView
-      featureName="Прайс-листы поставщиков"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+  </FeatureGate>
 )}
 
 {/* 📨 СПИСОК RFQ */}
 {currentView === 'rfqList' && (
-  checkFeatureAccess(currentPlan, 'rfq') ? (
+  <FeatureGate
+    feature="rfq"
+    featureName="RFQ (запросы КП)"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: false }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <RFQList
       companyId={userCompanyId}
       role={userRole}
@@ -10054,18 +10058,18 @@ onClearFilters={handleClearFilters}
         setCurrentView('rfqDetails');
       }}
     />
-  ) : (
-    <FeatureLockedView
-      featureName="RFQ (запросы КП)"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+  </FeatureGate>
 )}
 
 {/* 📝 СОЗДАНИЕ RFQ */}
 {currentView === 'rfqCreate' && (
-  checkFeatureAccess(currentPlan, 'rfq') ? (
+  <FeatureGate
+    feature="rfq_create"
+    featureName="Создание RFQ"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: false }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <RFQCreate
       companyId={userCompanyId}
       userId={user?.id}
@@ -10081,18 +10085,18 @@ onClearFilters={handleClearFilters}
       }}
       onCancel={() => setCurrentView('rfqList')}
     />
-  ) : (
-    <FeatureLockedView
-      featureName="RFQ (запросы КП)"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+  </FeatureGate>
 )}
 
 {/* 📋 ДЕТАЛИ RFQ */}
 {currentView === 'rfqDetails' && selectedRFQId && (
-  checkFeatureAccess(currentPlan, 'rfq') ? (
+  <FeatureGate
+    feature="rfq"
+    featureName="RFQ (запросы КП)"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: true }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <RFQDetails
       rfqId={selectedRFQId}
       companyId={userCompanyId}
@@ -10107,18 +10111,18 @@ onClearFilters={handleClearFilters}
         setCurrentView('purchaseOrderCreate');
       }}
     />
-  ) : (
-    <FeatureLockedView
-      featureName="RFQ (запросы КП)"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+  </FeatureGate>
 )}
 
 {/* 📦 СПИСОК ЗАКАЗОВ */}
 {currentView === 'purchaseOrders' && (
-  checkFeatureAccess(currentPlan, 'purchase_orders') ? (
+  <FeatureGate
+    feature="purchase_orders"
+    featureName="Заказы поставщикам"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: false }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <PurchaseOrderList
       companyId={userCompanyId}
       role={userRole}
@@ -10131,18 +10135,18 @@ onClearFilters={handleClearFilters}
         setCurrentView('purchaseOrderDetails');
       }}
     />
-  ) : (
-    <FeatureLockedView
-      featureName="Заказы поставщикам"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+  </FeatureGate>
 )}
 
 {/* 📝 СОЗДАНИЕ ЗАКАЗА */}
 {currentView === 'purchaseOrderCreate' && (
-  checkFeatureAccess(currentPlan, 'purchase_orders') ? (
+  <FeatureGate
+    feature="purchase_orders_create"
+    featureName="Создание заказа"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: false }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <PurchaseOrderForm
       companyId={userCompanyId}
       userId={user?.id}
@@ -10162,18 +10166,18 @@ onClearFilters={handleClearFilters}
         setCurrentView('purchaseOrders');
       }}
     />
-  ) : (
-    <FeatureLockedView
-      featureName="Заказы поставщикам"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+  </FeatureGate>
 )}
 
 {/* 📋 ДЕТАЛИ ЗАКАЗА */}
 {currentView === 'purchaseOrderDetails' && selectedPOId && (
-  checkFeatureAccess(currentPlan, 'purchase_orders') ? (
+  <FeatureGate
+    feature="purchase_orders"
+    featureName="Заказы поставщикам"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: true }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <PurchaseOrderDetails
       orderId={selectedPOId}
       role={userRole}
@@ -10183,19 +10187,19 @@ onClearFilters={handleClearFilters}
         setCurrentView('purchaseOrders');
       }}
     />
-  ) : (
-    <FeatureLockedView
-      featureName="Заказы поставщикам"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+  </FeatureGate>
 )}
 
 {/* 🏢 ДАШБОРД ПОСТАВЩИКА */}
 {currentView === 'supplierDashboard' && (
-  checkFeatureAccess(currentPlan, 'supplier_portal') ? (
-    currentSupplierId ? (
+  <FeatureGate
+    feature="supplier_portal"
+    featureName="Кабинет поставщика"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: Boolean(currentSupplierId) }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
+    {currentSupplierId ? (
       <SupplierDashboard
         companyId={userCompanyId}
         supplierId={currentSupplierId}
@@ -10224,54 +10228,41 @@ onClearFilters={handleClearFilters}
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             Ваш аккаунт не связан ни с одним поставщиком в системе.
           </p>
-
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-4 text-left text-sm">
             <p className="font-semibold text-amber-900 dark:text-amber-200 mb-2">
               Что проверить администратору:
             </p>
             <ul className="list-disc list-inside space-y-1 text-amber-800 dark:text-amber-300">
-              <li>
-                Есть ли запись в таблице <code>suppliers</code> с{' '}
-                <code>user_id</code> = <code className="text-xs">{user?.id}</code>
-              </li>
-              <li>
-                Или с <code>email</code> = <code>{user?.email}</code>
-              </li>
+              <li>Есть ли запись в таблице <code>suppliers</code> с <code>user_id</code> = <code className="text-xs">{user?.id}</code></li>
+              <li>Или с <code>email</code> = <code>{user?.email}</code></li>
             </ul>
             <p className="text-xs text-amber-700 dark:text-amber-400 mt-3">
               💡 Совет: нажмите «Перезагрузить» — часто помогает, если запись только что создана.
             </p>
           </div>
-
           <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition"
-            >
+            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition">
               🔄 Перезагрузить
             </button>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-            >
+            <button onClick={handleLogout} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition">
               Выйти
             </button>
           </div>
         </div>
       </div>
-    )
-  ) : (
-    <FeatureLockedView
-      featureName="Кабинет поставщика"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+    )}
+  </FeatureGate>
 )}
 
 {/* 📊 ДАШБОРД ЗАКУПЩИКА */}
 {currentView === 'procurementDashboard' && (
-  checkFeatureAccess(currentPlan, 'procurement_dashboard') ? (
+  <FeatureGate
+    feature="procurement_dashboard"
+    featureName="Дашборд закупщика"
+    currentPlan={currentPlan}
+    context={{ hasExistingData: false }}
+    onUpgrade={() => setCurrentView('tariffs')}
+  >
     <ProcurementDashboard
       companyId={userCompanyId}
       onNavigate={(view, payload) => {
@@ -10286,13 +10277,7 @@ onClearFilters={handleClearFilters}
         }
       }}
     />
-  ) : (
-    <FeatureLockedView
-      featureName="Дашборд закупщика"
-      onUpgrade={() => setCurrentView('tariffs')}
-      t={t}
-    />
-  )
+  </FeatureGate>
 )}
 
 {/* 🆕 ПАПКА ОБЪЕКТА (Object Hub) */}
