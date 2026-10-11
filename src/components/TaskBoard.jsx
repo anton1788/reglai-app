@@ -8,6 +8,8 @@ import {
   Lock,
 } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
+import { useUniversalExport } from '../hooks/useUniversalExport';
+import ExportMenu from './ExportMenu';
 
 const getCleanCompanyId = (companyId) => {
   if (!companyId) return null;
@@ -796,6 +798,44 @@ const TaskBoard = ({
   const [companyUsers, setCompanyUsers] = useState([]);
   const [isMobileView, setIsMobileView] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+    // 🆕 Универсальный экспорт задач
+  const { exportData, isExporting } = useUniversalExport({
+    filename: 'задачи',
+    sheetName: 'Задачи',
+    title: 'Задачи',
+    columns: [
+      { key: 'title', label: 'Название' },
+      { key: 'description', label: 'Описание' },
+      {
+        key: 'priority',
+        label: 'Приоритет',
+        format: (v) =>
+          ({ low: 'Низкий', medium: 'Средний', high: 'Высокий' }[v] || v),
+      },
+      {
+        key: 'status',
+        label: 'Статус',
+        format: (v) =>
+          ({
+            pending: 'Новая',
+            in_progress: 'В работе',
+            received: 'Выполнена',
+            canceled: 'Отменена',
+          }[v] || v),
+      },
+      {
+        key: 'due_date',
+        label: 'Срок',
+        format: (v) => (v ? new Date(v).toLocaleDateString('ru-RU') : '—'),
+      },
+      {
+        key: 'assigned_to',
+        label: 'Исполнитель',
+        format: (v, row) => row.assigned_name || 'Общая',
+      },
+    ],
+    showNotification,
+  });
 
   useEffect(() => {
     const checkMobile = () => setIsMobileView(window.innerWidth < 768);
@@ -1125,9 +1165,24 @@ const TaskBoard = ({
                 {viewMode === 'kanban' ? <List className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
               </button>
 
-              <button onClick={loadTasks} className="p-2 bg-white dark:bg-gray-800 text-gray-700 rounded-xl border">
+                            <button onClick={loadTasks} className="p-2 bg-white dark:bg-gray-800 text-gray-700 rounded-xl border">
                 <RefreshCw className="w-5 h-5" />
               </button>
+
+              {/* 🆕 Экспорт задач */}
+              {filteredTasks.length > 0 && (
+                <ExportMenu
+                  onExport={(format) =>
+                    exportData(filteredTasks, format, {
+                      title: 'Задачи',
+                      subtitle: `Задач: ${filteredTasks.length}`,
+                    })
+                  }
+                  isExporting={isExporting}
+                  compact
+                  label="Экспорт"
+                />
+              )}
 
               {canCreateTasks && (
                 <button

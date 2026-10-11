@@ -4,6 +4,8 @@ import {
   FileText, Plus, Trash2, Eye, Download, Settings,
   Calendar, BarChart3, PieChart, LineChart, Filter, Save, Lock,
 } from 'lucide-react';
+import { useUniversalExport } from '../hooks/useUniversalExport';
+import ExportMenu from './ExportMenu';
 
 const ReadOnlyBadge = () => (
   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs font-medium rounded-full">
@@ -34,6 +36,39 @@ const ReportBuilder = ({
   const [chartType, setChartType] = useState('bar');
   const [viewMode, setViewMode] = useState('table');
   const [savedReports, setSavedReports] = useState([]);
+    // 🆕 Универсальный экспорт
+  const { exportData, isExporting } = useUniversalExport({
+    filename: reportName || 'отчёт',
+    sheetName: 'Отчёт',
+    title: reportName || 'Отчёт',
+    columns: selectedFields.map((f) => {
+      const field = availableFields.find((af) => af.key === f);
+      return {
+        key: f,
+        label: field?.label || f,
+        format: (v, row) => {
+          if (f === 'materials_count') return row.materials?.length || 0;
+          if (f === 'completion_rate') {
+            const total = row.materials?.reduce((s, m) => s + m.quantity, 0) || 0;
+            const recv = row.materials?.reduce((s, m) => s + m.received, 0) || 0;
+            return total > 0 ? `${Math.round((recv / total) * 100)}%` : '0%';
+          }
+          if (f === 'created_at') return new Date(v).toLocaleDateString('ru-RU');
+          if (f === 'status') {
+            const map = {
+              pending: 'В ожидании',
+              partial_received: 'Частично',
+              received: 'Получено',
+              canceled: 'Отменено',
+            };
+            return map[v] || v;
+          }
+          return v ?? '—';
+        },
+      };
+    }),
+    showNotification,
+  });
 
   const loadSavedReports = useCallback(async () => {
     if (!companyId) return;
@@ -101,40 +136,6 @@ const ReportBuilder = ({
     }));
   }, [filteredData]);
 
-  // Экспорт — разрешён всегда (это чтение)
-  const exportReport = (format = 'csv') => {
-    let content = '';
-    let filename = `report_${reportName || 'untitled'}_${new Date().toISOString().slice(0,10)}`;
-
-    if (format === 'csv') {
-      content = selectedFields.join(',') + '\n';
-      filteredData.forEach(app => {
-        const row = selectedFields.map(field => {
-          let value = app[field];
-          if (field === 'materials_count') {
-            value = app.materials?.length || 0;
-          }
-          if (field === 'completion_rate') {
-            const total = app.materials?.reduce((s, m) => s + m.quantity, 0) || 0;
-            const received = app.materials?.reduce((s, m) => s + m.received, 0) || 0;
-            value = total > 0 ? Math.round((received / total) * 100) : 0;
-          }
-          return `"${String(value || '').replace(/"/g, '""')}"`;
-        });
-        content += row.join(',') + '\n';
-      });
-      filename += '.csv';
-    }
-
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(link.href);
-
-    showNotification(`📊 Отчёт "${reportName || 'без названия'}" экспортирован`, 'success');
-  };
 
   // 🆕 Сохранение заблокировано в read-only
   const saveReport = async () => {
@@ -216,13 +217,17 @@ const ReportBuilder = ({
                 Сохранить
               </button>
             )}
-            <button
-              onClick={() => exportReport('csv')}
-              className="px-4 py-2 bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Экспорт CSV
-            </button>
+            <ExportMenu
+  onExport={(format) =>
+    exportData(filteredData, format, {
+      title: reportName || 'Отчёт',
+      subtitle: `Записей: ${filteredData.length}`,
+    })
+  }
+  isExporting={isExporting}
+  compact
+  label="Экспорт"
+/>
           </div>
         </div>
 

@@ -28,6 +28,8 @@ import useCalendarNotifications from '../hooks/useCalendarNotifications';
 import CalendarFilters from './CalendarFilters';
 import CalendarHeatmap from './CalendarHeatmap';
 import { getObjectColor, getLightColor, isDarkColor } from '../utils/calendarColors';
+import { useUniversalExport } from '../hooks/useUniversalExport';
+import ExportMenu from './ExportMenu';
 
 moment.locale('ru');
 
@@ -168,6 +170,36 @@ const CalendarView = ({
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [eventCount, setEventCount] = useState({ total: 0, applications: 0, tasks: 0, overdue: 0, completed: 0 });
+    // 🆕 Универсальный экспорт календаря
+  const { exportData, isExporting } = useUniversalExport({
+    filename: 'календарь',
+    sheetName: 'События',
+    title: 'Календарь событий',
+    columns: [
+      { key: 'title', label: 'Название' },
+      {
+        key: 'type',
+        label: 'Тип',
+        format: (v) => (v === 'application' ? 'Заявка' : 'Задача'),
+      },
+      {
+        key: 'start',
+        label: 'Начало',
+        format: (v) =>
+          v ? moment(v).locale('ru').format('DD.MM.YYYY HH:mm') : '—',
+      },
+      {
+        key: 'end',
+        label: 'Конец',
+        format: (v) =>
+          v ? moment(v).locale('ru').format('DD.MM.YYYY HH:mm') : '—',
+      },
+      { key: 'foreman', label: 'Прораб' },
+      { key: 'status', label: 'Статус' },
+      { key: 'isOverdue', label: 'Просрочено', format: (v) => (v ? 'Да' : 'Нет') },
+    ],
+    showNotification,
+  });
 
   const containerRef = useRef(null);
   const calendarRef = useRef(null);
@@ -610,23 +642,36 @@ const CalendarView = ({
           </p>
 
           <div className="space-y-3">
-            <CalendarExportButton events={filteredEvents} calendarName={userCompany || 'Реглай PRO'} className="w-full justify-center" />
+  <CalendarExportButton events={filteredEvents} calendarName={userCompany || 'Реглай PRO'} className="w-full justify-center" />
 
-            <button
-              onClick={() => {
-                const json = JSON.stringify(filteredEvents.map(e => ({
-                  title: e.title, start: e.start, end: e.end, type: e.type, status: e.status
-                })), null, 2);
-                navigator.clipboard.writeText(json);
-                showNotification('✅ Данные скопированы в буфер обмена', 'success');
-                setShowExportModal(false);
-              }}
-              className="w-full py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all flex items-center justify-center gap-2"
-            >
-              <FileText className="w-5 h-5" />
-              Копировать JSON
-            </button>
-          </div>
+  {/* 🆕 Экспорт XLSX / PDF */}
+  <ExportMenu
+    onExport={(format) => {
+      exportData(filteredEvents, format, {
+        title: 'Календарь событий',
+        subtitle: `Событий: ${filteredEvents.length}`,
+      });
+      if (format !== 'csv') setShowExportModal(false);
+    }}
+    isExporting={isExporting}
+    label="XLSX / PDF"
+  />
+
+  <button
+    onClick={() => {
+      const json = JSON.stringify(filteredEvents.map(e => ({
+        title: e.title, start: e.start, end: e.end, type: e.type, status: e.status
+      })), null, 2);
+      navigator.clipboard.writeText(json);
+      showNotification('✅ Данные скопированы в буфер обмена', 'success');
+      setShowExportModal(false);
+    }}
+    className="w-full py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all flex items-center justify-center gap-2"
+  >
+    <FileText className="w-5 h-5" />
+    Копировать JSON
+  </button>
+</div>
 
           <button onClick={() => setShowExportModal(false)} className="w-full mt-3 py-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
             Отмена

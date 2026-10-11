@@ -12,6 +12,8 @@ import {
 } from '../../utils/priceManager';
 import { canEditPrices as canEditPricesUtil } from '../../utils/priceManager';
 import ImportPriceListModal from './ImportPriceListModal';
+import { useUniversalExport } from '../../hooks/useUniversalExport';
+import ExportMenu from '../ExportMenu';
 
 const UNIT_OPTIONS = ['шт', 'м', 'м²', 'м³', 'кг', 'т', 'л', 'упак', 'комплект', 'партия'];
 
@@ -37,6 +39,25 @@ const MaterialPriceCatalog = ({
   // 🆕 canCreate — учитывает и роль, и readOnly
   const canEditByRole = canEditPricesUtil(userRole);
   const canCreate = !readOnly && canEditByRole;
+    // 🆕 Универсальный экспорт (CSV / XLSX / PDF)
+  const { exportData, isExporting } = useUniversalExport({
+    filename: 'справочник_цен',
+    sheetName: 'Справочник цен',
+    title: 'Справочник цен',
+    columns: [
+      { key: 'description', label: 'Материал' },
+      { key: 'unit', label: 'Ед. изм.' },
+      { key: 'price', label: 'Цена, ₽', format: (v) => Number(v) || 0 },
+      { key: 'supplier_name', label: 'Поставщик' },
+      { key: 'supplier_phone', label: 'Телефон' },
+      {
+        key: 'updated_at',
+        label: 'Обновлено',
+        format: (v) => (v ? new Date(v).toLocaleDateString('ru-RU') : '—'),
+      },
+    ],
+    showNotification,
+  });
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -82,34 +103,6 @@ const MaterialPriceCatalog = ({
     return { total: items.length, withPrice, withSupplier };
   }, [items]);
 
-  // ─── Экспорт в CSV (доступен всегда, даже в readOnly) ───
-  const handleExportCSV = useCallback(() => {
-    if (items.length === 0) {
-      showNotification('⚠️ Нечего экспортировать', 'warning');
-      return;
-    }
-
-    const headers = ['Материал', 'Ед. изм.', 'Цена, ₽', 'Поставщик', 'Телефон', 'Обновлено'];
-    const rows = items.map((item) => [
-      `"${(item.description || '').replace(/"/g, '""')}"`,
-      item.unit || 'шт',
-      Number(item.price) || 0,
-      `"${(item.supplier_name || '').replace(/"/g, '""')}"`,
-      item.supplier_phone || '',
-      item.updated_at ? new Date(item.updated_at).toLocaleDateString('ru-RU') : '',
-    ]);
-
-    const csv = [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `справочник_цен_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    showNotification(`📥 Экспортировано ${items.length} записей`, 'success');
-  }, [items, showNotification]);
 
   // ─── Открытие модалки ─────────────────────────────
   const openCreate = () => {
@@ -261,15 +254,22 @@ const MaterialPriceCatalog = ({
           </button>
 
           {items.length > 0 && (
-            <button
-              onClick={handleExportCSV}
-              className="px-3 py-2 text-sm bg-white dark:bg-gray-800 text-[#4A6572] dark:text-[#F9AA33] border border-[#4A6572]/30 rounded-lg hover:bg-[#4A6572]/5 transition flex items-center gap-2"
-              title="Экспортировать в CSV"
-            >
-              <Download className="w-4 h-4" />
-              Экспорт
-            </button>
-          )}
+  <ExportMenu
+    onExport={(format) =>
+      exportData(
+        items,
+        format,
+        {
+          title: 'Справочник цен',
+          subtitle: `Записей: ${items.length}`,
+        }
+      )
+    }
+    isExporting={isExporting}
+    compact
+    label="Экспорт"
+  />
+)}
 
           {canCreate && (
             <>
