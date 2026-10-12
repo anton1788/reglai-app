@@ -29,6 +29,18 @@ export const ITEM_STATUS = {
   REJECTED: 'rejected'
 };
 
+// ─────────────────────────────────────────────────────────────
+// 🆕 ТИПЫ СКЛАДСКИХ ОПЕРАЦИЙ (для stock_movements / истории)
+// ─────────────────────────────────────────────────────────────
+export const WAREHOUSE_TRANSACTION_TYPE = {
+  RECEIVE_FROM_SUPPLIER: 'receive_from_supplier',  // приёмка от поставщика
+  ISSUE_TO_MASTER: 'issue_to_master',              // выдача мастеру
+  RETURN_FROM_MASTER: 'return_from_master',        // возврат от мастера
+  WRITE_OFF: 'write_off',                          // списание
+  INVENTORY_ADJUSTMENT: 'inventory_adjustment',    // корректировка
+  MOVE: 'move'                                     // перемещение
+};
+
 // ============ I18N КЛЮЧИ ============
 
 export const STATUS_I18N = {

@@ -9015,7 +9015,6 @@ if (inviteParam) {
       planLimits={planLimits} 
       onUpgradeClick={() => setCurrentView('tariffs')}
       userId={user?.id}                    // 🆕 для ObjectSelector
-      showNotification={showNotification}
     />
   </div>
 )}

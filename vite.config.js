@@ -1,28 +1,28 @@
 // ============================================
 // vite.config.js
-// 0.0.103-beta
 // ============================================
 
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// ✅ Единая строка CSP для переиспользования (dev + build)
-// 🔧 ФИКС: blob: добавлен в connect-src — иначе fetch(blobUrl) падает
-const CSP_POLICY = [
+// CSP для dev-сервера. В prod CSP задаётся в vercel.json.
+// 'unsafe-eval' нужен только для HMR Vite в dev.
+const CSP_DEV = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://*.supabase.co https://cdn.tailwindcss.com",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://*.supabase.co",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https: https://*.supabase.co https://*.supabase.storage",
-  "connect-src 'self' blob: https://*.supabase.co https://*.supabase.rest https://*.supabase.storage https://*.supabase.auth https://cdn.tailwindcss.com wss://*.supabase.co ws://localhost:* http://localhost:*",
+  "media-src 'self' blob: data: https://*.supabase.co https://*.supabase.storage",
+  "connect-src 'self' blob: https://*.supabase.co https://*.supabase.rest https://*.supabase.storage https://*.supabase.auth wss://*.supabase.co ws://localhost:* http://localhost:*",
   "manifest-src 'self'",
   "frame-src 'self' about: blob: https://*.supabase.co https://*.supabase.storage",
   "child-src 'self' about: blob: https://*.supabase.co",
-  "object-src 'self' blob: https://*.supabase.co https://*.supabase.storage",
+  "object-src 'none'",
   "worker-src 'self' blob:",
   "base-uri 'self'",
-  "form-action 'self'"
+  "form-action 'self'",
 ].join('; ');
 
 export default defineConfig({
@@ -35,7 +35,7 @@ export default defineConfig({
       devOptions: {
         enabled: true,
         type: 'module',
-        navigateFallback: '/index.html'
+        navigateFallback: '/index.html',
       },
 
       workbox: {
@@ -45,7 +45,7 @@ export default defineConfig({
           /^\/rest\/v1\//,
           /^\/auth\//,
           /^\/functions\//,
-          /^\/admin\//
+          /^\/admin\//,
         ],
 
         runtimeCaching: [
@@ -57,9 +57,9 @@ export default defineConfig({
               networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 5,
-                maxAgeSeconds: 60 * 60
-              }
-            }
+                maxAgeSeconds: 60 * 60,
+              },
+            },
           },
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|woff2?|ttf|eot)$/i,
@@ -68,10 +68,10 @@ export default defineConfig({
               cacheName: 'static-resources',
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 30 * 24 * 60 * 60
+                maxAgeSeconds: 30 * 24 * 60 * 60,
               },
-              cacheableResponse: { statuses: [0, 200] }
-            }
+              cacheableResponse: { statuses: [0, 200] },
+            },
           },
           {
             urlPattern: /\.mjs$/i,
@@ -80,10 +80,10 @@ export default defineConfig({
               cacheName: 'mjs-resources',
               expiration: {
                 maxEntries: 20,
-                maxAgeSeconds: 30 * 24 * 60 * 60
+                maxAgeSeconds: 30 * 24 * 60 * 60,
               },
-              cacheableResponse: { statuses: [0, 200] }
-            }
+              cacheableResponse: { statuses: [0, 200] },
+            },
           },
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*$/i,
@@ -93,10 +93,10 @@ export default defineConfig({
               networkTimeoutSeconds: 10,
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 5 * 60
+                maxAgeSeconds: 5 * 60,
               },
-              cacheableResponse: { statuses: [0, 200] }
-            }
+              cacheableResponse: { statuses: [0, 200] },
+            },
           },
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/.*$/i,
@@ -105,9 +105,9 @@ export default defineConfig({
               cacheName: 'supabase-storage',
               expiration: {
                 maxEntries: 30,
-                maxAgeSeconds: 24 * 60 * 60
-              }
-            }
+                maxAgeSeconds: 24 * 60 * 60,
+              },
+            },
           },
           {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*$/i,
@@ -116,33 +116,22 @@ export default defineConfig({
               cacheName: 'google-fonts',
               expiration: {
                 maxEntries: 20,
-                maxAgeSeconds: 30 * 24 * 60 * 60
-              }
-            }
-          },
-          {
-            urlPattern: /^https:\/\/cdn\.tailwindcss\.com\/.*$/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'tailwind-cdn',
-              expiration: {
-                maxEntries: 5,
-                maxAgeSeconds: 30 * 24 * 60 * 60
+                maxAgeSeconds: 30 * 24 * 60 * 60,
               },
-              cacheableResponse: { statuses: [0, 200] }
-            }
-          }
+            },
+          },
         ],
 
         cleanupOutdatedCaches: true,
         skipWaiting: true,
-        clientsClaim: true
+        clientsClaim: true,
       },
 
       manifest: {
         short_name: 'Снабжение ВиК',
         name: 'Снабжение Вентиляция и Кондиционирование',
-        description: 'Система управления заявками на материалы для подрядных организаций',
+        description:
+          'Система управления заявками на материалы для подрядных организаций',
         lang: 'ru',
         start_url: '/',
         display: 'standalone',
@@ -150,75 +139,69 @@ export default defineConfig({
         theme_color: '#4A6572',
         background_color: '#F5F7FA',
         icons: [
-          { src: '/icon-48.png',  sizes: '48x48',   type: 'image/png' },
-          { src: '/icon-72.png',  sizes: '72x72',   type: 'image/png' },
-          { src: '/icon-96.png',  sizes: '96x96',   type: 'image/png' },
+          { src: '/icon-48.png', sizes: '48x48', type: 'image/png' },
+          { src: '/icon-72.png', sizes: '72x72', type: 'image/png' },
+          { src: '/icon-96.png', sizes: '96x96', type: 'image/png' },
           { src: '/icon-128.png', sizes: '128x128', type: 'image/png' },
           { src: '/icon-144.png', sizes: '144x144', type: 'image/png' },
           { src: '/icon-152.png', sizes: '152x152', type: 'image/png' },
-          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+          {
+            src: '/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
           { src: '/icon-256.png', sizes: '256x256', type: 'image/png' },
           { src: '/icon-384.png', sizes: '384x384', type: 'image/png' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          {
+            src: '/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
         ],
         screenshots: [],
         related_applications: [],
         prefer_related_applications: false,
-        categories: ['business', 'productivity', 'utilities']
+        categories: ['business', 'productivity', 'utilities'],
       },
-
-      injectManifest: {
-        globPatterns: ['**/*.{js,mjs,css,html,png,svg,ico,woff2}']
-      }
-    })
+    }),
   ],
 
   server: {
     headers: {
-      'Content-Security-Policy': CSP_POLICY,
+      'Content-Security-Policy': CSP_DEV,
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'SAMEORIGIN',
       'X-XSS-Protection': '1; mode=block',
-      'Referrer-Policy': 'strict-origin-when-cross-origin'
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
     },
     allowedHosts: true,
     warmup: {
       clientFiles: [
         './src/main.jsx',
         './src/App.jsx',
-        './src/utils/supabaseClient.js'
-      ]
-    }
+        './src/utils/supabaseClient.js',
+      ],
+    },
   },
 
   build: {
     sourcemap: false,
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true
-      }
-    },
+    minify: 'esbuild',
     rollupOptions: {
       output: {
-        // 🔧 ФИКС: manualChunks ПОЛНОСТЬЮ убран.
-        //    Любое ручное разбиение (vendor-react, vendor-charts и т.д.)
-        //    вызывает циклическую инициализацию:
-        //    "Cannot access 'Ms' before initialization" в vendor-react-*.js
-        //    Rollup сам разобьёт код оптимально и без циклов.
-        //    Размер основного бандла вырастет, но dev и prod будут работать.
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
-      }
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
     },
     chunkSizeWarningLimit: 1500,
     target: 'esnext',
     cssCodeSplit: true,
     commonjsOptions: {
-      include: [/recharts/, /pdfjs-dist/, /node_modules/]
-    }
+      include: [/recharts/, /pdfjs-dist/, /node_modules/],
+    },
   },
 
   optimizeDeps: {
@@ -232,13 +215,13 @@ export default defineConfig({
       'jspdf',
       'lucide-react',
       'react-pdf',
-      'pdfjs-dist'
+      'pdfjs-dist',
     ],
     esbuildOptions: { target: 'esnext' },
-    force: false
+    force: false,
   },
 
   resolve: {
-    alias: {}
-  }
+    alias: {},
+  },
 });
