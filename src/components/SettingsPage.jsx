@@ -6,6 +6,15 @@ import {
   Smartphone, Eye, EyeOff, Save, Loader2, Palette, Settings
 } from 'lucide-react';
 
+// 🆕 D.1 — push-хелперы
+import {
+  subscribeToPush,
+  unsubscribeFromPush,
+  isSubscribed,
+  getPushPermission,
+  isPushSupported,
+} from '../utils/pushNotifications';
+
 // ✅ ХЕЛПЕР ДЛЯ ОЧИСТКИ COMPANY_ID
 const getCleanCompanyId = (companyId) => {
   if (!companyId) return null;
@@ -83,6 +92,11 @@ const SettingsPage = ({
   const [appVersion, setAppVersion] = useState('1.0.0');
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
+  // 🆕 D.2 — Push-уведомления
+  const [pushStatus, setPushStatus] = useState('loading');
+  // 'loading' | 'granted' | 'denied' | 'default' | 'unsupported' | 'subscribed'
+  const [pushBusy, setPushBusy] = useState(false);
+
   // 📋 Активные вкладки
   const [activeTab, setActiveTab] = useState('appearance');
 
@@ -92,12 +106,11 @@ const SettingsPage = ({
 
     setLoading(true);
     try {
-      // ✅ ИСПРАВЛЕНО: maybeSingle вместо single + обработка ошибки
       const { data: userPrefs, error: prefsError } = await supabase
         .from('user_preferences')
         .select('*')
         .eq('user_id', user.id)
-        .maybeSingle();   // ← НЕ падает при 0 строк
+        .maybeSingle();
 
       if (prefsError) {
         console.warn('⚠️ Ошибка загрузки настроек:', prefsError.message);
@@ -130,11 +143,9 @@ const SettingsPage = ({
         setDataRetentionDays(userPrefs.data_retention_days || 365);
         setAutoCleanupEnabled(userPrefs.auto_cleanup_enabled ?? true);
       } else {
-        // ✅ Если настроек ещё нет — оставляем дефолтные значения
         console.log('ℹ️ Настройки ещё не созданы, используем дефолтные');
       }
 
-      // Загружаем API ключ
       const cleanCompanyId = getCleanCompanyId(userCompanyId);
       if (cleanCompanyId) {
         const { data: apiData } = await supabase
@@ -150,7 +161,6 @@ const SettingsPage = ({
         }
       }
 
-      // Загружаем версию приложения
       try {
         const response = await fetch('/version.json');
         const data = await response.json();
@@ -185,7 +195,61 @@ const SettingsPage = ({
     loadSettings();
   }, [loadSettings]);
 
-  // ✅ ИСПРАВЛЕНО: saveSettings с onConflict + очисткой company_id
+  // 🆕 D.2 — Проверка статуса push при монтировании
+  useEffect(() => {
+    const checkPush = async () => {
+      if (!isPushSupported()) {
+        setPushStatus('unsupported');
+        return;
+      }
+      const permission = getPushPermission();
+      if (permission === 'denied') {
+        setPushStatus('denied');
+        return;
+      }
+      const subscribed = await isSubscribed();
+      setPushStatus(subscribed ? 'subscribed' : permission);
+    };
+    checkPush();
+  }, []);
+
+  // 🆕 D.2 — Включить push
+  const handleEnablePush = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      const cleanCompanyId = getCleanCompanyId(userCompanyId);
+      if (!cleanCompanyId) {
+        showNotification('❌ Ошибка: компания не найдена', 'error');
+        return;
+      }
+      await subscribeToPush(user.id, cleanCompanyId);
+      setPushStatus('subscribed');
+      showNotification('🔔 Push-уведомления включены!', 'success');
+    } catch (err) {
+      console.error('[Push] subscribe error:', err);
+      showNotification(`❌ ${err.message}`, 'error');
+      setPushStatus(getPushPermission());
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  // 🆕 D.2 — Выключить push
+  const handleDisablePush = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      await unsubscribeFromPush();
+      setPushStatus('default');
+      showNotification('🔕 Push-уведомления выключены', 'info');
+    } catch (err) {
+      showNotification(`Ошибка: ${err.message}`, 'error');
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
   const saveSettings = async () => {
     if (!user?.id) {
       showNotification('❌ Пользователь не авторизован', 'error');
@@ -202,7 +266,7 @@ const SettingsPage = ({
     try {
       const payload = {
         user_id: user.id,
-        company_id: cleanCompanyId,  // ✅ ТОЛЬКО строка UUID
+        company_id: cleanCompanyId,
         theme: localTheme,
         language: localLanguage,
         accent_color: accentColor,
@@ -231,20 +295,18 @@ const SettingsPage = ({
 
       console.log('💾 [Settings] Сохраняем:', payload);
 
-      // ✅ ИСПРАВЛЕНО: onConflict + игнорируем возвращаемые данные
       const { error: saveError } = await supabase
         .from('user_preferences')
         .upsert(payload, {
-  onConflict: 'user_id,company_id',   // ← составной ключ
-  ignoreDuplicates: false
-});
+          onConflict: 'user_id,company_id',
+          ignoreDuplicates: false
+        });
 
       if (saveError) {
         console.error('❌ [Settings] Ошибка:', saveError);
         throw saveError;
       }
 
-      // ✅ Обновляем глобальные настройки
       if (onThemeChange) onThemeChange(localTheme);
       if (onLanguageChange) onLanguageChange(localLanguage);
       if (onSettingsUpdate) {
@@ -256,7 +318,6 @@ const SettingsPage = ({
         });
       }
 
-      // ✅ Обновляем тему сразу в DOM (пользователь видит результат мгновенно)
       if (localTheme === 'dark') {
         document.documentElement.classList.add('dark');
       } else if (localTheme === 'light') {
@@ -266,7 +327,6 @@ const SettingsPage = ({
         document.documentElement.classList.toggle('dark', isDark);
       }
 
-      // ✅ Сохраняем в метаданные пользователя (для кросс-девайс синхронизации)
       try {
         await supabase.auth.updateUser({
           data: {
@@ -305,7 +365,7 @@ const SettingsPage = ({
       const { error } = await supabase
         .from('api_keys')
         .insert({
-          company_id: cleanCompanyId,   // ✅ ТОЛЬКО строка
+          company_id: cleanCompanyId,
           key_name: `API Key ${new Date().toLocaleDateString()}`,
           key_value: newKey,
           is_active: true,
@@ -472,21 +532,57 @@ const SettingsPage = ({
               className="w-5 h-5 rounded border-gray-300 text-[#4A6572] focus:ring-[#4A6572]"
             />
           </label>
-          <label className="flex items-center justify-between cursor-pointer">
-            <div className="flex items-center gap-3">
-              <Smartphone className="w-5 h-5 text-gray-500" />
-              <span className="text-sm">Push-уведомления</span>
+
+          {/* 🆕 D.3 — Push-уведомления (замена чекбокса) */}
+          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 flex-1">
+                <Smartphone className="w-5 h-5 text-gray-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium block">Push-уведомления</span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {pushStatus === 'loading' && 'Проверка...'}
+                    {pushStatus === 'subscribed' && '✅ Активны — приходят даже при закрытом приложении'}
+                    {pushStatus === 'default' && 'Получайте уведомления, когда приложение закрыто'}
+                    {pushStatus === 'granted' && 'Разрешение получено, но подписка ещё не создана'}
+                    {pushStatus === 'denied' && '❌ Заблокированы в настройках браузера'}
+                    {pushStatus === 'unsupported' && '⚠️ Не поддерживаются этим браузером'}
+                  </p>
+                </div>
+              </div>
+
+              {pushStatus === 'subscribed' && (
+                <button
+                  onClick={handleDisablePush}
+                  disabled={pushBusy}
+                  className="px-3 py-1.5 text-xs font-medium bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50 flex-shrink-0"
+                >
+                  {pushBusy ? '...' : 'Выключить'}
+                </button>
+              )}
+
+              {(pushStatus === 'default' || pushStatus === 'granted') && (
+                <button
+                  onClick={handleEnablePush}
+                  disabled={pushBusy}
+                  className="px-3 py-1.5 text-xs font-medium bg-[#4A6572] text-white rounded-lg hover:bg-[#344955] disabled:opacity-50 flex-shrink-0"
+                >
+                  {pushBusy ? '...' : 'Включить'}
+                </button>
+              )}
+
+              {pushStatus === 'denied' && (
+                <span className="text-xs text-gray-400 flex-shrink-0">
+                  Разрешите в браузере
+                </span>
+              )}
+
+              {pushStatus === 'unsupported' && (
+                <span className="text-xs text-gray-400 flex-shrink-0">—</span>
+              )}
             </div>
-            <input
-              type="checkbox"
-              checked={notificationSettings.pushNotifications}
-              onChange={(e) => setNotificationSettings(prev => ({
-                ...prev,
-                pushNotifications: e.target.checked
-              }))}
-              className="w-5 h-5 rounded border-gray-300 text-[#4A6572] focus:ring-[#4A6572]"
-            />
-          </label>
+          </div>
+
           <label className="flex items-center justify-between cursor-pointer">
             <div className="flex items-center gap-3">
               <MessageCircle className="w-5 h-5 text-gray-500" />
@@ -918,6 +1014,13 @@ const SettingsPage = ({
             <div>Роль: {userRole}</div>
             <div>Язык: {localLanguage}</div>
             <div>Тема: {localTheme}</div>
+            {/* 🆕 D.4 — статус push */}
+            <div>Push: {
+              pushStatus === 'subscribed' ? '✅ Включены'
+              : pushStatus === 'denied' ? '❌ Заблокированы'
+              : pushStatus === 'unsupported' ? '— Не поддерживается'
+              : '⚪ Выключены'
+            }</div>
           </div>
         </div>
       </div>
