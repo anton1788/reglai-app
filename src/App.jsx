@@ -46,7 +46,6 @@ import {
   FEATURE_CATEGORIES,        // 🆕 для справки (если нужно в UI)
 } from './utils/tariffPlans';
 // Добавить импорты
-import { WarehouseBalance } from './components/WarehouseView';
 import TaskBoard from './components/TaskBoard';
 import QRScanner from './components/Mobile/QRScanner';
 import { ROLE_VIEWS, getDefaultView, isViewAllowed, shouldHideFromNav } from './utils/roleViews';
