@@ -1851,51 +1851,6 @@ useEffect(() => {
     return link;
   });
 
- // ✅ Регистрация Service Worker
-const registerSW = async () => {
-  if ('serviceWorker' in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.register('/sw.js?v=' + APP_VERSION);
-      
-      // Обработка ожидающего worker'а
-      if (registration.waiting) {
-        setWaitingWorker(registration.waiting);
-        checkForUpdates();
-      }
-
-      // Отслеживаем новых worker'ов
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              setWaitingWorker(newWorker);
-              checkForUpdates();
-            }
-          });
-        }
-      });
-
-      // Обработка сообщений от worker'а
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data?.type === 'RELOAD_PAGE') {
-          window.location.reload();
-        }
-      });
-
-      // Периодическая проверка
-      setInterval(() => {
-        registration.update();
-      }, 60 * 60 * 1000); // Раз в час
-
-    } catch (err) {
-      console.error('[SW] Ошибка регистрации:', err);
-    }
-  }
-};
-
-// ✅ ВЫЗВАТЬ ФУНКЦИЮ ПОСЛЕ ОБЪЯВЛЕНИЯ:
-registerSW();
 
 // ✅ Cleanup — используем iconElements, чтобы убрать ошибку ESLint
 return () => {
