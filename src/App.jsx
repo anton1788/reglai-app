@@ -2671,7 +2671,19 @@ const currentOnboardingHighlights = useMemo(() => {
 // 🔄 CHECK FOR UPDATES (с защитой от дублирования)
 const checkForUpdates = useCallback(async () => {
   try {
-    const response = await fetch('/version.json?v=' + Date.now());
+    const response = await fetch('/version.json?v=' + Date.now(), {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+    });
+
+    if (!response.ok) {
+      console.warn('[UpdateCheck] version.json HTTP', response.status);
+      return;
+    }
+
     const data = await response.json();
     
     console.log('[UpdateCheck] Текущая версия:', APP_VERSION);
@@ -10509,26 +10521,58 @@ onClearFilters={handleClearFilters}
     }
   }}
   updateInfo={updateInfo}
-  onApplyUpdate={() => {
-    if (waitingWorker) {
-      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
-    }
+  onApplyUpdate={async () => {
+  try {
+    // 1. Сохраняем, чтобы не показать модалку повторно
     if (updateInfo?.to) {
       localStorage.setItem(`update_applied_${updateInfo.to}`, Date.now().toString());
       localStorage.setItem('last_update_shown', updateInfo.to);
     }
+
+    // 2. Говорим SW пропустить ожидание
+    if (waitingWorker) {
+      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    }
+    if (window.swRegistration?.waiting) {
+      window.swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+
+    // 3. Чистим Cache Storage
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+
+    // 4. Пытаемся обновить registration
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.update();
+    }
+
+    // 5. Закрываем модалку
     setShowUpdateModal(false);
     setUpdateInfo(null);
-    // Очищаем кэш
-    if ('caches' in window) {
-      caches.keys().then(keys => {
-        keys.forEach(key => caches.delete(key));
-      });
-    }
-    setTimeout(() => {
-      window.location.reload(true);
-    }, 500);
-  }}
+
+    // 6. Форсируем reload с cache-bust
+    const forceReload = () => {
+      window.location.href = window.location.pathname + '?v=' + Date.now();
+    };
+
+    const timer = setTimeout(forceReload, 1500);
+
+    navigator.serviceWorker?.addEventListener(
+      'controllerchange',
+      () => {
+        clearTimeout(timer);
+        forceReload();
+      },
+      { once: true }
+    );
+  } catch (err) {
+    console.error('[Update] Ошибка:', err);
+    window.location.href = window.location.pathname + '?v=' + Date.now();
+  }
+}}
 />
 
 {/* 🆕 Модалка понижения тарифа */}

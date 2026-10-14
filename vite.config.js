@@ -7,7 +7,6 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // CSP для dev-сервера. В prod CSP задаётся в vercel.json.
-// 'unsafe-eval' нужен только для HMR Vite в dev.
 const CSP_DEV = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://*.supabase.co",
@@ -32,7 +31,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'script',
 
-      // 🆕 Переходим на свой SW
+      // Свой SW через injectManifest
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.js',
@@ -40,6 +39,14 @@ export default defineConfig({
       injectManifest: {
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+
+        // ✅ ФИКС: НЕ прекэшируем version.json и sw.js,
+        //    иначе они никогда не обновятся
+        globIgnores: [
+          '**/version.json',
+          '**/sw.js',
+          '**/registerSW.js',
+        ],
       },
 
       devOptions: {
@@ -66,10 +73,20 @@ export default defineConfig({
           { src: '/icon-128.png', sizes: '128x128', type: 'image/png' },
           { src: '/icon-144.png', sizes: '144x144', type: 'image/png' },
           { src: '/icon-152.png', sizes: '152x152', type: 'image/png' },
-          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+          {
+            src: '/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
           { src: '/icon-256.png', sizes: '256x256', type: 'image/png' },
           { src: '/icon-384.png', sizes: '384x384', type: 'image/png' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          {
+            src: '/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
         ],
         screenshots: [],
         related_applications: [],
