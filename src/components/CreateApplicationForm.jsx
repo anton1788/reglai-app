@@ -280,8 +280,13 @@ const MaterialRow = memo(({
     onUpdate(index, 'quantity', clamp((material.quantity || 1) - 1, 1, 10000));
   }, [index, material.quantity, onUpdate]);
 
-  const photoKey = selectedApplicationId ? `${selectedApplicationId}-${index}` : `temp-${index}`;
-  const photos = capturedPhotos?.[photoKey] || [];
+  // ✅ Для существующей заявки — берём и оттуда, и оттуда (обратная совместимость).
+//    Для черновика — только из material.photos (туда пишет onCapture).
+const photosFromCaptured = selectedApplicationId
+  ? (capturedPhotos?.[`${selectedApplicationId}-${index}`] || [])
+  : [];
+const photosFromMaterial = Array.isArray(material.photos) ? material.photos : [];
+const photos = Array.from(new Set([...photosFromMaterial, ...photosFromCaptured]));
 
   return (
     <article
@@ -481,6 +486,14 @@ const SubmitButton = memo(({ canSubmit, isLoading, t }) => (
   <button
     type="submit"
     disabled={!canSubmit || isLoading}
+    onClick={(e) => {
+      // ✅ ФИКС: кнопка в <form>, но иногда клик не долетает
+      //    из-за всплывающих подсказок снизу. Форсируем submit.
+      if (canSubmit && !isLoading) {
+        e.preventDefault();
+        e.currentTarget.closest('form')?.requestSubmit();
+      }
+    }}
     className={`w-full py-4 px-6 rounded-2xl font-semibold shadow-lg transition-all duration-300 flex items-center justify-center gap-3 ${
       canSubmit && !isLoading
         ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl hover:scale-[1.02]'
@@ -758,8 +771,8 @@ const CreateApplicationForm = memo(({
   // ─────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-gray-200/50 dark:border-gray-700/50 form-enter">
+  <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 pb-28 lg:pb-8">
+    <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-gray-200/50 dark:border-gray-700/50 form-enter">
 
         {/* Header */}
         <FormHeader t={t} />
