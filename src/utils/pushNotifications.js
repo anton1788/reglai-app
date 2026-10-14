@@ -60,8 +60,8 @@ export const subscribeToPush = async (userId, companyId) => {
 
   // 4. Если нет — создаём
   if (!subscription) {
-    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-    if (!vapidKey) throw new Error('VAPID_PUBLIC_KEY не задан в .env');
+    const FALLBACK_VAPID_KEY = 'BE1n3-SZH60AFN3fzuRaS7PceNVhG8KMQTy1vVTMStTkaHeOWdmU5MTy8b19Wu6dl7axNEmJFOlcJqKGkMneYoo';
+    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || FALLBACK_VAPID_KEY;
 
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true, // обязательно true
