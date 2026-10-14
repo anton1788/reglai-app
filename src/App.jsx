@@ -298,12 +298,19 @@ const GLOBAL_STYLES = `
 
 /* ==========================================================
    📱 МОБИЛЬНЫЕ СТИЛИ
-   ⚠️ УБРАНЫ агрессивные display:none — они скрывали
-   кнопку "Отправить заявку" и другие важные блоки формы.
+   ВАЖНО: НЕ трогаем кнопки внутри <nav>!
    ========================================================== */
 @media (max-width: 768px) {
   input, select, textarea {
     font-size: 16px !important;
+  }
+
+  .text-center.mb-4,
+  .text-center.mt-8,
+  .fixed.bottom-0,
+  div.mb-4.flex.justify-center,
+  div.mt-8.text-center {
+    display: none !important;
   }
 
   .fade-enter {
@@ -312,12 +319,6 @@ const GLOBAL_STYLES = `
   @keyframes slideUp {
     from { transform: translateY(100%); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
-  }
-
-  /* ✅ НОВОЕ: отступ снизу, чтобы контент не уходил
-     под фиксированную мобильную навигацию (h-16 = 64px) */
-  main {
-    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -2671,19 +2672,7 @@ const currentOnboardingHighlights = useMemo(() => {
 // 🔄 CHECK FOR UPDATES (с защитой от дублирования)
 const checkForUpdates = useCallback(async () => {
   try {
-    const response = await fetch('/version.json?v=' + Date.now(), {
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-      },
-    });
-
-    if (!response.ok) {
-      console.warn('[UpdateCheck] version.json HTTP', response.status);
-      return;
-    }
-
+    const response = await fetch('/version.json?v=' + Date.now());
     const data = await response.json();
     
     console.log('[UpdateCheck] Текущая версия:', APP_VERSION);
@@ -3573,54 +3562,6 @@ const newApplication = {
     if (error) throw error;
     
     const realApplicationId = data[0].id;
-    // ✅ ФИКС: сохраняем фото, добавленные ДО отправки заявки
-try {
-  // ✅ ФИКС: берём фото ИЗ formData.materials, а не из data[0].materials,
-  //    потому что INSERT возвращает materials БЕЗ photos.
-  const materialsWithPhotos = (data[0].materials || []).map((dbMaterial, idx) => {
-    const formMaterial = formData.materials[idx];
-
-    // Собираем фото из ДВУХ источников (на случай, если где-то ещё писалось):
-    // 1) formData.materials[idx].photos — куда пишет onCapture в режиме черновика
-    // 2) capturedPhotos[`temp-${idx}`] — на всякий случай
-    const photosFromForm = Array.isArray(formMaterial?.photos) ? formMaterial.photos : [];
-    const photosFromCaptured = capturedPhotos?.[`temp-${idx}`] || [];
-
-    const allPhotos = Array.from(new Set([...photosFromForm, ...photosFromCaptured]));
-
-    return allPhotos.length > 0
-      ? { ...dbMaterial, photos: allPhotos }
-      : dbMaterial;
-  });
-
-  const hasAnyPhotos = materialsWithPhotos.some(m => m.photos?.length > 0);
-
-  if (hasAnyPhotos) {
-    const { error: photoErr } = await supabase
-      .from('applications')
-      .update({ materials: materialsWithPhotos })
-      .eq('id', realApplicationId);
-
-    if (photoErr) {
-      console.warn('[handleSubmit] Не удалось привязать фото к заявке:', photoErr);
-    } else {
-      console.log('✅ [handleSubmit] Фото привязаны к заявке:', realApplicationId);
-      // Обновляем локальный стейт
-      setApplications(prev =>
-        prev.map(a =>
-          a.id === realApplicationId
-            ? { ...a, materials: materialsWithPhotos }
-            : a
-        )
-      );
-    }
-  }
-
-  // Очищаем capturedPhotos, чтобы не тянулись в следующую заявку
-  setCapturedPhotos({});
-} catch (photoAttachErr) {
-  console.warn('[handleSubmit] Ошибка привязки фото:', photoAttachErr);
-}
 
     if (currentPlan?.id === 'basic' || !currentPlan) {
       try {
@@ -3942,13 +3883,6 @@ const { data: lastApp } = await supabase
       };
 
       await walkStorage(folderPath);
-
-// 🆕 Дополнительно чистим app_temp (там фото черновиков)
-try {
-  await walkStorage(`photos/company_${cleanCompanyId}/app_temp`);
-} catch (e) {
-  console.warn('[cancelApplication] app_temp walk failed:', e);
-}
     } catch (e) {
       console.warn('[cancelApplication] Storage walk failed:', e);
     }
@@ -8761,9 +8695,7 @@ if (inviteParam) {
       fullScreen 
     />
     
-    {/* ✅ ФИКС: overflow-x-hidden вместо overflow-hidden —
-    иначе на мобильных нельзя проскроллить длинные формы */}
-<div className="min-h-screen relative overflow-x-hidden bg-gradient-to-br from-[#F5F7FA] via-white to-[#E4EDF5] dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 page-enter">
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#F5F7FA] via-white to-[#E4EDF5] dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 page-enter">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-bl from-[#F9AA33]/5 to-transparent rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-[#4A6572]/5 to-transparent rounded-full blur-3xl"></div>
@@ -8999,12 +8931,12 @@ if (inviteParam) {
       showNotification={showNotification}
       handleSubmit={handleSubmit}
             onAddPhoto={(materialIndex) => {
-  // ✅ ФИКС: разрешаем добавлять фото ДО сохранения заявки.
-  //    URL фото кладём в formData.materials[index].photos,
-  //    а после submit — сохраняем в БД.
-  setActiveMaterialIndex(materialIndex);
-  setShowPhotoCapture(true);
-}}
+        // 🛑 Фото к заявке можно добавлять только после её сохранения
+        showNotification(
+          '📸 Сохраните заявку, затем добавьте фото через карточку заявки',
+          'info'
+        );
+      }}
       handleObjectInput={handleObjectInput}
       handlePhoneChange={handlePhoneChange}
       addMaterial={addMaterial}
@@ -10521,58 +10453,26 @@ onClearFilters={handleClearFilters}
     }
   }}
   updateInfo={updateInfo}
-  onApplyUpdate={async () => {
-  try {
-    // 1. Сохраняем, чтобы не показать модалку повторно
+  onApplyUpdate={() => {
+    if (waitingWorker) {
+      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    }
     if (updateInfo?.to) {
       localStorage.setItem(`update_applied_${updateInfo.to}`, Date.now().toString());
       localStorage.setItem('last_update_shown', updateInfo.to);
     }
-
-    // 2. Говорим SW пропустить ожидание
-    if (waitingWorker) {
-      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
-    }
-    if (window.swRegistration?.waiting) {
-      window.swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
-    }
-
-    // 3. Чистим Cache Storage
-    if ('caches' in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((key) => caches.delete(key)));
-    }
-
-    // 4. Пытаемся обновить registration
-    if ('serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) await reg.update();
-    }
-
-    // 5. Закрываем модалку
     setShowUpdateModal(false);
     setUpdateInfo(null);
-
-    // 6. Форсируем reload с cache-bust
-    const forceReload = () => {
-      window.location.href = window.location.pathname + '?v=' + Date.now();
-    };
-
-    const timer = setTimeout(forceReload, 1500);
-
-    navigator.serviceWorker?.addEventListener(
-      'controllerchange',
-      () => {
-        clearTimeout(timer);
-        forceReload();
-      },
-      { once: true }
-    );
-  } catch (err) {
-    console.error('[Update] Ошибка:', err);
-    window.location.href = window.location.pathname + '?v=' + Date.now();
-  }
-}}
+    // Очищаем кэш
+    if ('caches' in window) {
+      caches.keys().then(keys => {
+        keys.forEach(key => caches.delete(key));
+      });
+    }
+    setTimeout(() => {
+      window.location.reload(true);
+    }, 500);
+  }}
 />
 
 {/* 🆕 Модалка понижения тарифа */}
@@ -10816,95 +10716,78 @@ onClearFilters={handleClearFilters}
             }
 
             // 1. Локальный state превью
-// ✅ ФИКС: поддерживаем 2 режима — существующая заявка и черновик
-if (selectedApplication?.id) {
-  // Режим 1: заявка уже существует
-  const key = `${selectedApplication.id}-${activeMaterialIndex ?? 'all'}`;
-  setCapturedPhotos(prev => ({
-    ...prev,
-    [key]: [...(prev[key] || []), ...urlList]
-  }));
-} else if (activeMaterialIndex != null) {
-  // Режим 2: черновик — заявка ещё не создана.
-  // Кладём фото ТОЛЬКО в formData.materials[index].photos.
-  // В capturedPhotos НЕ дублируем — MaterialRow для черновика
-  // читает только material.photos (см. photosFromCaptured = ...).
-  setFormData(prev => {
-    const newMaterials = [...prev.materials];
-    const current = newMaterials[activeMaterialIndex];
-    if (!current) return prev;
-    newMaterials[activeMaterialIndex] = {
-      ...current,
-      photos: [...(current.photos || []), ...urlList]
-    };
-    return { ...prev, materials: newMaterials };
-  });
-}
+            if (selectedApplication?.id) {
+              const key = `${selectedApplication.id}-${activeMaterialIndex ?? 'all'}`;
+              setCapturedPhotos(prev => ({
+                ...prev,
+                [key]: [...(prev[key] || []), ...urlList]
+              }));
+            }
 
             // 2. Записываем в applications.materials[].photos (JSONB)
-//    ✅ Только для существующей заявки. Для черновика — уже записали выше.
-if (selectedApplication?.id) {
-  try {
-    const hasExplicitIndex =
-      activeMaterialIndex !== null && activeMaterialIndex !== undefined;
+            if (selectedApplication?.id) {
+              try {
+                const hasExplicitIndex =
+                  activeMaterialIndex !== null && activeMaterialIndex !== undefined;
 
-    const updatedMaterials = (selectedApplication.materials || []).map((m, idx) => {
-      if (hasExplicitIndex && idx !== activeMaterialIndex) return m;
-      const existingPhotos = Array.isArray(m.photos) ? m.photos : [];
-      return { ...m, photos: [...existingPhotos, ...urlList] };
-    });
+                const updatedMaterials = (selectedApplication.materials || []).map((m, idx) => {
+                  // Если индекс задан — пишем только в него
+                  if (hasExplicitIndex && idx !== activeMaterialIndex) return m;
+                  // Если индекс НЕ задан — пишем во все материалы (или можно в первый)
+                  const existingPhotos = Array.isArray(m.photos) ? m.photos : [];
+                  return { ...m, photos: [...existingPhotos, ...urlList] };
+                });
 
-    const { error: updErr } = await supabase
-      .from('applications')
-      .update({
-        materials: updatedMaterials,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', selectedApplication.id);
+                const { error: updErr } = await supabase
+                  .from('applications')
+                  .update({
+                    materials: updatedMaterials,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', selectedApplication.id);
 
-    if (updErr) {
-      console.warn('[App] Не удалось обновить materials:', updErr);
-      showNotification('⚠️ Фото в Storage, но не привязаны к заявке', 'warning');
-    } else {
-      setApplications(prev =>
-        prev.map(a =>
-          a.id === selectedApplication.id
-            ? { ...a, materials: updatedMaterials }
-            : a
-        )
-      );
-      setSelectedApplication(prev =>
-        prev ? { ...prev, materials: updatedMaterials } : prev
-      );
-    }
-  } catch (err) {
-    console.error('[App] Ошибка сохранения фото в заявку:', err);
-  }
-}
+                if (updErr) {
+                  console.warn('[App] Не удалось обновить materials:', updErr);
+                  showNotification('⚠️ Фото в Storage, но не привязаны к заявке', 'warning');
+                } else {
+                  setApplications(prev =>
+                    prev.map(a =>
+                      a.id === selectedApplication.id
+                        ? { ...a, materials: updatedMaterials }
+                        : a
+                    )
+                  );
+                  setSelectedApplication(prev =>
+                    prev ? { ...prev, materials: updatedMaterials } : prev
+                  );
+                }
+              } catch (err) {
+                console.error('[App] Ошибка сохранения фото в заявку:', err);
+              }
+            } else {
+              console.warn('[App] onCapture: selectedApplication.id отсутствует — фото не привязаны к заявке');
+            }
 
             // 3. work_photos — с корректным client_id
-if (selectedApplication?.id) {
-  // пишем только когда есть application_id (FK constraint)
-  try {
-    const rows = urlList.map((url) => ({
-      application_id: selectedApplication.id,
-      client_id: clientId || null,
-      photo_url: url,
-      description: null,
-      taken_at: new Date().toISOString(),
-    }));
+            try {
+              const rows = urlList.map((url) => ({
+                application_id: selectedApplication?.id || null,
+                client_id: clientId || null,   // ← ИСПРАВЛЕНО
+                photo_url: url,
+                description: null,
+                taken_at: new Date().toISOString(),
+              }));
 
-    const { error: wpErr } = await supabase
-      .from('work_photos')
-      .insert(rows);
+              const { error: wpErr } = await supabase
+                .from('work_photos')
+                .insert(rows);
 
-    if (wpErr) {
-      console.warn('[App] work_photos insert error:', wpErr);
-    }
-  } catch (err) {
-    console.error('[App] Ошибка сохранения в work_photos:', err);
-  }
-}
+              if (wpErr) {
+                console.warn('[App] work_photos insert error:', wpErr);
+              }
+            } catch (err) {
+              console.error('[App] Ошибка сохранения в work_photos:', err);
+            }
 
             setShowPhotoCapture(false);
             showNotification(`📸 Добавлено ${urlList.length} фото`, 'success');
