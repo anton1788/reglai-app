@@ -2444,7 +2444,7 @@ ${msg.content}
 
       {isOpen && (
         <div
-          className="fixed top-20 right-4 lg:top-24 lg:right-8 w-[380px] max-w-[calc(100vw-2rem)] h-[600px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col z-[9999] border border-gray-200 dark:border-gray-700 ai-bounce-in"
+  className="fixed top-20 right-2 sm:right-4 lg:top-24 lg:right-8 w-[380px] max-w-[calc(100vw-1rem)] h-[600px] max-h-[calc(100vh-6rem)] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col z-[9999] border border-gray-200 dark:border-gray-700 ai-bounce-in"
           role="dialog"
           aria-label="AI-ассистент"
         >

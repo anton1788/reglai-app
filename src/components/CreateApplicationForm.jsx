@@ -307,7 +307,7 @@ const MaterialRow = memo(({
             autoCorrect="off"
             autoCapitalize="sentences"
             spellCheck="false"
-            className="w-full px-4 py-3 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+            className="w-full min-w-0 px-4 py-3 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
             placeholder={t('materialDescriptionPlaceholder')}
             required
             aria-autocomplete="list"
@@ -347,7 +347,7 @@ const MaterialRow = memo(({
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="quantity-stepper flex items-center gap-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-1">
+          <div className="quantity-stepper flex items-center gap-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-1 flex-shrink-0">
             <button
               type="button"
               onClick={handleDecrement}
@@ -379,7 +379,7 @@ const MaterialRow = memo(({
           <select
             value={material.unit}
             onChange={(e) => onUpdate(index, 'unit', e.target.value)}
-            className="px-3 py-2.5 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+            className="px-3 py-2.5 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer flex-shrink-0"
             aria-label={t('unit')}
           >
             {unitOptions.map(unit => (
@@ -387,27 +387,27 @@ const MaterialRow = memo(({
             ))}
           </select>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onAddPhoto?.(index)}
-              className="p-2.5 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors"
-              title={t('addPhoto') || 'Добавить фото'}
-              aria-label={t('addPhoto') || 'Добавить фото'}
-            >
-              <Camera className="w-4.5 h-4.5" aria-hidden="true" />
-            </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+  <button
+    type="button"
+    onClick={() => onAddPhoto?.(index)}
+    className="p-2.5 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors flex-shrink-0"
+    title={t('addPhoto') || 'Добавить фото'}
+    aria-label={t('addPhoto') || 'Добавить фото'}
+  >
+    <Camera className="w-4 h-4" aria-hidden="true" />
+  </button>
 
-            <button
-              type="button"
-              onClick={() => onRemove(index)}
-              className="p-2.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
-              aria-label={t('removeMaterial')}
-              title={t('removeMaterial')}
-            >
-              <Trash2 className="w-4.5 h-4.5" aria-hidden="true" />
-            </button>
-          </div>
+  <button
+    type="button"
+    onClick={() => onRemove(index)}
+    className="p-2.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors flex-shrink-0"
+    aria-label={t('removeMaterial')}
+    title={t('removeMaterial')}
+  >
+    <Trash2 className="w-4 h-4" aria-hidden="true" />
+  </button>
+</div>
         </div>
       </div>
 
@@ -481,7 +481,7 @@ const SubmitButton = memo(({ canSubmit, isLoading, t }) => (
   <button
     type="submit"
     disabled={!canSubmit || isLoading}
-    className={`w-full py-4 px-6 rounded-2xl font-semibold shadow-lg transition-all duration-300 flex items-center justify-center gap-3 ${
+    className={`w-full max-w-full min-w-0 py-4 px-6 rounded-2xl font-semibold shadow-lg transition-all duration-300 flex items-center justify-center gap-3 ${
       canSubmit && !isLoading
         ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl hover:scale-[1.02]'
         : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
@@ -490,13 +490,13 @@ const SubmitButton = memo(({ canSubmit, isLoading, t }) => (
   >
     {isLoading ? (
       <>
-        <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-        <span className="text-lg">{t('sending') || 'Отправка...'}</span>
+        <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" aria-hidden="true" />
+        <span className="text-base sm:text-lg truncate">{t('sending') || 'Отправка...'}</span>
       </>
     ) : (
       <>
-        <Send className="w-5 h-5" aria-hidden="true" />
-        <span className="text-lg">{t('sendApplication')}</span>
+        <Send className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+        <span className="text-base sm:text-lg truncate">{t('sendApplication')}</span>
       </>
     )}
   </button>
@@ -758,8 +758,8 @@ const CreateApplicationForm = memo(({
   // ─────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-gray-200/50 dark:border-gray-700/50 form-enter">
+  <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 w-full overflow-x-hidden">
+    <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-gray-200/50 dark:border-gray-700/50 form-enter w-full">
 
         {/* Header */}
         <FormHeader t={t} />
@@ -868,8 +868,8 @@ const CreateApplicationForm = memo(({
           )}
 
           {/* Materials List */}
-          <section aria-labelledby="materials-heading">
-            <div className="flex justify-between items-center mb-4">
+          <section aria-labelledby="materials-heading" className="w-full min-w-0">
+  <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
               <h3 id="materials-heading" className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                 <Package className="w-4 h-4" aria-hidden="true" />
                 {t('materials')} <span className="text-red-500" aria-hidden="true">*</span>
@@ -891,7 +891,7 @@ const CreateApplicationForm = memo(({
               </p>
             )}
 
-            <div className="space-y-3" role="list" aria-label={t('materialsList')}>
+            <div className="space-y-3 w-full min-w-0" role="list" aria-label={t('materialsList')}>
               {formData.materials.map((material, index) => (
                 <MaterialRow
                   key={index}
@@ -914,12 +914,12 @@ const CreateApplicationForm = memo(({
 
           {/* 🆕 ИНДИКАЦИЯ ЛИМИТОВ ДЛЯ БЕСПЛАТНОГО ТАРИФА */}
           {currentPlan?.id === 'basic' && quotaStatus && (
-            <div className={`mb-4 p-4 rounded-xl border ${
-              quotaStatus.allowed
-                ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700/50'
-                : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50'
-            }`}>
-              <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className={`mb-4 p-4 rounded-xl border w-full min-w-0 ${
+  quotaStatus.allowed
+    ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700/50'
+    : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50'
+}`}>
+  <div className="flex items-center justify-between flex-wrap gap-2 w-full min-w-0">
                 <div className="flex items-center gap-3">
                   <AlertCircle className={`w-5 h-5 ${
                     quotaStatus.allowed ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'

@@ -97,7 +97,7 @@ import ObjectHub from './components/Objects/ObjectHub';
 import { normalizeObjectName } from './api/objects';
 import WarehouseView from './components/WarehouseView';
 import CalendarView from './components/CalendarView';
-// eslint-disable-next-line no-unused-vars
+ 
  import { APP_VERSION, isUpdateAvailable, APP_CONFIG } from './config';
 import CompanyChat from './components/CompanyChat';
 import VersionUpdateModal from './components/VersionUpdateModal';
@@ -215,7 +215,7 @@ import { supabase, getSafeCompanyId } from './utils/supabaseClient';
 // === APPROVAL WORKFLOW ===
 import ApprovalModal from './components/ApprovalWorkflow/ApprovalModal';
 import { useApproval } from './hooks/useApproval';
-// eslint-disable-next-line no-unused-vars
+ 
 import approvalEngine from './utils/approvalEngine'; 
 import EstimateCalculator from './components/EstimateCalculator';
 import ReportBuilder from './components/ReportBuilder';
@@ -252,6 +252,39 @@ const unitOptions = ['шт', 'м', 'кг', 'л', 'упак', 'комплект',
 const COMPANY_LOGO_TEXT = 'Реглай';
 const ITEMS_PER_PAGE = 20;
 const GLOBAL_STYLES = `
+/* ============================================================
+   🛡️ ГЛОБАЛЬНАЯ ЗАЩИТА ОТ ПЕРЕПОЛНЕНИЯ
+   ============================================================ */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+main, section, article {
+  min-width: 0;
+  max-width: 100%;
+}
+
+input, textarea, select, button {
+  max-width: 100%;
+}
+
+img, video, canvas, svg {
+  max-width: 100%;
+  height: auto;
+}
+
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(20px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -303,14 +336,25 @@ const GLOBAL_STYLES = `
 @media (max-width: 768px) {
   input, select, textarea {
     font-size: 16px !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
-  .text-center.mb-4,
-  .text-center.mt-8,
-  .fixed.bottom-0,
-  div.mb-4.flex.justify-center,
-  div.mt-8.text-center {
-    display: none !important;
+  button[type="submit"] {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .application-card,
+  .material-card,
+  .card {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .fixed.right-4,
+  .fixed.right-6 {
+    right: 12px !important;
   }
 
   .fade-enter {
@@ -1076,27 +1120,6 @@ useEffect(() => {
   }
 }, [rfqCart]);
 
-// 🔄 Восстановление из localStorage
-useEffect(() => {
-  try {
-    const saved = localStorage.getItem('rfq_cart');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) setRfqCart(parsed);
-    }
-  } catch (e) {
-    console.warn('⚠️ Не удалось восстановить RFQ-корзину:', e);
-  }
-}, []);
-
-// 💾 Сохранение при изменении
-useEffect(() => {
-  try {
-    localStorage.setItem('rfq_cart', JSON.stringify(rfqCart));
-  } catch (e) {
-    console.warn('⚠️ Не удалось сохранить RFQ-корзину:', e);
-  }
-}, [rfqCart]);
 const [selectedPOId, setSelectedPOId] = useState(null);
 const [poFormMode, setPoFormMode] = useState(null); // { offer, rfq } | { preselectedSupplierId } | null
 const [currentSupplierId, setCurrentSupplierId] = useState(null); // supplier.id для роли поставщика
@@ -1232,7 +1255,7 @@ const [activeMaterialIndex, setActiveMaterialIndex] = useState(null);
 const [capturedPhotos, setCapturedPhotos] = useState({}); // { [appId-materialIdx]: [urls] }
 const [workPhotos, setWorkPhotos] = useState({}); // 🆕 { [applicationId]: [photo, ...] }
   // ✅ Отключить правило только для этой строки
-// eslint-disable-next-line no-unused-vars
+ 
   const [isExportingSection, setIsExportingSection] = useState({ html: false, xlsx: false, pdf: false });
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isExportingXLSX, setIsExportingXLSX] = useState(false);
@@ -1375,8 +1398,8 @@ useEffect(() => {
       .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
     if (data) setAuditLogs(data);
   };
-  loadAuditLogs();
-}, [userCompanyId, supabase]);
+    loadAuditLogs();
+}, [userCompanyId]);
 
 // Загрузка clientId для роли client
 useEffect(() => {
@@ -1465,8 +1488,8 @@ useEffect(() => {
     }
   };
 
-  loadSupplierId();
-}, [user?.id, user?.email, userRole, supabase]);
+    loadSupplierId();
+}, [user?.id, user?.email, userRole, user?.user_metadata?.supplier_id]);
 
 // 📊 Load NPS Responses
 // ✅ СТАЛО
@@ -1495,8 +1518,8 @@ useEffect(() => {
       }
     }
   };
-  loadNpsResponses();
-}, [userCompanyId, user?.id, supabase]);
+    loadNpsResponses();
+}, [userCompanyId, user?.id]);
 
 // ← ВСТАВИТЬ СРАЗУ ПОСЛЕ:
 // 📉 Load Churn Reasons
@@ -1560,7 +1583,7 @@ const {
   approveApplication,
   rejectApplication,
   escalateApplication,
-  // eslint-disable-next-line no-unused-vars
+   
   requiresApproval
 } = useApproval(userCompanyId, user?.id, userRole);
 
@@ -1653,9 +1676,6 @@ const featureAdoption = useMemo(() => {
 //    - группируем по company_id + нормализованному имени
 const mergeableCount = useMemo(() => {
   const groups = {};
-  const normalizeObjectName = (name) =>
-    (name || '').trim().replace(/\s+/g, ' ').toLowerCase();
-
   applications.forEach(app => {
     if (app.is_consolidated === true) return;
     if (app.status === 'consolidated') return;
@@ -2124,7 +2144,8 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
       setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+        return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─────────────────────────────────────────────────────────
@@ -2201,13 +2222,14 @@ const handleABTestClick = useCallback(async (testName, conversionType = 'click')
       setIsOnline(false);
       showNotification(t('offlineMode'), 'warning');
     };
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [offlineDrafts, t, showNotification]);
+            window.addEventListener('online', handleOnline);
+  window.addEventListener('offline', handleOffline);
+  return () => {
+    window.removeEventListener('online', handleOnline);
+    window.removeEventListener('offline', handleOffline);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [offlineDrafts, t, showNotification, safeSetUserCompanyId]);
 
   // ─────────────────────────────────────────────────────────
   // 💾 OPTIMIZED DRAFT SAVE
@@ -2393,13 +2415,14 @@ const checkInvitation = useCallback(async (email) => {
     console.error('Ошибка проверки приглашения:', err);
     setInvitedCompany(null);
   }
-}, [supabase, signupCompanyName, invitedCompany]);
+}, [signupCompanyName, invitedCompany]);
 
 // И ОСТАВЬТЕ useEffect для автоматической проверки при монтировании
 useEffect(() => {
   if (signupEmail && signupEmail.includes('@')) {
     checkInvitation(signupEmail);
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [signupEmail]);
 
   const tutorialSteps = [
@@ -4343,7 +4366,7 @@ useEffect(() => {
       }
     }
   }
-}, [currentView, userCompanyId, user, userRole, profileDataForHeader, supabase]);
+}, [currentView, userCompanyId, user, userRole, profileDataForHeader]);
 
   // ─────────────────────────────────────────────────────────
   // 🔍 FILTERING
@@ -4378,31 +4401,38 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────
   // 📋 APPLICATION INTERACTION
   // ─────────────────────────────────────────────────────────
-  const markAsViewed = async (applicationId) => {
-  if (userRole === 'supply_admin' || userRole === 'foreman') {
-      const app = applications.find(a => a.id === applicationId);
-      if (app && !app.viewed_by_supply_admin) {
-        const { error } = await supabase
-          .from('applications')
-          .update({ viewed_by_supply_admin: true })
-          .eq('id', applicationId);
-        if (!error) {
-          setApplications(apps =>
-            apps.map(a =>
-              a.id === applicationId ? { ...a, viewed_by_supply_admin: true } : a
-            )
-          );
-          if (isAdminMode) {
-            setAllApplications(apps =>
-              apps.map(a =>
-                a.id === applicationId ? { ...a, viewed_by_supply_admin: true } : a
-              )
-            );
-          }
-        }
+    // ✅ useRef чтобы избежать пересоздания
+  const applicationsRefForViewed = useRef(applications);
+  useEffect(() => {
+    applicationsRefForViewed.current = applications;
+  }, [applications]);
+
+  const markAsViewed = useCallback(async (applicationId) => {
+    if (userRole !== 'supply_admin' && userRole !== 'foreman') return;
+    
+    const app = applicationsRefForViewed.current.find(a => a.id === applicationId);
+    if (!app || app.viewed_by_supply_admin) return;
+
+    const { error } = await supabase
+      .from('applications')
+      .update({ viewed_by_supply_admin: true })
+      .eq('id', applicationId);
+    
+    if (!error) {
+      setApplications(apps =>
+        apps.map(a =>
+          a.id === applicationId ? { ...a, viewed_by_supply_admin: true } : a
+        )
+      );
+      if (isAdminMode) {
+        setAllApplications(apps =>
+          apps.map(a =>
+            a.id === applicationId ? { ...a, viewed_by_supply_admin: true } : a
+          )
+        );
       }
     }
-  };
+  }, [userRole, isAdminMode]);
 
   // App.jsx - обновлённая openReceiveModal
 
@@ -4490,7 +4520,7 @@ const openReceiveModal = useCallback((application, mode = 'admin_receive') => {
     }
   }
 
-  setSelectedApplication({ ...application, modalMode: mode });
+        setSelectedApplication({ ...application, modalMode: mode });
   setShowReceiveModal(true);
   markAsViewed(application.id);
 }, [userRole, showNotification, markAsViewed]);
@@ -4618,7 +4648,7 @@ const openReceiveModal = useCallback((application, mode = 'admin_receive') => {
       console.error('[handleDeletePhoto] Критическая ошибка:', err);
       showNotification('Ошибка удаления фото: ' + err.message, 'error');
     }
-    }, [userCompanyId, supabase, showNotification, selectedApplication, userRole, user?.id]);
+            }, [userCompanyId, showNotification, selectedApplication, userRole, user?.id, isAdminMode]);
 
   const handleSearchChange = useCallback((value) => {
   setSearchTerm(value);
@@ -4738,7 +4768,7 @@ const handleAdminReceive = useCallback(async (materialsFromModal, application) =
     showNotification('Ошибка приёмки: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, userCompanyId, supabase, showNotification, setApplications, isAdminMode]);
+}, [user, userCompanyId, showNotification, setApplications, isAdminMode]);
 
   // 🔹 Снабженец берет заявку в работу (поиск поставщика, запрос счета)
 // ✅ СТАЛО
@@ -5049,7 +5079,7 @@ const handleSendToMaster = useCallback(async (itemsToSend, application, recipien
     showNotification('Ошибка выдачи: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, userCompanyId, supabase, showNotification, setApplications, isAdminMode, userRole]);
+}, [user, userCompanyId, showNotification, setApplications, isAdminMode, userRole]);
 
 // ============================================================
 // 🔹 ПОДТВЕРЖДЕНИЕ МАСТЕРОМ (С ЗАЩИТОЙ ОТ УМЕНЬШЕНИЯ)
@@ -5216,7 +5246,7 @@ return { success: true };
     showNotification('Ошибка подтверждения: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, supabase, showNotification, setApplications]);
+}, [user, showNotification, setApplications]);
 
 // ============================================================
 // 🔹 ВОЗВРАТ НА СКЛАД (мастер возвращает остатки с объекта)
@@ -5336,7 +5366,7 @@ const handleReturnToStock = useCallback(async (localMaterials, application, reas
     showNotification('Ошибка возврата: ' + err.message, 'error');
     return { success: false };
   }
-}, [user, userCompanyId, supabase, showNotification, setApplications, isAdminMode]);
+}, [user, userCompanyId, showNotification, setApplications, isAdminMode]);
 
 // ============================================================
 // 🔒 ЗАКРЫТИЕ ЗАЯВКИ ДЛЯ ВОЗВРАТОВ
@@ -5411,7 +5441,7 @@ const handleCloseReturns = useCallback(async (application) => {
     console.error('❌ [CLOSE RETURNS] Критическая ошибка:', err);
     showNotification('Ошибка: ' + err.message, 'error');
   }
-}, [user, userCompanyId, supabase, showNotification, setApplications, isAdminMode, t]);
+}, [user, userCompanyId, showNotification, setApplications, isAdminMode]);
 
 // ============================================================
 // 🔓 ПЕРЕОТКРЫТИЕ ЗАЯВКИ (только снабженец/менеджер)
@@ -5487,12 +5517,12 @@ const handleReopenReturns = useCallback(async (application) => {
       ));
     }
 
-    showNotification('🔓 Заявка переоткрыта', 'success');
+        showNotification('🔓 Заявка переоткрыта', 'success');
   } catch (err) {
     console.error('❌ [REOPEN RETURNS] Критическая ошибка:', err);
     showNotification('Ошибка: ' + err.message, 'error');
   }
-}, [user, userCompanyId, userRole, supabase, showNotification, setApplications]);
+}, [user, userCompanyId, userRole, showNotification, setApplications, isAdminMode, t]);
 
   // ─────────────────────────────────────────────────────────
   // 🔐 ADMIN FUNCTIONS
@@ -5994,11 +6024,12 @@ if (allAppsError) {
       return;
     }
     
-    const timer = setTimeout(() => {
+        const timer = setTimeout(() => {
       loadApplications(1);
     }, 300); // debounce для поиска
     
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, statusFilter, dateFilter, viewedFilter, user, userCompanyId]);
 
   // 📩 ЗАГРУЗКА УВЕДОМЛЕНИЙ (ВСТАВИТЬ ПОСЛЕ loadApplications)
@@ -6055,12 +6086,13 @@ useEffect(() => {
     }
   };
   
-  loadData();
+    loadData();
   
   return () => {
     isMounted = false;
   };
-}, [user, userCompanyId, userRole, isAdminMode, applications.length]); // ← Убрали loadApplications из зависимостей
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user, userCompanyId, userRole, isAdminMode, applications.length]);
 
   // 📡 ПОДПИСКА НА НОВЫЕ УВЕДОМЛЕНИЯ В РЕАЛЬНОМ ВРЕМЕНИ
   useEffect(() => {
@@ -6100,10 +6132,11 @@ useEffect(() => {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id, showNotification]);
+      return () => {
+    supabase.removeChannel(channel);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user?.id]);
 
   // ============================================================
 // 🔔 СЧЁТЧИК НЕПРОЧИТАННЫХ В TITLE СТРАНИЦЫ
@@ -6163,10 +6196,10 @@ useEffect(() => {
       }
     };
 
-    checkOverdue();
-    const interval = setInterval(checkOverdue, 10 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [user?.id, applications]);
+      checkOverdue();
+  const interval = setInterval(checkOverdue, 10 * 60 * 1000);
+  return () => clearInterval(interval);
+}, [user?.id, applications]);
 
 // 💰 Load company plan & quota (ОБНОВЛЁННАЯ ВЕРСИЯ)
 useEffect(() => {
@@ -6287,8 +6320,9 @@ const { data: companyData, error: companyError } = await supabase
     }
   };
   
-  loadPlan();
-}, [userCompanyId, supabase, userRole, user, isSuperAdmin]);
+    loadPlan();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [userCompanyId, userRole, user, isSuperAdmin]);
 
 // 📝 Отслеживание новых отзывов для супер-админа
 useEffect(() => {
@@ -6333,7 +6367,7 @@ useEffect(() => {
   return () => {
     supabase.removeChannel(channel);
   };
-}, [userRole, userCompanyId, showNotification, supabase, setCurrentView]);
+}, [userRole, userCompanyId, showNotification, setCurrentView]);
 
 // Добавьте этот useEffect в App.jsx после loadPlan
 useEffect(() => {
@@ -6370,10 +6404,10 @@ useEffect(() => {
     }
   };
   
-  checkTrialExpired();
+    checkTrialExpired();
   const interval = setInterval(checkTrialExpired, 5 * 60 * 1000);
   return () => clearInterval(interval);
-}, [userCompanyId, supabase, currentPlanDetails, currentPlan]);
+}, [userCompanyId, currentPlanDetails, currentPlan, showNotification]);
 
 // ✅ ДОБАВИТЬ СИНХРОНИЗАЦИЮ ПРОМОКОДОВ СЮДА (ПОСЛЕ загрузки тарифа)
 useEffect(() => {
@@ -6389,8 +6423,8 @@ useEffect(() => {
     }
   };
   
-  syncPromos();
-}, [user, userRole, supabase]);
+      syncPromos();
+}, [user, userRole, showNotification]);
 
 // 🕐 ЕЖЕДНЕВНАЯ ПРОВЕРКА ИСТЕКШИХ ТАРИФОВ
 useEffect(() => {
@@ -6424,10 +6458,11 @@ useEffect(() => {
   };
   
   // Проверяем при загрузке и каждый час
-  checkExpiredPlans();
+    checkExpiredPlans();
   const interval = setInterval(checkExpiredPlans, 60 * 60 * 1000);
   
   return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [userCompanyId, currentPlan, currentPlanDetails]);
 
 // ============================================================
@@ -6477,7 +6512,7 @@ const { error } = await supabase.rpc('reset_company_limits', {
   const interval = setInterval(resetDailyLimits, 60 * 60 * 1000);
   
   return () => clearInterval(interval);
-}, [userCompanyId, supabase]);
+}, [userCompanyId]);
 
 
 useEffect(() => {
@@ -6647,7 +6682,7 @@ useEffect(() => {
       return () => clearTimeout(timer);
     }
   }
-}, [user, userCompanyId, applications.length, lastNpsDate]);
+}, [user, userCompanyId, applications, lastNpsDate]);
 
   // ─────────────────────────────────────────────────────────
   // 🔄 FORCE RELOAD
@@ -6863,7 +6898,7 @@ useEffect(() => {
   };
   
   checkInteractiveTour();
-}, [user, userCompanyId, userRole, applications.length, showOnboarding, isSuperAdmin]);
+}, [user, userCompanyId, userRole, applications.length, showOnboarding]);
 
 // 📊 ЗАГРУЗКА ПРОГРЕССА ОНБОРДИНГА
 useEffect(() => {
@@ -6927,7 +6962,7 @@ useEffect(() => {
   };
   
   loadProgress();
-}, [user, userCompanyId, userRole, supabase]);
+}, [user, userCompanyId, userRole]);
 
 const handleOnboardingComplete = async () => {
   setShowOnboarding(false);
@@ -7178,7 +7213,7 @@ const checkApiQuota = useCallback(async (apiKeyId = null) => {
     if (!quota.allowed) {
       showNotification('⚠️ Лимит API исчерпан. Обновите тариф.', 'warning');
       setCurrentView('tariffs');
-      return false; // ← ЖЕСТКАЯ БЛОКИРОВКА
+      return false;
     }
     return quota.allowed;
   }
@@ -7187,7 +7222,7 @@ const checkApiQuota = useCallback(async (apiKeyId = null) => {
   const quota = await checkQuota(supabase, userCompanyId, apiKeyId);
   setQuotaStatus(quota);
   return quota.allowed;
-}, [userCompanyId, supabase, showNotification, userRole, user, currentPlan]);
+}, [userCompanyId, showNotification, userRole, user, currentPlan]);
 
 // 🆕 GRACE PERIOD: откат тарифа
 const handleRevertPlan = async () => {
@@ -7361,7 +7396,7 @@ useEffect(() => {
     setABTestLoaded(true);
   };
   
-  initializeABTests();
+    initializeABTests();
 }, [user?.id]);
 
 // Напоминание о заполнении реквизитов компании
@@ -7410,9 +7445,9 @@ const { data } = await supabase
   };
   
   // Задержка, чтобы не отвлекать пользователя сразу
-  const timer = setTimeout(checkCompanyProfile, 5000);
+        const timer = setTimeout(checkCompanyProfile, 5000);
   return () => clearTimeout(timer);
-}, [userCompanyId, userRole, isCompanyOwner, supabase, showNotification]);
+}, [userCompanyId, userRole, isCompanyOwner, showNotification]);
 
 // 🔐 Проверка квоты при просмотре формы создания заявки
 useEffect(() => {
@@ -7450,7 +7485,7 @@ useEffect(() => {
   };
 
   checkQuotaOnView();
-}, [currentView, userCompanyId, supabase, showNotification, planLimits]);
+}, [currentView, userCompanyId, showNotification, planLimits]);
 
 
  const renderLandingPage = () => (
@@ -10948,8 +10983,8 @@ onClearFilters={handleClearFilters}
 )}
            {/* 🦶 МОБИЛЬНЫЙ ФУТЕР — ПОКАЗЫВАЕТСЯ ТОЛЬКО НА МОБИЛЬНЫХ */}
       {user && isMobile && (
-        <footer 
-          className="lg:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-5 px-4"
+  <footer 
+    className="lg:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-5 px-4 overflow-x-hidden w-full"
           style={{ 
             marginBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))'
           }}
@@ -10987,39 +11022,54 @@ onClearFilters={handleClearFilters}
 
             {/* 📱 МОБИЛЬНАЯ НИЖНЯЯ НАВИГАЦИЯ — ФИКСИРОВАННАЯ ВНИЗУ */}
       {isMobile && user && (
-        <div 
-          className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50" 
-          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-        >
-          <div className="grid grid-cols-5 h-16">
-            {/* Вкладка 1: Заявки */}
-            <button onClick={() => setCurrentView('inwork')} className={`flex flex-col items-center justify-center ${currentView === 'inwork' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
-                <Package className="w-6 h-6" />
-                <span className="text-[10px] font-medium">Заявки</span>
-            </button>
-            {/* Вкладка 2: Склад */}
-            <button onClick={() => setCurrentView('warehouse')} className={`flex flex-col items-center justify-center ${currentView === 'warehouse' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
-                <Warehouse className="w-6 h-6" />
-                <span className="text-[10px] font-medium">Склад</span>
-            </button>
-            {/* Вкладка 3: Создать */}
-            <button onClick={() => setCurrentView('create')} className={`flex flex-col items-center justify-center ${currentView === 'create' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
-                <Plus className="w-8 h-8 p-1 bg-[#4A6572] text-white rounded-full shadow-lg -mt-4" />
-                <span className="text-[10px] font-medium mt-1">Создать</span>
-            </button>
-            {/* Вкладка 4: Аналитика */}
-            <button onClick={() => setCurrentView('analytics')} className={`flex flex-col items-center justify-center ${currentView === 'analytics' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
-                <BarChart3 className="w-6 h-6" />
-                <span className="text-[10px] font-medium">Аналитика</span>
-            </button>
-            {/* Вкладка 5: Профиль */}
-            <button onClick={() => setCurrentView('profile')} className={`flex flex-col items-center justify-center ${currentView === 'profile' ? 'text-[#4A6572]' : 'text-gray-400'}`}>
-                <User className="w-6 h-6" />
-                <span className="text-[10px] font-medium">Профиль</span>
-            </button>
-          </div>
-        </div>
-      )}
+  <div 
+    className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50" 
+    style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+  >
+    <div className="grid grid-cols-5 h-16 w-full">
+      {/* Вкладка 1: Заявки */}
+      <button 
+        onClick={() => setCurrentView('inwork')} 
+        className={`flex flex-col items-center justify-center min-w-0 px-1 ${currentView === 'inwork' ? 'text-[#4A6572]' : 'text-gray-400'}`}
+      >
+        <Package className="w-6 h-6 flex-shrink-0" />
+        <span className="text-[10px] font-medium truncate max-w-full">Заявки</span>
+      </button>
+      {/* Вкладка 2: Склад */}
+      <button 
+        onClick={() => setCurrentView('warehouse')} 
+        className={`flex flex-col items-center justify-center min-w-0 px-1 ${currentView === 'warehouse' ? 'text-[#4A6572]' : 'text-gray-400'}`}
+      >
+        <Warehouse className="w-6 h-6 flex-shrink-0" />
+        <span className="text-[10px] font-medium truncate max-w-full">Склад</span>
+      </button>
+      {/* Вкладка 3: Создать */}
+      <button 
+        onClick={() => setCurrentView('create')} 
+        className={`flex flex-col items-center justify-center min-w-0 px-1 ${currentView === 'create' ? 'text-[#4A6572]' : 'text-gray-400'}`}
+      >
+        <Plus className="w-8 h-8 p-1 bg-[#4A6572] text-white rounded-full shadow-lg -mt-4 flex-shrink-0" />
+        <span className="text-[10px] font-medium truncate max-w-full mt-1">Создать</span>
+      </button>
+      {/* Вкладка 4: Аналитика */}
+      <button 
+        onClick={() => setCurrentView('analytics')} 
+        className={`flex flex-col items-center justify-center min-w-0 px-1 ${currentView === 'analytics' ? 'text-[#4A6572]' : 'text-gray-400'}`}
+      >
+        <BarChart3 className="w-6 h-6 flex-shrink-0" />
+        <span className="text-[10px] font-medium truncate max-w-full">Аналитика</span>
+      </button>
+      {/* Вкладка 5: Профиль */}
+      <button 
+        onClick={() => setCurrentView('profile')} 
+        className={`flex flex-col items-center justify-center min-w-0 px-1 ${currentView === 'profile' ? 'text-[#4A6572]' : 'text-gray-400'}`}
+      >
+        <User className="w-6 h-6 flex-shrink-0" />
+        <span className="text-[10px] font-medium truncate max-w-full">Профиль</span>
+      </button>
+    </div>
+  </div>
+)}
   </ErrorBoundary>
 );
 };

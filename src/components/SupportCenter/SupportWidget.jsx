@@ -176,10 +176,10 @@ export default function SupportWidget({
     <>
       {/* ── Плавающая кнопка ── */}
       <button
-        onClick={() => setIsOpen(v => !v)}
-        className="fixed bottom-24 right-4 lg:bottom-6 lg:right-6 z-[9998] w-14 h-14 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] text-white shadow-2xl flex items-center justify-center hover:scale-105 transition-transform"
-        aria-label={tr('support.title', 'Поддержка')}
-      >
+  onClick={() => setIsOpen(v => !v)}
+  className="fixed bottom-24 right-3 lg:bottom-6 lg:right-6 z-[9998] w-14 h-14 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] text-white shadow-2xl flex items-center justify-center hover:scale-105 transition-transform"
+  aria-label={tr('support.title', 'Поддержка')}
+>
         {isOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
         {!isOpen && unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
@@ -193,7 +193,7 @@ export default function SupportWidget({
 
       {/* ── Панель ── */}
       {isOpen && (
-        <div className="fixed bottom-40 right-4 lg:bottom-24 lg:right-6 z-[9998] w-[calc(100vw-2rem)] max-w-sm h-[60vh] max-h-[500px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
+  <div className="fixed bottom-40 right-3 lg:bottom-24 lg:right-6 z-[9998] w-[calc(100vw-1.5rem)] max-w-sm h-[60vh] max-h-[500px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
           {/* Хедер */}
           <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] text-white px-4 py-3 flex items-center gap-2">
             {view !== 'list' && (
