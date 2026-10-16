@@ -2,7 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Убираем все ограничения для корневого элемента */
+/* ============================================================
+   БАЗОВЫЕ СТИЛИ
+   ============================================================ */
 html, body, #root {
   width: 100%;
   min-height: 100vh;
@@ -15,6 +17,7 @@ html, body, #root {
   flex-direction: column;
   max-width: none !important;
   padding: 0 !important;
+  text-align: left;
 }
 
 /* ============================================
@@ -75,6 +78,9 @@ textarea {
   -webkit-appearance: none;
   appearance: none;
   background-clip: padding-box;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* 6. Исправление для select на iOS */
@@ -88,7 +94,7 @@ select {
 }
 
 /* Навигация всегда сверху */
-nav, 
+nav,
 header,
 [class*="Navbar"],
 [class*="navbar"] {
@@ -105,7 +111,16 @@ header,
   z-index: 101 !important;
 }
 
-/* Остальные стили */
+/* Для iOS - принудительное включение пробелов */
+@supports (-webkit-touch-callout: none) {
+  input, textarea {
+    -webkit-text-size-adjust: 100%;
+  }
+}
+
+/* ============================================
+   ОСТАЛЬНЫЕ СТИЛИ
+   ============================================ */
 .logo {
   height: 6em;
   padding: 1.5em;
@@ -155,30 +170,6 @@ header,
 
 .animate-scale-in {
   animation: scale-in 0.2s ease-out forwards;
-}
-
-/* Исправление проблемы с пробелами на мобильных устройствах */
-input, 
-textarea,
-[contenteditable="true"] {
-  -webkit-user-select: text !important;
-  user-select: text !important;
-}
-
-input[type="text"],
-input[type="tel"],
-input[type="email"],
-textarea {
-  -webkit-appearance: none;
-  appearance: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* Для iOS - принудительное включение пробелов */
-@supports (-webkit-touch-callout: none) {
-  input, textarea {
-    -webkit-text-size-adjust: 100%;
-  }
 }
 
 /* ========== СТИЛИ ДЛЯ ЧАТА ========== */
@@ -232,4 +223,67 @@ textarea {
 
 .message-bubble:active {
   transform: scale(0.98);
+}
+
+/* ============================================================
+   🛡️ ГЛОБАЛЬНАЯ ЗАЩИТА ОТ ГОРИЗОНТАЛЬНОГО ВЫЛЕЗАНИЯ
+   ============================================================ */
+
+/* 1. Никакой горизонтальный скролл */
+html, body, #root {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* 2. Убираем старую центровку #root, которая ломала ширину */
+#root {
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: left !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* 3. Flex-дети могут сжиматься — иначе вылезают за родителя */
+.min-w-0 {
+  min-width: 0;
+}
+
+/* 4. Отключаем hover-сдвиг на тач-устройствах */
+@media (hover: none) {
+  .material-row:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* 5. На мобилке селекты не должны быть шире экрана */
+@media (max-width: 640px) {
+  select,
+  input[type="number"],
+  input[type="text"],
+  input[type="tel"],
+  input[type="email"] {
+    max-width: 100%;
+  }
+
+  /* Материал-строка: разрешаем перенос на две строки */
+  .material-row {
+    overflow: hidden;
+  }
+
+  /* Кнопки в строке материала — не вылезают */
+  .material-actions {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+}
+
+/* 6. Нижняя навигация не должна перекрывать контент */
+@media (max-width: 1024px) {
+  main {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
 }
