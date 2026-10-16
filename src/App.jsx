@@ -2704,65 +2704,63 @@ const currentOnboardingHighlights = useMemo(() => {
   };
 
 // 🔄 CHECK FOR UPDATES (с защитой от дублирования)
+// 🔄 CHECK FOR UPDATES (единый источник правды)
 const checkForUpdates = useCallback(async () => {
   try {
     const response = await fetch('/version.json?v=' + Date.now());
     const data = await response.json();
-    
+
     console.log('[UpdateCheck] Текущая версия:', APP_VERSION);
     console.log('[UpdateCheck] Новая версия:', data.version);
-    
-    if (data.version && data.version !== APP_VERSION) {
-      // Проверяем, не отклоняли ли уже это обновление
-      const declinedKey = `update_declined_${data.version}`;
-      const declinedAt = localStorage.getItem(declinedKey);
-      
-      // Если отклонено менее чем 24 часа назад, не показываем
-      if (declinedAt && (Date.now() - parseInt(declinedAt)) < 24 * 60 * 60 * 1000) {
-        console.log('[UpdateCheck] Обновление отклонено, не показываем');
-        return;
-      }
-      
-      // Проверяем, не применяли ли уже это обновление
-      const appliedKey = `update_applied_${data.version}`;
-      if (localStorage.getItem(appliedKey)) {
-        console.log('[UpdateCheck] Обновление уже применено');
-        return;
-      }
-      
-      // Проверяем, не показывали ли уже это обновление в текущей сессии
-      const lastShownVersion = localStorage.getItem('last_update_shown');
-      if (lastShownVersion !== data.version) {
-        console.log('[UpdateCheck] Показываем модальное окно обновления');
-        
-        // Находим информацию о версии из списка
-        const versionInfo = data.versions?.find(v => v.version === data.version) || {
-          version: data.version,
-          changes: data.changes || ['Улучшена производительность и исправлены ошибки'],
-          date: data.date || new Date().toISOString(),
-          breaking: false
-        };
-        
-        setUpdateInfo({
-          from: APP_VERSION,
-          to: data.version,
-          changes: versionInfo.changes,
-          date: versionInfo.date,
-          breaking: versionInfo.breaking || false,
-          updateOptions: data.updateOptions || {
-            showStayOption: true,
-            remindLaterDays: 3,
-            message: 'После обновления может потребоваться перезагрузка'
-          }
-        });
-        setShowUpdateModal(true);
-        localStorage.setItem('last_update_shown', data.version);
-      } else {
-        console.log('[UpdateCheck] Обновление уже показывали в этой сессии');
-      }
-    } else {
+
+    if (!data.version || data.version === APP_VERSION) {
       console.log('[UpdateCheck] Нет новых версий');
+      return;
     }
+
+    // Проверяем, не отклоняли ли уже это обновление
+    const declinedKey = `update_declined_${data.version}`;
+    const declinedAt = localStorage.getItem(declinedKey);
+    if (declinedAt && (Date.now() - parseInt(declinedAt)) < 24 * 60 * 60 * 1000) {
+      console.log('[UpdateCheck] Обновление отклонено (24ч), не показываем');
+      return;
+    }
+
+    // Проверяем, не применяли ли уже
+    if (localStorage.getItem(`update_applied_${data.version}`)) {
+      console.log('[UpdateCheck] Обновление уже применено');
+      return;
+    }
+
+    // Не показываем повторно в текущей сессии
+    const lastShownVersion = sessionStorage.getItem('last_update_shown_session');
+    if (lastShownVersion === data.version) {
+      console.log('[UpdateCheck] Уже показывали в этой сессии');
+      return;
+    }
+
+    const versionInfo = data.versions?.find(v => v.version === data.version) || {
+      version: data.version,
+      changes: data.changes || ['Улучшена производительность и исправлены ошибки'],
+      date: data.date || new Date().toISOString(),
+      breaking: false
+    };
+
+    setUpdateInfo({
+      from: APP_VERSION,
+      to: data.version,
+      changes: versionInfo.changes,
+      date: versionInfo.date,
+      breaking: versionInfo.breaking || false,
+      updateOptions: data.updateOptions || {
+        showStayOption: true,
+        remindLaterDays: 3,
+        message: 'После обновления может потребоваться перезагрузка'
+      }
+    });
+    setShowUpdateModal(true);
+    sessionStorage.setItem('last_update_shown_session', data.version);
+    console.log('[UpdateCheck] Показываем VersionUpdateModal для', data.version);
   } catch (err) {
     console.warn('[UpdateCheck] Ошибка проверки обновлений:', err);
   }
@@ -6530,14 +6528,22 @@ useEffect(() => {
   // Проверка обновлений при загрузке
   const timer = setTimeout(() => {
     checkForUpdates();
-  }, 3000); // через 3 секунды после загрузки
-  
+  }, 3000);
+
   // Проверка каждые 6 часов
   const interval = setInterval(checkForUpdates, 6 * 60 * 60 * 1000);
-  
+
+  // 🆕 Реагируем на событие от Service Worker (main.jsx)
+  const handlePwaUpdate = () => {
+    console.log('[App] pwa-update-available → запускаем checkForUpdates');
+    checkForUpdates();
+  };
+  window.addEventListener('pwa-update-available', handlePwaUpdate);
+
   return () => {
     clearTimeout(timer);
     clearInterval(interval);
+    window.removeEventListener('pwa-update-available', handlePwaUpdate);
   };
 }, [checkForUpdates]);
 
@@ -10496,28 +10502,37 @@ onClearFilters={handleClearFilters}
     setShowUpdateModal(false);
     if (updateInfo?.to) {
       localStorage.setItem(`update_declined_${updateInfo.to}`, Date.now().toString());
+      // ❗ НЕ трогаем sessionStorage — чтобы при след. сессии окно показалось снова
     }
   }}
   updateInfo={updateInfo}
-  onApplyUpdate={() => {
-    if (waitingWorker) {
-      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+  onApplyUpdate={async () => {
+    // 1. Просим SW применить обновление
+    try {
+      if (window.swRegistration?.waiting) {
+        window.swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      if (window.updateSW) {
+        await window.updateSW(true); // true = принудительное обновление
+      }
+    } catch (e) {
+      console.warn('[Update] SW update error:', e);
     }
+
+    // 2. Помечаем версию как применённую
     if (updateInfo?.to) {
       localStorage.setItem(`update_applied_${updateInfo.to}`, Date.now().toString());
-      localStorage.setItem('last_update_shown', updateInfo.to);
+      localStorage.removeItem(`update_declined_${updateInfo.to}`);
     }
-    setShowUpdateModal(false);
-    setUpdateInfo(null);
-    // Очищаем кэш
+
+    // 3. Очищаем кэши
     if ('caches' in window) {
-      caches.keys().then(keys => {
-        keys.forEach(key => caches.delete(key));
-      });
+      const keys = await caches.keys();
+      await Promise.all(keys.map(key => caches.delete(key)));
     }
-    setTimeout(() => {
-      window.location.reload(true);
-    }, 500);
+
+    // 4. Перезагружаем
+    setTimeout(() => window.location.reload(true), 500);
   }}
 />
 
