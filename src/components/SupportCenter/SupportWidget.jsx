@@ -176,13 +176,13 @@ export default function SupportWidget({
     <>
       {/* ── Плавающая кнопка ── */}
       <button
-  onClick={() => setIsOpen(v => !v)}
-  className="fixed bottom-24 right-3 lg:bottom-6 lg:right-6 z-[9998] w-14 h-14 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] text-white shadow-2xl flex items-center justify-center hover:scale-105 transition-transform"
-  aria-label={tr('support.title', 'Поддержка')}
->
-        {isOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
+        onClick={() => setIsOpen(v => !v)}
+        className="fixed bottom-28 right-3 lg:bottom-6 lg:right-6 z-40 w-12 h-12 lg:w-14 lg:h-14 rounded-full bg-gradient-to-br from-[#4A6572] to-[#344955] text-white shadow-2xl flex items-center justify-center hover:scale-105 transition-transform"
+        aria-label={tr('support.title', 'Поддержка')}
+      >
+        {isOpen ? <X className="w-5 h-5 lg:w-6 lg:h-6" /> : <MessageCircle className="w-5 h-5 lg:w-6 lg:h-6" />}
         {!isOpen && unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center">
             {unreadCount}
           </span>
         )}
@@ -193,20 +193,20 @@ export default function SupportWidget({
 
       {/* ── Панель ── */}
       {isOpen && (
-  <div className="fixed bottom-40 right-3 lg:bottom-24 lg:right-6 z-[9998] w-[calc(100vw-1.5rem)] max-w-sm h-[60vh] max-h-[500px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
+        <div className="fixed bottom-36 right-3 lg:bottom-24 lg:right-6 z-40 w-[calc(100vw-1.5rem)] max-w-sm h-[60vh] max-h-[500px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
           {/* Хедер */}
-          <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] text-white px-4 py-3 flex items-center gap-2">
+          <div className="bg-gradient-to-r from-[#4A6572] to-[#344955] text-white px-4 py-3 flex items-center gap-2 flex-shrink-0">
             {view !== 'list' && (
               <button
                 onClick={() => setView('list')}
-                className="p-1 hover:bg-white/20 rounded"
+                className="p-1 hover:bg-white/20 rounded flex-shrink-0"
                 aria-label={tr('support.back', 'Назад')}
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
             )}
-            <div className="flex-1">
-              <div className="font-semibold text-sm">
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm truncate">
                 {view === 'new'
                   ? tr('support.newTicket', 'Новое обращение')
                   : view === 'chat'
@@ -214,22 +214,24 @@ export default function SupportWidget({
                     : tr('support.title', 'Поддержка')}
               </div>
               <div className="text-xs opacity-90 flex items-center gap-1">
-                <span className={`w-2 h-2 rounded-full ${hasOnlineAgent ? 'bg-green-400' : 'bg-gray-400'}`} />
-                {hasOnlineAgent
-                  ? `${tr('support.online', 'Онлайн')}: ${onlineAgents.length}`
-                  : tr('support.offline', 'Операторы офлайн')}
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${hasOnlineAgent ? 'bg-green-400' : 'bg-gray-400'}`} />
+                <span className="truncate">
+                  {hasOnlineAgent
+                    ? `${tr('support.online', 'Онлайн')}: ${onlineAgents.length}`
+                    : tr('support.offline', 'Операторы офлайн')}
+                </span>
               </div>
             </div>
           </div>
 
           {/* ── Список тикетов ── */}
           {view === 'list' && (
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
               <button
                 onClick={() => setView('new')}
                 className="w-full py-2.5 px-3 bg-[#F9AA33] text-white rounded-lg font-medium flex items-center justify-center gap-2 hover:bg-[#F57C00]"
               >
-                <Plus className="w-4 h-4" /> {tr('support.createTicket', 'Создать обращение')}
+                <Plus className="w-4 h-4 flex-shrink-0" /> {tr('support.createTicket', 'Создать обращение')}
               </button>
 
               {ticketsLoading ? (
@@ -245,10 +247,10 @@ export default function SupportWidget({
                   <button
                     key={ticket.id}
                     onClick={() => { setActiveTicket(ticket); setView('chat'); }}
-                    className="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    className="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 min-w-0"
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-sm truncate">{ticket.subject}</span>
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <span className="font-medium text-sm truncate flex-1 min-w-0">{ticket.subject}</span>
                       <StatusBadge status={ticket.status} tr={tr} />
                     </div>
                     <div className="text-xs text-gray-500">
@@ -262,7 +264,7 @@ export default function SupportWidget({
 
           {/* ── Новый тикет ── */}
           {view === 'new' && (
-            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
               <div>
                 <label className="block text-xs font-medium mb-1">
                   {tr('support.category', 'Категория')}
@@ -317,7 +319,7 @@ export default function SupportWidget({
           {/* ── Чат ── */}
           {view === 'chat' && activeTicket && (
             <>
-              <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50 dark:bg-gray-900/30">
+              <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50 dark:bg-gray-900/30 min-h-0">
                 {messages.length === 0 && (
                   <div className="text-center py-6 text-gray-400 text-xs">
                     {tr('support.noMessages', 'Сообщений пока нет')}
@@ -328,7 +330,7 @@ export default function SupportWidget({
                 ))}
                 <div ref={messagesEndRef} />
               </div>
-              <div className="border-t p-2 flex gap-2">
+              <div className="border-t p-2 flex gap-2 flex-shrink-0">
                 <input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -338,13 +340,13 @@ export default function SupportWidget({
                       handleSend();
                     }
                   }}
-                  className="flex-1 px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                  className="flex-1 min-w-0 px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
                   placeholder={tr('support.messagePlaceholder', 'Сообщение...')}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!input.trim()}
-                  className="px-3 py-2 bg-[#4A6572] text-white rounded-lg disabled:opacity-50"
+                  className="px-3 py-2 bg-[#4A6572] text-white rounded-lg disabled:opacity-50 flex-shrink-0"
                   aria-label={tr('support.send', 'Отправить')}
                 >
                   <Send className="w-4 h-4" />
@@ -367,14 +369,14 @@ function MessageBubble({ msg, isOwn }) {
     return <div className="text-center text-xs text-gray-400 py-1">{msg.content}</div>;
   }
   return (
-    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} min-w-0`}>
       <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${
         isOwn
           ? 'bg-[#4A6572] text-white rounded-br-sm'
           : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-bl-sm shadow-sm'
       }`}>
         {!isOwn && msg.sender_name && (
-          <div className="text-xs opacity-70 mb-0.5">{msg.sender_name}</div>
+          <div className="text-xs opacity-70 mb-0.5 truncate">{msg.sender_name}</div>
         )}
         <div className="whitespace-pre-wrap break-words">{msg.content}</div>
         <div className={`text-[10px] mt-1 ${isOwn ? 'text-white/70' : 'text-gray-400'}`}>
@@ -394,5 +396,5 @@ function StatusBadge({ status, tr = (k, fb) => fb }) {
     closed: { label: tr('support.status.closed', 'Закрыт'), cls: 'bg-gray-100 text-gray-600' },
   };
   const item = map[status] || map.new;
-  return <span className={`text-[10px] px-1.5 py-0.5 rounded ${item.cls}`}>{item.label}</span>;
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded flex-shrink-0 ${item.cls}`}>{item.label}</span>;
 }

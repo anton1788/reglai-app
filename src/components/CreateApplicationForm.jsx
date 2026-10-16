@@ -98,8 +98,8 @@ const useDebounce = (value, delay) => {
 // ─────────────────────────────────────────────────────────────
 
 const FormHeader = memo(({ t }) => (
-  <header className="flex items-center gap-4 mb-8 pb-4 border-b border-gray-200/60 dark:border-gray-700/60">
-    <div className="p-3 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl shadow-lg shadow-indigo-500/20">
+  <header className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200/60 dark:border-gray-700/60 min-w-0">
+    <div className="p-3 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl shadow-lg shadow-indigo-500/20 flex-shrink-0">
       <img
         src="/icon-512.png"
         alt=""
@@ -108,9 +108,11 @@ const FormHeader = memo(({ t }) => (
         loading="lazy"
       />
     </div>
-    <div>
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('createApplication')}</h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+    <div className="min-w-0 flex-1">
+      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
+        {t('createApplication')}
+      </h2>
+      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">
         {t('createApplicationSubtitle') || 'Заполните данные для отправки заявки'}
       </p>
     </div>
@@ -134,7 +136,7 @@ const QuickActions = memo(({ onCloneLast, onDownloadTemplate, onImportExcel, onS
   ];
 
   return (
-    <div className="flex flex-wrap gap-2 mb-6" role="group" aria-label={t('quickActions')}>
+    <div className="flex flex-wrap gap-2 mb-6 w-full min-w-0" role="group" aria-label={t('quickActions')}>
       {actions.map((action, idx) => {
         const Icon = action.icon;
         return (
@@ -142,10 +144,10 @@ const QuickActions = memo(({ onCloneLast, onDownloadTemplate, onImportExcel, onS
             key={idx}
             type="button"
             onClick={action.action}
-            className={`flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r ${actionStyles[action.color]} text-white rounded-xl text-sm font-medium transition-all shadow-md hover:shadow-lg focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800`}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-gradient-to-r ${actionStyles[action.color]} text-white rounded-xl text-sm font-medium transition-all shadow-md hover:shadow-lg focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 flex-shrink-0`}
             aria-label={action.label}
           >
-            <Icon className="w-4 h-4" aria-hidden="true" />
+            <Icon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
             <span className="hidden sm:inline">{action.label}</span>
           </button>
         );
@@ -156,7 +158,7 @@ const QuickActions = memo(({ onCloneLast, onDownloadTemplate, onImportExcel, onS
 QuickActions.displayName = 'QuickActions';
 
 const ForemanField = memo(({ id, label, value, onChange, type = 'text', placeholder, error }) => (
-  <div>
+  <div className="w-full min-w-0">
     <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
       {label} <span className="text-red-500" aria-hidden="true">*</span>
     </label>
@@ -168,7 +170,7 @@ const ForemanField = memo(({ id, label, value, onChange, type = 'text', placehol
       autoCorrect="off"
       autoCapitalize="sentences"
       spellCheck="false"
-      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white transition-all ${
+      className={`w-full min-w-0 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white transition-all ${
         error ? 'border-red-400 focus:ring-red-500' : 'border-gray-200/60 dark:border-gray-600/60 hover:border-indigo-300/60'
       }`}
       placeholder={placeholder}
@@ -177,7 +179,7 @@ const ForemanField = memo(({ id, label, value, onChange, type = 'text', placehol
     />
     {error && (
       <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5 form-error" role="alert">
-        <AlertCircle className="w-4 h-4" aria-hidden="true" />
+        <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
         {error}
       </p>
     )}
@@ -186,12 +188,12 @@ const ForemanField = memo(({ id, label, value, onChange, type = 'text', placehol
 ForemanField.displayName = 'ForemanField';
 
 const WarehouseInfo = memo(({ t }) => (
-  <div className="mb-6 p-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200/50 dark:border-blue-700/50" role="note">
-    <div className="flex items-start gap-3">
-      <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+  <div className="mb-6 p-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200/50 dark:border-blue-700/50 w-full min-w-0" role="note">
+    <div className="flex items-start gap-3 min-w-0">
+      <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg flex-shrink-0">
         <Warehouse className="w-5 h-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
       </div>
-      <div>
+      <div className="min-w-0 flex-1">
         <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
           {t('materialTrackingTitle')}
         </h4>
@@ -200,11 +202,11 @@ const WarehouseInfo = memo(({ t }) => (
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-blue-700 dark:text-blue-300">
           <span className="flex items-center gap-1.5">
-            <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
+            <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
             {t('receiptEqualsIncome')}
           </span>
           <span className="flex items-center gap-1.5">
-            <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />
+            <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
             {t('issueEqualsExpense')}
           </span>
         </div>
@@ -214,6 +216,11 @@ const WarehouseInfo = memo(({ t }) => (
 ));
 WarehouseInfo.displayName = 'WarehouseInfo';
 
+// ─────────────────────────────────────────────────────────────
+// 🔑 MATERIAL ROW — ГЛАВНАЯ ПРАВКА
+// Инпут сверху, группа управления снизу (flex-wrap).
+// Всё гарантированно помещается даже на 320px.
+// ─────────────────────────────────────────────────────────────
 const MaterialRow = memo(({
   material,
   index,
@@ -285,136 +292,141 @@ const MaterialRow = memo(({
 
   return (
     <article
-      className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60 hover:border-indigo-300/60 dark:hover:border-indigo-600/60 transition-all"
+      className="material-row bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-3 sm:p-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60 hover:border-indigo-300/60 dark:hover:border-indigo-600/60 transition-all w-full min-w-0 overflow-hidden"
       role="listitem"
       aria-labelledby={`material-label-${index}`}
     >
-      <div className="flex flex-col lg:flex-row gap-4">
-        <div className="flex-1 relative">
-          <label htmlFor={`material-${index}`} className="sr-only">{t('materialDescription')}</label>
-          <input
-            id={`material-${index}`}
-            ref={inputRef}
-            type="text"
-            value={material.description}
-            onChange={(e) => {
-              const value = e.target.value;
-              const sanitized = value.replace(/[<>]/g, '').slice(0, MAX_INPUT_LENGTH);
-              onUpdate(index, 'description', sanitized);
-            }}
-            onFocus={() => setLocalSuggestions(localSuggestions.length > 0 ? localSuggestions : [])}
-            onKeyDown={handleKeyDown}
-            autoCorrect="off"
-            autoCapitalize="sentences"
-            spellCheck="false"
-            className="w-full min-w-0 px-4 py-3 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-            placeholder={t('materialDescriptionPlaceholder')}
-            required
-            aria-autocomplete="list"
-            aria-controls={localSuggestions.length > 0 ? listboxId : undefined}
-            aria-activedescendant={activeIndex >= 0 ? `${listboxId}-item-${activeIndex}` : undefined}
-          />
+      {/* 1) Инпут названия — всегда на всю ширину */}
+      <div className="w-full min-w-0 mb-3">
+        <label htmlFor={`material-${index}`} className="sr-only">{t('materialDescription')}</label>
+        <input
+          id={`material-${index}`}
+          ref={inputRef}
+          type="text"
+          value={material.description}
+          onChange={(e) => {
+            const value = e.target.value;
+            const sanitized = value.replace(/[<>]/g, '').slice(0, MAX_INPUT_LENGTH);
+            onUpdate(index, 'description', sanitized);
+          }}
+          onFocus={() => setLocalSuggestions(localSuggestions.length > 0 ? localSuggestions : [])}
+          onKeyDown={handleKeyDown}
+          autoCorrect="off"
+          autoCapitalize="sentences"
+          spellCheck="false"
+          className="w-full min-w-0 px-4 py-3 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+          placeholder={t('materialDescriptionPlaceholder')}
+          required
+          aria-autocomplete="list"
+          aria-controls={localSuggestions.length > 0 ? listboxId : undefined}
+          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-item-${activeIndex}` : undefined}
+        />
 
-          {showSuggestions && localSuggestions.length > 0 && (
-            <ul
-              id={listboxId}
-              role="listbox"
-              className="absolute z-20 mt-2 w-full bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border border-gray-200/60 dark:border-gray-600/60 rounded-xl shadow-xl max-h-40 overflow-auto form-enter"
-            >
-              {localSuggestions.map((suggestion, idx) => (
-                <li
-                  key={idx}
-                  id={`${listboxId}-item-${idx}`}
-                  role="option"
-                  aria-selected={idx === activeIndex}
-                  className={`px-4 py-2.5 cursor-pointer text-gray-900 dark:text-white transition-all ${
-                    idx === activeIndex
-                      ? 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 text-indigo-900 dark:text-indigo-100 border-l-4 border-indigo-500'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                  }`}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    onSuggestionSelect(index, suggestion);
-                    setLocalSuggestions([]);
-                  }}
-                  onMouseEnter={() => setActiveIndex(idx)}
-                >
-                  {suggestion}
-                </li>
-              ))}
-            </ul>
-          )}
+        {showSuggestions && localSuggestions.length > 0 && (
+          <ul
+            id={listboxId}
+            role="listbox"
+            className="mt-2 w-full bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border border-gray-200/60 dark:border-gray-600/60 rounded-xl shadow-xl max-h-40 overflow-auto form-enter"
+          >
+            {localSuggestions.map((suggestion, idx) => (
+              <li
+                key={idx}
+                id={`${listboxId}-item-${idx}`}
+                role="option"
+                aria-selected={idx === activeIndex}
+                className={`px-4 py-2.5 cursor-pointer text-gray-900 dark:text-white transition-all ${
+                  idx === activeIndex
+                    ? 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 text-indigo-900 dark:text-indigo-100 border-l-4 border-indigo-500'
+                    : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSuggestionSelect(index, suggestion);
+                  setLocalSuggestions([]);
+                }}
+                onMouseEnter={() => setActiveIndex(idx)}
+              >
+                {suggestion}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* 2) Группа управления — снизу, с переносом */}
+      <div className="flex flex-wrap items-center gap-2 w-full min-w-0">
+        {/* Степпер */}
+        <div className="quantity-stepper flex items-center gap-0.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-1 flex-shrink-0">
+          <button
+            type="button"
+            onClick={handleDecrement}
+            disabled={material.quantity <= 1}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+            aria-label={t('decreaseQuantity')}
+          >
+            <Minus className="w-4 h-4" aria-hidden="true" />
+          </button>
+          <input
+            type="number"
+            min="1"
+            max="10000"
+            value={material.quantity}
+            onChange={handleQuantityChange}
+            className="w-10 text-center px-0 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium text-sm"
+            aria-label={t('quantity')}
+          />
+          <button
+            type="button"
+            onClick={handleIncrement}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-600 transition-colors flex-shrink-0"
+            aria-label={t('increaseQuantity')}
+          >
+            <Plus className="w-4 h-4" aria-hidden="true" />
+          </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="quantity-stepper flex items-center gap-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-1 flex-shrink-0">
-            <button
-              type="button"
-              onClick={handleDecrement}
-              disabled={material.quantity <= 1}
-              className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              aria-label={t('decreaseQuantity')}
-            >
-              <Minus className="w-4 h-4" aria-hidden="true" />
-            </button>
-            <input
-              type="number"
-              min="1"
-              max="10000"
-              value={material.quantity}
-              onChange={handleQuantityChange}
-              className="w-14 text-center px-2 py-1.5 bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white font-medium"
-              aria-label={t('quantity')}
-            />
-            <button
-              type="button"
-              onClick={handleIncrement}
-              className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-600 transition-colors"
-              aria-label={t('increaseQuantity')}
-            >
-              <Plus className="w-4 h-4" aria-hidden="true" />
-            </button>
-          </div>
+        {/* Селект единиц — фиксированная ширина 5rem, не растягивается */}
+        <select
+          value={material.unit}
+          onChange={(e) => onUpdate(index, 'unit', e.target.value)}
+          style={{ width: '5rem', minWidth: '5rem', maxWidth: '5rem' }}
+          className="px-2 py-2 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer flex-shrink-0 text-sm text-center"
+          aria-label={t('unit')}
+        >
+          {unitOptions.map(unit => (
+            <option key={unit} value={unit}>{unit}</option>
+          ))}
+        </select>
 
-          <select
-            value={material.unit}
-            onChange={(e) => onUpdate(index, 'unit', e.target.value)}
-            className="px-3 py-2.5 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer flex-shrink-0"
-            aria-label={t('unit')}
+        {/* Кнопки фото и удаления — в одну линию, справа */}
+        <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
+          <button
+            type="button"
+            onClick={() => onAddPhoto?.(index)}
+            className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors flex-shrink-0"
+            title={t('addPhoto') || 'Добавить фото'}
+            aria-label={t('addPhoto') || 'Добавить фото'}
           >
-            {unitOptions.map(unit => (
-              <option key={unit} value={unit}>{unit}</option>
-            ))}
-          </select>
+            <Camera className="w-4 h-4" aria-hidden="true" />
+          </button>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
-  <button
-    type="button"
-    onClick={() => onAddPhoto?.(index)}
-    className="p-2.5 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors flex-shrink-0"
-    title={t('addPhoto') || 'Добавить фото'}
-    aria-label={t('addPhoto') || 'Добавить фото'}
-  >
-    <Camera className="w-4 h-4" aria-hidden="true" />
-  </button>
-
-  <button
-    type="button"
-    onClick={() => onRemove(index)}
-    className="p-2.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors flex-shrink-0"
-    aria-label={t('removeMaterial')}
-    title={t('removeMaterial')}
-  >
-    <Trash2 className="w-4 h-4" aria-hidden="true" />
-  </button>
-</div>
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            className="w-9 h-9 flex items-center justify-center text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors flex-shrink-0"
+            aria-label={t('removeMaterial')}
+            title={t('removeMaterial')}
+          >
+            <Trash2 className="w-4 h-4" aria-hidden="true" />
+          </button>
         </div>
       </div>
 
+      {/* 3) Превью фото */}
       {photos.length > 0 && (
-        <div className="flex gap-2 mt-3 flex-wrap">
+        <div className="flex gap-2 mt-3 flex-wrap w-full min-w-0">
           {photos.map((url, i) => (
-            <div key={i} className="relative group">
+            <div key={i} className="relative group flex-shrink-0">
               <img
                 src={url}
                 alt={`${t('materialPhoto') || 'Фото материала'} ${i + 1}`}
@@ -446,12 +458,12 @@ const TemplateSelector = memo(({ templates, onLoad, t }) => {
   if (!templates?.length) return null;
 
   return (
-    <div className="flex flex-wrap gap-3 items-end">
-      <div className="flex-1 min-w-[200px]">
+    <div className="flex flex-wrap gap-3 items-end w-full min-w-0">
+      <div className="flex-1 min-w-0">
         <label htmlFor="template-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           {t('selectTemplate')}
         </label>
-        <div className="relative">
+        <div className="relative w-full min-w-0">
           <select
             id="template-select"
             onChange={(e) => {
@@ -459,7 +471,7 @@ const TemplateSelector = memo(({ templates, onLoad, t }) => {
               if (template) onLoad(template.materials, template.template_name);
               e.target.value = '';
             }}
-            className="w-full px-4 py-3 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none"
+            className="w-full min-w-0 px-4 py-3 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none"
             defaultValue=""
           >
             <option value="" disabled>{t('selectTemplate')}</option>
@@ -483,7 +495,7 @@ const SubmitButton = memo(({ canSubmit, isLoading, t }) => (
     disabled={!canSubmit || isLoading}
     className={`w-full max-w-full min-w-0 py-4 px-6 rounded-2xl font-semibold shadow-lg transition-all duration-300 flex items-center justify-center gap-3 ${
       canSubmit && !isLoading
-        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl hover:scale-[1.02]'
+        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-xl'
         : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
     }`}
     aria-busy={isLoading}
@@ -632,7 +644,6 @@ const CreateApplicationForm = memo(({
   onClientSelect,
   companyId,
   language = 'ru',
-  // 🆕 НОВЫЕ ПРОПСЫ
   quotaStatus,
   currentPlan,
   onUpgradeClick,
@@ -716,23 +727,6 @@ const CreateApplicationForm = memo(({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [canSubmit, isLoading]);
 
-  // ─────────────────────────────────────────────────────────────
-  // 🔧 ФИКС ПРОБЕЛОВ
-  // ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const preventSpaceBlocking = (e) => {
-      const target = e.target;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-        if (e.key === ' ' || e.key === 'Space') {
-          return;
-        }
-      }
-    };
-
-    document.addEventListener('keydown', preventSpaceBlocking);
-    return () => document.removeEventListener('keydown', preventSpaceBlocking);
-  }, []);
-
   // ─────────────────────────────────────────────────────────
   // 🎛️ ОБРАБОТЧИКИ
   // ─────────────────────────────────────────────────────────
@@ -758,8 +752,9 @@ const CreateApplicationForm = memo(({
   // ─────────────────────────────────────────────────────────
 
   return (
-  <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 w-full overflow-x-hidden">
-    <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-gray-200/50 dark:border-gray-700/50 form-enter w-full">
+    // pb-32 — чтобы плавающие кнопки AI и поддержки не перекрывали контент
+    <div className="max-w-4xl mx-auto p-3 sm:p-6 lg:p-8 pb-32 lg:pb-8 w-full overflow-x-hidden">
+      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-6 mb-6 border border-gray-200/50 dark:border-gray-700/50 form-enter w-full min-w-0 overflow-hidden">
 
         {/* Header */}
         <FormHeader t={t} />
@@ -773,7 +768,7 @@ const CreateApplicationForm = memo(({
           t={t}
         />
 
-        <form ref={formRef} onSubmit={onSubmit} className="space-y-6" noValidate>
+        <form ref={formRef} onSubmit={onSubmit} className="space-y-5 w-full min-w-0" noValidate>
 
           {/* Hidden File Input */}
           <input
@@ -786,37 +781,41 @@ const CreateApplicationForm = memo(({
             tabIndex={-1}
           />
 
-          {/* 🆕 Object Selector — умный автокомплит с поиском в БД */}
-          <ObjectSelector
-            companyId={companyId}
-            userId={userId}
-            value={formData.objectId || ''}
-            valueName={formData.objectName || ''}
-            onChange={({ objectId, name }) => {
-              setFormData(prev => ({
-                ...prev,
-                objectId: objectId || '',
-                objectName: name || '',
-              }));
-              if (formErrors.objectName) {
-                setFormErrors(prev => ({ ...prev, objectName: null }));
-              }
-            }}
-            language={language}
-            showNotification={showNotification}
-            required
-            error={formErrors.objectName}
-            autoFocus={false}
-          />
+          {/* Object Selector */}
+          <div className="w-full min-w-0">
+            <ObjectSelector
+              companyId={companyId}
+              userId={userId}
+              value={formData.objectId || ''}
+              valueName={formData.objectName || ''}
+              onChange={({ objectId, name }) => {
+                setFormData(prev => ({
+                  ...prev,
+                  objectId: objectId || '',
+                  objectName: name || '',
+                }));
+                if (formErrors.objectName) {
+                  setFormErrors(prev => ({ ...prev, objectName: null }));
+                }
+              }}
+              language={language}
+              showNotification={showNotification}
+              required
+              error={formErrors.objectName}
+              autoFocus={false}
+            />
+          </div>
 
           {/* Выбор заказчика */}
           {companyId && onClientSelect && (
-            <ClientSelector
-              companyId={companyId}
-              selectedClientId={selectedClientId}
-              onSelect={onClientSelect}
-              t={t}
-            />
+            <div className="w-full min-w-0">
+              <ClientSelector
+                companyId={companyId}
+                selectedClientId={selectedClientId}
+                onSelect={onClientSelect}
+                t={t}
+              />
+            </div>
           )}
 
           {/* Foreman Name */}
@@ -858,35 +857,37 @@ const CreateApplicationForm = memo(({
 
           {/* Material Cart */}
           {formData.cart?.length > 0 && (
-            <MaterialCart
-              cart={formData.cart}
-              restoreMaterial={restoreFromCart}
-              removeMaterialPermanently={removeFromCartPermanently}
-              t={t}
-              isStandaloneView={false}
-            />
+            <div className="w-full min-w-0">
+              <MaterialCart
+                cart={formData.cart}
+                restoreMaterial={restoreFromCart}
+                removeMaterialPermanently={removeFromCartPermanently}
+                t={t}
+                isStandaloneView={false}
+              />
+            </div>
           )}
 
           {/* Materials List */}
           <section aria-labelledby="materials-heading" className="w-full min-w-0">
-  <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+            <div className="flex justify-between items-center mb-4 flex-wrap gap-2 w-full min-w-0">
               <h3 id="materials-heading" className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                <Package className="w-4 h-4" aria-hidden="true" />
+                <Package className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
                 {t('materials')} <span className="text-red-500" aria-hidden="true">*</span>
               </h3>
               <button
                 type="button"
                 onClick={addMaterial}
-                className="flex items-center gap-2 px-4 py-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors focus:ring-2 focus:ring-indigo-500"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors focus:ring-2 focus:ring-indigo-500 flex-shrink-0"
               >
-                <Plus className="w-4 h-4" aria-hidden="true" />
+                <Plus className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
                 <span className="text-sm font-medium">{t('addMaterial')}</span>
               </button>
             </div>
 
             {formErrors.materials && (
               <p className="mb-4 text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5 form-error" role="alert">
-                <AlertCircle className="w-4 h-4" aria-hidden="true" />
+                <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
                 {formErrors.materials}
               </p>
             )}
@@ -912,19 +913,19 @@ const CreateApplicationForm = memo(({
             </div>
           </section>
 
-          {/* 🆕 ИНДИКАЦИЯ ЛИМИТОВ ДЛЯ БЕСПЛАТНОГО ТАРИФА */}
+          {/* Индикация лимитов */}
           {currentPlan?.id === 'basic' && quotaStatus && (
             <div className={`mb-4 p-4 rounded-xl border w-full min-w-0 ${
-  quotaStatus.allowed
-    ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700/50'
-    : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50'
-}`}>
-  <div className="flex items-center justify-between flex-wrap gap-2 w-full min-w-0">
-                <div className="flex items-center gap-3">
-                  <AlertCircle className={`w-5 h-5 ${
+              quotaStatus.allowed
+                ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700/50'
+                : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50'
+            }`}>
+              <div className="flex items-center justify-between flex-wrap gap-2 w-full min-w-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <AlertCircle className={`w-5 h-5 flex-shrink-0 ${
                     quotaStatus.allowed ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
                   }`} />
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                       Бесплатный тариф: <span className="font-bold">{quotaStatus.dailyUsage || 0}</span>/{quotaStatus.dailyLimit || 100} заявок
                     </p>
@@ -944,7 +945,7 @@ const CreateApplicationForm = memo(({
                   <button
                     type="button"
                     onClick={onUpgradeClick}
-                    className="px-4 py-2 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all"
+                    className="px-4 py-2 bg-gradient-to-r from-[#F9AA33] to-[#F57C00] text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all flex-shrink-0"
                   >
                     🔓 Обновить тариф
                   </button>
@@ -961,9 +962,13 @@ const CreateApplicationForm = memo(({
           />
 
           {/* Keyboard hints */}
-          <div className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500">
-            <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded mr-2">Ctrl+Enter — отправить</span>
-            <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded">Esc — закрыть список</span>
+          <div className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500 w-full min-w-0">
+            <span className="inline-block px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded mb-1">
+              Ctrl+Enter — отправить
+            </span>
+            <span className="inline-block px-2 py-1 bg-gray-100 dark:bg-gray-700/50 rounded ml-0 sm:ml-2">
+              Esc — закрыть список
+            </span>
           </div>
         </form>
       </div>

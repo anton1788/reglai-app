@@ -334,15 +334,26 @@ img, video, canvas, svg {
    ВАЖНО: НЕ трогаем кнопки внутри <nav>!
    ========================================================== */
 @media (max-width: 768px) {
-  input, select, textarea {
+  /* Только inputs и textarea растягиваем на всю ширину */
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  textarea {
     font-size: 16px !important;
     width: 100% !important;
     max-width: 100% !important;
   }
 
+  /* Select и кнопки — не трогаем ширину */
+  select {
+    font-size: 16px !important;
+  }
+
   button[type="submit"] {
-    width: 100% !important;
-    max-width: 100% !important;
+    font-size: 16px !important;
   }
 
   .application-card,
