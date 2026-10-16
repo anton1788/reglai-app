@@ -176,7 +176,13 @@ const renderApp = () => {
 const bootstrap = async () => {
   initToastManager();
   setupServiceWorker();
-  await initOfflineFeatures();
+
+  try {
+    await initOfflineFeatures();
+  } catch (e) {
+    console.warn('[App] Offline init failed, continuing:', e);
+  }
+
   const cleanupNetwork = setupNetworkMonitor();
 
   if (import.meta.hot) {

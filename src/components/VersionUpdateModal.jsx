@@ -27,7 +27,7 @@ const VersionUpdateModal = memo(({
       aria-labelledby="update-modal-title"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-200/50 dark:border-gray-700/50 animate-slide-up">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-200/50 dark:border-gray-700/50 fade-enter">
         
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200/50 dark:border-gray-700/50">
