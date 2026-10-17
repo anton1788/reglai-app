@@ -20,7 +20,7 @@
       "breaking": false
     },
     {
-      "version": "0.0.78-beta",
+      "version": "0.0.79-beta",
       "date": "2026-06-03",
       "title": "Исправлена фотофиксация",
       "changes": [
