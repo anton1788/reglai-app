@@ -1,7 +1,7 @@
 {
   "name": "my-project",
   "private": true,
-  "version": "0.0.85-beta",
+  "version": "0.0.86-beta",
   "type": "module",
   "scripts": {
     "dev": "vite",
