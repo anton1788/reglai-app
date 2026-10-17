@@ -1,5 +1,5 @@
 // src/config.js
-export const APP_VERSION = '0.0.80-beta'; // Оставляем текущую
+export const APP_VERSION = '0.0.82-beta'; // Текущая версия билда
 
 export const APP_CONFIG = {
   version: APP_VERSION,
@@ -21,7 +21,6 @@ export const APP_CONFIG = {
 
 // ✅ ИСПРАВЛЕННАЯ функция сравнения (игнорирует -beta, -alpha и т.д.)
 export const compareVersions = (v1, v2) => {
-  // Отрезаем всё после дефиса и разбиваем на числа
   const cleanV1 = String(v1).split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
   const cleanV2 = String(v2).split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
   
@@ -34,7 +33,6 @@ export const compareVersions = (v1, v2) => {
   return 0;
 };
 
-// ✅ Проверка, есть ли обновление
 export const isUpdateAvailable = (current, latest) => {
   return compareVersions(latest, current) > 0;
 };
