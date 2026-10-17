@@ -10,7 +10,7 @@ import { registerSW } from 'virtual:pwa-register'
 import { initOfflineModule, checkOfflineSupport } from './utils/offlineStorage'
 
 // ✅ Версия приложения
-const APP_VERSION = '0.0.80-beta';
+const APP_VERSION = '0.0.81-beta';
 
 // ─────────────────────────────────────────────────────────
 // 🔹 Регистрация Service Worker через VitePWA
