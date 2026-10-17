@@ -1,4 +1,4 @@
 // src/version.js
-export const VERSION = '0.0.82-beta';
+export const VERSION = '0.0.85-beta';
 export const ASSET_SUFFIX = `v${VERSION}`;
 export const CACHE_NAME = `reglai-system-${VERSION}`;
