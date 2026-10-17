@@ -2692,66 +2692,73 @@ const currentOnboardingHighlights = useMemo(() => {
     setFormData({ ...formData, foremanPhone: formatted });
   };
 
-// 🔄 CHECK FOR UPDATES (с защитой от дублирования)
+// 🔄 CHECK FOR UPDATES (исправленная версия)
 const checkForUpdates = useCallback(async () => {
   try {
-    const response = await fetch('/version.json?v=' + Date.now());
+    // ✅ cache: 'no-store' — критично, иначе SW/браузер отдаёт старый version.json
+    const response = await fetch('/version.json?v=' + Date.now(), {
+      cache: 'no-store',
+    });
     const data = await response.json();
-    
+
     console.log('[UpdateCheck] Текущая версия:', APP_VERSION);
     console.log('[UpdateCheck] Новая версия:', data.version);
-    
-    if (data.version && data.version !== APP_VERSION) {
-      // Проверяем, не отклоняли ли уже это обновление
-      const declinedKey = `update_declined_${data.version}`;
-      const declinedAt = localStorage.getItem(declinedKey);
-      
-      // Если отклонено менее чем 24 часа назад, не показываем
-      if (declinedAt && (Date.now() - parseInt(declinedAt)) < 24 * 60 * 60 * 1000) {
-        console.log('[UpdateCheck] Обновление отклонено, не показываем');
-        return;
-      }
-      
-      // Проверяем, не применяли ли уже это обновление
-      const appliedKey = `update_applied_${data.version}`;
-      if (localStorage.getItem(appliedKey)) {
-        console.log('[UpdateCheck] Обновление уже применено');
-        return;
-      }
-      
-      // Проверяем, не показывали ли уже это обновление в текущей сессии
-      const lastShownVersion = localStorage.getItem('last_update_shown');
-      if (lastShownVersion !== data.version) {
-        console.log('[UpdateCheck] Показываем модальное окно обновления');
-        
-        // Находим информацию о версии из списка
-        const versionInfo = data.versions?.find(v => v.version === data.version) || {
-          version: data.version,
-          changes: data.changes || ['Улучшена производительность и исправлены ошибки'],
-          date: data.date || new Date().toISOString(),
-          breaking: false
-        };
-        
-        setUpdateInfo({
-          from: APP_VERSION,
-          to: data.version,
-          changes: versionInfo.changes,
-          date: versionInfo.date,
-          breaking: versionInfo.breaking || false,
-          updateOptions: data.updateOptions || {
-            showStayOption: true,
-            remindLaterDays: 3,
-            message: 'После обновления может потребоваться перезагрузка'
-          }
-        });
-        setShowUpdateModal(true);
-        localStorage.setItem('last_update_shown', data.version);
-      } else {
-        console.log('[UpdateCheck] Обновление уже показывали в этой сессии');
-      }
-    } else {
+
+    // ✅ Семантическое сравнение: серверная версия СТРОГО больше текущей
+    if (!data.version || !isUpdateAvailable(APP_VERSION, data.version)) {
       console.log('[UpdateCheck] Нет новых версий');
+      return;
     }
+
+    // ✅ Проверка «уже применено»
+    const appliedKey = `update_applied_${data.version}`;
+    if (localStorage.getItem(appliedKey)) {
+      console.log('[UpdateCheck] Обновление уже применено');
+      return;
+    }
+
+    // ✅ Проверка «отклонено менее 24 ч назад»
+    const declinedKey = `update_declined_${data.version}`;
+    const declinedAt = localStorage.getItem(declinedKey);
+    if (declinedAt && Date.now() - parseInt(declinedAt, 10) < 24 * 60 * 60 * 1000) {
+      console.log('[UpdateCheck] Обновление отклонено < 24ч назад');
+      return;
+    }
+
+    // ✅ Защита от повторного показа в этой же сессии (sessionStorage!)
+    const shownKey = `update_shown_${data.version}`;
+    if (sessionStorage.getItem(shownKey)) {
+      console.log('[UpdateCheck] Уже показывали в этой сессии');
+      return;
+    }
+
+    console.log('[UpdateCheck] Показываем модальное окно обновления');
+
+    const versionInfo =
+      data.versions?.find((v) => v.version === data.version) || {
+        version: data.version,
+        changes: data.changes || ['Улучшена производительность и исправлены ошибки'],
+        date: data.date || new Date().toISOString(),
+        breaking: false,
+      };
+
+    setUpdateInfo({
+      from: APP_VERSION,
+      to: data.version,
+      changes: versionInfo.changes,
+      date: versionInfo.date,
+      breaking: versionInfo.breaking || false,
+      updateOptions:
+        data.updateOptions || {
+          showStayOption: true,
+          remindLaterDays: 3,
+          message: 'После обновления может потребоваться перезагрузка',
+        },
+    });
+    setShowUpdateModal(true);
+
+    // ✅ Помечаем как показанное в ЭТОЙ сессии, а не в localStorage навсегда
+    sessionStorage.setItem(shownKey, '1');
   } catch (err) {
     console.warn('[UpdateCheck] Ошибка проверки обновлений:', err);
   }

@@ -1,4 +1,6 @@
+// src/config.js
 // ✅ Единая точка управления версией приложения
+
 export const APP_VERSION = '0.0.78-beta';
 
 export const APP_CONFIG = {
@@ -22,11 +24,13 @@ export const APP_CONFIG = {
 
 // ✅ Хелпер для сравнения версий (семантическое версионирование)
 export const compareVersions = (v1, v2) => {
-  const a = v1.split('.').map(Number);
-  const b = v2.split('.').map(Number);
+  const a = String(v1).split('.').map(Number);
+  const b = String(v2).split('.').map(Number);
   for (let i = 0; i < 3; i++) {
-    if (a[i] > b[i]) return 1;
-    if (a[i] < b[i]) return -1;
+    const ai = Number.isFinite(a[i]) ? a[i] : 0;
+    const bi = Number.isFinite(b[i]) ? b[i] : 0;
+    if (ai > bi) return 1;
+    if (ai < bi) return -1;
   }
   return 0;
 };
