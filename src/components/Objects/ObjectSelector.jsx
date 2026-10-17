@@ -270,7 +270,7 @@ const ObjectSelector = memo(({
       {/* Dropdown */}
       {isOpen && (
         <div
-          className="absolute z-30 mt-1 left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl max-h-72 overflow-y-auto"
+          className="absolute z-30 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl max-h-72 overflow-y-auto"
         >
           {/* Существующие объекты */}
           {objects.length > 0 && (

@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import UpdateModal from './components/UpdateModal.jsx'
 
 // ✅ VitePWA: правильная регистрация Service Worker
 import { registerSW } from 'virtual:pwa-register'
@@ -9,9 +10,58 @@ import { registerSW } from 'virtual:pwa-register'
 // ✅ Офлайн-модуль
 import { initOfflineModule, checkOfflineSupport } from './utils/offlineStorage'
 
+// ✅ Версия приложения
+const APP_VERSION = '0.0.77-beta';
+
+// ─────────────────────────────────────────────────────────
+// 🔹 Глобальные переменные для модального окна обновлений
+// ─────────────────────────────────────────────────────────
+let updateModalRoot = null;
+
+const showUpdateModal = (updateInfo) => {
+  const handleApplyUpdate = () => {
+    if (window.waitingWorker) {
+      window.waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    }
+    if (updateInfo?.to) {
+      localStorage.setItem(`update_applied_${updateInfo.to}`, Date.now().toString());
+      localStorage.setItem('last_update_shown', updateInfo.to);
+    }
+    if (window.appToast) {
+      window.appToast.success('🔄 Обновление установлено, страница будет перезагружена...');
+    }
+    setTimeout(() => {
+      window.location.reload(true);
+    }, 1500);
+  };
+
+  const handleClose = () => {
+    if (updateModalRoot) {
+      updateModalRoot.render(null);
+    }
+  };
+
+  if (updateModalRoot) {
+    updateModalRoot.render(
+      <UpdateModal
+        isOpen={true}
+        updateInfo={updateInfo}
+        onClose={handleClose}
+        onApplyUpdate={handleApplyUpdate}
+        isLoading={false}
+      />
+    );
+  } else {
+    const modalDiv = document.createElement('div');
+    modalDiv.id = 'update-modal-root';
+    document.body.appendChild(modalDiv);
+    updateModalRoot = createRoot(modalDiv);
+    showUpdateModal(updateInfo);
+  }
+};
+
 // ─────────────────────────────────────────────────────────
 // 🔹 Регистрация Service Worker через VitePWA
-//    (только регистрация! Модалку показывает App.jsx)
 // ─────────────────────────────────────────────────────────
 const setupServiceWorker = () => {
   try {
@@ -20,6 +70,7 @@ const setupServiceWorker = () => {
 
       onRegisteredSW(swUrl, registration) {
         console.log('[PWA] SW registered:', swUrl);
+        // Сохраняем registration для доступа из App.jsx
         window.swRegistration = registration;
       },
 
@@ -28,10 +79,9 @@ const setupServiceWorker = () => {
       },
 
       onNeedRefresh() {
-        // ❗ НЕ показываем модалку здесь — просто уведомляем App.jsx
         console.log('[PWA] New content available');
         window.dispatchEvent(new CustomEvent('pwa-update-available', {
-          detail: { source: 'sw' }
+          detail: { version: APP_VERSION }
         }));
       },
 
@@ -40,12 +90,97 @@ const setupServiceWorker = () => {
       },
     });
 
+    // Сохраняем функцию обновления для использования в модалке
     window.updateSW = updateSW;
+
     return updateSW;
   } catch (error) {
+    // Не критично: если VitePWA не доступен (например, в dev-режиме без SW),
+    // приложение всё равно должно работать
     console.warn('[PWA] SW setup skipped:', error?.message || error);
     return null;
   }
+};
+
+// ─────────────────────────────────────────────────────────
+// 🔹 Слушатель обновлений PWA (версии через version.json)
+// ─────────────────────────────────────────────────────────
+const setupPWAUpdateListener = () => {
+  let updatePrompted = false;
+  const PROMPT_COOLDOWN = 24 * 60 * 60 * 1000; // 24 часа
+
+  const checkVersionManifest = async () => {
+    try {
+      const response = await fetch('/version.json?v=' + Date.now());
+      const data = await response.json();
+
+      if (data.version && data.version !== APP_VERSION) {
+        const lastShown = localStorage.getItem('last_update_shown');
+        const lastDeclined = localStorage.getItem(`update_declined_${data.version}`);
+
+        if (lastDeclined && (Date.now() - parseInt(lastDeclined)) < PROMPT_COOLDOWN) {
+          console.log('[PWA] Update declined, not showing');
+          return;
+        }
+
+        if (lastShown !== data.version && !updatePrompted) {
+          updatePrompted = true;
+          localStorage.setItem('last_update_shown', data.version);
+
+          const versionInfo = data.versions?.find(v => v.version === data.version) || {
+            version: data.version,
+            changes: data.changes || ['Улучшена производительность'],
+            date: data.date,
+            breaking: false
+          };
+
+          showUpdateModal({
+            from: APP_VERSION,
+            to: data.version,
+            changes: versionInfo.changes,
+            date: versionInfo.date,
+            breaking: versionInfo.breaking || false,
+            updateOptions: data.updateOptions || {
+              showStayOption: true,
+              remindLaterDays: 3,
+              message: 'После обновления может потребоваться перезагрузка'
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[PWA] Version check failed:', err);
+    }
+  };
+
+  // Проверяем при загрузке
+  checkVersionManifest();
+
+  // Проверяем каждые 6 часов
+  const interval = setInterval(checkVersionManifest, 6 * 60 * 60 * 1000);
+
+  // Слушаем обновления от Service Worker
+  const handleUpdate = (event) => {
+    const { version } = event.detail || {};
+    if (version && version !== APP_VERSION && !updatePrompted) {
+      updatePrompted = true;
+      showUpdateModal({
+        from: APP_VERSION,
+        to: version,
+        changes: ['Новая версия приложения готова к установке'],
+        date: new Date().toISOString(),
+        breaking: false,
+        updateOptions: { showStayOption: true, remindLaterDays: 3 }
+      });
+    }
+  };
+
+  window.addEventListener('pwa-update-available', handleUpdate);
+
+  return () => {
+    clearInterval(interval);
+    window.removeEventListener('pwa-update-available', handleUpdate);
+  };
 };
 
 // ─────────────────────────────────────────────────────────
@@ -55,9 +190,11 @@ const setupNetworkMonitor = () => {
   const updateNetworkStatus = () => {
     const isOnline = navigator.onLine;
     document.documentElement.setAttribute('data-online', isOnline ? 'true' : 'false');
+
     window.dispatchEvent(new CustomEvent('network:change', {
       detail: { online: isOnline, timestamp: Date.now() }
     }));
+
     console.log(`[Network] ${isOnline ? '🟢 Online' : '🔴 Offline'}`);
   };
 
@@ -173,27 +310,37 @@ const renderApp = () => {
   );
 };
 
+// ✅ Запуск
 const bootstrap = async () => {
+  // 0. Инициализируем toast-менеджер (для уведомлений)
   initToastManager();
+
+  // 1. Регистрируем Service Worker через VitePWA
+  //    (В dev-режиме VitePWA сам управляет SW, в prod — собирает из src/sw.js)
   setupServiceWorker();
 
-  try {
-    await initOfflineFeatures();
-  } catch (e) {
-    console.warn('[App] Offline init failed, continuing:', e);
-  }
+  // 2. Инициализируем оффлайн-модуль
+  await initOfflineFeatures();
 
+  // 3. Настраиваем мониторинг сети
   const cleanupNetwork = setupNetworkMonitor();
 
+  // 4. Настраиваем слушатель обновлений PWA
+  const cleanupPWA = setupPWAUpdateListener();
+
+  // Сохраняем функции очистки для HMR (если используете Vite)
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {
       cleanupNetwork?.();
+      cleanupPWA?.();
     });
   }
 
+  // 5. Рендерим приложение
   renderApp();
 };
 
+// Запускаем после загрузки страницы
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootstrap);
 } else {

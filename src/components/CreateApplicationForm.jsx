@@ -64,28 +64,6 @@ const styles = `
 .quantity-stepper input[type=number] {
   -moz-appearance: textfield;
 }
-
-/* ─────────────────────────────────────────────────────────
-   📱 MATERIAL ROW — адаптивная раскладка
-   ───────────────────────────────────────────────────────── */
-.material-row,
-.material-row * {
-  box-sizing: border-box;
-}
-
-/* На очень узких экранах — селект единиц на всю ширину */
-@media (max-width: 400px) {
-  .material-unit-select {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    flex: 1 1 100% !important;
-  }
-  .material-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-}
 `;
 
 // ─────────────────────────────────────────────────────────────
@@ -158,11 +136,7 @@ const QuickActions = memo(({ onCloneLast, onDownloadTemplate, onImportExcel, onS
   ];
 
   return (
-    <div
-      className="grid grid-cols-4 gap-2 mb-6 w-full min-w-0"
-      role="group"
-      aria-label={t('quickActions')}
-    >
+    <div className="flex flex-wrap gap-2 mb-6 w-full min-w-0" role="group" aria-label={t('quickActions')}>
       {actions.map((action, idx) => {
         const Icon = action.icon;
         return (
@@ -170,12 +144,11 @@ const QuickActions = memo(({ onCloneLast, onDownloadTemplate, onImportExcel, onS
             key={idx}
             type="button"
             onClick={action.action}
-            className={`flex items-center justify-center gap-2 px-2 sm:px-4 py-2.5 bg-gradient-to-r ${actionStyles[action.color]} text-white rounded-xl text-sm font-medium transition-all shadow-md hover:shadow-lg focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 min-w-0`}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-gradient-to-r ${actionStyles[action.color]} text-white rounded-xl text-sm font-medium transition-all shadow-md hover:shadow-lg focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 flex-shrink-0`}
             aria-label={action.label}
-            title={action.label}
           >
             <Icon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-            <span className="hidden sm:inline truncate">{action.label}</span>
+            <span className="hidden sm:inline">{action.label}</span>
           </button>
         );
       })}
@@ -244,17 +217,9 @@ const WarehouseInfo = memo(({ t }) => (
 WarehouseInfo.displayName = 'WarehouseInfo';
 
 // ─────────────────────────────────────────────────────────────
-// 🔑 MATERIAL ROW — ПЕРЕПИСАН
-// ─────────────────────────────────────────────────────────────
-// Ключевые изменения против старой версии:
-//   1. Инпут названия — отдельный блок w-full (уже было)
-//   2. Группа управления — grid из 2 колонок на мобилке:
-//      [степпер + селект]  [кнопки]
-//      На >= 480px — flex в одну строку.
-//   3. Убрано ml-auto (оно и выбивало кнопки за карточку).
-//   4. Селект единиц больше не имеет фиксированных inline-стилей
-//      на узких экранах — flex: 1 1 auto, min-width: 0.
-//   5. Все элементы min-w-0 — flex-дети могут сжиматься.
+// 🔑 MATERIAL ROW — ГЛАВНАЯ ПРАВКА
+// Инпут сверху, группа управления снизу (flex-wrap).
+// Всё гарантированно помещается даже на 320px.
 // ─────────────────────────────────────────────────────────────
 const MaterialRow = memo(({
   material,
@@ -331,7 +296,7 @@ const MaterialRow = memo(({
       role="listitem"
       aria-labelledby={`material-label-${index}`}
     >
-      {/* 1) Название материала — всегда на всю ширину */}
+      {/* 1) Инпут названия — всегда на всю ширину */}
       <div className="w-full min-w-0 mb-3">
         <label htmlFor={`material-${index}`} className="sr-only">{t('materialDescription')}</label>
         <input
@@ -388,8 +353,8 @@ const MaterialRow = memo(({
         )}
       </div>
 
-      {/* 2) Группа управления — grid 2 колонки на мобилке, flex на десктопе */}
-      <div className="w-full min-w-0 flex flex-wrap items-center gap-2">
+      {/* 2) Группа управления — снизу, с переносом */}
+      <div className="flex flex-wrap items-center gap-2 w-full min-w-0">
         {/* Степпер */}
         <div className="quantity-stepper flex items-center gap-0.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-1 flex-shrink-0">
           <button
@@ -420,11 +385,12 @@ const MaterialRow = memo(({
           </button>
         </div>
 
-        {/* Селект единиц — flex: 1 1 auto, но не меньше 4.5rem на мобилке */}
+        {/* Селект единиц — фиксированная ширина 5rem, не растягивается */}
         <select
           value={material.unit}
           onChange={(e) => onUpdate(index, 'unit', e.target.value)}
-          className="material-unit-select flex-1 min-w-[4.5rem] max-w-[7rem] px-2 py-2 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer text-sm text-center"
+          style={{ width: '5rem', minWidth: '5rem', maxWidth: '5rem' }}
+          className="px-2 py-2 border border-gray-200/60 dark:border-gray-600/60 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer flex-shrink-0 text-sm text-center"
           aria-label={t('unit')}
         >
           {unitOptions.map(unit => (
@@ -432,8 +398,8 @@ const MaterialRow = memo(({
           ))}
         </select>
 
-        {/* Кнопки фото и удаления — прижимаются вправо, но не вылезают */}
-        <div className="material-actions flex items-center gap-1 flex-shrink-0 ml-auto">
+        {/* Кнопки фото и удаления — в одну линию, справа */}
+        <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
           <button
             type="button"
             onClick={() => onAddPhoto?.(index)}

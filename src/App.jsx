@@ -98,7 +98,7 @@ import { normalizeObjectName } from './api/objects';
 import WarehouseView from './components/WarehouseView';
 import CalendarView from './components/CalendarView';
  
-import { APP_VERSION } from './config';
+ import { APP_VERSION, isUpdateAvailable, APP_CONFIG } from './config';
 import CompanyChat from './components/CompanyChat';
 import VersionUpdateModal from './components/VersionUpdateModal';
 import NpsSurveyModal from './components/NpsSurveyModal'; 
@@ -334,26 +334,15 @@ img, video, canvas, svg {
    ВАЖНО: НЕ трогаем кнопки внутри <nav>!
    ========================================================== */
 @media (max-width: 768px) {
-  /* Только inputs и textarea растягиваем на всю ширину */
-  input[type="text"],
-  input[type="email"],
-  input[type="tel"],
-  input[type="password"],
-  input[type="number"],
-  input[type="search"],
-  textarea {
+  input, select, textarea {
     font-size: 16px !important;
     width: 100% !important;
     max-width: 100% !important;
   }
 
-  /* Select и кнопки — не трогаем ширину */
-  select {
-    font-size: 16px !important;
-  }
-
   button[type="submit"] {
-    font-size: 16px !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   .application-card,
@@ -1583,10 +1572,6 @@ const [selectedChatId, setSelectedChatId] = useState(null);
   const lastLoggedRef = useRef({});  // ← ДЛЯ ДЕБАУНСА ФИЧЕР-ЛОГОВ
   const aiAssistantRef = useRef(null);
   const applicationsRef = useRef([]);  // ✅ ДЛЯ open-application
-  // 🆕 Защита от StrictMode-двойного вызова checkForUpdates
-const updateCheckDoneRef = useRef(false);
-// 🆕 Актуален ли онбординг (для откладывания показа обновления)
-const onboardingActiveRef = useRef(false);
 
   // ─────────────────────────────────────────────────────────
 // ✅ APPROVAL WORKFLOW HOOK
@@ -2707,92 +2692,66 @@ const currentOnboardingHighlights = useMemo(() => {
     setFormData({ ...formData, foremanPhone: formatted });
   };
 
-// 🔄 CHECK FOR UPDATES (единый источник правды)
+// 🔄 CHECK FOR UPDATES (с защитой от дублирования)
 const checkForUpdates = useCallback(async () => {
   try {
-    if (updateCheckDoneRef.current) return;
-
-    if (onboardingActiveRef.current) {
-      setTimeout(() => {
-        updateCheckDoneRef.current = false;
-        checkForUpdates();
-      }, 30 * 1000);
-      return;
-    }
-
     const response = await fetch('/version.json?v=' + Date.now());
     const data = await response.json();
-
+    
     console.log('[UpdateCheck] Текущая версия:', APP_VERSION);
     console.log('[UpdateCheck] Новая версия:', data.version);
-
-    if (!data.version || data.version === APP_VERSION) {
-      console.log('[UpdateCheck] Нет новых версий');
-      updateCheckDoneRef.current = true;
-      return;
-    }
-
-    const declinedKey = `update_declined_${data.version}`;
-    const declinedAt = localStorage.getItem(declinedKey);
-    if (declinedAt && (Date.now() - parseInt(declinedAt)) < 24 * 60 * 60 * 1000) {
-      console.log('[UpdateCheck] Обновление отклонено (24ч)');
-      updateCheckDoneRef.current = true;
-      return;
-    }
-
-    if (localStorage.getItem(`update_applied_${data.version}`)) {
-      console.log('[UpdateCheck] Обновление уже применено');
-      updateCheckDoneRef.current = true;
-      return;
-    }
-
-    // 🆕 СБОР ВСЕХ ИЗМЕНЕНИЙ
-    // Если у нас есть массив versions, мы ищем все версии, которые новее текущей
-    let allChanges = [];
-    let latestTitle = '';
     
-    if (data.versions && Array.isArray(data.versions)) {
-      const currentVerNum = parseFloat(APP_VERSION.replace(/[^\d.]/g, ''));
+    if (data.version && data.version !== APP_VERSION) {
+      // Проверяем, не отклоняли ли уже это обновление
+      const declinedKey = `update_declined_${data.version}`;
+      const declinedAt = localStorage.getItem(declinedKey);
       
-      // Перебираем версии, фильтруем те, что новее нашей, и собираем их changes
-      const applicableVersions = data.versions
-        .filter(v => {
-          const verNum = parseFloat(v.version.replace(/[^\d.]/g, ''));
-          return verNum > currentVerNum;
-        })
-        .sort((a, b) => parseFloat(a.version.replace(/[^\d.]/g, '')) - parseFloat(b.version.replace(/[^\d.]/g, ''))); // Сортируем от старых к новым
-
-      applicableVersions.forEach(v => {
-        if (v.title) latestTitle = v.title; // Берем заголовок от самой новой
-        if (v.changes && Array.isArray(v.changes)) {
-          // Добавляем изменения с указанием версии
-          allChanges.push(...v.changes.map(c => `[${v.version}] ${c}`));
-        }
-      });
-    }
-
-    // Если по какой-то причине массив versions пуст, берем корневые changes
-    if (allChanges.length === 0) {
-      allChanges = data.changes || ['Улучшена производительность и исправлены ошибки'];
-    }
-
-    setUpdateInfo({
-      from: APP_VERSION,
-      to: data.version,
-      title: latestTitle,
-      changes: allChanges, // <-- Теперь здесь будут ВСЕ изменения
-      date: data.date || new Date().toISOString(),
-      breaking: false,
-      updateOptions: data.updateOptions || {
-        showStayOption: true,
-        remindLaterDays: 3,
-        message: 'После обновления страница будет перезагружена'
+      // Если отклонено менее чем 24 часа назад, не показываем
+      if (declinedAt && (Date.now() - parseInt(declinedAt)) < 24 * 60 * 60 * 1000) {
+        console.log('[UpdateCheck] Обновление отклонено, не показываем');
+        return;
       }
-    });
-    
-    setShowUpdateModal(true);
-    updateCheckDoneRef.current = true;
-    console.log('[UpdateCheck] Показываем VersionUpdateModal для', data.version);
+      
+      // Проверяем, не применяли ли уже это обновление
+      const appliedKey = `update_applied_${data.version}`;
+      if (localStorage.getItem(appliedKey)) {
+        console.log('[UpdateCheck] Обновление уже применено');
+        return;
+      }
+      
+      // Проверяем, не показывали ли уже это обновление в текущей сессии
+      const lastShownVersion = localStorage.getItem('last_update_shown');
+      if (lastShownVersion !== data.version) {
+        console.log('[UpdateCheck] Показываем модальное окно обновления');
+        
+        // Находим информацию о версии из списка
+        const versionInfo = data.versions?.find(v => v.version === data.version) || {
+          version: data.version,
+          changes: data.changes || ['Улучшена производительность и исправлены ошибки'],
+          date: data.date || new Date().toISOString(),
+          breaking: false
+        };
+        
+        setUpdateInfo({
+          from: APP_VERSION,
+          to: data.version,
+          changes: versionInfo.changes,
+          date: versionInfo.date,
+          breaking: versionInfo.breaking || false,
+          updateOptions: data.updateOptions || {
+            showStayOption: true,
+            remindLaterDays: 3,
+            message: 'После обновления может потребоваться перезагрузка'
+          }
+        });
+        setShowUpdateModal(true);
+        localStorage.setItem('last_update_shown', data.version);
+      } else {
+        console.log('[UpdateCheck] Обновление уже показывали в этой сессии');
+      }
+    } else {
+      console.log('[UpdateCheck] Нет новых версий');
+    }
   } catch (err) {
     console.warn('[UpdateCheck] Ошибка проверки обновлений:', err);
   }
@@ -6560,22 +6519,14 @@ useEffect(() => {
   // Проверка обновлений при загрузке
   const timer = setTimeout(() => {
     checkForUpdates();
-  }, 3000);
-
+  }, 3000); // через 3 секунды после загрузки
+  
   // Проверка каждые 6 часов
   const interval = setInterval(checkForUpdates, 6 * 60 * 60 * 1000);
-
-  // 🆕 Реагируем на событие от Service Worker (main.jsx)
-  const handlePwaUpdate = () => {
-    console.log('[App] pwa-update-available → запускаем checkForUpdates');
-    checkForUpdates();
-  };
-  window.addEventListener('pwa-update-available', handlePwaUpdate);
-
+  
   return () => {
     clearTimeout(timer);
     clearInterval(interval);
-    window.removeEventListener('pwa-update-available', handlePwaUpdate);
   };
 }, [checkForUpdates]);
 
@@ -6906,10 +6857,6 @@ useEffect(() => {
   window.addEventListener('ai-open-rfq', handler);
   return () => window.removeEventListener('ai-open-rfq', handler);
 }, []);
-// 🔄 Синхронизируем ref с актуальным состоянием онбординга
-useEffect(() => {
-  onboardingActiveRef.current = showOnboarding || showInteractiveTour;
-}, [showOnboarding, showInteractiveTour]);
   // 🎯 Onboarding Tour Logic
 useEffect(() => {
   const checkOnboarding = async () => {
@@ -8639,6 +8586,96 @@ const renderApprovalsQueue = () => (
   </div>
 );
 
+// ─────────────────────────────────────────────────────────
+// 🪟 UPDATE MODAL COMPONENT
+// ─────────────────────────────────────────────────────────
+const UpdateModal = ({ isOpen, onClose, updateInfo, onApplyUpdate }) => {
+  if (!isOpen || !updateInfo) return null;
+  return (
+    <div 
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000] fade-enter"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="update-modal-title"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-200/50 dark:border-gray-700/50">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200/50 dark:border-gray-700/50">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-gradient-to-br from-[#F9AA33] to-[#F57C00] rounded-lg">
+              <Sparkles className="w-5 h-5 text-white" aria-hidden="true" />
+            </div>
+            <div>
+              <h3 id="update-modal-title" className="text-lg font-bold text-gray-900 dark:text-white">
+                Доступно обновление
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                v{updateInfo.from} → v{updateInfo.to}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label="Закрыть"
+          >
+            <X className="w-5 h-5" aria-hidden="true" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 space-y-4">
+          {updateInfo.breaking && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-sm text-red-700 dark:text-red-300 flex items-start">
+                <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                <span>⚠️ Это обновление содержит важные изменения. Рекомендуется обновиться сейчас.</span>
+              </p>
+            </div>
+          )}
+          
+          <div>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Что нового в версии {updateInfo.to}:
+            </p>
+            <ul className="space-y-2">
+              {updateInfo.changes.map((change, idx) => (
+                <li key={idx} className="flex items-start text-sm text-gray-600 dark:text-gray-400">
+                  <CheckCircle className="w-4 h-4 mr-2 text-green-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                  <span>{change}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            Дата выпуска: {new Date(updateInfo.date).toLocaleDateString('ru-RU')}
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end space-x-3 p-4 border-t border-gray-200/50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 rounded-b-2xl">
+          {!updateInfo.breaking && (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+            >
+              Позже
+            </button>
+          )}
+          <button
+            onClick={onApplyUpdate}
+            className="px-4 py-2 text-sm font-medium bg-gradient-to-r from-[#4A6572] to-[#344955] text-white rounded-lg hover:shadow-md transition-shadow flex items-center space-x-2"
+          >
+            <RefreshCw className="w-4 h-4" aria-hidden="true" />
+            <span>Обновить сейчас</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ─────────────────────────────────────────────────────────
 // 📝 РЕГИСТРАЦИЯ ПО ПРИГЛАШЕНИЮ
@@ -10451,27 +10488,25 @@ onClearFilters={handleClearFilters}
     }
   }}
   updateInfo={updateInfo}
-  onApplyUpdate={async () => {
-    // 1. Просим SW применить обновление
-    try {
-      if (window.swRegistration?.waiting) {
-        window.swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
-      }
-      if (window.updateSW) {
-        await window.updateSW(true);
-      }
-    } catch (e) {
-      console.warn('[Update] SW update error:', e);
+  onApplyUpdate={() => {
+    if (waitingWorker) {
+      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
     }
-
-    // 2. Помечаем версию как применённую
     if (updateInfo?.to) {
       localStorage.setItem(`update_applied_${updateInfo.to}`, Date.now().toString());
-      localStorage.removeItem(`update_declined_${updateInfo.to}`);
+      localStorage.setItem('last_update_shown', updateInfo.to);
     }
-
-    // 3. Перезагружаем страницу (кэши Workbox очистит сам)
-    setTimeout(() => window.location.reload(true), 500);
+    setShowUpdateModal(false);
+    setUpdateInfo(null);
+    // Очищаем кэш
+    if ('caches' in window) {
+      caches.keys().then(keys => {
+        keys.forEach(key => caches.delete(key));
+      });
+    }
+    setTimeout(() => {
+      window.location.reload(true);
+    }, 500);
   }}
 />
 
