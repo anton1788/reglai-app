@@ -13,9 +13,12 @@ import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { clientsClaim } from 'workbox-core';
 
 // ───────────────────────────────────────────────────────────
-// 🚀 Активация: skipWaiting + clientsClaim
+// 🚀 Активация: clientsClaim без skipWaiting
 // ───────────────────────────────────────────────────────────
-self.skipWaiting();
+// ⚠️ НЕ добавлять self.skipWaiting() здесь!
+// Активация управляется сообщением SKIP_WAITING из UI,
+// иначе кнопка "Обновить сейчас" теряет смысл, а обновление
+// применяется без ведома пользователя.
 clientsClaim();
 
 // ───────────────────────────────────────────────────────────

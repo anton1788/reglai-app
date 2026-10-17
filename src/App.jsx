@@ -10433,7 +10433,6 @@ onClearFilters={handleClearFilters}
     setShowUpdateModal(false);
     if (updateInfo?.to) {
       localStorage.setItem(`update_declined_${updateInfo.to}`, Date.now().toString());
-      // ❗ НЕ трогаем sessionStorage — чтобы при след. сессии окно показалось снова
     }
   }}
   updateInfo={updateInfo}
@@ -10444,7 +10443,7 @@ onClearFilters={handleClearFilters}
         window.swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
       }
       if (window.updateSW) {
-        await window.updateSW(true); // true = принудительное обновление
+        await window.updateSW(true);
       }
     } catch (e) {
       console.warn('[Update] SW update error:', e);
@@ -10456,13 +10455,7 @@ onClearFilters={handleClearFilters}
       localStorage.removeItem(`update_declined_${updateInfo.to}`);
     }
 
-    // 3. Очищаем кэши
-    if ('caches' in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(key => caches.delete(key)));
-    }
-
-    // 4. Перезагружаем
+    // 3. Перезагружаем страницу (кэши Workbox очистит сам)
     setTimeout(() => window.location.reload(true), 500);
   }}
 />
