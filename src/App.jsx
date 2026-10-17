@@ -2710,15 +2710,9 @@ const currentOnboardingHighlights = useMemo(() => {
 // 🔄 CHECK FOR UPDATES (единый источник правды)
 const checkForUpdates = useCallback(async () => {
   try {
-    // 🛡️ Защита от StrictMode-двойного вызова
-    if (updateCheckDoneRef.current) {
-      console.log('[UpdateCheck] Уже проверяли в этом монтировании');
-      return;
-    }
+    if (updateCheckDoneRef.current) return;
 
-    // 🛡️ Не показываем поверх онбординга/интерактивного тура
     if (onboardingActiveRef.current) {
-      console.log('[UpdateCheck] Онбординг активен, отложим показ на 30 сек');
       setTimeout(() => {
         updateCheckDoneRef.current = false;
         checkForUpdates();
@@ -2738,43 +2732,64 @@ const checkForUpdates = useCallback(async () => {
       return;
     }
 
-    // Проверяем, не отклоняли ли уже это обновление
     const declinedKey = `update_declined_${data.version}`;
     const declinedAt = localStorage.getItem(declinedKey);
     if (declinedAt && (Date.now() - parseInt(declinedAt)) < 24 * 60 * 60 * 1000) {
-      console.log('[UpdateCheck] Обновление отклонено (24ч), не показываем');
+      console.log('[UpdateCheck] Обновление отклонено (24ч)');
       updateCheckDoneRef.current = true;
       return;
     }
 
-    // Проверяем, не применяли ли уже
     if (localStorage.getItem(`update_applied_${data.version}`)) {
       console.log('[UpdateCheck] Обновление уже применено');
       updateCheckDoneRef.current = true;
       return;
     }
 
-    // ❌ БОЛЬШЕ НЕТ sessionStorage-проверки
+    // 🆕 СБОР ВСЕХ ИЗМЕНЕНИЙ
+    // Если у нас есть массив versions, мы ищем все версии, которые новее текущей
+    let allChanges = [];
+    let latestTitle = '';
+    
+    if (data.versions && Array.isArray(data.versions)) {
+      const currentVerNum = parseFloat(APP_VERSION.replace(/[^\d.]/g, ''));
+      
+      // Перебираем версии, фильтруем те, что новее нашей, и собираем их changes
+      const applicableVersions = data.versions
+        .filter(v => {
+          const verNum = parseFloat(v.version.replace(/[^\d.]/g, ''));
+          return verNum > currentVerNum;
+        })
+        .sort((a, b) => parseFloat(a.version.replace(/[^\d.]/g, '')) - parseFloat(b.version.replace(/[^\d.]/g, ''))); // Сортируем от старых к новым
 
-    const versionInfo = data.versions?.find(v => v.version === data.version) || {
-      version: data.version,
-      changes: data.changes || ['Улучшена производительность и исправлены ошибки'],
-      date: data.date || new Date().toISOString(),
-      breaking: false
-    };
+      applicableVersions.forEach(v => {
+        if (v.title) latestTitle = v.title; // Берем заголовок от самой новой
+        if (v.changes && Array.isArray(v.changes)) {
+          // Добавляем изменения с указанием версии
+          allChanges.push(...v.changes.map(c => `[${v.version}] ${c}`));
+        }
+      });
+    }
+
+    // Если по какой-то причине массив versions пуст, берем корневые changes
+    if (allChanges.length === 0) {
+      allChanges = data.changes || ['Улучшена производительность и исправлены ошибки'];
+    }
 
     setUpdateInfo({
       from: APP_VERSION,
       to: data.version,
-      changes: versionInfo.changes,
-      date: versionInfo.date,
-      breaking: versionInfo.breaking || false,
+      title: latestTitle,
+      changes: allChanges, // <-- Теперь здесь будут ВСЕ изменения
+      date: data.date || new Date().toISOString(),
+      breaking: false,
       updateOptions: data.updateOptions || {
         showStayOption: true,
         remindLaterDays: 3,
-        message: 'После обновления может потребоваться перезагрузка'
+        message: 'После обновления страница будет перезагружена'
       }
     });
+    
     setShowUpdateModal(true);
     updateCheckDoneRef.current = true;
     console.log('[UpdateCheck] Показываем VersionUpdateModal для', data.version);

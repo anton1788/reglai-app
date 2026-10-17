@@ -1,5 +1,8 @@
-// ✅ Единая точка управления версией приложения
-export const APP_VERSION = '0.0.82-beta';
+// ✅ Автоматически импортируем версию из package.json
+import pkg from '../package.json';
+
+// ✅ Единая точка управления версией приложения (берется из package.json)
+export const APP_VERSION = pkg.version;
 
 export const APP_CONFIG = {
   version: APP_VERSION,
@@ -22,8 +25,13 @@ export const APP_CONFIG = {
 
 // ✅ Хелпер для сравнения версий (семантическое версионирование)
 export const compareVersions = (v1, v2) => {
-  const a = v1.split('.').map(Number);
-  const b = v2.split('.').map(Number);
+  // Очищаем от префиксов вроде 'v' или '-beta' для корректного сравнения чисел
+  const cleanV1 = String(v1).replace(/[^\d.]/g, '');
+  const cleanV2 = String(v2).replace(/[^\d.]/g, '');
+  
+  const a = cleanV1.split('.').map(Number);
+  const b = cleanV2.split('.').map(Number);
+  
   for (let i = 0; i < 3; i++) {
     if (a[i] > b[i]) return 1;
     if (a[i] < b[i]) return -1;
