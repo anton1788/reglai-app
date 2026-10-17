@@ -1,8 +1,8 @@
 {
-  "version": "0.0.85-beta",
+  "version": "0.0.86-beta",
   "versions": [
     {
-      "version": "0.0.85-beta",
+      "version": "0.0.86-beta",
       "date": "2026-10-16",
       "title": "Исправлена фотофиксация и навигация",
       "changes": [
