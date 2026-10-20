@@ -1,5 +1,5 @@
 // src/config.js
-export const APP_VERSION = '0.0.85-beta'; // Текущая версия билда
+export const APP_VERSION = '0.0.87-beta'; // Текущая версия билда
 
 export const APP_CONFIG = {
   version: APP_VERSION,
