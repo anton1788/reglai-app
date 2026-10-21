@@ -8741,12 +8741,38 @@ if (inviteParam) {
         <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-bl from-[#F9AA33]/5 to-transparent rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-[#4A6572]/5 to-transparent rounded-full blur-3xl"></div>
       </div>
-           <Navbar
+                      <Navbar
         user={user}
         companyName={userCompany}
         userRole={userRole}
         onLogout={handleLogout}
         isMobile={isMobile}
+        // 🆕 Синхронизация офлайн-черновиков (кнопка «Синхр.» в Navbar)
+        onSyncOffline={async () => {
+          if (!offlineDrafts.length) {
+            showNotification('Нет черновиков для синхронизации', 'info');
+            return;
+          }
+          if (!navigator.onLine) {
+            showNotification('Нет соединения с интернетом', 'warning');
+            return;
+          }
+          showNotification('⏳ Синхронизация...', 'info');
+          try {
+            for (const draft of offlineDrafts) {
+              await sendWithRetry(draft);
+              await deleteDraftFromDB(draft.id);
+            }
+            setOfflineDrafts([]);
+            showNotification('✅ Черновики отправлены', 'success');
+            await loadApplications(page);
+          } catch (err) {
+            console.error('[Sync] error:', err);
+            showNotification('❌ Ошибка синхронизации', 'error');
+          }
+        }}
+        // 🆕 Статус поддержки (по умолчанию true — точка зелёная)
+        supportOnline={true}
         onNavigate={(path) => {
   console.log('🔍 Навигация:', path);
   if (path === '/' || path === '/home' || path === '/dashboard') {

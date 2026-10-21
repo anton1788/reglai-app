@@ -1,5 +1,5 @@
 // src/components/Navbar.jsx
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Menu, X, Search, User, LogOut, HelpCircle,
   Bell, ChevronDown, Home, Package, ClipboardList,
@@ -75,6 +75,75 @@ const getNotificationBgClass = (notif) => {
   }
 };
 
+// ============================================================
+// 🔢 ЕДИНЫЙ ХЕЛПЕР БЕЙДЖЕЙ (устраняет дублирование в 3 местах)
+// ============================================================
+const getBadgeForItem = (itemId, {
+  readyToIssueCount = 0,
+  rfqCartCount = 0,
+  pendingApprovalsCount = 0,
+  cartItemsCount = 0,
+  mergeableCount = 0,
+  chatUnreadCount = 0,
+}) => {
+  switch (itemId) {
+    case 'readyToIssue':
+      return readyToIssueCount > 0
+        ? { count: readyToIssueCount, color: 'bg-amber-500' }
+        : null;
+    case 'rfqList':
+      return rfqCartCount > 0
+        ? { count: rfqCartCount, color: 'bg-red-500' }
+        : null;
+    case 'approvals':
+      return pendingApprovalsCount > 0
+        ? { count: pendingApprovalsCount, color: 'bg-red-500' }
+        : null;
+    case 'cart':
+      return cartItemsCount > 0
+        ? { count: cartItemsCount, color: 'bg-orange-500' }
+        : null;
+    case 'merge':
+      return mergeableCount > 0
+        ? { count: mergeableCount, color: 'bg-indigo-500' }
+        : null;
+    case 'chat':
+      return chatUnreadCount > 0
+        ? {
+            count: chatUnreadCount > 99 ? '99+' : chatUnreadCount,
+            color: 'bg-red-500',
+            pulse: true,
+          }
+        : null;
+    default:
+      return null;
+  }
+};
+
+// ============================================================
+// 🧭 ХЕЛПЕР: активен ли пункт меню
+// ============================================================
+const isNavItemActive = (itemId, currentPage) => {
+  if (currentPage === itemId) return true;
+
+  switch (itemId) {
+    case 'applications':
+      return currentPage === 'inwork' || currentPage === 'history';
+    case 'clients':
+      return currentPage === 'clientDashboard';
+    case 'rfqList':
+      return currentPage === 'rfqList'
+        || currentPage === 'rfqCreate'
+        || currentPage === 'rfqDetails';
+    case 'purchaseOrders':
+      return currentPage === 'purchaseOrders'
+        || currentPage === 'purchaseOrderCreate'
+        || currentPage === 'purchaseOrderDetails';
+    default:
+      return false;
+  }
+};
+
 const Navbar = ({
   user,
   isMobile = false,
@@ -111,7 +180,8 @@ const Navbar = ({
   onCloseNotificationModal,
   readyToIssueCount = 0,
   rfqCartCount = 0,
-  onOpenAIAssistant = null
+  onOpenAIAssistant = null,
+  supportOnline = true,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -140,6 +210,9 @@ const Navbar = ({
   const touchEndX = useRef(null);
   const touchEndY = useRef(null);
 
+  // ============================================================
+  // 📊 ЗАГРУЗКА ТАРИФА
+  // ============================================================
   const loadCompanyPlan = useCallback(async () => {
     const cleanId = getCleanCompanyId(companyId);
     if (!cleanId || !supabase) {
@@ -161,6 +234,9 @@ const Navbar = ({
     loadCompanyPlan();
   }, [loadCompanyPlan]);
 
+  // ============================================================
+  // 🔒 БЛОКИРОВКА СКРОЛЛА, ESC-ЗАКРЫТИЕ
+  // ============================================================
   useEffect(() => {
     if (isMobileMenuOpen) {
       document.body.style.overflow = 'hidden';
@@ -182,6 +258,9 @@ const Navbar = ({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isMobileMenuOpen]);
 
+  // ============================================================
+  // 👆 TOUCH-ЖЕСТЫ ДЛЯ МОБИЛЬНОГО МЕНЮ
+  // ============================================================
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
@@ -213,6 +292,9 @@ const Navbar = ({
     touchEndY.current = null;
   };
 
+  // ============================================================
+  // 🖱️ CLICK OUTSIDE
+  // ============================================================
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
@@ -226,6 +308,9 @@ const Navbar = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // ============================================================
+  // ⌨️ ГОРЯЧИЕ КЛАВИШИ
+  // ============================================================
   useEffect(() => {
     const handleGlobalSearch = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -268,6 +353,9 @@ const Navbar = ({
     return () => document.removeEventListener('keydown', handleKeyboardNav);
   }, [onNavigate]);
 
+  // ============================================================
+  // ↔️ СКРОЛЛ-СТРЕЛКИ
+  // ============================================================
   useEffect(() => {
     let timeoutId = null;
     let scrollTimeoutId = null;
@@ -337,7 +425,7 @@ const Navbar = ({
   };
 
   // ============================================================
-  // 🆕 РОЛИ (включая проектировщика)
+  // 🏷️ РОЛИ
   // ============================================================
   const getRoleLabel = () => {
     const roles = {
@@ -377,9 +465,9 @@ const Navbar = ({
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   // ============================================================
-  // 🆕 NAV ITEMS
+  // 🧭 NAV ITEMS
   // ============================================================
-  const getNavItems = () => {
+  const getNavItems = useCallback(() => {
     const items = [];
 
     // ============================================================
@@ -416,7 +504,7 @@ const Navbar = ({
         icon: User,
         path: '/profile',
       });
-      return items;   // ← ВАЖНО: выходим, поставщик не видит чужих разделов
+      return items;
     }
 
     items.push({ id: 'dashboard', label: 'Главная', icon: Home, path: '/', always: true });
@@ -443,21 +531,18 @@ const Navbar = ({
       return items;
     }
 
-        // ============================================================
+    // ============================================================
     // 🏢 БЛОК ПОСТАВЩИКОВ (B2B) — только для закупщиков
-    // + проверка доступа по тарифу через can()
     // ============================================================
     const canSeeSuppliersRole = [
       'procurement_manager', 'supply_admin', 'manager', 'director', 'super_admin',
     ].includes(userRole) || isCompanyOwner;
 
-    // 🆕 Проверяем доступ к функциям тарифа
     const hasSuppliersFeature = !currentPlan || can('suppliers_manage');
     const hasCatalogFeature = !currentPlan || can('supplier_catalog');
     const hasRFQFeature = !currentPlan || can('rfq');
     const hasOrdersFeature = !currentPlan || can('purchase_orders');
 
-    // Показываем "Поставщики" только если роль И тариф позволяют
     if (canSeeSuppliersRole && hasSuppliersFeature) {
       items.push({
         id: 'suppliers',
@@ -467,7 +552,6 @@ const Navbar = ({
       });
     }
 
-    // Каталог — если роль И тариф
     if (canSeeSuppliersRole && hasCatalogFeature) {
       items.push({
         id: 'supplierCatalog',
@@ -477,7 +561,6 @@ const Navbar = ({
       });
     }
 
-    // RFQ — если роль И тариф
     if (canSeeSuppliersRole && hasRFQFeature) {
       items.push({
         id: 'rfqList',
@@ -487,7 +570,6 @@ const Navbar = ({
       });
     }
 
-    // Заказы — если роль И тариф
     if (canSeeSuppliersRole && hasOrdersFeature) {
       items.push({
         id: 'purchaseOrders',
@@ -497,7 +579,7 @@ const Navbar = ({
       });
     }
 
-        // 📚 СПРАВОЧНИК ЦЕН — плюс проверка тарифа
+    // 📚 СПРАВОЧНИК ЦЕН
     if (canEditPrices(userRole) && (!currentPlan || can('price_catalog'))) {
       items.push({
         id: 'priceCatalog',
@@ -507,7 +589,7 @@ const Navbar = ({
       });
     }
 
-        if (userRole === 'procurement_manager' && (!currentPlan || can('procurement_dashboard'))) {
+    if (userRole === 'procurement_manager' && (!currentPlan || can('procurement_dashboard'))) {
       items.push({
         id: 'procurementDashboard',
         label: 'Закупки',
@@ -631,13 +713,29 @@ const Navbar = ({
     }
 
     return items;
-  };
+  }, [
+    userRole,
+    isCompanyOwner,
+    currentPlan,
+    can,
+    rfqCartCount,
+    pendingApprovalsCount,
+    cartItemsCount,
+    mergeableCount,
+  ]);
 
-  const navItems = getNavItems();
-  const filteredNavItems = navItems.filter(item =>
-    item.label.toLowerCase().includes(mobileSearch.toLowerCase())
+  const navItems = useMemo(() => getNavItems(), [getNavItems]);
+
+  const filteredNavItems = useMemo(
+    () => navItems.filter(item =>
+      item.label.toLowerCase().includes(mobileSearch.toLowerCase())
+    ),
+    [navItems, mobileSearch]
   );
 
+  // ============================================================
+  // 🎨 ИНЪЕКЦИЯ СТИЛЕЙ
+  // ============================================================
   useEffect(() => {
     const style = document.createElement('style');
     style.textContent = `
@@ -667,6 +765,9 @@ const Navbar = ({
     return () => document.head.removeChild(style);
   }, []);
 
+  // ============================================================
+  // 🔔 ОБРАБОТЧИК КЛИКА ПО УВЕДОМЛЕНИЮ
+  // ============================================================
   const handleNotificationClick = useCallback((notif) => {
     onMarkNotificationRead?.(notif.id);
     setIsNotificationsOpen(false);
@@ -718,6 +819,9 @@ const Navbar = ({
     }
   }, [onMarkNotificationRead, onNavigate, onNotificationClick]);
 
+  // ============================================================
+  // 🏷️ ИНДИКАТОР ТАРИФА
+  // ============================================================
   const renderTariffIndicator = () => {
     if (planLoading) {
       return (
@@ -757,6 +861,58 @@ const Navbar = ({
     );
   };
 
+  // ============================================================
+  // 🔢 УНИВЕРСАЛЬНЫЙ РЕНДЕР БЕЙДЖА
+  // ============================================================
+  const renderBadge = (itemId, position = 'corner') => {
+    const badge = getBadgeForItem(itemId, {
+      readyToIssueCount,
+      rfqCartCount,
+      pendingApprovalsCount,
+      cartItemsCount,
+      mergeableCount,
+      chatUnreadCount,
+    });
+    if (!badge) return null;
+
+    if (position === 'corner') {
+      // Планшетная/десктопная навигация — угол иконки
+      return (
+        <span
+          className={`absolute -top-1 -right-1 w-4 h-4 ${badge.color} text-white text-[10px] rounded-full flex items-center justify-center ${badge.pulse ? 'animate-pulse' : ''}`}
+        >
+          {badge.count}
+        </span>
+      );
+    }
+
+    // Мобильное меню — справа от текста
+    return (
+      <span className={`ml-auto px-2 py-0.5 ${badge.color} text-white text-xs rounded-full flex-shrink-0`}>
+        {badge.count}
+      </span>
+    );
+  };
+
+  // ============================================================
+  // 📅 БЕЗОПАСНАЯ ДАТА УВЕДОМЛЕНИЯ
+  // ============================================================
+  const getNotificationDate = (notif) => {
+    if (!notif) return '';
+    if (notif.time) return notif.time;
+    if (notif.created_at) {
+      try {
+        return new Date(notif.created_at).toLocaleString('ru-RU');
+      } catch {
+        return '';
+      }
+    }
+    return '';
+  };
+
+  // ============================================================
+  // 🎨 РЕНДЕР
+  // ============================================================
   return (
     <>
       <nav className="bg-white dark:bg-gray-900 shadow-lg sticky top-0 z-50 w-full">
@@ -924,8 +1080,8 @@ const Navbar = ({
                       Поддержка
                     </span>
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${supportOnline ? 'bg-green-400' : 'bg-gray-400'} opacity-75`}></span>
+                      <span className={`relative inline-flex rounded-full h-2 w-2 ${supportOnline ? 'bg-green-500' : 'bg-gray-500'}`}></span>
                     </span>
                   </button>
 
@@ -952,7 +1108,7 @@ const Navbar = ({
                   onClick={onOpenAIAssistant}
                   className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
                   aria-label="AI-ассистент"
-                  title="AI-ассистент (Ctrl+/"
+                  title="AI-ассистент (Ctrl+/)"
                 >
                   <Bot className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-[#4A6572] dark:group-hover:text-[#F9AA33] transition-colors" />
                   <span className="absolute top-1 right-1 flex h-2 w-2">
@@ -1040,7 +1196,7 @@ const Navbar = ({
                                 {notif.message}
                               </p>
                               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                {notif.time || (notif.created_at ? new Date(notif.created_at).toLocaleString('ru-RU') : '')}
+                                {getNotificationDate(notif)}
                               </p>
                             </div>
                           </div>
@@ -1161,17 +1317,7 @@ const Navbar = ({
             >
               {navItems.slice(0, 8).map((item) => {
                 const Icon = item.icon;
-                const isActive = currentPage === item.id ||
-                  (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
-                  (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard') ||
-                  (item.id === 'supplierPriceList' && currentPage === 'supplierPriceList');
-
-                let badgeCount = 0;
-                let badgeColor = 'bg-amber-500';
-                if (item.id === 'readyToIssue') {
-                  badgeCount = readyToIssueCount || 0;
-                  badgeColor = 'bg-amber-500';
-                }
+                const isActive = isNavItemActive(item.id, currentPage);
 
                 return (
                   <button
@@ -1185,39 +1331,7 @@ const Navbar = ({
                   >
                     <Icon className="w-5 h-5" />
                     <span className="text-xs font-medium">{item.label}</span>
-
-                    {item.id === 'readyToIssue' && badgeCount > 0 && (
-                      <span className={`absolute -top-1 -right-1 w-4 h-4 ${badgeColor} text-white text-[10px] rounded-full flex items-center justify-center`}>
-                        {badgeCount}
-                      </span>
-                    )}
-
-                    {item.id === 'rfqList' && rfqCartCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                        {rfqCartCount}
-                      </span>
-                    )}
-
-                    {item.id === 'approvals' && pendingApprovalsCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                        {pendingApprovalsCount}
-                      </span>
-                    )}
-                    {item.id === 'cart' && cartItemsCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                        {cartItemsCount}
-                      </span>
-                    )}
-                    {item.id === 'merge' && mergeableCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                        {mergeableCount}
-                      </span>
-                    )}
-                    {item.id === 'chat' && chatUnreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center animate-pulse">
-                        {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-                      </span>
-                    )}
+                    {renderBadge(item.id, 'corner')}
                   </button>
                 );
               })}
@@ -1259,31 +1373,7 @@ const Navbar = ({
               >
                 {navItems.map((item) => {
                   const Icon = item.icon;
-                  const isActive = currentPage === item.id ||
-                    (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
-                    (item.id === 'clients' && currentPage === 'clientDashboard') ||
-                    (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
-                    (item.id === 'estimates' && currentPage === 'estimates') ||
-                    (item.id === 'reports' && currentPage === 'reports') ||
-                    (item.id === 'integration' && currentPage === 'integration') ||
-                    (item.id === 'api' && currentPage === 'api') ||
-                    (item.id === 'merge' && currentPage === 'merge') ||
-                    (item.id === 'readyToIssue' && currentPage === 'readyToIssue') ||
-                    (item.id === 'suppliers' && currentPage === 'suppliers') ||
-                    (item.id === 'supplierCatalog' && currentPage === 'supplierCatalog') ||
-                    (item.id === 'rfqList' && (currentPage === 'rfqList' || currentPage === 'rfqCreate' || currentPage === 'rfqDetails')) ||
-                    (item.id === 'purchaseOrders' && (currentPage === 'purchaseOrders' || currentPage === 'purchaseOrderCreate' || currentPage === 'purchaseOrderDetails')) ||
-                    (item.id === 'procurementDashboard' && currentPage === 'procurementDashboard') ||
-                    (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard') ||
-                    (item.id === 'supplierPriceList' && currentPage === 'supplierPriceList') ||
-                    (item.id === 'priceCatalog' && currentPage === 'priceCatalog');
-
-                  let badgeCount = 0;
-                  let badgeColor = 'bg-amber-500';
-                  if (item.id === 'readyToIssue') {
-                    badgeCount = readyToIssueCount || 0;
-                    badgeColor = 'bg-amber-500';
-                  }
+                  const isActive = isNavItemActive(item.id, currentPage);
 
                   return (
                     <button
@@ -1300,39 +1390,7 @@ const Navbar = ({
                     >
                       <Icon className="w-4 h-4" />
                       <span className="text-sm font-medium">{item.label}</span>
-
-                      {item.id === 'readyToIssue' && badgeCount > 0 && (
-                        <span className={`absolute -top-1 -right-1 w-4 h-4 ${badgeColor} text-white text-[10px] rounded-full flex items-center justify-center`}>
-                          {badgeCount}
-                        </span>
-                      )}
-
-                      {item.id === 'rfqList' && rfqCartCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                          {rfqCartCount}
-                        </span>
-                      )}
-
-                      {item.id === 'approvals' && pendingApprovalsCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                          {pendingApprovalsCount}
-                        </span>
-                      )}
-                      {item.id === 'cart' && cartItemsCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center">
-                          {cartItemsCount}
-                        </span>
-                      )}
-                      {item.id === 'merge' && mergeableCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-white text-xs rounded-full flex items-center justify-center">
-                          {mergeableCount}
-                        </span>
-                      )}
-                      {item.id === 'chat' && chatUnreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
-                          {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-                        </span>
-                      )}
+                      {renderBadge(item.id, 'corner')}
                     </button>
                   );
                 })}
@@ -1514,28 +1572,7 @@ const Navbar = ({
               <div className="flex flex-col">
                 {filteredNavItems.map((item) => {
                   const Icon = item.icon;
-                  const isActive = currentPage === item.id ||
-                    (item.id === 'applications' && (currentPage === 'inwork' || currentPage === 'history')) ||
-                    (item.id === 'crm-sales' && currentPage === 'crm-sales') ||
-                    (item.id === 'estimates' && currentPage === 'estimates') ||
-                    (item.id === 'reports' && currentPage === 'reports') ||
-                    (item.id === 'integration' && currentPage === 'integration') ||
-                    (item.id === 'api' && currentPage === 'api') ||
-                    (item.id === 'merge' && currentPage === 'merge') ||
-                    (item.id === 'readyToIssue' && currentPage === 'readyToIssue') ||
-                    (item.id === 'suppliers' && currentPage === 'suppliers') ||
-                    (item.id === 'supplierCatalog' && currentPage === 'supplierCatalog') ||
-                    (item.id === 'rfqList' && (currentPage === 'rfqList' || currentPage === 'rfqCreate' || currentPage === 'rfqDetails')) ||
-                    (item.id === 'purchaseOrders' && (currentPage === 'purchaseOrders' || currentPage === 'purchaseOrderCreate' || currentPage === 'purchaseOrderDetails')) ||
-                    (item.id === 'procurementDashboard' && currentPage === 'procurementDashboard') ||
-                    (item.id === 'supplierDashboard' && currentPage === 'supplierDashboard') ||
-                    (item.id === 'supplierPriceList' && currentPage === 'supplierPriceList') ||
-                    (item.id === 'priceCatalog' && currentPage === 'priceCatalog');
-
-                  let badgeCount = 0;
-                  if (item.id === 'readyToIssue') {
-                    badgeCount = readyToIssueCount || 0;
-                  }
+                  const isActive = isNavItemActive(item.id, currentPage);
 
                   return (
                     <button
@@ -1552,29 +1589,7 @@ const Navbar = ({
                     >
                       <Icon className="w-5 h-5 flex-shrink-0" />
                       <span className="flex-1 text-left">{item.label}</span>
-
-                      {item.id === 'readyToIssue' && badgeCount > 0 && (
-                        <span className="ml-auto px-2 py-0.5 bg-amber-500 text-white text-xs rounded-full flex-shrink-0">
-                          {badgeCount}
-                        </span>
-                      )}
-
-                      {item.id === 'rfqList' && rfqCartCount > 0 && (
-                        <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
-                          {rfqCartCount}
-                        </span>
-                      )}
-
-                      {item.id === 'approvals' && pendingApprovalsCount > 0 && (
-                        <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
-                          {pendingApprovalsCount}
-                        </span>
-                      )}
-                      {item.id === 'chat' && chatUnreadCount > 0 && (
-                        <span className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded-full flex-shrink-0">
-                          {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-                        </span>
-                      )}
+                      {renderBadge(item.id, 'inline')}
                     </button>
                   );
                 })}
@@ -1700,7 +1715,7 @@ const Navbar = ({
             </div>
 
             <p className="text-xs text-gray-400 dark:text-gray-500 text-right">
-              {selectedNotification.time || new Date(selectedNotification.created_at).toLocaleString('ru-RU')}
+              {getNotificationDate(selectedNotification)}
             </p>
 
             <div className="mt-6 flex justify-end">
