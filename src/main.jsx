@@ -6,8 +6,8 @@ import App from './App.jsx'
 // ✅ Офлайн-модуль
 import { initOfflineModule, checkOfflineSupport } from './utils/offlineStorage'
 
-// ✅ Версия приложения
-const APP_VERSION = '0.0.88-beta';
+// ✅ Версия приложения — берём из единого места (config.js)
+import { APP_VERSION } from './config';
 
 // ─────────────────────────────────────────────────────────
 // 🔹 Регистрация Service Worker (нативная)
