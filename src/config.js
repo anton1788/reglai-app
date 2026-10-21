@@ -1,5 +1,5 @@
 // src/config.js
-export const APP_VERSION = '0.0.89-beta';
+export const APP_VERSION = '0.0.90-beta';
 
 export const APP_CONFIG = {
   version: APP_VERSION,
